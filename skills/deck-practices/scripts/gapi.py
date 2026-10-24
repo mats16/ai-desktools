@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Google の API（Drive・Slides・Docs）を呼ぶ共通の部品。スライド（slides-build）・ドキュメント（docs-build）とほかのスキルのスクリプトが使う（標準ライブラリだけ）。
 認証は単独で動く（gcloud も、ほかの Google のスキルも要らない）。トークンは、環境変数 GOOGLE_OAUTH_ACCESS_TOKEN、なければ
-authorized_user の認証情報の JSON（GOOGLE_APPLICATION_CREDENTIALS、なければ gcloud の ADC のファイル）の refresh_token で取る。401・403 や認証情報がないときは factory-doctor で確かめる。
+authorized_user の認証情報の JSON（GOOGLE_APPLICATION_CREDENTIALS、なければ gcloud の ADC のファイル）の refresh_token で取る。401・403 や認証情報がないときは desk-doctor で確かめる。
 usage: python3 gapi.py --selftest"""
 import datetime, functools, getpass, json, os, re, socket, subprocess, sys, tempfile, threading, time, tomllib, urllib.error, urllib.parse, urllib.request, uuid
 from pathlib import Path
@@ -69,31 +69,35 @@ CLOCK = Clock()  # 読み込んだときから数える
 
 
 def locate():
-    """factory.toml（人ごとに変わる設定値。ワークスペースの直下）を、今いるフォルダから上へ、次にこのスクリプトのフォルダから上へたどって探す。なければ None。
-    結果を覚えない。import のときに読むもの（slides.py の [brand]）はこちらを使う（覚えると、あとで今いるフォルダを変える factory-doctor が古い結果を使う）。"""
+    """desk.toml（人ごとに変わる設定値。ワークスペースの直下）を、今いるフォルダから上へ、次にこのスクリプトのフォルダから上へたどって探す。なければ None。
+    結果を覚えない。import のときに読むもの（slides.py の [brand]）はこちらを使う（覚えると、あとで今いるフォルダを変える desk-doctor が古い結果を使う）。"""
     for base in (Path.cwd(), Path(__file__).resolve().parent):
         for d in (base, *base.parents):
-            if (d / "factory.toml").is_file():
-                return d / "factory.toml"
+            if (d / "desk.toml").is_file():
+                return d / "desk.toml"
     return None
 
 
 @functools.cache
-def find_factory():
+def find_config():
     """locate の結果（最初に呼んだときのものを覚える）。"""
     return locate()
 
 
-def factory_path():
-    """find_factory の結果。なければ止まる。"""
-    return find_factory() or sys.exit("factory.toml が見つからない（今いるフォルダとスクリプトのフォルダから上へ探した）。ワークスペース（資料のフォルダの上。例: ~/Documents/factory.toml）に置く。"
+def config_path():
+    """find_config の結果。なければ止まる（前の版の factory.toml があれば、desk-migrate を案内する）。"""
+    if p := find_config():
+        return p
+    if old := next((d for b in (Path.cwd(), Path(__file__).resolve().parent) for d in (b, *b.parents) if (d / "factory.toml").is_file()), None):
+        sys.exit(f"{old} は前の版のワークスペース（factory.toml）。desk-migrate で desk.toml に移す")
+    sys.exit("desk.toml が見つからない（今いるフォルダとスクリプトのフォルダから上へ探した）。ワークスペース（資料のフォルダの上。例: ~/Documents/desk.toml）に置く。"
              "書き方は ../../slides-build/themes.md")
 
 
 @functools.cache
-def factory():
-    """factory.toml の設定値（[google]・[slides]・[drive]）。"""
-    return tomllib.loads(factory_path().read_text())
+def config():
+    """desk.toml の設定値（[google]・[slides]・[drive]）。"""
+    return tomllib.loads(config_path().read_text())
 
 
 class ApiError(Exception):
@@ -145,7 +149,7 @@ def request(method, url, body=None, raw=None, ctype="application/json", binary=F
     paced=True（ページの画像）なら、送るたびに（429 の取り直しも）上限を見越して待つ（pace）。待った秒は WAITED・PACED に足す。"""
     data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
     headers = {"Authorization": f"Bearer {token()}", "Content-Type": ctype}
-    if qp := factory().get("google", {}).get("quota_project"):
+    if qp := config().get("google", {}).get("quota_project"):
         headers["x-goog-user-project"] = qp  # gcloud の既定の OAuth クライアントで取ったトークンは、これがないと 403
     for wait in (5, 15, 30, 60, None):
         if (hold := _HOLD[0] - time.time()) > 0:  # ほかの取り手が 429 を受け、分の枠が明けるのを待っている
@@ -236,7 +240,7 @@ def guard(fid, rev, key, src, stop=True):
     """前に組んだあとに画面で直されていたら（rev が key に残した版か指紋と違う）、または未解決のコメントがあれば、止める。
     組み直すと画面での直しは消え、コメントは付け先を失う。src は直しを入れる先（pages.py・doc.md）。stop=False なら止めずに理由の並びを返す（slides.py plan）。"""
     last = request("GET", f"{DRIVE}/files/{fid}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(key)
-    st = factory_path().parent / ".factory" / "comments.json"  # 見張りの知らせ（deck-comments の comments.py watch）は、直すコメントでないので数えない
+    st = config_path().parent / ".desk" / "comments.json"  # 見張りの知らせ（deck-comments の comments.py watch）は、直すコメントでないので数えない
     notice = {n["id"] for n in json.loads(st.read_text()).get("notice", {}).values()} if st.is_file() else set()
     comments = [c for c in request("GET", f"{DRIVE}/files/{fid}/comments?pageSize=100&fields=comments(id,resolved,deleted,content,quotedFileContent(value))")
                 .get("comments", []) if not c.get("resolved") and not c.get("deleted") and c.get("id") not in notice]
@@ -358,7 +362,7 @@ def selftest():
     assert window_end('"window_start_time": "%d"' % (t0 + 3600), t0) is None  # 1 時間先は読み違え（そこまで待たない）
     assert window_end("{}", t0) is None and window_end('"window_start_time": "x"', t0) is None and window_end('"window_start_time": "1"', t0) is None
     import http.client, io
-    real = urllib.request.urlopen, time.sleep, factory, globals()["_TOK"], globals()["pace"]
+    real = urllib.request.urlopen, time.sleep, config, globals()["_TOK"], globals()["pace"]
     calls, slept, paced = [], [], []
 
     def fake(req, *a, **k):  # 1 回目は、もう明けた枠の 429。2 回目は通す
@@ -367,7 +371,7 @@ def selftest():
             raise urllib.error.HTTPError(req.full_url, 429, "x", {}, io.BytesIO(b'"window_start_time": "%d"' % (time.time() - 70)))
         return io.BytesIO(b"{}")
 
-    globals().update(factory=lambda: {}, _TOK="t", pace=lambda: paced.append(1))
+    globals().update(config=lambda: {}, _TOK="t", pace=lambda: paced.append(1))
     urllib.request.urlopen, time.sleep = fake, slept.append
     try:
         assert request("GET", "https://example.invalid", paced=True) == {} and slept == [5]  # 明けた枠なら、0.5 秒でなく前の 5 秒で取り直す
@@ -416,7 +420,7 @@ def selftest():
         assert request("GET", "https://example.invalid") == {} and len(calls) == 3
     finally:
         urllib.request.urlopen, time.sleep = real[0], real[1]
-        globals().update(factory=real[2], _TOK=real[3], pace=real[4])
+        globals().update(config=real[2], _TOK=real[3], pace=real[4])
         WAITED.clear()
         _HOLD[0] = 0.0
     with tempfile.TemporaryDirectory() as d:  # 上限に届いたら、いちばん古い 1 回が窓を出るまで待つ

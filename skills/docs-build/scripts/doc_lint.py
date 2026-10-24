@@ -52,7 +52,7 @@ def gdoc_paras(doc):
 
 def theme_pages():
     """ドキュメントのテーマのファイル（ワークスペースの themes/docs/<名前>.json）の用紙（pt の幅・高さ）。会社のテンプレートに合わせた版面なので、
-    A4 でなくても、1 行の字数が多くても通す。読めないファイルは飛ばす（形の誤りは docs.py と factory-doctor が止める）。"""
+    A4 でなくても、1 行の字数が多くても通す。読めないファイルは飛ばす（形の誤りは docs.py と desk-doctor が止める）。"""
     out = []
     for f in sorted(p.parent.joinpath("themes", "docs").glob("*.json")) if (p := gapi.locate()) else []:
         try:
@@ -234,7 +234,7 @@ class Report(textlint.Report):
 
 
 def selftest():
-    globals()["theme_pages"] = lambda: []  # 回す場所の factory.toml のテーマ（用紙）に左右されない
+    globals()["theme_pages"] = lambda: []  # 回す場所の desk.toml のテーマ（用紙）に左右されない
     globals()["workspace_checks"] = lambda *a: 0  # 回す場所のワークスペースの checks.py にも左右されない
     import contextlib, io
     # Google Docs: わざと欠陥を入れた文書で、規則がそれぞれ拾うか

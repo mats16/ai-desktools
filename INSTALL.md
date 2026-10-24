@@ -1,25 +1,25 @@
 # AI Desk Tools を会話で入れる（エージェントが読む手順）
 
-README の「会話で入れる」のプロンプトを貼られたエージェントが従う手順。プラグインを入れ、ワークスペースを作り、factory-doctor で確かめるまでを、1 つの会話で進める。手で入れる手順は README の「入れ方」。
+README の「会話で入れる」のプロンプトを貼られたエージェントが従う手順。プラグインを入れ、ワークスペースを作り、desk-doctor で確かめるまでを、1 つの会話で進める。手で入れる手順は README の「入れ方」。
 
 このファイルは curl で読む（`curl -fsSL https://raw.githubusercontent.com/mats16/ai-desktools/main/INSTALL.md`）。WebFetch のように要約して返す道具では、コマンドと手順が欠ける。
 
 ## 決まり
 
-- **この会話には、まだスキルがない。** 入れたスキルは次の会話から読み込まれる。この会話では `/desk-tools:factory-init`・`$desk-tools:factory-init`・`/skill:factory-init` を呼ばずに、入れた場所の `SKILL.md` を開いて従う（4）。
+- **この会話には、まだスキルがない。** 入れたスキルは次の会話から読み込まれる。この会話では `/desk-tools:desk-init`・`$desk-tools:desk-init`・`/skill:desk-init` を呼ばずに、入れた場所の `SKILL.md` を開いて従う（4）。
 - **ワークスペースだけに入れる。** `~/.claude/settings.json`・`~/.pi/agent/settings.json` は変えない。Codex は入れる範囲がないので、`~/.codex/config.toml` で切ってワークスペースの `.codex/config.toml` で入れる（3）。ほかのフォルダの会話にはスキルが出ない。
-- **ユーザーが決めることは聞いてから進める。** 場所、ツールを入れるか、`factory.toml` の値。ブラウザが開くログイン（`gcloud auth application-default login`）は、ユーザーに回してもらう。
-- **あるファイルは上書きしない。** factory-init の `init.py` も上書きしない。
-- 手順の `<ワークスペース>` と `<プラグイン>` は、1 と 3 で決まったパスに置き換える。スクリプトは今いるフォルダから `factory.toml` を探すので、ワークスペースのコマンドは `cd <ワークスペース> &&` を付けて回す。
+- **ユーザーが決めることは聞いてから進める。** 場所、ツールを入れるか、`desk.toml` の値。ブラウザが開くログイン（`gcloud auth application-default login`）は、ユーザーに回してもらう。
+- **あるファイルは上書きしない。** desk-init の `init.py` も上書きしない。
+- 手順の `<ワークスペース>` と `<プラグイン>` は、1 と 3 で決まったパスに置き換える。スクリプトは今いるフォルダから `desk.toml` を探すので、ワークスペースのコマンドは `cd <ワークスペース> &&` を付けて回す。
 
 ## 1. 聞く
 
 自分が Claude Code・Codex・pi のどれかは聞かない（自分で分かる）。次の 4 つを 1 回でまとめて聞く（Claude Code なら AskUserQuestion）。
 
-1. **ワークスペースにするフォルダ。** 資料（`Customers/`・`Internal/`・`Research/`）と `factory.toml` を置く。候補に、今の会話のフォルダと `~/Documents` を出す。なければ作る。すでに `factory.toml` か `AGENTS.md` があれば、足りないものだけ置くことを伝える。
-2. **全社の共有テーマのフォルダ。** 会社でスライドのテーマ（テンプレート）を配っていれば、その Google Drive のフォルダの URL。なければ「ない」。プロンプトに URL が書いてあれば聞かずに使う。4 で `factory.toml` の `[drive] shared_themes` に書く。
+1. **ワークスペースにするフォルダ。** 資料（`Customers/`・`Internal/`・`Research/`）と `desk.toml` を置く。候補に、今の会話のフォルダと `~/Documents` を出す。なければ作る。すでに `desk.toml` か `AGENTS.md` があれば、足りないものだけ置くことを伝える。
+2. **全社の共有テーマのフォルダ。** 会社でスライドのテーマ（テンプレート）を配っていれば、その Google Drive のフォルダの URL。なければ「ない」。プロンプトに URL が書いてあれば聞かずに使う。4 で `desk.toml` の `[drive] shared_themes` に書く。
 3. **定期の整理（dreaming）を回すか。** 会話の記録から、決まりに戻し忘れた指示を毎日拾うもの。選ぶのは「毎日 5:00 に回す（推奨）」「時刻を変える」「回さない」。どのスケジューラーに登録するかは聞かない（5 で、今の環境から決める）。
-4. **資料を返したあと、付いたコメントを見張るか。** 人にコメントを頼んだあと、付いたコメントで直すもの。最後のコメント（なければ見張り始め）から決めた時間、新しいコメントがなければ見張りを終える。見張りは、資料を作った会話が開いているあいだだけ動く。選ぶのは「見張らない（既定）」「24 時間」「72 時間」「時間を決める」。見張らなくても、「コメントを見て直して」「コメントを見張って」と頼めば、そのときに取る。4 で `factory.toml` の `[feedback.google_comments] watch_hours` に書く（見張らないなら 0 のまま）。
+4. **資料を返したあと、付いたコメントを見張るか。** 人にコメントを頼んだあと、付いたコメントで直すもの。最後のコメント（なければ見張り始め）から決めた時間、新しいコメントがなければ見張りを終える。見張りは、資料を作った会話が開いているあいだだけ動く。選ぶのは「見張らない（既定）」「24 時間」「72 時間」「時間を決める」。見張らなくても、「コメントを見て直して」「コメントを見張って」と頼めば、そのときに取る。4 で `desk.toml` の `[feedback.google_comments] watch_hours` に書く（見張らないなら 0 のまま）。
 
 ## 2. 前提を見る
 
@@ -74,12 +74,12 @@ pi install -l git:github.com/mats16/ai-desktools
 
 `<プラグイン>` は `<ワークスペース>/.pi/git/github.com/mats16/ai-desktools`。
 
-どれも `<プラグイン>/skills/factory-init/SKILL.md` があることを確かめる。
+どれも `<プラグイン>/skills/desk-init/SKILL.md` があることを確かめる。
 
 ## 4. ワークスペースを作る
 
-1. `<プラグイン>/skills/factory-init/SKILL.md` を開き、その手順に従う。「このスキルのフォルダ」は `<プラグイン>/skills/factory-init`、ほかのスキルのフォルダは `<プラグイン>/skills/<スキル>`。手順の 1（場所）は、ここの 1 で聞いたので飛ばす。3 の `[drive] shared_themes` は、ここの 1 の 2 で聞いた値を書く。`[feedback.google_comments] watch_hours` は、ここの 1 の 4 で選んだ時間を書く（見張らないなら雛形の 0 のまま）。3 の `[slides] default_theme`（既定のテンプレート）は、テンプレートを作り、共有のテーマを `slides.py theme <url>` で写したあとで、`<プラグイン>/skills/slides-template/SKILL.md` の「Choosing the default theme」に従って選択式で聞く（1 では聞かない。何を選べるかは、そろってから分かる）。
-2. factory-init の最後の手順（6 の「Check」）は、`<プラグイン>/skills/factory-doctor/SKILL.md` を開いて従う。要修正が 0 になるまで直す。Google のログインのように、ユーザーが回すものが残ったら、回してもらってから doctor をもう一度回す。
+1. `<プラグイン>/skills/desk-init/SKILL.md` を開き、その手順に従う。「このスキルのフォルダ」は `<プラグイン>/skills/desk-init`、ほかのスキルのフォルダは `<プラグイン>/skills/<スキル>`。手順の 1（場所）は、ここの 1 で聞いたので飛ばす。3 の `[drive] shared_themes` は、ここの 1 の 2 で聞いた値を書く。`[feedback.google_comments] watch_hours` は、ここの 1 の 4 で選んだ時間を書く（見張らないなら雛形の 0 のまま）。3 の `[slides] default_theme`（既定のテンプレート）は、テンプレートを作り、共有のテーマを `slides.py theme <url>` で写したあとで、`<プラグイン>/skills/slides-template/SKILL.md` の「Choosing the default theme」に従って選択式で聞く（1 では聞かない。何を選べるかは、そろってから分かる）。
+2. desk-init の最後の手順（6 の「Check」）は、`<プラグイン>/skills/desk-doctor/SKILL.md` を開いて従う。要修正が 0 になるまで直す。Google のログインのように、ユーザーが回すものが残ったら、回してもらってから doctor をもう一度回す。
 
 ## 5. 定期の整理を登録する
 
@@ -99,7 +99,7 @@ pi install -l git:github.com/mats16/ai-desktools
 
 次をまとめて返す。
 
-- 置いたもの（init.py の「置いた」「残した」）と、`factory.toml` で埋めた値・空のままの値。既定のテーマ。コメントを見張る時間（見張らないなら、そう書く）。
+- 置いたもの（init.py の「置いた」「残した」）と、`desk.toml` で埋めた値・空のままの値。既定のテーマ。コメントを見張る時間（見張らないなら、そう書く）。
 - 定期の整理を登録したスケジューラーと時刻。手で入れてもらうものが残っていれば、その手順。
 - doctor の結果。残った要確認と、ユーザーが回すもの。
 - 次からの開き方。**ワークスペースの直下で開く**（サブフォルダで開くと、プラグインのスキルも hook も読み込まれない）。

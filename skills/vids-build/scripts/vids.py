@@ -25,7 +25,7 @@ usage（ワークスペースの下で）:
   uv run vids.py avatars                                                選べる AI avatar（Conversational voices で話す 30 体）
   uv run vids.py download <Vids の URL か ID> <出力.mp4>               公式の Drive API（files.download）で MP4 にする
   uv run vids.py --selftest
-create・update・check は --browser <URL> を取る。--browser、環境変数 VIDS_BROWSER、factory.toml の [vids] browser の順で、なければ http://127.0.0.1:9222。
+create・update・check は --browser <URL> を取る。--browser、環境変数 VIDS_BROWSER、desk.toml の [vids] browser の順で、なければ http://127.0.0.1:9222。
 """
 import hashlib, json, re, shutil, subprocess, sys, time, urllib.parse, urllib.request
 from pathlib import Path

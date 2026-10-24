@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """usage: init.py [<ワークスペース>]   （--selftest で自己確認）
-ワークスペースに、決まり（AGENTS.md・CLAUDE.md・rules/）、設定（factory.toml）、索引（references_index.md）の雛形と、資料のフォルダを置く。
+ワークスペースに、決まり（AGENTS.md・CLAUDE.md・rules/）、設定（desk.toml）、索引（references_index.md）の雛形と、資料のフォルダを置く。
 あるファイルは上書きしない（置いたもの・残したものを出す）。標準ライブラリだけ。ワークスペースを省くと、今いるフォルダ。"""
 import sys, tempfile
 from pathlib import Path
 
 TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
-DIRS = ("Customers", "Internal", "Research", ".factory")  # 雛形のないフォルダ（雛形のある rules/ は写すときにできる）
+DIRS = ("Customers", "Internal", "Research", ".desk")  # 雛形のないフォルダ（雛形のある rules/ は写すときにできる）
 
 
 def init(ws):
@@ -31,7 +31,7 @@ def selftest():
         (Path(tmp) / "AGENTS.md").write_text("mine")
         out = init(tmp)
         assert (Path(tmp) / "AGENTS.md").read_text() == "mine" and any("残した" in o and "AGENTS.md" in o for o in out)
-        assert (Path(tmp) / "factory.toml").is_file() and (Path(tmp) / "rules" / "README.md").is_file() and (Path(tmp) / "Customers").is_dir()
+        assert (Path(tmp) / "desk.toml").is_file() and (Path(tmp) / "rules" / "README.md").is_file() and (Path(tmp) / "Customers").is_dir()
         assert all("残した" in o for o in init(tmp))  # 2 回目は何も上書きしない
     print("selftest ok")
 

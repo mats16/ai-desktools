@@ -54,7 +54,7 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 
 | フォルダ | `plugin list` の enabled | 読み込まれたスキル |
 |---|---|---|
-| `~/adf-plugin-test`（入れたフォルダ） | true | `desk-tools:` の 15 個（customer-profile、deck-comments、deck-practices、deck-research、deck-review、docs-build、dreaming、factory-doctor、factory-init、factory-kaizen、factory-migrate、slides-build、slides-template、vids-build、vids-voice） |
+| `~/adf-plugin-test`（入れたフォルダ） | true | `desk-tools:` の 15 個（customer-profile、deck-comments、deck-practices、deck-research、deck-review、docs-build、dreaming、desk-doctor、desk-init、desk-kaizen、desk-migrate、slides-build、slides-template、vids-build、vids-voice） |
 | `~/Documents` | false | `.agents/skills` の 6 つ（`desk-tools:` が付かない。プラグインのものではない） |
 | `/tmp` | false | なし |
 | `~/adf-plugin-test/Internal`（入れたフォルダのサブフォルダ） | false | なし |
@@ -66,8 +66,8 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 同じフォルダで Claude Code を開き、スキルを呼ぶ。
 
 ```
-/desk-tools:factory-init
-/desk-tools:factory-doctor
+/desk-tools:desk-init
+/desk-tools:desk-doctor
 ```
 
 doctor の要修正が 0 になれば使える。ワークスペースの `rules/<スキル>/<ファイル>` は、プラグインの同じファイルを Read で開くと hook が続けて出す（2026-10-12 に、そのときの `rules/deck-practices/visual.md` で確かめた。サブフォルダで開いた会話では出ない）。`/desk-tools:<スキル>` で呼んだときは、道具を通らずに SKILL.md が入るので、UserPromptSubmit の hook が `rules/<スキル>/SKILL.md` を出す（2026-10-20 に確かめた）。スキルは `desk-tools:` を付けた名前で呼ぶ（`/desk-tools:slides-build` など）。

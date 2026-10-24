@@ -2,12 +2,12 @@
 # usage: cd <ワークスペース> && snapshot.sh save | diff <tar.gz> | restore <tar.gz>
 # 定期の整理の前に、指示（AGENTS.md・CLAUDE.md・rules/）、顧客の memory（Customers/*/memory.md）、索引、調べ直しの記録（Research/deck_research/）、Claude Code のメモリを固めて残す。
 # diff はその写しから後の変更を出し、restore はその写しに戻す（写しのあとに足したファイルは消さない）。
-# 写しはワークスペースの .factory/dreaming/backup/。lint の記録（.factory/lint_runs.jsonl）は、戻すと消えるので入れない。
+# 写しはワークスペースの .desk/dreaming/backup/。lint の記録（.desk/lint_runs.jsonl）は、戻すと消えるので入れない。
 set -eu
 ROOT=$(pwd -P)  # /tmp のようなリンクでも、Claude Code がメモリに使う実際のパスにする
-[ -f "$ROOT/factory.toml" ] || { echo "factory.toml のあるフォルダ（ワークスペース）で回す: $ROOT" >&2; exit 2; }
+[ -f "$ROOT/desk.toml" ] || { echo "desk.toml のあるフォルダ（ワークスペース）で回す: $ROOT" >&2; exit 2; }
 MEM=$HOME/.claude/projects/$(printf %s "$ROOT" | tr '/._' '---')/memory
-DIR=$ROOT/.factory/dreaming/backup
+DIR=$ROOT/.desk/dreaming/backup
 CMD=${1:-} ARG=${2:-}
 set --  # 固めるパスは引数に並べる（空白のあるフォルダも 1 つのパスのまま渡す）
 for p in "$ROOT/AGENTS.md" "$ROOT/CLAUDE.md" "$ROOT/references_index.md" "$ROOT/rules" "$ROOT"/Customers/*/memory.md "$ROOT/Research/deck_research" "$MEM"; do

@@ -2,7 +2,7 @@
 
 このリポジトリ（GitHub の `mats16/ai-desktools`）は、AI Desk Tools のプラグイン（Claude Code・Codex）とパッケージ（pi）の元。中身・入れ方・ワークスペースの作りは [README.md](README.md)、開発の手順の詳しいことは [docs/development.md](docs/development.md)。
 
-**`sandbox/` の下で開いた会話には、このファイルは効かない。** そこは利用者として動作を見る検証用のワークスペースで、このファイルは親のフォルダから読まれているだけ。`sandbox/` の `AGENTS.md`（factory-init の雛形）に従い、プラグインの利用者として振る舞う。
+**`sandbox/` の下で開いた会話には、このファイルは効かない。** そこは利用者として動作を見る検証用のワークスペースで、このファイルは親のフォルダから読まれているだけ。`sandbox/` の `AGENTS.md`（desk-init の雛形）に従い、プラグインの利用者として振る舞う。
 
 ## 名前
 
@@ -39,7 +39,7 @@ README は 20 万字あり、ほとんどが「決めたこと」。通して読
 
 - **Claude Code・Codex・pi で同じソースを使う。** Codex は Claude Code の形（`.claude-plugin/`・`hooks/hooks.json`）をそのまま読むので、Codex のための別のファイルは置かない。`rules/` を出す仕組みを直すなら、`hooks/hooks.json` と `extensions/rules.ts` の両方を見る。どれか 1 つだけに効く直しにしない。
 - **スクリプトは標準ライブラリだけで書く。** Pillow などが要るものだけ、先頭の `# /// script` に依存を書いて `uv run` で回す。Python は 3.11 以上で動かす。
-- **`SKILL.md` の本文は 5,000 トークン以内にする。** Claude Code はコンパクションのあと、呼んだスキルの先頭 5,000 トークンだけを付け直すため。場面でしか要らない節（ある場合だけの手順、失敗したとき、別の呼び出しで使う手順）は、`SKILL.md` の表から 1 段で指すファイルに出す。ほかのファイルからしか辿れないファイルは作らない（入れ子の先は一部だけ読まれやすい）。分けたら `factory-migrate/scripts/migrate.py` の `SPLIT` に足す（README の「決めたこと」の 2026-10-24）。
+- **`SKILL.md` の本文は 5,000 トークン以内にする。** Claude Code はコンパクションのあと、呼んだスキルの先頭 5,000 トークンだけを付け直すため。場面でしか要らない節（ある場合だけの手順、失敗したとき、別の呼び出しで使う手順）は、`SKILL.md` の表から 1 段で指すファイルに出す。ほかのファイルからしか辿れないファイルは作らない（入れ子の先は一部だけ読まれやすい）。分けたら `desk-migrate/scripts/migrate.py` の `SPLIT` に足す（README の「決めたこと」の 2026-10-24）。
 - **ほかのスキルのファイルとスクリプトのメッセージから、`SKILL.md` から分けたファイルを開かせるときは、「`../<スキル>/SKILL.md` を開いてから、その `<ファイル>`」と書く。** hook は開いたパスと同じ `rules/<スキル>/<ファイル>` しか出さないので、分けたファイルを直に開くと、`rules/<スキル>/SKILL.md` に書いてあるワークスペースの上書きが出ない。決まりの出典として番号で指すだけのところ（「`dreaming/run.md` の 5 で見る」）とスクリプトのコメントは、そのままでよい。
 - **スキルを足す・外す・名前を変えるときは、数と名前の出てくるところをそろえる。** README の表、`docs/` の「15 個」、`deck-practices` などから指しているパス。
 - **ユーザーが決めたことは、README の「決めたこと」に日付とユーザーの発言（原文）で残す。** 後回しにしたものは「残っている課題」に書く。
@@ -56,7 +56,7 @@ AI が読む指示は英語、人が読むものと日本語に結びつく決�
   - 資料作りのニュアンスが絡む決まり（主張や見出しの言い方、顧客への言葉の調子、聞き手がどう受け取るか、話の運び、何を言う・言わないか）。
   - 例、ユーザーの発言、そのまま書き写す文字列（`構成案.md` などのファイル名、構成案に書く節の名前〔「書き方の決め」など〕、lint の札〔`要修正`・`要確認`〕、台帳の値、スクリプトや人が読む表の列の名前、「要判断」の印）。
   - 利用者や Issue に出す出力の型（dreaming の報告、Issue の本文、profile.md の骨組み、doc.md の例）。
-  - 人が読むもの: README.md、`docs/`、このファイル、`docs/fixtures/` の依頼文、`skills/factory-init/templates/`（ワークスペースの人が直す）、PR・Issue・commit の本文。スクリプトのメッセージとコメントも、今は日本語のまま（README の「残っている課題」）。
+  - 人が読むもの: README.md、`docs/`、このファイル、`docs/fixtures/` の依頼文、`skills/desk-init/templates/`（ワークスペースの人が直す）、PR・Issue・commit の本文。スクリプトのメッセージとコメントも、今は日本語のまま（README の「残っている課題」）。
 - **決まり（箇条 1 つ）ごとに、言いたいことの中心で決める。** 迷ったら日本語のままにする。1 つの文の中で混ぜない。英語の文に入れる日本語の例・値・節の名前は、「」か `` ` `` で囲む（「AGENTS.md の「修正の指示」」ではなく「「修正の指示」 in AGENTS.md」）。囲まなくてよいのは、出典の札（（見た目 1-7）など）と固有名詞（人名・書名・社名・書体名）だけ。
 - **言葉を替えても、決まりの ID（`[slides-visual-027]` など）と節の番号は変えない。** ほかのファイルの節は英語の見出しで指し（`deck-practices/SKILL.md` の "Working practices"）、番号は `§4` と書く。日本語のまま残るファイル（README・`docs/`・ワークスペースの `AGENTS.md`）の節は、日本語の見出しのまま指す。日本語のファイル（雛形・スクリプトのメッセージ）から英語にしたファイルの節を指すときも、英語の見出しで指す（README の「決めたこと」の過去の記録は直さない）。
 - **子への依頼文に、答えの言葉（「日本語で答える」など）を書かない。** なくてもモデルが選ぶ。要るのは、決まりの文・ユーザーの発言・出典を写すときに、元の言葉のまま写す指示のほう。
@@ -76,14 +76,14 @@ worktree の直下に検証用のワークスペース `sandbox/` を置き、wo
 1. **作る。** worktree の直下で回す。
 
    ```sh
-   python3 skills/factory-init/scripts/init.py sandbox
+   python3 skills/desk-init/scripts/init.py sandbox
    cd sandbox
-   python3 ../skills/factory-doctor/scripts/doctor.py --local   # Google の API は見ない
+   python3 ../skills/desk-doctor/scripts/doctor.py --local   # Google の API は見ない
    ```
 
-   雛形の `factory.toml` のままでは、Google に組む作業はできない（doctor の要修正が残る）。組んで確かめるときは、本番のワークスペースの `factory.toml` を写し、`[drive]` を検証用の Drive のフォルダに替える（本番のものを書き換えないため。docs/development.md の「作る」）。`sandbox/` で `git init` はしない。
+   雛形の `desk.toml` のままでは、Google に組む作業はできない（doctor の要修正が残る）。組んで確かめるときは、本番のワークスペースの `desk.toml` を写し、`[drive]` を検証用の Drive のフォルダに替える（本番のものを書き換えないため。docs/development.md の「作る」）。`sandbox/` で `git init` はしない。
 
-2. **selftest を回す。** `sandbox/` で回す（`template.py` は `factory.toml` を探す）。Python は最低の版の 3.11 にそろえる。
+2. **selftest を回す。** `sandbox/` で回す（`template.py` は `desk.toml` を探す）。Python は最低の版の 3.11 にそろえる。
 
    ```sh
    for f in ../hooks/*.py ../skills/*/scripts/*.py ../tests/*/*.py; do

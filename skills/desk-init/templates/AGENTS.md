@@ -1,6 +1,6 @@
 # このワークスペースの運用ルール
 
-AI Desk Tools（プラグイン）で、スライドとドキュメントを作るワークスペース。使う人の名前・役割・担当の顧客は、`factory.toml` の `user.profile` が指すファイルにある。要るときに読み、このフォルダの文書には写さない。顧客向けの資料（`Customers/`）、社内向けの資料（`Internal/`）、調べものの結果（`Research/`）を作り、置いておく。
+AI Desk Tools（プラグイン）で、スライドとドキュメントを作るワークスペース。使う人の名前・役割・担当の顧客は、`desk.toml` の `user.profile` が指すファイルにある。要るときに読み、このフォルダの文書には写さない。顧客向けの資料（`Customers/`）、社内向けの資料（`Internal/`）、調べものの結果（`Research/`）を作り、置いておく。
 
 このファイルには、どの会話でも要ることだけを書く。資料を作る・直すときにだけ要ることは、プラグインのスキルと、ここから指す `rules/` にある（下の「資料を作る・直すとき」）。
 
@@ -8,7 +8,7 @@ AI Desk Tools（プラグイン）で、スライドとドキュメントを作�
 
 - **このワークスペースの決まりが、プラグインのスキルより優先する。** ワークスペースの決まりは、このファイルと `rules/<スキル>/<ファイル>`（プラグインの同じパスのファイルへの足しと上書き）。食い違うときは、こちらに従う。
 - **このワークスペースは、やり取りで育てる 1 つのプロダクト。** 修正の指示は、決まり（このファイルと `rules/`）と点検（`rules/slides-build/checks.py`・`rules/docs-build/checks.py`）に戻す。プラグインの入った場所は書き換えない（入れ直すと消える）。
-- **大元を直すべきものは Issue にする。** ほかの人にも効くものは、dreaming が「プラグインに上げる」提案にし、スキル `factory-kaizen` で過去の資料で確かめてから Issue を出す（スキル `deck-practices` の `rules.md` の「Rule layers」）。
+- **大元を直すべきものは Issue にする。** ほかの人にも効くものは、dreaming が「プラグインに上げる」提案にし、スキル `desk-kaizen` で過去の資料で確かめてから Issue を出す（スキル `deck-practices` の `rules.md` の「Rule layers」）。
 
 ## 基本方針
 
@@ -18,7 +18,7 @@ AI Desk Tools（プラグイン）で、スライドとドキュメントを作�
 - **スライドは Google Slides を Slides API で、ドキュメントは Google Docs を Docs API で直接組む。** スライドは `slides-build` の `slides.py`、ドキュメントは `docs-build` の `docs.py` で組む。pptx・docx は作らない。Word が要るときは Google Docs から書き出す。
 - **納品は Google Drive の URL で渡し、確認を頼む。** PDF は作らない（`slides-build` の SKILL.md の「Deliverables」）。
 - **サブエージェントを呼ぶときは、必ずモデルを指定し、原則メインと同じモデルにする。** 省くと、会社の設定や既定値で別のモデルになる。Claude Code ではメインと同じ別名（Opus なら `opus`）を渡す。
-- **環境を確かめるときは `factory-doctor`、ワークスペースを作るときは `factory-init`。** 401・403 や、スクリプトが設定を見つけられないときも `factory-doctor` から始める。
+- **環境を確かめるときは `desk-doctor`、ワークスペースを作るときは `desk-init`。** 401・403 や、スクリプトが設定を見つけられないときも `desk-doctor` から始める。
 
 ## いい資料の考え方
 
@@ -42,7 +42,7 @@ AI Desk Tools（プラグイン）で、スライドとドキュメントを作�
 
 作っている途中にユーザーがチャットで出した修正の指示は、その資料を直すだけで終わらせない。次の資料でも同じことを言われないよう、その場でワークスペースの決まり（このファイルか `rules/`）に戻す。戻す先・確かめ方・聞いてから戻すものは `deck-practices/rules.md`。取りこぼしは、定期の整理（スキル `dreaming`）が会話の記録から拾う。
 
-- **受けたらすぐ決まりの台帳に書く。** `python3 <スキル deck-practices のフォルダ>/scripts/ledger.py add --deck <資料のフォルダ> --quote "<ユーザーの言葉（できるだけ原文）>" --fix "<直した箇所>" --to <戻し先> --check <lint・レビュー・なし>`。ユーザーがはっきり決めたこと（案から選んだ、言い切った）には `--decided` を付ける。台帳はこのワークスペースの `.factory/ledger.jsonl`（顧客のことが入るので、外に写さない）。会話はコンパクションで要約になり、指示が落ちることがある。
+- **受けたらすぐ決まりの台帳に書く。** `python3 <スキル deck-practices のフォルダ>/scripts/ledger.py add --deck <資料のフォルダ> --quote "<ユーザーの言葉（できるだけ原文）>" --fix "<直した箇所>" --to <戻し先> --check <lint・レビュー・なし>`。ユーザーがはっきり決めたこと（案から選んだ、言い切った）には `--decided` を付ける。台帳はこのワークスペースの `.desk/ledger.jsonl`（顧客のことが入るので、外に写さない）。会話はコンパクションで要約になり、指示が落ちることがある。
 - **直したら、その場で戻す。** 片付けまで待たない。決まりには ID と短い理由だけを書き、日付と原文は決まりの台帳に残す（`deck-practices/rules.md` の「Routing corrections」）。報告の最後に、どの指示をどの決まりに戻したかを書く。
 - **エージェントのメモリに書いて済ませない。** 資料づくりの決まりは、ここか `rules/` に、顧客ごとの好みは顧客の `memory.md` に、顧客のことは顧客の `profile.md` に書く。エージェントのメモリはほかのエージェントから見えない。
 
@@ -52,7 +52,7 @@ AI Desk Tools（プラグイン）で、スライドとドキュメントを作�
 
 - 先に `grep -rln <語> Research/ references_index.md` で前の調査を探す。あれば読み、足りないところだけ調べて同じファイルに足す（末尾の「更新」に日付と変わったこと）。
 - 書くこと: 依頼（ユーザーの言葉のまま）、結論（冒頭に数行）、根拠と出典（URL と確かめた日）、確かめたことと推測の区別、未確認のこと。社外秘が入るなら冒頭に【社内】と書く。
-- **書いたら・足したら、Google Drive に写す。** `python3 <スキル deck-practices のフォルダ>/scripts/drive_put.py research Research/<内容>_<YYYYMMDD>.md`。Google Docs に変えて、`factory.toml` の `drive.factory` の下の `Research`（なければ作る）に上げる。同じ名前があれば上書きし、URL は変わらない。初めて上げたら、`references_index.md` の「Google Drive の置き場所」の `Research` の行（なければ足す）の下に `- 上げた: Research/<内容>_<YYYYMMDD>.md → [<YYYYMMDD>_<内容>](URL)（初めて上げた日）` を足す。写しは控えと、人がブラウザで読むためのもの。元はこのフォルダの md で、探すのも読むのもこちらでする。Drive の写しは直さず、コメントも付けない（上げ直すと、直しは消え、コメントは付け先を失う）。
+- **書いたら・足したら、Google Drive に写す。** `python3 <スキル deck-practices のフォルダ>/scripts/drive_put.py research Research/<内容>_<YYYYMMDD>.md`。Google Docs に変えて、`desk.toml` の `drive.desk` の下の `Research`（なければ作る）に上げる。同じ名前があれば上書きし、URL は変わらない。初めて上げたら、`references_index.md` の「Google Drive の置き場所」の `Research` の行（なければ足す）の下に `- 上げた: Research/<内容>_<YYYYMMDD>.md → [<YYYYMMDD>_<内容>](URL)（初めて上げた日）` を足す。写しは控えと、人がブラウザで読むためのもの。元はこのフォルダの md で、探すのも読むのもこちらでする。Drive の写しは直さず、コメントも付けない（上げ直すと、直しは消え、コメントは付け先を失う）。
 - ある資料のための調べものは、`Research/` ではなく、その資料のフォルダ（`references.md`・`社内メモ_*.md`）に書く。出典は `refs.py add` で `references.md` に 1 行ずつ足し、ページに出す事実は構成案の「出典の表」に、出典の ID と一緒に書く（deck-practices の materials.md の "Ledger"）。資料に使えそうな出典は `references_index.md` にも足す。
 
 ## 社外秘と顧客の情報
@@ -81,10 +81,10 @@ Research/<内容>_<YYYYMMDD>.md                    … 調べもの
 Research/deck_research/                           … deck-research の調べ直しの記録（state.md・log/）
 rules/<スキル>/<ファイル>                         … このワークスペースの決まり（プラグインの同じファイルへの足しと上書き）
 rules/slides-build/checks.py・rules/docs-build/checks.py … このワークスペースの点検（スライドとドキュメントの lint が読み込む）
-themes/slides/<名前>.json                         … スライドのテーマ（色・書体・表紙と扉のレイアウト。テンプレートの URL は factory.toml の [slides.templates]）
+themes/slides/<名前>.json                         … スライドのテーマ（色・書体・表紙と扉のレイアウト。テンプレートの URL は desk.toml の [slides.templates]）
 assets/                                           … 自分だけの画像（ページの JSON の "src": "asset:<名前>" が先に探す）
-.factory/                                         … スクリプトが書く記録（lint・dreaming・コメントの見張り）と、顧客の profile の前の版。手で直さない
-factory.toml                                      … 人ごとに変わる設定値（スクリプトが読む）
+.desk/                                            … スクリプトが書く記録（lint・dreaming・コメントの見張り）と、顧客の profile の前の版。手で直さない
+desk.toml                                         … 人ごとに変わる設定値（スクリプトが読む）
 references_index.md                               … 過去に使った資料の索引
 ```
 
@@ -93,7 +93,7 @@ references_index.md                               … 過去に使った資料�
 - **過去に使った資料は、直下の `references_index.md` にまとめる。** 探すときは、検索より先に `grep -n <語> references_index.md`。
 - **エージェントが読み書きするファイルの名前は、英数字とハイフン・アンダーバーだけにする。** 納品物と、ユーザーが読む `構成案*.md`・`社内メモ_*.md` は日本語の名前のまま。
 - ワークスペースの直下に、上に書いたもののほかのファイルを作らない。
-- git で管理するのは、決まりと設定（`AGENTS.md`・`CLAUDE.md`・`factory.toml`・`rules/`・`themes/`・`assets/`）と、調べ直しの記録（`Research/deck_research/`）だけ（`.gitignore`）。資料と台帳は入れない。
+- git で管理するのは、決まりと設定（`AGENTS.md`・`CLAUDE.md`・`desk.toml`・`rules/`・`themes/`・`assets/`）と、調べ直しの記録（`Research/deck_research/`）だけ（`.gitignore`）。資料と台帳は入れない。
 
 ### 顧客とフォルダ
 

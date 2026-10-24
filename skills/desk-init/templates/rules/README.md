@@ -7,7 +7,7 @@
 プラグインのスキルのファイルと同じパスに置く（例: `rules/slides-build/visual.md` は `slides-build/visual.md` への足しと上書き）。プラグインのファイルを開くと、hook がこちらを続けて出す。
 
 - 各ファイルの冒頭に、どのファイルへの足しかを書く。プラグインの決まりを上書きするときは、その ID を `- [ws-slides-visual-<番号>] 〜は〜にする（slides-visual-012 より優先。<短い理由>）。` の形で書く（ID のない節なら「プラグインの〇〇の節より優先」）。
-- 決まりは 1 項目ごとに ID を付ける（`- [ws-slides-visual-<番号>] 〜のときは〜する（<短い理由>）。`。ID は `ledger.py next ws-slides-visual`）。日付とユーザーの言葉（原文）は本文に書かず、決まりの台帳（`.factory/ledger.jsonl`）に ID でつなぐ（`deck-practices/rules.md` の「Routing corrections」）。
+- 決まりは 1 項目ごとに ID を付ける（`- [ws-slides-visual-<番号>] 〜のときは〜する（<短い理由>）。`。ID は `ledger.py next ws-slides-visual`）。日付とユーザーの言葉（原文）は本文に書かず、決まりの台帳（`.desk/ledger.jsonl`）に ID でつなぐ（`deck-practices/rules.md` の「Routing corrections」）。
 
 ## 点検: `rules/slides-build/checks.py`・`rules/docs-build/checks.py`
 
@@ -41,7 +41,7 @@ def doc(doc, r):
 
 ## 大元に上げる
 
-ほかの人にも効くと分かったものは、dreaming が「プラグインに上げる」提案にし、`factory-kaizen` で Issue を出す。上げた決まりが入っているプラグインに届いたら、ここの写しを消す提案を dreaming が出す（`ledger.py candidates` の「写しを消す」）。
+ほかの人にも効くと分かったものは、dreaming が「プラグインに上げる」提案にし、`desk-kaizen` で Issue を出す。上げた決まりが入っているプラグインに届いたら、ここの写しを消す提案を dreaming が出す（`ledger.py candidates` の「写しを消す」）。
 
 ## 顧客の memory: `Customers/<顧客>/memory.md`
 

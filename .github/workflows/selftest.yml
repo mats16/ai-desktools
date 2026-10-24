@@ -16,7 +16,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - name: selftest
         run: |
-          python3 skills/factory-init/scripts/init.py sandbox
+          python3 skills/desk-init/scripts/init.py sandbox
           cd sandbox
           fail=0
           for f in ../hooks/*.py ../skills/*/scripts/*.py ../tests/*/*.py; do

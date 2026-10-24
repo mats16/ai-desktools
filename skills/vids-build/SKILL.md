@@ -20,13 +20,13 @@ Make the video from the deck itself, and do not copy the Slides into a separate 
 ## Setup
 
 - **A Chrome DevTools (MCP) that can reach the target Google account.** `vids.py` connects to that Chrome's remote debugging port, opens a background tab on `docs.google.com/videos`, runs `scripts/vids_client.js` there, and closes the tab. The Cookie and tokens stay inside that tab; the script returns only IDs, counts, and lengths. Use the Chrome that the Chrome DevTools MCP of this conversation drives, if it is signed in to the account that owns the deck. If it is not running, start it the way that MCP's setup says.
-- The address is `--browser <URL>`, else the environment variable `VIDS_BROWSER`, else `browser` under `[vids]` in factory.toml, else `http://127.0.0.1:9222`.
+- The address is `--browser <URL>`, else the environment variable `VIDS_BROWSER`, else `browser` under `[vids]` in desk.toml, else `http://127.0.0.1:9222`.
 - Run with `uv run` (it installs `websockets` and Pillow). `--selftest` also needs `node`.
 - The public OAuth token (gcloud ADC) does not work for Vids' editing calls (403, checked 2026-10-21), which is why a signed-in Chrome is needed.
 
 ## Steps
 
-Run in the material's folder (factory.toml is found from the current folder upward), because `layout --out` defaults to `build/vids_avatar` under the current folder and the `--layout` path is relative to it.
+Run in the material's folder (desk.toml is found from the current folder upward), because `layout --out` defaults to `build/vids_avatar` under the current folder and the `--layout` path is relative to it.
 
 ```sh
 V=<vids-build folder>/scripts/vids.py

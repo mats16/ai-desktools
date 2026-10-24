@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """JSON のページの見本（skills/slides-build/samples/json/）をすべて Google Slides に組み、Google が描いた全ページの画像を、ページごとの見るところ（expect.json）と並べる。
-usage（sandbox のようなワークスペースの中で回す。factory.toml の [drive] internal に一時のデッキを作る）:
+usage（sandbox のようなワークスペースの中で回す。desk.toml の [drive] internal に一時のデッキを作る）:
   python3 <リポジトリ>/tests/render/run.py [--keep] [--judge]
   --keep   組んだデッキを残す（既定は、画像を取ったらゴミ箱に移す）
   --judge  claude -p に report.md と画像を読ませ、ページごとに OK・NG を出させる（judge.md）。NG があれば終わりの状態を 1 にする
   --selftest  見本のどのページにも expect.json の見るところがあるかだけを見る（Google を読まない）
-出すもの: <ワークスペース>/.factory/render/（build/ に組んだページ、png/ に画像、report.md、judge.md）。
+出すもの: <ワークスペース>/.desk/render/（build/ に組んだページ、png/ に画像、report.md、judge.md）。
 lint（手元と組んだあと）の要修正が 1 つでもあれば、終わりの状態を 1 にする。"""
 import json, re, shutil, subprocess, sys, time
 from pathlib import Path
@@ -75,9 +75,9 @@ def main():
             except SystemExit:
                 pass
         return print("selftest ok")
-    ws = gapi.factory_path().parent
-    folder = gapi.factory().get("drive", {}).get("internal") or sys.exit("factory.toml の [drive] internal が空。一時のデッキを置く Drive のフォルダ（検証用）を書く")
-    out = ws / ".factory" / "render"
+    ws = gapi.config_path().parent
+    folder = gapi.config().get("drive", {}).get("internal") or sys.exit("desk.toml の [drive] internal が空。一時のデッキを置く Drive のフォルダ（検証用）を書く")
+    out = ws / ".desk" / "render"
     shutil.rmtree(out, ignore_errors=True)
     (build := out / "build").mkdir(parents=True)
     (png := out / "png").mkdir()

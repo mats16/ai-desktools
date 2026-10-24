@@ -7,7 +7,7 @@
 usage: rules_overlay.py claude   （標準入力に Claude Code か Codex の hook の JSON）
        rules_overlay.py pi       （標準入力に {"cwd", "text", "isPath", "seen"}。isPath は text が読んだファイルのパスのとき。seen は今の文脈に残る、前に出したもの。出力は {"context": …}）
        rules_overlay.py --selftest
-標準ライブラリだけ。ワークスペース（factory.toml のあるフォルダ）の外や、rules/ と memory.md がないときは何も出さない。"""
+標準ライブラリだけ。ワークスペース（desk.toml のあるフォルダ）の外や、rules/ と memory.md がないときは何も出さない。"""
 import json, os, re, shlex, sys, tempfile
 from pathlib import Path
 
@@ -25,7 +25,7 @@ LIMIT = 20000  # 差し込む字数の上限（決まりが育ちすぎたら、
 
 def workspace(cwd):
     d = Path(cwd).resolve()
-    return next((x for x in (d, *d.parents) if (x / "factory.toml").is_file()), None)
+    return next((x for x in (d, *d.parents) if (x / "desk.toml").is_file()), None)
 
 
 def words(command):
@@ -150,7 +150,7 @@ def main(mode):
 
 def selftest():
     with tempfile.TemporaryDirectory() as ws:
-        (Path(ws) / "factory.toml").write_text("")
+        (Path(ws) / "desk.toml").write_text("")
         (Path(ws) / "rules" / "deck-practices").mkdir(parents=True)
         (Path(ws) / "rules" / "slides-build").mkdir()
         (Path(ws) / "rules" / "slides-build" / "visual.md").write_text("本文は 16pt")

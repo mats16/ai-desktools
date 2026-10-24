@@ -1,6 +1,6 @@
 ---
 name: customer-profile
-description: Create, refresh, or add to a customer's profile (`Customers/<customer>/profile.md` — business, organization, technology stack, engineers' preferences and culture, current initiatives). Gathers from the tools in `[sources]` of factory.toml, the `[user] profile` file, and public information, and keeps what the user said. Use when asked 「<顧客> の profile を作って・更新して」, when starting a customer-facing material and the profile is missing or older than 30 days, and when the user says something newly learned about a customer (business, stack, preferences).
+description: Create, refresh, or add to a customer's profile (`Customers/<customer>/profile.md` — business, organization, technology stack, engineers' preferences and culture, current initiatives). Gathers from the tools in `[sources]` of desk.toml, the `[user] profile` file, and public information, and keeps what the user said. Use when asked 「<顧客> の profile を作って・更新して」, when starting a customer-facing material and the profile is missing or older than 30 days, and when the user says something newly learned about a customer (business, stack, preferences).
 ---
 
 # Customer profile
@@ -44,7 +44,7 @@ If unsure, decide by the form of the sentence. 「〜である」 (a fact) goes 
 ## Create or refresh
 
 1. **Decide the customer.** The name of the `Customers/<customer>/` folder. If it does not exist, create it following 「フォルダの置き方」 in AGENTS.md.
-2. **Keep the previous version.** If one exists: `mkdir -p .factory/profile && cp "Customers/<customer>/profile.md" ".factory/profile/<customer>_$(date +%Y%m%d-%H%M%S).md"`.
+2. **Keep the previous version.** If one exists: `mkdir -p .desk/profile && cp "Customers/<customer>/profile.md" ".desk/profile/<customer>_$(date +%Y%m%d-%H%M%S).md"`.
 3. **Gather.** If the `[user] profile` file has an entry for that customer (ledger ID, channels, owner), use it as a lead. Then read the following (tool usage is in `deck-practices/materials.md`; at most 5 minutes per command).
    - `crm`: industry, size, locations, current initiatives
    - `search`, `wiki`: the customer's technology stack and history recorded internally

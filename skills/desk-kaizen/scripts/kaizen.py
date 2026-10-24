@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""プラグインの改善を、過去の資料で確かめてから Issue にする（手順は ../SKILL.md）。ワークスペース（factory.toml のあるフォルダ）で回す。
+"""プラグインの改善を、過去の資料で確かめてから Issue にする（手順は ../SKILL.md）。ワークスペース（desk.toml のあるフォルダ）で回す。
 usage:
   kaizen.py start   <名前>                          元のリポジトリ（plugin.json の repository）を clone して kaizen/<名前> のブランチを作る。前の版（main）も写す
   kaizen.py lint    <名前> <資料の URL ...>          いまの資料の JSON に、前の版と変えた版の lint をかけて比べる
@@ -7,7 +7,7 @@ usage:
   kaizen.py open    <名前> --title <題> --body <本文.md>   本文と検証の記録と変更案の差分をまとめて、プラグインのリポジトリに Issue を作る（commit は先に済ませる。Issue があれば本文を書き換える）
   kaizen.py clean   <名前>                          clone と検証の記録を消す（Issue が閉じられたあと）
   kaizen.py --selftest
-置き場所は <ワークスペース>/.factory/kaizen/<名前>/（repo/ 変える版、base/ 前の版、verify/ 検証の記録）。資料の名前・URL・本文は verify/detail.md にだけ書き、
+置き場所は <ワークスペース>/.desk/kaizen/<名前>/（repo/ 変える版、base/ 前の版、verify/ 検証の記録）。資料の名前・URL・本文は verify/detail.md にだけ書き、
 Issue には「資料 1」のような番号と、規則ごとの数の変化と、選んだ画像と、変更案の差分だけを出す。ブランチは push しない。"""
 import json, os, re, shutil, subprocess, sys, tempfile, time
 from functools import cached_property
@@ -40,9 +40,9 @@ def sh(*cmd, cwd=None, env=None, check=True):
 
 class Work:
     def __init__(self, name):
-        self.ws = gapi.factory_path().parent
+        self.ws = gapi.config_path().parent
         self.name, self.branch = name, f"kaizen/{name}"
-        self.dir = self.ws / ".factory" / "kaizen" / name
+        self.dir = self.ws / ".desk" / "kaizen" / name
         self.repo, self.base, self.verify = self.dir / "repo", self.dir / "base", self.dir / "verify"
 
     @cached_property
@@ -61,7 +61,7 @@ class Work:
     def need(self):
         if not self.repo.is_dir():
             sys.exit(f"{self.repo} がない。先に kaizen.py start {self.name}")
-        if (self.repo / ".git").is_file():  # 2026-10-14 までの start が、[factory] source の checkout に作った worktree（origin が fork のことがあり、差分の起点がずれる）
+        if (self.repo / ".git").is_file():  # 2026-10-14 までの start が、[factory] source（前の版）の checkout に作った worktree（origin が fork のことがあり、差分の起点がずれる）
             sys.exit(f"{self.repo} は前の版の start で作った worktree。kaizen.py clean {self.name} のあと start し直す（元の checkout では git worktree prune）")
 
     def label(self, key):
@@ -120,7 +120,7 @@ def lint_cmd(w, urls):
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
             json.dump(data, f)
         skill, script = ("docs-build", "doc_lint.py") if kind == "ドキュメント" else ("slides-build", "lint.py")
-        outs = [sh(sys.executable, w.scripts(side, skill) / script, f.name, cwd=w.ws, env={"FACTORY_VERIFY": "1"}, check=False).stdout for side in ("base", "head")]
+        outs = [sh(sys.executable, w.scripts(side, skill) / script, f.name, cwd=w.ws, env={"DESK_VERIFY": "1"}, check=False).stdout for side in ("base", "head")]
         os.unlink(f.name)
         detail, public = report(w.label(url), kind, *compare(*outs), title=f"{data.get('title', '')} {url}")
         w.log("### lint\n\n" + detail, "### lint\n\n" + public)
@@ -138,7 +138,7 @@ def is_slides(build):
 
 def rebuild(w, folders, pages=None, keep=False):
     w.need()
-    out_dir = gapi.factory().get("drive", {}).get("factory") or sys.exit("factory.toml の drive.factory（仮に組む Drive のフォルダ）がない")
+    out_dir = gapi.config().get("drive", {}).get("desk") or sys.exit("desk.toml の drive.desk（仮に組む Drive のフォルダ）がない")
     img = w.verify / "img"
     img.mkdir(parents=True, exist_ok=True)
     for folder in map(Path, folders):
@@ -149,11 +149,11 @@ def rebuild(w, folders, pages=None, keep=False):
         try:
             for side in ("base", "head"):
                 s = w.scripts(side, "slides-build" if slides else "docs-build")
-                r = sh(sys.executable, s / ("slides.py" if slides else "docs.py"), "new", out_dir, f"{time.strftime('%Y%m%d')}_検証_{w.name}_{label.replace(' ', '')}_{side}", cwd=build, env={"FACTORY_VERIFY": "1"})
+                r = sh(sys.executable, s / ("slides.py" if slides else "docs.py"), "new", out_dir, f"{time.strftime('%Y%m%d')}_検証_{w.name}_{label.replace(' ', '')}_{side}", cwd=build, env={"DESK_VERIFY": "1"})
                 fid = URL_ID.findall(r.stdout)[-1]
                 made.append(fid)
                 cmd = [sys.executable, s / ("gslides.py" if slides else "docs.py"), "check", fid] + (["--pages", pages] if pages and slides else [])
-                outs.append(sh(*cmd, cwd=build, env={"FACTORY_VERIFY": "1"}, check=False).stdout)
+                outs.append(sh(*cmd, cwd=build, env={"DESK_VERIFY": "1"}, check=False).stdout)
                 shots[side] = {p.name: p for p in sorted(Path(f"/tmp/{'slides' if slides else 'docs'}_{fid[:8]}").glob("p-*.png"))}
         finally:
             for fid in made if not keep else []:
@@ -193,7 +193,7 @@ def upload_images(w, files):
 
 def private_words(ws, extra=()):
     """Issue に出してはいけない語: Customers/ の顧客の名前、Customers/<顧客>/ と Internal/ の資料のフォルダの名前（年の 4 桁の数字が入ったもの。
-    決まりでは <内容>_<日付>。review_2026q3 のような形も入る）、factory.toml の [factory] private（日本語の社名・製品名、日付のないフォルダの名前など）。
+    決まりでは <内容>_<日付>。review_2026q3 のような形も入る）、desk.toml の [desk] private（日本語の社名・製品名、日付のないフォルダの名前など）。
     日付のないフォルダ（assets・drafts など）は、ありふれた語で関係のない Issue を止めるので、名前だけでは入れない（要るなら private に書く）。"""
     names = {p.name for p in (ws / "Customers").glob("*") if p.is_dir()}
     names |= {p.name for p in [*(ws / "Customers").glob("*/*"), *(ws / "Internal").glob("*")] if p.is_dir() and re.search(r"\d{4}", p.name)}
@@ -238,7 +238,7 @@ def place_images(verify_text, urls):
 
 def issue_body(body, changed, base, verify_text, patch):
     """Issue の本文。差分が長くて本文が上限を超えるなら、差分を載せずに行数だけ書く。"""
-    head = body.rstrip() + "\n\n## 検証の記録（factory-kaizen）\n\n前の版: `" + base + "`（差分の起点の commit）\n\n変えたファイル: " + ", ".join(f"`{f}`" for f in changed) + "\n\n" + verify_text.rstrip()
+    head = body.rstrip() + "\n\n## 検証の記録（desk-kaizen）\n\n前の版: `" + base + "`（差分の起点の commit）\n\n変えたファイル: " + ", ".join(f"`{f}`" for f in changed) + "\n\n" + verify_text.rstrip()
     lines = len(patch.splitlines())
     fence = "`" * max(4, 1 + max(map(len, re.findall(r"`+", patch)), default=0))  # 差分の中の ``` で囲いが閉じないように、中のどれより長くする
     diff = f"\n\n## 変更案の差分\n\n<details><summary>git diff（{lines} 行）</summary>\n\n{fence}diff\n{patch.rstrip()}\n{fence}\n\n</details>\n"
@@ -268,7 +268,7 @@ def open_issue(w, title, body_file):
     # 外に出す前に（画像を上げる前に）、外に出るものを全部確かめる。本文は、足す検証の記録（ワークスペースの点検の規則の名前も入る）と画像の名前まで含める
     patch = git("diff", f"{MAIN}...HEAD")
     text = outgoing(title, "\n".join([body, verify_text, *(f.name for f in images)]), w.branch, patch, changed)
-    if hit := leaks(text, private_words(w.ws, gapi.factory().get("factory", {}).get("private", []))):
+    if hit := leaks(text, private_words(w.ws, gapi.config().get("desk", {}).get("private", []))):
         sys.exit("Issue にできない: 題・本文（検証の記録を含む）・ファイルの名前・差分に、顧客や社内の資料の名前がある: " + "、".join(hit)
                  + "。「顧客向けの資料」「（顧客）」のような一般の形にして commit し直す")
     base = git("rev-parse", "--short", git("merge-base", MAIN, "HEAD").strip()).strip()  # 差分の起点の commit
@@ -361,7 +361,7 @@ def selftest():
         (b / "deck.json").unlink()
         (b / "pages.py").touch()
         assert is_slides(b) is True
-    with tempfile.TemporaryDirectory() as d:  # 顧客と資料のフォルダの名前、[factory] private の語が Issue に入ったら止める
+    with tempfile.TemporaryDirectory() as d:  # 顧客と資料のフォルダの名前、[desk] private の語が Issue に入ったら止める
         for x in ("Customers/Acme/sample_briefing_202610", "Customers/Acme/review_2026q3", "Customers/Acme/assets", "Internal/grok_study_202610", "Internal/drafts"):
             (Path(d) / x).mkdir(parents=True)
         words = private_words(Path(d), ["アクメ"])

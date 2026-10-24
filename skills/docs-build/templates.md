@@ -2,7 +2,7 @@
 
 Open when the workspace has a document template (`rules/docs-build/templates/<name>/doc.md`) and you write from it, or when you make or fix a template. Read it together with [SKILL.md](SKILL.md) (doc.md format) and [visual.md](visual.md). `K=<docs-build folder>/scripts`.
 
-The source of truth for a template's structure is the workspace's `rules/docs-build/templates/<name>/doc.md` (it is a company's document format, so it is not in the plugin. If there is no template, write doc.md from scratch), and the URL of the built sample is in `[docs.templates]` in `factory.toml`. `docs.py init <name>` copies from here.
+The source of truth for a template's structure is the workspace's `rules/docs-build/templates/<name>/doc.md` (it is a company's document format, so it is not in the plugin. If there is no template, write doc.md from scratch), and the URL of the built sample is in `[docs.templates]` in `desk.toml`. `docs.py init <name>` copies from here.
 
 - **Content:** the order of sections (H1), example sentences and bullets per section, example tables (the header row defines the columns), notes to the writer (`> <担当: SA>`), tags (`[会社名]`, `[氏名]`, and so on: `[ ]` that are not links), and the theme and cover. The header `source:` is the URL of the document it was based on (the English version), and `skeleton_ok:` lists the sections whose skeleton is accepted as different from the original, with reasons (`  - <section name>: <reason>`).
 - **Starting to write:** `docs.py init <name>` copies doc.md and adds `template: <name>` to the header (removing `source` and `skeleton_ok`). Replace the tags and notes with content. While tags and notes remain, check reports `要修正`, so no leftover placeholders remain.

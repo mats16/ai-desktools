@@ -18,7 +18,7 @@ Put the final report in one message. Include:
 - What the source check changed, and the rows still 「照合中」 or `確かめられない` (deck-flow-019)
 - If notes or a video were asked for: what step 7 of `../vids-voice/SKILL.md` lists, and the Vids URL (deck-flow-022)
 
-If `[feedback.google_comments] watch_hours` in `factory.toml` is greater than 0, start watching comments after delivery (deck-comments-004 in `../deck-comments/SKILL.md`). If it is 0 or unset, do not watch.
+If `[feedback.google_comments] watch_hours` in `desk.toml` is greater than 0, start watching comments after delivery (deck-comments-004 in `../deck-comments/SKILL.md`). If it is 0 or unset, do not watch.
 
 ## 11. Clean up
 

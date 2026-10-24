@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""決まりの台帳。修正の指示（指摘）、決まりの変更の提案・適用・却下、判断待ち、レビューの結果を、ワークスペースの .factory/ledger.jsonl に 1 件 1 行で足していく。
+"""決まりの台帳。修正の指示（指摘）、決まりの変更の提案・適用・却下、判断待ち、レビューの結果を、ワークスペースの .desk/ledger.jsonl に 1 件 1 行で足していく。
 決まりの本文には ID（slides-visual-<番号>・ws-slides-visual-<番号> を角括弧で囲む。接頭辞は何についての決まりか〔TOPICS〕で、置き場所が変わっても変えない）と短い理由だけを書き、日付・原文・どの資料か・ユーザーが決めたかは、ここに ID でつなぐ。
-決まりの層と戻し方は ../rules.md。ワークスペース（今いるフォルダから上へ、最初の factory.toml のフォルダ）で回す。標準ライブラリだけ。
+決まりの層と戻し方は ../rules.md。ワークスペース（今いるフォルダから上へ、最初の desk.toml のフォルダ）で回す。標準ライブラリだけ。
 usage:
   ledger.py add --deck <資料のフォルダ> --quote <ユーザーの言葉> [--fix <直した箇所>] [--to <決まりの ID・ファイル・未・戻さない>] [--check lint|レビュー|なし] [--session <会話 ID>] [--at <言われた時刻（UTC）>] [--decided] [--plan AI|人] [--once]
                                                    --plan は構成の見逃し（方針のレビューのあとに、聞き手・問い・主張・順序を変えた指摘。値はその資料の方針のレビュー）
@@ -19,7 +19,7 @@ usage:
   ledger.py propose --file <ワークスペースのファイル> --new <新しい文> [--old <今の文>] [--rule <ID>] --why <要点> [--src c-1,c-2] [--kind <種類>] [--plugin] [--replaces ws-x-001,…] [--rec 適用|様子見|却下 [--rec-why <理由>]] [--auto]
                                                    --rec は出した側の推奨（ユーザーは「推奨どおり」と例外だけを返せる）
                                                    --auto は会話を出典にしない片付け（重なり・古い記述）で、ID の付いた決まりを丸ごと消すだけのものを、出してすぐ当てる。当ててよいかはここで見る
-                                                   --plugin は変更先がプラグイン（--file は skills/ からのパス）。当てず、factory-kaizen で Issue にする
+                                                   --plugin は変更先がプラグイン（--file は skills/ からのパス）。当てず、desk-kaizen で Issue にする
                                                    --replaces は、その Issue の直しが届いたら要らなくなるワークスペースの決まり（上書きなど。出典の指摘の決まりは書かなくてよい）
   ledger.py pending [--status 却下|適用済み|戻した|取り下げ|Issue にした|all]   提案と差分（既定は未適用。却下は理由も）
   ledger.py apply <P-ID ...|all>                   提案を当てる（今の文がそのまま 1 か所にあるときだけ。プラグインへの提案は当てない）
@@ -33,7 +33,7 @@ usage:
   ledger.py questions [--all]                      判断待ち（--all は答えたものと取り下げたものも）
   ledger.py review --deck <資料のフォルダ> --table <指摘の表のファイル>   deck-review の指摘の表から、決まりの列のある行の結果を取り込む（同じ行は 2 度数えず、ラウンドをまたぐ同じ行はあとのラウンドの結果）
   ledger.py --selftest
-台帳の原文には顧客のことが入る。.factory/ から外（Issue・チャット）に写さない。"""
+台帳の原文には顧客のことが入る。.desk/ から外（Issue・チャット）に写さない。"""
 import argparse, difflib, hashlib, json, re, sys, tempfile, time
 from collections import Counter
 from datetime import datetime, timezone
@@ -73,11 +73,14 @@ PLUGIN_ID = re.compile(r"(?<![\w-])(?!ws-)[a-z][\w-]*?-\d{3}")
 
 def workspace():
     d = Path.cwd().resolve()
-    return next((x for x in (d, *d.parents) if (x / "factory.toml").is_file()), None) or sys.exit("factory.toml が見つからない。ワークスペースで回す")
+    if ws := next((x for x in (d, *d.parents) if (x / "desk.toml").is_file()), None):
+        return ws
+    old = next((x for x in (d, *d.parents) if (x / "factory.toml").is_file()), None)
+    sys.exit(f"{old} は前の版のワークスペース（factory.toml）。desk-migrate で desk.toml に移す" if old else "desk.toml が見つからない。ワークスペースで回す")
 
 
 def path(ws):
-    return ws / ".factory" / "ledger.jsonl"
+    return ws / ".desk" / "ledger.jsonl"
 
 
 def records(ws):
@@ -368,7 +371,7 @@ def landed(p, plugin):
 
 
 def next_id(ws, prefix):
-    found = texts([PLUGIN, ws / "rules", ws / "AGENTS.md", ws / "Customers"], {Path(__file__).resolve(), (PLUGIN / "factory-migrate" / "scripts" / "migrate.py").resolve()})  # selftest の試しの ID は数えない
+    found = texts([PLUGIN, ws / "rules", ws / "AGENTS.md", ws / "Customers"], {Path(__file__).resolve(), (PLUGIN / "desk-migrate" / "scripts" / "migrate.py").resolve()})  # selftest の試しの ID は数えない
     num = re.compile(rf"{re.escape(prefix)}-(\d{{3}})")
     ids = [m.group(1) for t in found for m in RULE_ID.finditer(t)]
     ids += [r.get("rule", "") for r in records(ws) if r["kind"] in ("proposal", "sent")]  # 提案だけで、まだ当てていない ID と、Issue で替えた ID も使ったものにする
@@ -405,7 +408,7 @@ def where(ws, rid):
 def target(ws, f):
     p = (ws / f).resolve()
     if not p.is_relative_to(ws) or p.is_relative_to(PLUGIN):
-        sys.exit(f"変更先はワークスペースの中のファイルだけ（プラグインは factory-kaizen で Issue にする）: {f}")
+        sys.exit(f"変更先はワークスペースの中のファイルだけ（プラグインは desk-kaizen で Issue にする）: {f}")
     return p
 
 
@@ -507,7 +510,7 @@ def apply(ws, ids):
         if p["status"] != "未適用":
             sys.exit(f"{i} は {p['status']}")
         if p.get("plugin"):
-            print(f"{i}: プラグインへの提案なので当てない（factory-kaizen で Issue にし、ledger.py sent {i} --issue <URL> で残す）")
+            print(f"{i}: プラグインへの提案なので当てない（desk-kaizen で Issue にし、ledger.py sent {i} --issue <URL> で残す）")
             continue
         f = target(ws, p["file"])
         text = f.read_text(encoding="utf-8") if f.exists() else ""
@@ -772,7 +775,7 @@ def selftest_topics():
     """プラグインのどの [ID] も、TOPICS の主題を使い、1 つのファイルにだけ書く（ファイルを分けたり、新しい決まりを足したりしたときに、表から外れた ID を止める）。"""
     bad, seen = [], {}
     for f in sorted(PLUGIN.rglob("*")):
-        if f.suffix in (".md", ".py") and f.is_file() and "factory-migrate" not in f.parts and "templates" not in f.parts and f.resolve() != Path(__file__).resolve():
+        if f.suffix in (".md", ".py") and f.is_file() and "desk-migrate" not in f.parts and "templates" not in f.parts and f.resolve() != Path(__file__).resolve():
             for m in RULE_ID.finditer(f.read_text(encoding="utf-8")):
                 rid = m.group(1)
                 if rid.startswith("ws-"):
@@ -799,7 +802,7 @@ def selftest():
     quiet = lambda *a: contextlib.redirect_stdout(io.StringIO())
     with tempfile.TemporaryDirectory() as d:
         ws = Path(d).resolve()
-        (ws / "factory.toml").write_text("")
+        (ws / "desk.toml").write_text("")
         (ws / "Customers" / "acme" / "deck_202610").mkdir(parents=True)
         (ws / "rules" / "slides-build").mkdir(parents=True)
         (ws / "rules" / "slides-build" / "visual.md").write_text("`slides-build/visual.md` に足す。\n\n- [ws-slides-visual-001] 本文は 16pt。\n")
@@ -1080,7 +1083,7 @@ def selftest():
                 pass
             (ws / "rules" / "c.md").write_text("## 見出し\n- [ws-c-001] 次は使わない:\n  - 赤い文字\n- [ws-c-002] 本文は 16pt。\n", encoding="utf-8")
             for argv in (["--file", "rules/c.md", "--old", "## 見出し\n- [ws-c-001] 次は使わない:", "--new", "## 見出し"],  # 続きの行だけが残る
-                         ["--file", ".factory/ledger.jsonl", "--old", path(ws).read_text(encoding="utf-8").splitlines()[0] + "\n", "--new", "x"]):  # 決まりのファイルでない
+                         ["--file", ".desk/ledger.jsonl", "--old", path(ws).read_text(encoding="utf-8").splitlines()[0] + "\n", "--new", "x"]):  # 決まりのファイルでない
                 try:
                     with quiet(), contextlib.redirect_stderr(io.StringIO()):
                         main(["propose", "--auto", "--why", "片付け", "--kind", "重なり"] + argv)
@@ -1196,7 +1199,7 @@ def selftest_candidates(quiet):
     import contextlib, io, os
     with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as plug:
         ws, plug = Path(d).resolve(), Path(plug)
-        (ws / "factory.toml").write_text("")
+        (ws / "desk.toml").write_text("")
         (ws / "rules" / "slides-build").mkdir(parents=True)
         (ws / "rules" / "slides-build" / "visual.md").write_text(
             "- [ws-slides-visual-001] 表は分ける。\n- [ws-slides-visual-002] 本文は 18pt（slides-visual-012 より優先。読みやすさ）。\n- [ws-slides-visual-003] 見出しは左（slides-visual-777 より優先）。\n"

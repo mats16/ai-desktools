@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """スライドとドキュメントで同じ lint の部品: 本文の表記の決まり（HARD・WARN）、色のコントラスト、出典の表の照合、指摘の入れ物（Report）、
-ワークスペースの点検（rules/<スキル>/checks.py）、要確認の記録（.factory/lint_runs.jsonl）。スライドは slides-build の lint.py、
+ワークスペースの点検（rules/<スキル>/checks.py）、要確認の記録（.desk/lint_runs.jsonl）。スライドは slides-build の lint.py、
 ドキュメントは docs-build の doc_lint.py が読む。標準ライブラリだけ。
 usage: python3 textlint.py --stats   要確認の残り方（規則ごと。dreaming/run.md の 5）
        python3 textlint.py --selftest"""
@@ -129,8 +129,8 @@ def workspace_checks(kind, data, r):
     （修正の指示から育てる、そのワークスペースだけの点検。deck-practices/rules.md の「Rule layers」）。足された指摘のうち、checks.py の HARD にある名前は要修正、ほかは要確認。"""
     import importlib.util
     try:
-        path = gapi.factory_path().parent / "rules" / CHECKS[kind] / "checks.py"
-    except SystemExit:  # factory.toml がない
+        path = gapi.config_path().parent / "rules" / CHECKS[kind] / "checks.py"
+    except SystemExit:  # desk.toml がない
         return 0
     if not path.is_file():
         return 0
@@ -150,9 +150,9 @@ def workspace_checks(kind, data, r):
 
 
 def log_path():
-    """要確認の記録。ワークスペース（factory.toml のあるフォルダ）の .factory/ に置く（プラグインのフォルダは入れ直すと消える）。
+    """要確認の記録。ワークスペース（desk.toml のあるフォルダ）の .desk/ に置く（プラグインのフォルダは入れ直すと消える）。
     ponytail: 足すだけで消さない（1 回 1 行）。重くなったら古い行を落とす"""
-    return str(gapi.factory_path().parent / ".factory" / "lint_runs.jsonl")
+    return str(gapi.config_path().parent / ".desk" / "lint_runs.jsonl")
 
 
 def log_run(r, deck, path=None):
@@ -160,7 +160,7 @@ def log_run(r, deck, path=None):
     資料の文は残さず、場所（p3・段落 12）を除いた指摘のハッシュだけにする（ページが増えても同じ指摘と分かる）。"""
     warn = {k: sorted({hashlib.sha1(re.sub(r"^(p\d+|段落 \d+)", "", h).encode()).hexdigest()[:8] for h in v})
             for k, v in r.hits.items() if v and k not in r.hard}
-    if os.environ.get("FACTORY_VERIFY"):  # factory-kaizen の検証で組んだ仮の資料は数えない
+    if os.environ.get("DESK_VERIFY"):  # desk-kaizen の検証で組んだ仮の資料は数えない
         return
     path = path or log_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -215,17 +215,17 @@ def selftest():
     assert not_in_facts(["売上は 1,200 億円", "３．２倍", "12%"], "1200 億円、3.2 倍") == ["12%"]  # 桁区切り・全角はそろえ、表にない値だけを出す
     # ワークスペースの点検: HARD の名前だけ要修正になる。スライドとドキュメントは、それぞれのスキルの checks.py
     with tempfile.TemporaryDirectory() as ws, contextlib.chdir(ws), contextlib.redirect_stdout(io.StringIO()):
-        Path(ws, "factory.toml").write_text("")
+        Path(ws, "desk.toml").write_text("")
         Path(ws, "rules", "slides-build").mkdir(parents=True)
         Path(ws, "rules", "slides-build", "checks.py").write_text(
             'HARD = {"禁止の語"}\ndef slides(p, r):\n    r.hits["禁止の語"].append("p1")\n    r.hits["気になる語"].append("p2")\n')
-        gapi.find_factory.cache_clear()
+        gapi.find_config.cache_clear()
         r = Report()
         assert workspace_checks("slides", {}, r) == 1 and r.hits["気になる語"] and workspace_checks("doc", {}, Report()) == 0
         Path(ws, "rules", "docs-build").mkdir()
         Path(ws, "rules", "docs-build", "checks.py").write_text('def doc(doc, r):\n    r.hits["文書の語"].append("段落 1")\n')
         assert workspace_checks("doc", {}, r := Report()) == 0 and r.hits["文書の語"]  # HARD がなければ要確認
-    gapi.find_factory.cache_clear()
+    gapi.find_config.cache_clear()
     print("selftest ok")
 
 
