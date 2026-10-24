@@ -1,6 +1,6 @@
 ---
 name: factory-init
-description: Create an AI Deck Factory workspace (the folder that holds materials and rules). Places templates of AGENTS.md, CLAUDE.md, factory.toml, references_index.md, rules/, and .gitignore, plus Customers/, Internal/, and Research/ (never overwrites existing files), fills in factory.toml with the user, and checks with factory-doctor. Use when asked 「ワークスペースを作って」, 「setup して」, or 「AI Deck Factory を使い始めたい」.
+description: Create an AI Desk Tools workspace (the folder that holds materials and rules). Places templates of AGENTS.md, CLAUDE.md, factory.toml, references_index.md, rules/, and .gitignore, plus Customers/, Internal/, and Research/ (never overwrites existing files), fills in factory.toml with the user, and checks with factory-doctor. Use when asked 「ワークスペースを作って」, 「setup して」, or 「AI Desk Tools を使い始めたい」.
 ---
 
 # Create a workspace

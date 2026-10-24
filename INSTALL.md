@@ -1,12 +1,12 @@
-# AI Deck Factory を会話で入れる（エージェントが読む手順）
+# AI Desk Tools を会話で入れる（エージェントが読む手順）
 
 README の「会話で入れる」のプロンプトを貼られたエージェントが従う手順。プラグインを入れ、ワークスペースを作り、factory-doctor で確かめるまでを、1 つの会話で進める。手で入れる手順は README の「入れ方」。
 
-このファイルは curl で読む（`curl -fsSL https://raw.githubusercontent.com/mats16/ai-deck-factory/main/INSTALL.md`）。WebFetch のように要約して返す道具では、コマンドと手順が欠ける。
+このファイルは curl で読む（`curl -fsSL https://raw.githubusercontent.com/mats16/ai-desktools/main/INSTALL.md`）。WebFetch のように要約して返す道具では、コマンドと手順が欠ける。
 
 ## 決まり
 
-- **この会話には、まだスキルがない。** 入れたスキルは次の会話から読み込まれる。この会話では `/ai-deck-factory:factory-init`・`$ai-deck-factory:factory-init`・`/skill:factory-init` を呼ばずに、入れた場所の `SKILL.md` を開いて従う（4）。
+- **この会話には、まだスキルがない。** 入れたスキルは次の会話から読み込まれる。この会話では `/desk-tools:factory-init`・`$desk-tools:factory-init`・`/skill:factory-init` を呼ばずに、入れた場所の `SKILL.md` を開いて従う（4）。
 - **ワークスペースだけに入れる。** `~/.claude/settings.json`・`~/.pi/agent/settings.json` は変えない。Codex は入れる範囲がないので、`~/.codex/config.toml` で切ってワークスペースの `.codex/config.toml` で入れる（3）。ほかのフォルダの会話にはスキルが出ない。
 - **ユーザーが決めることは聞いてから進める。** 場所、ツールを入れるか、`factory.toml` の値。ブラウザが開くログイン（`gcloud auth application-default login`）は、ユーザーに回してもらう。
 - **あるファイルは上書きしない。** factory-init の `init.py` も上書きしない。
@@ -40,39 +40,39 @@ git --version
 
 ```sh
 cd <ワークスペース>
-claude plugin marketplace list --json | python3 -c "import json,sys; [print(m) for m in json.load(sys.stdin) if m['name']=='ai-deck-factory']"   # もうあるか
-claude plugin marketplace add https://github.com/mats16/ai-deck-factory.git --scope project
-claude plugin install ai-deck-factory@ai-deck-factory --scope project
-claude plugin list --json | python3 -c "import json,sys; [print(p.get('readFromFolder') or p['installPath']) for p in json.load(sys.stdin) if p['id']=='ai-deck-factory@ai-deck-factory' and p['enabled']]"
+claude plugin marketplace list --json | python3 -c "import json,sys; [print(m) for m in json.load(sys.stdin) if m['name']=='desk-tools']"   # もうあるか
+claude plugin marketplace add https://github.com/mats16/ai-desktools.git --scope project
+claude plugin install desk-tools@desk-tools --scope project
+claude plugin list --json | python3 -c "import json,sys; [print(p.get('readFromFolder') or p['installPath']) for p in json.load(sys.stdin) if p['id']=='desk-tools@desk-tools' and p['enabled']]"
 ```
 
-- 1 つめで `ai-deck-factory` が出たら、`add` は飛ばす（名前は 1 つしか持てない。足すと前のものとぶつかる）。出た入れ元（`path`・`url`・`repo`）が、ここで入れるもの（GitHub）と違うときは、そのことと、ほかのワークスペースもその入れ元を読んでいることを伝え、そのまま使うかをユーザーに聞く。入れ元を勝手に替えない。
+- 1 つめで `desk-tools` が出たら、`add` は飛ばす（名前は 1 つしか持てない。足すと前のものとぶつかる）。出た入れ元（`path`・`url`・`repo`）が、ここで入れるもの（GitHub）と違うときは、そのことと、ほかのワークスペースもその入れ元を読んでいることを伝え、そのまま使うかをユーザーに聞く。入れ元を勝手に替えない。
 - 最後に出たパスが `<プラグイン>`。手元のパスから入れたなら checkout（`readFromFolder`）、GitHub から入れたなら写し（`installPath`）。
 
 **Codex**
 
 ```sh
 cd <ワークスペース>
-codex plugin marketplace list --json | python3 -c "import json,sys; [print(m) for m in json.load(sys.stdin)['marketplaces'] if m['name']=='ai-deck-factory']"   # もうあるか
-codex plugin marketplace add mats16/ai-deck-factory
-codex plugin add ai-deck-factory@ai-deck-factory --json | python3 -c "import json,sys; print(json.load(sys.stdin)['installedPath'])"
-python3 -c 'import os,pathlib; p=pathlib.Path(os.environ.get("CODEX_HOME","~/.codex")).expanduser()/"config.toml"; k="[plugins.\"ai-deck-factory@ai-deck-factory\"]\nenabled = true"; s=p.read_text(); assert k in s, "見つからない"; p.write_text(s.replace(k, k[:-4]+"false"))'
-mkdir -p .codex && { grep -qs 'ai-deck-factory@ai-deck-factory' .codex/config.toml || printf '\n[plugins."ai-deck-factory@ai-deck-factory"]\nenabled = true\n' >> .codex/config.toml; }
+codex plugin marketplace list --json | python3 -c "import json,sys; [print(m) for m in json.load(sys.stdin)['marketplaces'] if m['name']=='desk-tools']"   # もうあるか
+codex plugin marketplace add mats16/ai-desktools
+codex plugin add desk-tools@desk-tools --json | python3 -c "import json,sys; print(json.load(sys.stdin)['installedPath'])"
+python3 -c 'import os,pathlib; p=pathlib.Path(os.environ.get("CODEX_HOME","~/.codex")).expanduser()/"config.toml"; k="[plugins.\"desk-tools@desk-tools\"]\nenabled = true"; s=p.read_text(); assert k in s, "見つからない"; p.write_text(s.replace(k, k[:-4]+"false"))'
+mkdir -p .codex && { grep -qs 'desk-tools@desk-tools' .codex/config.toml || printf '\n[plugins."desk-tools@desk-tools"]\nenabled = true\n' >> .codex/config.toml; }
 ```
 
 - 1 つめで出たときは、Claude Code と同じく `marketplace add` を飛ばし、入れ元（`marketplaceSource`）が違えばユーザーに聞く。
 - 3 つめに出たパスが `<プラグイン>`（`~/.codex/plugins/cache/` の写し）。
-- 4 つめでユーザーの設定の `enabled` を切り、5 つめでワークスペースだけで入れる。4 つめが止まったら、`~/.codex/config.toml` の `[plugins."ai-deck-factory@ai-deck-factory"]` を見せ、`enabled = false` にしてもらう（切らないと、どのフォルダの会話にもスキルが出る）。5 つめは、ワークスペースの `.codex/config.toml` にもう `ai-deck-factory@ai-deck-factory` があれば足さないので、そのときは中身を見て `enabled = true` かを確かめる。ワークスペースの `.codex/config.toml` は、そのフォルダを信頼したときだけ読まれる。
-- hook は、次に対話の Codex をワークスペースで開いたとき、`/hooks` で `ai-deck-factory` の 2 つを信頼してもらう（6 で伝える。信頼するまで `rules/` が出ない。`<プラグイン>/docs/codex-plugin.md`）。
+- 4 つめでユーザーの設定の `enabled` を切り、5 つめでワークスペースだけで入れる。4 つめが止まったら、`~/.codex/config.toml` の `[plugins."desk-tools@desk-tools"]` を見せ、`enabled = false` にしてもらう（切らないと、どのフォルダの会話にもスキルが出る）。5 つめは、ワークスペースの `.codex/config.toml` にもう `desk-tools@desk-tools` があれば足さないので、そのときは中身を見て `enabled = true` かを確かめる。ワークスペースの `.codex/config.toml` は、そのフォルダを信頼したときだけ読まれる。
+- hook は、次に対話の Codex をワークスペースで開いたとき、`/hooks` で `desk-tools` の 2 つを信頼してもらう（6 で伝える。信頼するまで `rules/` が出ない。`<プラグイン>/docs/codex-plugin.md`）。
 
 **pi**
 
 ```sh
 cd <ワークスペース>
-pi install -l git:github.com/mats16/ai-deck-factory
+pi install -l git:github.com/mats16/ai-desktools
 ```
 
-`<プラグイン>` は `<ワークスペース>/.pi/git/github.com/mats16/ai-deck-factory`。
+`<プラグイン>` は `<ワークスペース>/.pi/git/github.com/mats16/ai-desktools`。
 
 どれも `<プラグイン>/skills/factory-init/SKILL.md` があることを確かめる。
 
@@ -103,8 +103,8 @@ pi install -l git:github.com/mats16/ai-deck-factory
 - 定期の整理を登録したスケジューラーと時刻。手で入れてもらうものが残っていれば、その手順。
 - doctor の結果。残った要確認と、ユーザーが回すもの。
 - 次からの開き方。**ワークスペースの直下で開く**（サブフォルダで開くと、プラグインのスキルも hook も読み込まれない）。
-  - Claude Code: `cd <ワークスペース> && claude`。スキルは `/ai-deck-factory:slides-build` のように呼ぶ。
-  - Codex: `cd <ワークスペース> && codex`。初めてはフォルダを信頼し、`/hooks` で `ai-deck-factory` の hook を信頼する。スキルは `$ai-deck-factory:slides-build` のように呼ぶ。
+  - Claude Code: `cd <ワークスペース> && claude`。スキルは `/desk-tools:slides-build` のように呼ぶ。
+  - Codex: `cd <ワークスペース> && codex`。初めてはフォルダを信頼し、`/hooks` で `desk-tools` の hook を信頼する。スキルは `$desk-tools:slides-build` のように呼ぶ。
   - pi: `cd <ワークスペース> && pi`。初めては `/trust` で信頼を保存する（保存しないと、パッケージのスキルが出ない。dreaming の定期の回も読めない）。スキルは `/skill:slides-build` のように呼ぶ。
 - 最初の資料は「〇〇向けの提案のスライドを作って」のように頼めばよい（スキル `deck-practices` から始まる）。
 

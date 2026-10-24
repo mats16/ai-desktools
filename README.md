@@ -1,4 +1,4 @@
-# AI Deck Factory
+# AI Desk Tools
 
 日本語のスライド（Google Slides）とドキュメント（Google Docs）を Slides API・Docs API で直接組み、lint・Google が描いたページの画像・別の目のレビューで確かめて渡す仕組み。会話の記録から、決まりに戻し忘れた指示を拾って決まりを育てていく（dreaming）。
 
@@ -13,7 +13,7 @@
 | `factory-migrate` | 前の版で作ったワークスペースを今の版へ移す（`rules/` の移動、決まりの ID とパスの書き換え。先に `.factory/migrate/` に控えを取る）。プラグインが分けたファイルへの上書きは、決まりごとに移し先を出し、エージェントが分け直す |
 | `factory-kaizen` | プラグインの改善を、過去の資料で前後を比べてから Issue にする（理由・背景・検証の結果・見た目なら画像・変更案の差分）。PR は持ち主が作る |
 | `deck-practices` | 資料を作る・直すときに最初に読む（スライドとドキュメントで共通）。`SKILL.md` は全体の流れと場面ごとに開くファイルの表だけで、中身は場面ごとのファイル（`start.md`: 1〜5 の準備と構成、`agents.md`: 子の起こし方と待ち方、`deliver.md`: 返す・片付ける、`revise.md`: 返したあとの頼み、`drive.md`: Drive への置き方、`content.md`・`materials.md`・`rules.md`。資料の種類ごとの決まりは `content_customer.md`・`content_internal.md`・`content_explain.md`）。スライドとドキュメントで共有するスクリプト（Google の API・lint の共通の決まり・書体と著作権表示・一覧の画像・台帳）も持つ |
-| `slides-template` | 会社のテンプレートから、AI Deck Factory のテンプレート（テーマ）を作る。日本語のテンプレートがある・英語しかない・ない、の 3 つ。書体・大きさ・大枠の色を残し、和文の書体とコントラストを合わせる（`template.py audit`、`slides.py lint <テーマのファイル>`） |
+| `slides-template` | 会社のテンプレートから、AI Desk Tools のテンプレート（テーマ）を作る。日本語のテンプレートがある・英語しかない・ない、の 3 つ。書体・大きさ・大枠の色を残し、和文の書体とコントラストを合わせる（`template.py audit`、`slides.py lint <テーマのファイル>`） |
 | `slides-build` | Google Slides を組む（`slides.py`）・確かめる（`gslides.py check`・`lint.py`）。新しいデッキの 6〜8（代表の 3 枚、残りのページ、全体を組む）は `workflow.md`。ページの JSON は `pages.md`、図・矢印・ガント・棒グラフの書き方は `diagrams.md`、見た目の決まりは `visual.md`、コマンドは `commands.md`、テーマは `themes.md`、画像は `images.md`、lint の読み方は `lint.md`、社内のデッキの流用は `reuse.md`、pages.py と pptx の古いデッキは `legacy.md`。使い回す画像は `assets/`、一通りの書き方を入れた JSON のページの見本は `samples/json/` |
 | `docs-build` | Google Docs を `build/doc.md` から組む・確かめる（`docs.py`・`doc_lint.py`・`doc_layout.py`）。見た目の決まりは `visual.md`、lint の読み方は `lint.md`、Docs API の落とし穴は `api.md`、テーマのファイルは `themes.md`、テンプレートから書く・作るは `templates.md`。テンプレートはワークスペースの `rules/docs-build/templates/` |
 | `deck-review` | 返す前の全体のレビュー。会話を渡さない新しいサブエージェント（メインと同じモデル）に頼む。`SKILL.md` はラウンドの流れと手順ごとに開くファイルの表だけで、頼み方は `ask.md`、指摘の確かめと直し方は `fix.md`、直しを子に分けるときは `prompt_fix.md`。子への依頼文は形式ごと（`prompt_slides.md`・`prompt_doc.md`）と出典の照合（`prompt_sources.md`） |
@@ -41,8 +41,8 @@ docs/                             設定のガイド（claude-code-plugin.md: Cl
 Claude Code・Codex・pi のどれかを開き、次を貼る（どのフォルダで開いた会話でもよい）。
 
 ```text
-AI Deck Factory を入れて、ワークスペースを作ってください。
-手順は https://raw.githubusercontent.com/mats16/ai-deck-factory/main/INSTALL.md にあります。WebFetch ではなく curl で読み、そのとおりに進めてください。
+AI Desk Tools を入れて、ワークスペースを作ってください。
+手順は https://raw.githubusercontent.com/mats16/ai-desktools/main/INSTALL.md にあります。WebFetch ではなく curl で読み、そのとおりに進めてください。
 ```
 
 エージェントが [INSTALL.md](INSTALL.md) に従い、ワークスペースにするフォルダと全社の共有テーマのフォルダ、定期の整理を回すかを聞き、Python・uv を見て、そのフォルダだけにプラグインを入れる。続けて、入れた `factory-init` と `factory-doctor` の手順で `factory.toml`（Google の認証、テーマ、Drive の置き場所、材料を集める道具）を一緒に埋め、要修正が 0 になるまで進める。最後に、定期の整理（dreaming）を回すなら、エージェントが自分の道具にあるスケジューラー（T3 Code・Claude Code Desktop・Omnigent など）に登録する（なければ、launchd か cron の入れ方を示す）。自分で回すのは、ブラウザが開く Google のログインだけ。終わったら、ワークスペースの直下で会話を開き直す。
@@ -54,27 +54,27 @@ AI Deck Factory を入れて、ワークスペースを作ってください。
 **Claude Code**
 
 ```sh
-claude plugin marketplace add https://github.com/mats16/ai-deck-factory.git   # 手元の checkout なら ~/Projects/ai-deck-factory
-claude plugin install ai-deck-factory@ai-deck-factory
-claude plugin update ai-deck-factory@ai-deck-factory               # GitHub から入れたとき、直して commit・push したあと
+claude plugin marketplace add https://github.com/mats16/ai-desktools.git   # 手元の checkout なら ~/Projects/ai-desktools
+claude plugin install desk-tools@desk-tools
+claude plugin update desk-tools@desk-tools               # GitHub から入れたとき、直して commit・push したあと
 ```
 
-マーケットプレイスが GitHub を指していれば、会話は `~/.claude/plugins/cache/` に写した版を読む。`plugin.json` に版を書いていないので commit の SHA が版になり、push してから `update` で届く。手元のパスで足したなら、会話は checkout をそのまま読むので、保存すれば次の会話から効く（commit も `update` も要らない）。手元で直しながら試すときは `claude --plugin-dir ~/Projects/ai-deck-factory`（worktree と検証用のワークスペースで試す手順は [docs/development.md](docs/development.md)）。スキルは `/ai-deck-factory:factory-init` のように呼ぶ。資料のフォルダだけで効かせる（`--scope project`）入れ方と、効いている範囲の確かめ方は [docs/claude-code-plugin.md](docs/claude-code-plugin.md)。
+マーケットプレイスが GitHub を指していれば、会話は `~/.claude/plugins/cache/` に写した版を読む。`plugin.json` に版を書いていないので commit の SHA が版になり、push してから `update` で届く。手元のパスで足したなら、会話は checkout をそのまま読むので、保存すれば次の会話から効く（commit も `update` も要らない）。手元で直しながら試すときは `claude --plugin-dir ~/Projects/ai-desktools`（worktree と検証用のワークスペースで試す手順は [docs/development.md](docs/development.md)）。スキルは `/desk-tools:factory-init` のように呼ぶ。資料のフォルダだけで効かせる（`--scope project`）入れ方と、効いている範囲の確かめ方は [docs/claude-code-plugin.md](docs/claude-code-plugin.md)。
 
 **Codex**
 
 ```sh
-codex plugin marketplace add mats16/ai-deck-factory   # 手元の checkout なら ~/Projects/ai-deck-factory
-codex plugin add ai-deck-factory@ai-deck-factory     # 直したものを取るときも回し直す（GitHub なら先に codex plugin marketplace upgrade ai-deck-factory）
+codex plugin marketplace add mats16/ai-desktools   # 手元の checkout なら ~/Projects/ai-desktools
+codex plugin add desk-tools@desk-tools     # 直したものを取るときも回し直す（GitHub なら先に codex plugin marketplace upgrade desk-tools）
 ```
 
-Codex は Claude Code の形（`.claude-plugin/`・`hooks/hooks.json`）をそのまま読む。会話が読むのは `~/.codex/plugins/cache/` の写しで、手元のパスで足しても写すので、直したら `add` を回し直す。hook は、対話の Codex の `/hooks` で信頼するまで動かない。スキルは `$ai-deck-factory:factory-init` のように呼ぶ。資料のフォルダだけで効かせる入れ方（Codex には scope がないので、ユーザーの設定で切り、ワークスペースの `.codex/config.toml` で入れる）と、効いている範囲の確かめ方は [docs/codex-plugin.md](docs/codex-plugin.md)。
+Codex は Claude Code の形（`.claude-plugin/`・`hooks/hooks.json`）をそのまま読む。会話が読むのは `~/.codex/plugins/cache/` の写しで、手元のパスで足しても写すので、直したら `add` を回し直す。hook は、対話の Codex の `/hooks` で信頼するまで動かない。スキルは `$desk-tools:factory-init` のように呼ぶ。資料のフォルダだけで効かせる入れ方（Codex には scope がないので、ユーザーの設定で切り、ワークスペースの `.codex/config.toml` で入れる）と、効いている範囲の確かめ方は [docs/codex-plugin.md](docs/codex-plugin.md)。
 
 **pi**
 
 ```sh
-pi install ~/Projects/ai-deck-factory                                # 手元の checkout をそのまま読む（写さない）
-pi install git:github.com/mats16/ai-deck-factory        # git から
+pi install ~/Projects/ai-desktools                                # 手元の checkout をそのまま読む（写さない）
+pi install git:github.com/mats16/ai-desktools        # git から
 ```
 
 スキルは `/skill:factory-init` のように呼ぶ。資料のフォルダだけで効かせる（`-l`）入れ方と、project trust、効いている範囲の確かめ方は [docs/pi.md](docs/pi.md)。
@@ -281,6 +281,7 @@ gcloud の既定の OAuth クライアントで作った認証情報は、`googl
 - 2026-10-24: 段階的な読み込みのため、スキルのファイルを、要る場面でだけ開く部分に分ける（ユーザー「全体的にスキルが肥大化しているので、段階的読み込みを意識した効率的な構成に移行したいのですが、対応すべきスキルを分析して」「1,2,3順に実装してください。」）。`slides-build/pages.md` から、図・矢印・ガント・棒グラフと表の格子の書き方（`frame`・`arrow`・`gantt`・`bars`、位置の警告の slides-pages-038、slides-pages-009・010）を `diagrams.md` に、pages.py だけで要る「Laying out shapes and text」を `legacy.md` に移す（4.3 万字 → 2.4 万字。図のないページを書く子は `diagrams.md` を開かない）。`visual.md` は分けない（ページを書く子もレビューの子もほぼ全部要り、スクリプトのメッセージが節の番号で指すため）。分けたファイルの元の名前は、いつも読む側に残す（`rules/<スキル>/<ファイル>` の上書きが、元のファイルを読んだときに出続けるため）。`deck-practices/content.md` の §1 は、どの資料にも効く決まり（deck-content-001・002・045・004・009、読ませる資料）とコミュニティ向けの節だけを残し、顧客向けを `content_customer.md`、社内向けを `content_internal.md`、道具・仕組み・調査・発表の説明と使い方の案内にだけ効く決まり（deck-content-043・046〜051・003・044、社内向けの節にあった 010・013・014・058、顧客向けの節にあった 008）を `content_explain.md` に出す。前は §1 を全部読んでいたので、社内向けの節にあっても社外の資料に効いていた決まり（009 など）は、分けたあとも見えるところへ移す（3.7 万字 → 2.5 万字。書く子とレビューの子は、3 つのうち資料に当てはまるものだけを開く）。毎回すべての会話で読まれるスキルの `description` から、中のファイルの一覧と手順の細かいところを外し、何をするかと使う場面だけにする（10 個で 8,048 字 → 4,872 字）。1 つのファイルに場面の違う手順が入っていた SKILL.md も分ける。`dreaming/SKILL.md` は入口と開くファイルの表だけにし、定期の実行を `run.md`、報告への返事で提案を当てる手順を `apply.md` に出す（返事の会話は 3.4 万字ではなく 0.7 万字を読む）。`slides-template/SKILL.md` は既定のテーマの切り替えと直すときを残し、会社のテンプレートから作る流れを `create.md`、暗い本文のテーマを `dark.md`、書体の早見表を `fonts.md` に出す（ほかのスキルとスクリプトも `fonts.md` を指す）。`vids-build/SKILL.md` から、ユーザーがシーンを名指ししたときだけ使う AI avatar の節を `avatars.md` に出す。`docs-build/SKILL.md` の doc.md の例と記法の表（1 万字）は、どの文書を書くときにも要るので分けない
 - 2026-10-24: `SKILL.md` の本文は 5,000 トークン以内にし、場面でしか要らない節は、`SKILL.md` の表から 1 段で指すファイルに出す（ユーザー「全体的にスキルが肥大化しています。必要な時に必要な分だけ読み込めるように、段階的読み込みやファイル分割などのベストプラクティスを用いて最適化してください。」「実装前に anthropic のベストプラクティスを調査してください。」）。Anthropic の Skill authoring best practices と Claude Code の skills の説明で確かめたこと: `SKILL.md` の本文は 500 行・約 5k トークンまで、参照は `SKILL.md` から 1 段まで（入れ子は一部だけ読まれやすい）、一緒に使わない中身は別のファイルにする、Claude Code はコンパクションのあと呼んだスキルの先頭 5,000 トークンだけを付け直す（2026-10-24 に確かめた）。`dreaming`・`slides-template`・`vids-build`・`deck-review` を分けたあと（#99・#102）、5k を超えて残っていた `docs-build` から、テーマのファイル（docs-write-010）を `themes.md`、テンプレートから書く・作る（docs-write-003）を `templates.md`、`docs.py check` がすることを `lint.md` に出す（2.3 万字 → 1.5 万字）。doc.md の例と記法の表は、前の決めのとおり `SKILL.md` に残す。§1.3 と §2 の見出しは残し、移した先を 1〜2 文で指す（ほかのファイルが節の番号で指しているため）
 - 2026-10-24: hook が `rules/` と顧客の `memory.md` を出すのは、同じ会話でまだ見えていないときだけにする。コンパクションで消えたら、次に開いたときに出し直す。Claude Code と Codex は hook に渡る会話の記録（`transcript_path`。Claude Code の子は子の記録）の最後のコンパクションのあとを、pi は拡張がモデルに見えている文脈（`buildSessionProjection`）を見る。Claude Code の子が子の記録を見るのは、hook に `agent_id` が渡る 2.1.69 から（それより前は親の記録で決める）。Codex は記録の形を確かめていない（合わなければ、前と同じく毎回出す）。全体に入れる対応（既定のワークスペース `~/.ai-deck-factory`、外で開いたときに `AGENTS.md` を案内する hook）は後回しにし、調べたことは mats16/ai-deck-factory#105 に残す（ユーザー「一旦、グローバルインストールへの対応は無くして hooks の整理だけで進めてください。」「グローバルインストールについての findings は issue に残してください」）。10/12〜10/24 の会話の記録を調べると、hook は資料を作る pi の会話で効いていた（10/20 からは `rules/` 98%・`memory.md` 100%）。ただし、差し込んだ 821 回の 45% は、同じ会話の 2 回目以降だった（1 本あたり平均 1.3 万字）。効いていなかったのは、ワークスペースの外で開いた会話（Claude Code の 139 本のうち 125 本）と Codex（4 本、出たのは 0）。UserPromptSubmit は使われていなかったが、Codex の `$` で呼ぶ道筋なので残す
+- 2026-10-24: リポジトリの名前を `ai-desktools` に変えたのに合わせて、プラグイン・マーケットプレイス・pi のパッケージの名前を `desk-tools` にし（スキルは `/desk-tools:slides-build`・`$desk-tools:slides-build`、入れるときは `desk-tools@desk-tools`）、GitHub の URL を `mats16/ai-desktools` にする。Google Slides のテンプレートとデッキに書き込む目印（`ai-deck-factory theme=` など）は、作ってあるものが読めなくなるので替えない。文の中の製品名も「AI Deck Factory」から「AI Desk Tools」にする。この「決めたこと」の過去の記録も直さない（ユーザー「プラグイン名は desk-tools に変更します。」「URL も合わせて変更してください。」、製品名を聞いて「AI Desk Tools」）。
 
 ## 入れていないもの
 
@@ -288,11 +289,12 @@ gcloud の既定の OAuth クライアントで作った認証情報は、`googl
 
 ## 残っている課題
 
-- **流れの再編の残り（2026-10-18）:** `kaizen.py rebuild` が JSON のデッキで止まる（mats16/ai-deck-factory#57）。`visual.md` の決まりの例には、まだ Python の書き方（`d.note`・`d.table`・`d.label` など）が残る。持ち主のワークスペースの `rules/` の ws-deck-flow-003・ws-deck-review-005（pi から T3 Code の子を `sleep 270` で待つ）は、deck-agents-013 の `t3_thread_wait` と食い違う。拡張が 30 秒以上の `sleep` を止めるので、外す。
+- **前の名前で入れたものを移す（後回し）:** 前の名前（`ai-deck-factory`）で登録したものは、新しい名前では引けない。ユーザーの設定とワークスペースの設定の両方にある（Claude Code の `~/.claude/plugins/`〔`known_marketplaces.json`・`marketplaces/`・`cache/`〕と `.claude/settings.json`、Codex の `~/.codex/config.toml`〔`[marketplaces.ai-deck-factory]`・`[plugins."ai-deck-factory@ai-deck-factory"]`〕と `.codex/config.toml`、pi の `~/.pi/agent/settings.json`〔`-l` なしで入れたとき。写しは `~/.pi/agent/git/`〕と `.pi/settings.json`）。漏れのないよう、`grep -rln ai-deck-factory ~/.claude/plugins ~/.claude/settings.json ~/.codex/config.toml ~/.codex/automations ~/.claude/scheduled-tasks ~/Library/LaunchAgents ~/.pi/agent/settings.json <ワークスペース>/.claude <ワークスペース>/.codex <ワークスペース>/.pi <ワークスペース>/AGENTS.md <ワークスペース>/rules` で拾ってから、外して `desk-tools` で入れ直す。ワークスペースの `AGENTS.md`・`rules/` に残る `/ai-deck-factory:<スキル>` は替える（hook は新しい名前でしか拾わない）。dreaming を定期に回す作業は、`dreaming/schedule.md` の 1〜5 と cron のどの登録先でも前の名前を写している（`prompt.txt` の 1 行、`run.sh` のパス）。登録した先を `dreaming/schedule.md` の見出しの順にすべて見て、新しい `prompt.txt` と `run.sh` のパスで登録し直す（T3 Code・Omnigent は道具の一覧で、cron は `crontab -l` で見る。上の grep に出ない）。Drive のフォルダ「AI Deck Factory」は `factory.toml` の URL で引くので、名前は替えなくてよい。持ち主の本番は前の checkout（`~/Projects/ai-deck-factory`）を読んでいる（ユーザー「プラグイン名の変更などが終わってないので、一旦後回しです」）。
+- **流れの再編の残り（2026-10-18）:** `kaizen.py rebuild` が JSON のデッキで止まる（mats16/ai-desktools#57）。`visual.md` の決まりの例には、まだ Python の書き方（`d.note`・`d.table`・`d.label` など）が残る。持ち主のワークスペースの `rules/` の ws-deck-flow-003・ws-deck-review-005（pi から T3 Code の子を `sleep 270` で待つ）は、deck-agents-013 の `t3_thread_wait` と食い違う。拡張が 30 秒以上の `sleep` を止めるので、外す。
 - **ワークスペースのテーマの章番号の色（2026-10-16）:** テーマの確かめに「扉の章番号 / 扉の地、3:1」を足したので、章番号を地に近い色にしていたテーマは `slides.py lint <テーマのファイル>` で届かないと出る（持ち主の手元の 7 つのうち 6 つ。1.28〜1.90:1）。直す色の案は lint が出す。どの色にするかは、テーマごとに画像で見て持ち主が決める。
 - **WCAG 3 のコントラストの物差しが決まったら、lint を合わせる（2026-10-16）:** 今の lint は WCAG 2 の比で見る（4.5:1、18pt 以上は 3:1。太字だけは 11pt 以上を 3:1 にした。slides-visual-039）。WCAG 3 の草案（2026-09-10）は、文字のコントラストの物差しを「まだ決まっていない」としている。候補の 1 つの APCA（W3C の外で作られた計算）は、大きさと太さで要る値が細かく変わる（本文でない文字は 16px の太字で Lc 60）。太字の境目を 11pt に下げた決まり（slides-visual-039）も、そのときに決め直す。決まったら、lint の色の組のすべてと、4.5:1 に合わせて決めたテーマの色（visual.md・`themes/`・ワークスペースのテーマ）を測り直し、見本を `tests/render/run.py` で組んで画像で比べる。
 - **hooks の残り（後回し）:** 前の検討の corrections・guard・review_gate。corrections（コンパクションの前に指摘を拾う）は、dreaming の報告の「取りこぼし」の数が続けて多ければ入れる（Claude Code と pi の両方に要る。pi にきっかけがあるかは確かめていない）。入れたのは `rules/` と顧客の memory を続けて出すものだけ。pi の `/skill:<名前>`（読むツールを通らない）では出ない。
-- **全体に入れる（後回し）:** ワークスペースの外で開いた会話でも使えるようにする（既定のワークスペース `~/.ai-deck-factory`、外で開いたときに `AGENTS.md` を案内する SessionStart の hook、dreaming が外の会話も拾う）。調べたことは mats16/ai-deck-factory#105。
+- **全体に入れる（後回し）:** ワークスペースの外で開いた会話でも使えるようにする（既定のワークスペース `~/.desk-tools`、外で開いたときに `AGENTS.md` を案内する SessionStart の hook、dreaming が外の会話も拾う）。調べたことは mats16/ai-desktools#105。
 - **継続改善の残り:** コンパクションの前に拾う hook は、`ledger.py rules` の週ごとの取りこぼしの割合を見てから決める。顧客の memory の古さ（担当が変わった）は、食い違う発言が出たときに直すだけで、日付から外すことはしていない。ワークスペースの決まりの上書きは、ワークスペースの中でしか数えていない（ほかの人のワークスペースの上書きは、プラグインに上げる提案で届いたものだけ見える）。構成案のレビューは、見逃しの数だけを見ている。分母（その間に作った資料の数）は台帳になく、dreaming が報告で資料を仕上げた会話の数と並べるだけで、割合にはしていない。代表の 3 枚と `/deck-review` の見逃しには印を付けていない。
 - **顧客の profile の残り:** hook は profile を続けて出さない（作り始めに 1 回読む。memory と違って長いので、`構成案*.md` を開くたびに出すと文脈が膨らむ）。dreaming は、会話でユーザーが言った顧客のこと（事業・構成・好み）を profile に拾わない。作る会話がその場で書き足すだけ。取り直しは、作り始めに 30 日より古いときだけで、定期には回していない。書き足しの取りこぼしが多いか、作り始めに読み忘れが続いたら、dreaming の提案か hook に足す。
 - **スキルの中の経緯:** 2026-10-12 に、スキルの本文の持ち主の決めたこと（「ユーザーが決めた」と日付、ユーザーの言葉）を、決まりの ID に置き換えた。移した経緯は、持ち主のワークスペースの決まりの台帳に入れる（`git show <この直しの前>:skills/...` からも見られる）。測った日・調べた日・その日より前のファイルを指す日付は、意味が変わるので残した。Issue に顧客の名前が入らないかは、`kaizen.py open` が見て止める（`Customers/` の顧客と資料のフォルダの名前、`[factory] private` の語）。

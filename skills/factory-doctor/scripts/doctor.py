@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """usage: doctor.py [<ワークスペース>] [--local]   （--selftest で自己確認）
-AI Deck Factory を動かす前提を確かめる。--local は手元だけ見て、Google の API を呼ばない。
+AI Desk Tools を動かす前提を確かめる。--local は手元だけ見て、Google の API を呼ばない。
 1 行 1 項目で「OK」「要修正」「要確認」を出す。要修正が 1 つでもあれば exit 1。標準ライブラリだけ。"""
 import io, contextlib, json, math, os, re, shutil, subprocess, sys, tempfile, tomllib
 from pathlib import Path

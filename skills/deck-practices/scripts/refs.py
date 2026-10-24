@@ -160,7 +160,7 @@ def guess_kind(t):
 
 
 def get(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "ai-deck-factory-refs"})
+    req = urllib.request.Request(url, headers={"User-Agent": "desk-tools-refs"})
     with urllib.request.urlopen(req, timeout=10) as res:
         return res.headers, res.read(200_000)
 

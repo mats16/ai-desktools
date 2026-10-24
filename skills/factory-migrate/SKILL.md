@@ -1,6 +1,6 @@
 ---
 name: factory-migrate
-description: Move a workspace made with an earlier version of AI Deck Factory to the current one (the 2026-10-24 renaming of skills, splitting of plugin files, and new rule IDs). After a backup, moves rules/ files and rewrites rule IDs and paths in rules/, AGENTS.md, customers' memory.md, and the rule ledger, then has you split overrides whose plugin file was split. Use when factory-doctor reports 「前の版のワークスペース」, after updating the plugin, or when asked 「移行して」「migrate して」.
+description: Move a workspace made with an earlier version of AI Desk Tools to the current one (the 2026-10-24 renaming of skills, splitting of plugin files, and new rule IDs). After a backup, moves rules/ files and rewrites rule IDs and paths in rules/, AGENTS.md, customers' memory.md, and the rule ledger, then has you split overrides whose plugin file was split. Use when factory-doctor reports 「前の版のワークスペース」, after updating the plugin, or when asked 「移行して」「migrate して」.
 ---
 
 # Move a workspace to the current version

@@ -1,6 +1,6 @@
 ---
 name: factory-doctor
-description: Check the prerequisites for running AI Deck Factory. Looks at Python and uv, the workspace (factory.toml, AGENTS.md), overlapping skills, Google authentication (a token in an environment variable or a credentials JSON), whether templates and Drive folders are reachable, and the MCP servers for gathering material, and prints how to fix each problem. Use after factory-init, in a new environment, on 401 or 403, when 「factory.toml が見つからない」 appears, or when asked 「環境を確かめて」 or 「doctor して」.
+description: Check the prerequisites for running AI Desk Tools. Looks at Python and uv, the workspace (factory.toml, AGENTS.md), overlapping skills, Google authentication (a token in an environment variable or a credentials JSON), whether templates and Drive folders are reachable, and the MCP servers for gathering material, and prints how to fix each problem. Use after factory-init, in a new environment, on 401 or 403, when 「factory.toml が見つからない」 appears, or when asked 「環境を確かめて」 or 「doctor して」.
 ---
 
 # Check the prerequisites

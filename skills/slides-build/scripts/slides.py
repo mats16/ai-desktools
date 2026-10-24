@@ -2430,7 +2430,7 @@ def spec_schema():
     defs["deck"]["properties"].pop("type")
     defs["theme"]["properties"].pop("type")
     root = lambda ref, k8s: {"allOf": [{"$ref": f"#/$defs/{ref}"}], "properties": {"kind": {"const": k8s}}, "required": ["apiVersion", "kind"]}
-    return {"$schema": "https://json-schema.org/draft/2020-12/schema", "$id": f"https://github.com/mats16/ai-deck-factory/{API_VERSION}", "title": f"AI Deck Factory のページ（{API_VERSION}）",
+    return {"$schema": "https://json-schema.org/draft/2020-12/schema", "$id": f"https://github.com/mats16/ai-desktools/{API_VERSION}", "title": f"AI Desk Tools のページ（{API_VERSION}）",
             "anyOf": [root("deck", "deck"), root("page", "page"), root("element", "component"), root("theme", "theme")], "$defs": defs}
 
 
@@ -2929,7 +2929,7 @@ def resolved(deck, p):
     ls = [l for l in p["layouts"] if is_blank(l) and l["objectId"] not in kinds]  # 会社のテンプレートから作ったものは、template.py が残した Blank が 1 つだけ（名前は会社のもの）
     layout = next((l["objectId"] for l in ls if l["layoutProperties"]["displayName"] == BLANK), ls[0]["objectId"] if len(p["layouts"]) == len(kinds) + 1 and ls else None)
     if not layout:
-        sys.exit(f"レイアウト「{BLANK}」がない。AI Deck Factory のテンプレートから作ったプレゼンではない（slides.py new で作る）")
+        sys.exit(f"レイアウト「{BLANK}」がない。AI Desk Tools のテンプレートから作ったプレゼンではない（slides.py new で作る）")
     lay = {"@LAYOUT": layout} | {k: i for i, k in kinds.items()}
     if miss := sorted(set(re.findall(r'"(@(?:COVER|SECTION)\d+)"', json.dumps(deck.reqs))) - set(lay)):
         sys.exit(f"デッキに表紙・扉のパターン {', '.join(miss)} のレイアウトがない（テンプレートを作り直す前に複製したデッキ）。番号を変えるか、slides.py new で作り直す")
@@ -4106,7 +4106,7 @@ def selftest():
 
 def selftest_sample():
     """JSON のページの見本（../samples/json）は、形のすべての型とキーを使い（キーを足したら見本にも足す）、警告なしに組む要求まで作れる。
-    見た目は sandbox でこの見本を組んで画像で見る（AGENTS.md の「直すときの決まり」）。"""
+    見た目は sandbox でこの見本を組んで画像で見る（AGENTS.md の「直したら確かめる」）。"""
     root = Path(__file__).resolve().parent.parent / "samples" / "json"
     used, kinds, geo = defaultdict(set), set(), set()
 
