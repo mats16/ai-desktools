@@ -41,13 +41,14 @@ SPLIT = {  # 中身を場面ごとに分けたプラグインのファイル。�
     "vids-build/SKILL.md": "vids-build/SKILL.md・avatars.md",
     "deck-practices/content.md": "deck-practices/content.md・content_customer.md・content_internal.md・content_explain.md（§1 の資料の種類ごとの決まり）"}
 B = "A-Za-z0-9_-"  # ID とスキルの名前の前後の区切り（和文は続けて書いてもよいので、英数字だけを見る）
+DREAMING = re.compile(rf"(?<![{B}])(?<!\.desk/)dreaming(?![{B}])(?!/(?:last_run|log|backup)\b)")  # 2026-10-25 より前のスキルの名前。記録のフォルダ .desk/dreaming/（中の last_run・log・backup）は替えない
 PATHS = [  # 本文の中のパスとスキルの名前（決まりの ID は先に替えるので、deck-build-005 などはもう残っていない）
     (r"deck-practices/visual_doc\.md", "docs-build/visual.md"), (r"deck-practices/visual\.md", "slides-build/visual.md"),
     (r"deck-practices/reuse\.md", "slides-build/reuse.md"), (r"deck-build/slides\.md", "slides-build/pages.md"),
     (r"deck-build/scripts/(docs|doc_layout)\.py", r"docs-build/scripts/\1.py"), (r"deck-build/scripts/(gapi|sheet|drive_put)\.py", r"deck-practices/scripts/\1.py"),
     *((rf"(?<![{B}]){a}(?![{B}])", b) for a, b in (("deck-build", "slides-build"), ("doc-build", "docs-build"), ("deck-template", "slides-template"),
                                                     ("slides-speaker-notes", "vids-voice"), ("vids-beta", "vids-build"))), *NAMES,
-    (rf"(?<![{B}])(?<!\.desk/)dreaming(?![{B}])", "desk-dreaming")]  # .factory を .desk にしたあとに当てる。記録のフォルダ .desk/dreaming/ は替えない
+    (DREAMING, "desk-dreaming")]  # .factory を .desk にしたあとに当てる
 OLD_IDS = [re.compile(rf"(?<![{B}])(ws-)?(" + "|".join(sorted(map(re.escape, m["prefixes"]), key=len, reverse=True)) + rf")-(\d{{3}})(?![{B}])") for m in MAPS]
 WS_ID = re.compile(r"\[(ws-[\w-]+?-\d{3})\]")
 WS_ANY = re.compile(rf"(?<![{B}])ws-[a-z][\w-]*?-\d{{3}}(?![{B}])")  # ワークスペースの決まりの ID（角括弧のあるなしによらない）
@@ -361,6 +362,8 @@ def defined(rid):
 def apply(ws):
     data = move_data(ws)  # 台帳（.desk/ledger.jsonl）を書き換える前に、名前を今の版にする
     moves, edit, split, ws_map = plan(ws)
+    # 前の名前で整理を回していた。移すもの（rules/dreaming/ のファイルか、前の名前の残る本文）があるときだけ。前の名前が何も残らなければ、登録し直したあとと見分けられない
+    old_run = (ws / ".desk" / "dreaming").is_dir() and (any(src.is_relative_to(ws / "rules" / "dreaming") for src, _ in moves) or any(DREAMING.search(t) for t in strings(ws)))
     if not moves and not edit:
         return data + relink(ws) or ["移すものはない（今の版）"]
     backup = ws / ".desk" / "migrate" / time.strftime("%Y%m%d-%H%M%S")
@@ -418,6 +421,9 @@ def apply(ws):
         if plug:
             out.append(f"要判断: 角括弧なしで書いた、もうプラグインにない前の ID がある（{'・'.join(plug)}）。ids_*.json の prefixes で今の主題を見て、"
                        "その文を直すか、要らなければ消す（ID だと言い切れないので、ここでは替えない）")
+    if old_run:  # 登録はワークスペースの外（アプリ・launchd・cron）にあり、ここからは直せない
+        out.append("要判断: 定期の整理を前の名前（dreaming）で登録していれば、前の登録を消して登録し直す（desk-dreaming の SKILL.md を開いてから、その schedule.md の頭。"
+                   "前の登録のままだと、run.sh が見つからないか前のスキルを呼んで止まり、報告も出ない）")
     return out
 
 
@@ -562,15 +568,27 @@ def selftest():
         put = lambda rel, text: ((ws / rel).parent.mkdir(parents=True, exist_ok=True), (ws / rel).write_text(text))
         put("desk.toml", "")
         put("rules/dreaming/run.md", "- [ws-factory-dreaming-001] 朝に回す（factory-dreaming-001 より優先）。\n")
-        put("AGENTS.md", "スキル `dreaming`（`/desk-tools:dreaming`、`../dreaming/run.md`）。記録は `.desk/dreaming/log/`。\n")
+        put("AGENTS.md", "スキル `dreaming`（`/desk-tools:dreaming`、`../dreaming/run.md`）。記録は `.desk/dreaming/log/`（.desk/ の `dreaming/last_run`・`dreaming/backup/`）。\n")
         put(".desk/ledger.jsonl", json.dumps({"ts": "2026-10-25T00:00:00Z", "kind": "correction", "id": "c-0001", "quote": "dreaming して", "to": "ws-factory-dreaming-001", "by": "dreaming"}, ensure_ascii=False) + "\n")
         assert "rules/dreaming/run.md" in needs(ws)
-        apply(ws)
+        put(".desk/dreaming/last_run", "2026-10-24T20:00:00Z")
+        out = apply(ws)
         assert (ws / "rules" / "desk-dreaming" / "run.md").read_text() == "- [ws-desk-dreaming-001] 朝に回す（desk-dreaming-001 より優先）。\n" and not (ws / "rules" / "dreaming").exists()
-        assert (ws / "AGENTS.md").read_text() == "スキル `desk-dreaming`（`/desk-tools:desk-dreaming`、`../desk-dreaming/run.md`）。記録は `.desk/dreaming/log/`。\n"  # 記録のフォルダは替えない
+        assert (ws / "AGENTS.md").read_text() == "スキル `desk-dreaming`（`/desk-tools:desk-dreaming`、`../desk-dreaming/run.md`）。記録は `.desk/dreaming/log/`（.desk/ の `dreaming/last_run`・`dreaming/backup/`）。\n"  # 記録のフォルダは替えない
+        assert any(o.startswith("要判断: 定期の整理") for o in out)  # 前の名前で回していた（.desk/dreaming/ がある）
         led = json.loads((ws / ".desk" / "ledger.jsonl").read_text())
         assert (led["to"], led["quote"], led["by"]) == ("ws-desk-dreaming-001", "dreaming して", "dreaming")  # 原文と、書いた者の種類は替えない
         assert needs(ws) == [] and apply(ws) == ["移すものはない（今の版）"]
+    with tempfile.TemporaryDirectory() as tmp:  # 整理を回していない（.desk/dreaming/ がない）なら、登録し直しは出さない
+        ws = Path(tmp)
+        (ws / "desk.toml").write_text("")
+        (ws / "rules" / "dreaming").mkdir(parents=True)
+        (ws / "rules" / "dreaming" / "run.md").write_text("x\n")
+        out = apply(ws)
+        assert (ws / "rules" / "desk-dreaming" / "run.md").is_file() and not any(o.startswith("要判断: 定期の整理") for o in out)
+        (ws / ".desk" / "dreaming").mkdir(parents=True)
+        (ws / "rules" / "dreaming").mkdir()  # 空のフォルダだけが残る（前の名前は何も残らない）
+        assert apply(ws) == ["移すものはない（今の版）"]
     print("selftest ok")
 
 
