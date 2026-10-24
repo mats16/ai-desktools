@@ -328,14 +328,14 @@ def selftest():
         calls = []
         def fake(*cmd, cwd=None, env=None, check=True):
             calls.append(cmd)
-            return subprocess.CompletedProcess(cmd, 0, perm if cmd[:2] == ("gh", "repo") else "me/ai-deck-factory", "")
+            return subprocess.CompletedProcess(cmd, 0, perm if cmd[:2] == ("gh", "repo") else "me/ai-desktools", "")
         real, sh = sh, fake
         try:
             return object.__new__(Work).assets, len(calls)
         finally:
             sh = real
     assert assets("ADMIN") == (REPO, 1) and assets("WRITE") == (REPO, 1)  # 書けるなら、fork を作らない
-    assert assets("READ") == ("me/ai-deck-factory", 3)  # 書けないなら、自分の fork（作って、見えるのを待つ）
+    assert assets("READ") == ("me/ai-desktools", 3)  # 書けないなら、自分の fork（作って、見えるのを待つ）
     def stops(f, word):
         try:
             f()

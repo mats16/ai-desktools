@@ -1,6 +1,6 @@
 # pi のパッケージとして入れる
 
-AI Deck Factory を pi（`@earendil-works/pi-coding-agent`）のパッケージとして、1 つのワークスペース（プロジェクト）だけに入れる手順。ほかのフォルダの pi には出ない。2026-10-12 に pi 1.0.0 で確かめた。Claude Code で使う手順は [claude-code-plugin.md](claude-code-plugin.md)、開発しながら試す手順は [development.md](development.md)。
+AI Desk Tools を pi（`@earendil-works/pi-coding-agent`）のパッケージとして、1 つのワークスペース（プロジェクト）だけに入れる手順。ほかのフォルダの pi には出ない。2026-10-12 に pi 1.0.0 で確かめた。Claude Code で使う手順は [claude-code-plugin.md](claude-code-plugin.md)、開発しながら試す手順は [development.md](development.md)。
 
 ## 入れる
 
@@ -8,8 +8,8 @@ AI Deck Factory を pi（`@earendil-works/pi-coding-agent`）のパッケージ�
 
 ```sh
 cd <ワークスペース>
-pi install -l ~/Projects/ai-deck-factory                           # 手元の checkout をそのまま読む（写さない）
-pi install -l git:github.com/mats16/ai-deck-factory   # git から
+pi install -l ~/Projects/ai-desktools                           # 手元の checkout をそのまま読む（写さない）
+pi install -l git:github.com/mats16/ai-desktools   # git から
 ```
 
 - 書き込まれるのは `<ワークスペース>/.pi/settings.json` の `packages`。手元のパスは `.pi/` からの相対のパスで入るので、ワークスペースか checkout を動かしたら入れ直す。
@@ -28,7 +28,7 @@ pi install -l git:github.com/mats16/ai-deck-factory   # git から
 
 ```sh
 cd <ワークスペース> && pi list   # Project packages に出る
-cd ~ && pi list                   # User packages にだけ出る（ここに ai-deck-factory が出たら、-l なしで入っている）
+cd ~ && pi list                   # User packages にだけ出る（ここに desk-tools が出たら、-l なしで入っている）
 ```
 
 スキルの出どころは、対話の pi の起動の表示か、RPC の `get_commands` で見る（モデルは呼ばない）。
@@ -54,7 +54,7 @@ cd ~ && pi list                   # User packages にだけ出る（ここに ai
 
 ```sh
 cd <ワークスペース>
-pi remove -l ~/Projects/ai-deck-factory   # 入れたときと同じ書き方で
+pi remove -l ~/Projects/ai-desktools   # 入れたときと同じ書き方で
 ```
 
 ワークスペースのファイル（`factory.toml`・`AGENTS.md`・`rules/`・`.factory/`）は残る。

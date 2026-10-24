@@ -2,7 +2,7 @@
 
 プラグインを直す人のための手順。直すのは元のリポジトリの worktree でし、その worktree の下に検証用のワークスペース `sandbox/` を置いて、資料を作って確かめる。`sandbox/` はリポジトリの `.gitignore` で無視しているので commit に入らず、worktree を消せば一緒に消える。worktree ごとに分かれるので、いくつかのブランチを並べて試せる。2026-10-12 に Claude Code と pi 1.0.0 で、Codex は 2026-10-20 に Codex CLI 0.162.1 で確かめた。利用者の入れ方は [claude-code-plugin.md](claude-code-plugin.md)・[codex-plugin.md](codex-plugin.md)・[pi.md](pi.md)。
 
-元の checkout（`~/Projects/ai-deck-factory`）は `main` のままにしておく。ほかのワークスペースにこの checkout のパスで入れたプラグインはここを読むので、利用者と同じものが動く（GitHub や git の URL で入れたものは、checkout とは別の版を読む）。
+元の checkout（`git worktree list` の 1 行目）は `main` のままにしておく。ほかのワークスペースにこの checkout のパスで入れたプラグインはここを読むので、利用者と同じものが動く（GitHub や git の URL で入れたものは、checkout とは別の版を読む）。
 
 ## 作る
 
@@ -28,8 +28,14 @@ cp -R ~/Documents/rules ~/Documents/AGENTS.md ~/Documents/CLAUDE.md .   # 本番
 claude --plugin-dir ..
 ```
 
-- 起動したときの `plugins` の `path` が worktree を指し、`ai-deck-factory:` のスキルが 15 個読まれる。
-- `claude plugin marketplace add .. --scope project` で入れてはいけない。マーケットプレイスの名前（`ai-deck-factory`）は `~/.claude/plugins/known_marketplaces.json` に 1 つしか持てず、本番のワークスペースで足したものとぶつかる。外すと、ほかで足したものの記録も消える。
+- 起動したときの `plugins` の `path` が worktree を指し、`desk-tools:` のスキルが 15 個読まれる。次で確かめる（worktree のパスと 15 個の名前が出る）。
+
+  ```sh
+  claude --plugin-dir .. -p ok --model haiku --max-turns 1 --output-format stream-json --verbose 2>/dev/null \
+    | python3 -c "import json,sys; e=next(e for e in map(json.loads, sys.stdin) if e.get('subtype')=='init'); print([p['path'] for p in e['plugins'] if p['name']=='desk-tools']); print(sorted(s for s in e['skills'] if s.startswith('desk-tools:')))"
+  ```
+
+- `claude plugin marketplace add .. --scope project` で入れてはいけない。マーケットプレイスの名前（`desk-tools`）は `~/.claude/plugins/known_marketplaces.json` に 1 つしか持てず、本番のワークスペースで足したものとぶつかる。外すと、ほかで足したものの記録も消える。
 - そこから起こす `claude -p` の子（dreaming の `run.sh claude` など）には、プラグインが入っていない。子まで確かめるときは pi で試す。
 - worktree が点で始まるフォルダの下（T3 Code の `~/.t3/worktrees` など）にあると、`claude -p` で回した会話は、sandbox の中のファイルを「sensitive file」として書けない（`--permission-mode acceptEdits` でも止まる）。`claude -p` で資料まで作って確かめるときは、sandbox を `/tmp/<名前>/` に写し、そこで `claude --plugin-dir <worktree>` を回す。終わったら消す。
 
@@ -39,15 +45,15 @@ claude --plugin-dir ..
 
 ```sh
 export CODEX_HOME=/tmp/adf-codex-$(basename "$(dirname "$PWD")") && mkdir -p $CODEX_HOME
-codex plugin marketplace add .. && codex plugin add ai-deck-factory@ai-deck-factory
-codex debug prompt-input ok | grep -oE 'ai-deck-factory:[a-z-]+: ' | sort -u
+codex plugin marketplace add .. && codex plugin add desk-tools@desk-tools
+codex debug prompt-input ok | grep -oE 'desk-tools:[a-z-]+: ' | sort -u
 ```
 
 - `CODEX_HOME` は worktree の外に置く。Codex は worktree（マーケットプレイスの根元）を丸ごと写すので、中に置くと自分を写し続けて止まる（`File name too long`）。
-- ふだんの `~/.codex` で `codex plugin marketplace add ..` しない。マーケットプレイスの名前（`ai-deck-factory`）は 1 つしか持てず、本番のワークスペースで足したものとぶつかる。
-- 会話は `$CODEX_HOME/plugins/cache/ai-deck-factory/ai-deck-factory/local/` の写しを読む。手元のパスで足しても写すので、直したら `codex plugin add ai-deck-factory@ai-deck-factory` を回し直す。
+- ふだんの `~/.codex` で `codex plugin marketplace add ..` しない。マーケットプレイスの名前（`desk-tools`）は 1 つしか持てず、本番のワークスペースで足したものとぶつかる。
+- 会話は `$CODEX_HOME/plugins/cache/desk-tools/desk-tools/local/` の写しを読む。手元のパスで足しても写すので、直したら `codex plugin add desk-tools@desk-tools` を回し直す。
 - 分けた `CODEX_HOME` にはログインがない。会話を回すなら、`~/.codex/auth.json`（ChatGPT のログイン）か、`~/.codex/config.toml` の `model_provider`・`[model_providers.<名前>]` を写す。会話の記録も `$CODEX_HOME/sessions/` に残るので、dreaming の `sessions.py`（`~/.codex/sessions/` を読む）には出ない。
-- hook は信頼するまで動かない。対話の Codex の `/hooks` で信頼するか、`codex exec --dangerously-bypass-hook-trust` で回す。`sed -n 1,3p ../skills/slides-build/visual.md` を回させたあとと、`$ai-deck-factory:factory-doctor` で呼んだときに、`sandbox/rules/` の目印が差し込まれることを確かめた。
+- hook は信頼するまで動かない。対話の Codex の `/hooks` で信頼するか、`codex exec --dangerously-bypass-hook-trust` で回す。`sed -n 1,3p ../skills/slides-build/visual.md` を回させたあとと、`$desk-tools:factory-doctor` で呼んだときに、`sandbox/rules/` の目印が差し込まれることを確かめた。
 
 ## pi
 
@@ -55,11 +61,30 @@ codex debug prompt-input ok | grep -oE 'ai-deck-factory:[a-z-]+: ' | sort -u
 
 ```sh
 pi install -l ..
+pi                                     # 初めては /trust で信頼を保存する（pi -p の子は聞けない）
+(echo '{"type":"get_commands"}'; sleep 8) | pi --mode rpc --no-session 2>/dev/null \
+  | python3 -c "import json,os,sys; r=os.path.realpath('..'); e=next(e for e in map(json.loads, sys.stdin) if e.get('command')=='get_commands'); print(sorted(c['name'] for c in e['data']['commands'] if c.get('sourceInfo',{}).get('path','').startswith(r)))"
 ```
+
+最後のコマンドで、worktree から読まれた 15 個のスキルが出る。
 
 - `.pi/settings.json` に `../..`（`.pi/` からの相対のパス）で入り、worktree の 15 個のスキルと `extensions/rules.ts` が読まれる。`pi -p` の子（dreaming の `run.sh pi`、レビューを頼むとき）も同じものを読む（`sandbox/` で `pi -p` を起こし、slides-build の `SKILL.md` が worktree のパスで出ることと、`../skills/slides-build/visual.md` を read すると `sandbox/rules/slides-build/visual.md` が続けて差し込まれることを確かめた）。
 - trust は、`sandbox/` で対話の pi を開いて `/trust` で保存する（`pi -p` の子は聞けないので、先に済ませる）。親のフォルダの決定も子に効く。ホームを信頼してあれば、`--approve` なしの `pi -p`・`--mode rpc` でも読まれた。worktree を置くフォルダ（T3 Code なら `~/.t3/worktrees`）ごと信頼すると、聞かれなくなる代わりに、あとからそこに置くほかのリポジトリの拡張も黙って読まれる（[pi.md](pi.md) の「project trust」）。
 - 同じ名前のスキルがほかにあると、パッケージのものは負ける（[pi.md](pi.md) の「同じ名前のスキルがあるとき」）。`get_commands` の `sourceInfo.path` が worktree を指しているかを確かめる。
+
+## `rules/` が続けて出るかを見る
+
+`sandbox/rules/slides-build/visual.md` に目印の 1 行を書き、会話で `../skills/slides-build/visual.md` を開かせる。目印が続けて差し込まれれば、hook（Claude Code・Codex）と拡張（pi）が効いている。`/desk-tools:<スキル>`（Claude Code）・`$desk-tools:<スキル>`（Codex）で呼んだときは、`rules/<スキル>/SKILL.md` が出る（UserPromptSubmit）。hook だけなら、会話を開かずに確かめられる。
+
+```sh
+mkdir -p rules/slides-build && echo "目印" > rules/slides-build/visual.md
+echo "{\"cwd\":\"$PWD\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$PWD/../skills/slides-build/visual.md\"}}" \
+  | python3 ../hooks/rules_overlay.py claude
+```
+
+## 資料を作って確かめる
+
+`sandbox/` の会話で、直したスキルを使う場面を通し（Claude Code は `/desk-tools:slides-build`、Codex は `$desk-tools:slides-build`、pi は `/skill:slides-build` など）、lint と Google が描いたページの画像で見る。
 
 ## 見本を組んで画像で見る
 
@@ -98,7 +123,7 @@ pi -ns --skill <worktree>/skills -ne -e <worktree>/extensions/rules.ts
 - Claude Code は、入れてあるものと重ねても、読まれるのは `--plugin-dir` の版だけ（二重にならない）。
 - pi は、`--skill` だけを足すと入れてあるパッケージのほうが勝つ。`-ns`（スキルを探さない）・`-ne`（拡張を探さない）を付けると、渡したものだけが読まれる。ほかのスキル（`~/.agents/skills` など）と拡張も止まる。
 - Codex には、入れずに渡す起動オプションがない。本番のワークスペースで試すなら、上の「Codex」と同じく `CODEX_HOME` を分けて入れる。
-- どちらも、子のプロセスには伝わらない。子は入れてある版（checkout のパスで入れたなら `~/Projects/ai-deck-factory`）を読む。
+- どちらも、子のプロセスには伝わらない。子は入れてある版（checkout のパスで入れたなら元の checkout）を読む。
 
 ## 消す
 

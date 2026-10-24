@@ -575,7 +575,7 @@ def selftest():
         assert not is_dreaming(a.said) and is_dreaming([(ts, '…/skills/dreaming/SKILL.md を読み')]) and is_dreaming([(ts, '…/skills/dreaming/apply.md を読み')])
         assert not is_dreaming([(ts, '資料を作って'), (ts, 'dreaming でこの指示を拾って')])
         assert not is_dreaming([(ts, '決まりの台帳と dreaming の流れを紹介する資料を作って')])
-        assert all(is_dreaming([(ts, x)]) for x in ("スキル dreaming（Claude Code は /ai-deck-factory:dreaming）を読み", "/skill:dreaming", "dreaming の P0001 を適用して", "dreaming して"))
+        assert all(is_dreaming([(ts, x)]) for x in ("スキル dreaming（Claude Code は /desk-tools:dreaming）を読み", "/skill:dreaming", "dreaming の P0001 を適用して", "dreaming して"))
         folder = Path(home) / '.codex/sessions/2026/10/06'
         folder.mkdir(parents=True)
         rows = [{"type": "session_meta", "payload": {"id": "c", "cwd": root}}]

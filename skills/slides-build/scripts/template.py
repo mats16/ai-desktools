@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AI Deck Factory のテンプレートを作る・合わせ直す（../themes.md。会社のテンプレートから作る流れは ../../slides-template/create.md）。
+"""AI Desk Tools のテンプレートを作る・合わせ直す（../themes.md。会社のテンプレートから作る流れは ../../slides-template/create.md）。
 テーマはテーマのファイル（kind theme。組み込みの ../themes/<名前>.json と、ワークスペースの themes/slides/<名前>.json）。色は役割の名前で書く。
 テーマのファイルだけを見る（形と役割の組のコントラスト）のは slides.py lint <ファイル>（Google を読まない）。
 usage:
@@ -213,7 +213,7 @@ def specimen(theme, t, origin=()):
         return want if want and ratio(want) >= 4.5 else max((STAGE_TEXT, WHITE), key=ratio)
 
     def make(d):
-        s = d.cover(f"テーマ「{theme}」の見本", f"社内｜{time.strftime('%Y-%m-%d')}", "AI Deck Factory のテンプレート")
+        s = d.cover(f"テーマ「{theme}」の見本", f"社内｜{time.strftime('%Y-%m-%d')}", "AI Desk Tools のテンプレート")
         d.note(s, "表紙です。小見出しは相手と日付、タイトルは白、副題と小見出しは濃紺の上の赤、社名は濃紺の上の補足の色（SUB_ON_NAVY）です。表紙にはページ番号を置きません。")
 
         s = d.divider("01", "色と部品", "テーマの色の役割と、本文ページの部品")
@@ -295,7 +295,7 @@ def specimen(theme, t, origin=()):
                     s = d.divider(f"{i:02d}", f"扉のパターン {i}", f"d.divider(…, variant={i})。地: {t}", variant=i)
                 d.note(s, f"{'表紙' if kind == 'cover' else '章の扉'}のパターン {i} です（地の明るさ {t}）。会社のテンプレートの図形と写真を残し、文字の色は地に合わせます。")
 
-    return make_deck(make_all, f"AI Deck Factory｜テーマ「{theme}」の見本")
+    return make_deck(make_all, f"AI Desk Tools｜テーマ「{theme}」の見本")
 
 
 def pick(p, names=None):

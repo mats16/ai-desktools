@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """プラグインのスキルのファイルが読まれたら、ワークスペースの同じパスの rules/<スキル>/<ファイル> を続けて出す（開き忘れを防ぐ）。
 顧客の資料の 構成案*.md・社内メモ_*.md・references.md が読まれたら、その顧客の Customers/<顧客>/memory.md（資料への好み。どう作るか）を続けて出す。
-/ai-deck-factory:<スキル>（Claude Code）・$ai-deck-factory:<スキル>（Codex）で呼んだスキルは、道具を使わずに SKILL.md が入るので、プロンプトから拾って rules/<スキル>/SKILL.md を出す。
+/desk-tools:<スキル>（Claude Code）・$desk-tools:<スキル>（Codex）で呼んだスキルは、道具を使わずに SKILL.md が入るので、プロンプトから拾って rules/<スキル>/SKILL.md を出す。
 同じ会話で出したもののうち、まだモデルに見えている（コンパクションで消えていない）ものは出し直さない。Claude Code と Codex は hook に渡る会話の記録（transcript_path）の、最後のコンパクションのあとを見る。pi は拡張が、モデルに見えている道具の結果を渡す。Codex の記録の形は確かめていない（合わなければ毎回出す）。
 決まりの層は skills/deck-practices/rules.md。Claude Code と Codex は hooks.json の PostToolUse（Read・Bash・Skill）と UserPromptSubmit、pi は extensions/rules.ts から呼ぶ。
 usage: rules_overlay.py claude   （標準入力に Claude Code か Codex の hook の JSON）
@@ -14,7 +14,7 @@ from pathlib import Path
 SKILLS = {p.parent.name for p in (Path(__file__).resolve().parent.parent / "skills").glob("*/SKILL.md")}
 REF = re.compile(rf"(?<![\w-])({'|'.join(map(re.escape, SKILLS))})/([\w./-]+\.md)")  # スキルの名前で始まるパス（前のフォルダは問わない）
 MEMORY_FROM = re.compile(r"(?:^|/)(?:構成案[^/]*|社内メモ_[^/]*|references)\.md$")  # 資料を始めるときとコンパクションのあとに読むもの（組む途中に何度も開く build/ は入れない）
-CALL = re.compile(rf"(?:^\s*/|(?<![\w$/.-])\$)ai-deck-factory:({'|'.join(map(re.escape, SKILLS))})(?![\w-])", re.ASCII)  # プロンプトで呼んだスキル（Claude Code の / は頭だけ、Codex の $ はどこでも。和文は続けて書いても呼んだことになる）
+CALL = re.compile(rf"(?:^\s*/|(?<![\w$/.-])\$)desk-tools:({'|'.join(map(re.escape, SKILLS))})(?![\w-])", re.ASCII)  # プロンプトで呼んだスキル（Claude Code の / は頭だけ、Codex の $ はどこでも。和文は続けて書いても呼んだことになる）
 PUNCT = "();<>|&`"  # コマンドの区切り
 HEAD = re.compile(r'## (?:ワークスペースの決まり|顧客の memory): ([^`"\\\n]+?\.md)(?=\\|\n|$)')  # 出したものの見出し。会話の記録では改行が \n（hook の出力の写しでは \\n）になる
 PART = re.compile(r"(?:^|\n)## (?:ワークスペースの決まり|顧客の memory): ")  # 差し込む部分の頭
@@ -117,7 +117,7 @@ def overlays(cwd, text, skill=None, is_path=False, seen=()):
 
 
 def called(cwd, prompt, seen=()):
-    """プロンプトで呼んだスキル（/ai-deck-factory:<スキル>・$ai-deck-factory:<スキル>）に当たる rules/<スキル>/SKILL.md の中身。"""
+    """プロンプトで呼んだスキル（/desk-tools:<スキル>・$desk-tools:<スキル>）に当たる rules/<スキル>/SKILL.md の中身。"""
     return "\n\n".join(filter(None, (overlays(cwd, "", s, seen=seen) for s in dict.fromkeys(CALL.findall(prompt)))))
 
 
@@ -161,12 +161,12 @@ def selftest():
         assert "16pt" in overlays(ws, "sed -n 1,40p slides-build/visual.md")  # Bash で読んだとき
         assert overlays(ws, f"{ws}/rules/slides-build/visual.md") == ""  # rules/ そのものを読んだときは出さない
         assert overlays(ws, "/plug/skills/deck-practices/content.md") == ""  # rules/ に同じファイルがない
-        assert "最初に聞くこと" in overlays(ws, "", "ai-deck-factory:deck-practices")
-        assert CALL.findall("/ai-deck-factory:slides-build と $ai-deck-factory:deck-review、ai-deck-factory:docs-build、$ai-deck-factory:slides-builds") == ["slides-build", "deck-review"]  # 呼んだものだけ
-        assert CALL.findall("さっきの /ai-deck-factory:slides-build は x/$ai-deck-factory:docs-build") == []  # 文の途中の / とパスの中は呼んでいない
-        assert CALL.findall("資料を$ai-deck-factory:slides-buildで作る") == ["slides-build"] and CALL.findall("/ai-deck-factory:docs-buildで") == ["docs-build"]  # 和文が続いても切る
-        assert "最初に聞くこと" in called(ws, "/ai-deck-factory:deck-practices を回して") and called(ws, "$ai-deck-factory:slides-build") == ""  # rules/ に SKILL.md のないスキル
-        assert called(ws, "/ai-deck-factory:deck-practices $ai-deck-factory:deck-practices").count("最初に聞くこと") == 1
+        assert "最初に聞くこと" in overlays(ws, "", "desk-tools:deck-practices")
+        assert CALL.findall("/desk-tools:slides-build と $desk-tools:deck-review、desk-tools:docs-build、$desk-tools:slides-builds") == ["slides-build", "deck-review"]  # 呼んだものだけ
+        assert CALL.findall("さっきの /desk-tools:slides-build は x/$desk-tools:docs-build") == []  # 文の途中の / とパスの中は呼んでいない
+        assert CALL.findall("資料を$desk-tools:slides-buildで作る") == ["slides-build"] and CALL.findall("/desk-tools:docs-buildで") == ["docs-build"]  # 和文が続いても切る
+        assert "最初に聞くこと" in called(ws, "/desk-tools:deck-practices を回して") and called(ws, "$desk-tools:slides-build") == ""  # rules/ に SKILL.md のないスキル
+        assert called(ws, "/desk-tools:deck-practices $desk-tools:deck-practices").count("最初に聞くこと") == 1
         assert overlays("/", "/plug/skills/slides-build/visual.md") == ""  # ワークスペースの外
         deck = Path(ws) / "Customers" / "acme" / "deck_202610"
         deck.mkdir(parents=True)
@@ -197,7 +197,7 @@ def selftest():
         assert overlays(ws, f"cat '{spaced}/d 1/構成案.md' slides-build/visual.md", seen=shown(log)) == ""
         assert "16pt" in overlays(ws, "slides-build/visual.md", seen={"Customers/Acme Corp/memory.md"})  # 見えているのが別のものなら出す
         log.write_text(log.read_text() + '{"type":"system","subtype":"compact_boundary"}\n')
-        assert shown(log) == set() and "最初に聞くこと" in called(ws, "/ai-deck-factory:deck-practices", shown(log))
+        assert shown(log) == set() and "最初に聞くこと" in called(ws, "/desk-tools:deck-practices", shown(log))
         log.write_text(log.read_text() + json.dumps({"uuid": "s1", "parentUuid": None, "isCompactSummary": True, "message": {"content": ctx}}, ensure_ascii=False) + "\n")
         assert shown(log) == set()  # 要約に写った見出しは数えない
         hook = {"type": "hook_additional_context", "content": [ctx]}
