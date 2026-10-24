@@ -10,12 +10,12 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(SKILLS / "deck-practices" / "scripts"))
 sys.path.insert(0, str(SKILLS / "slides-build" / "scripts"))
 sys.path.insert(0, str(SKILLS / "docs-build" / "scripts"))
-sys.path.insert(0, str(SKILLS / "factory-migrate" / "scripts"))
-import migrate  # noqa: E402  前の版のワークスペースか（factory-migrate）
+sys.path.insert(0, str(SKILLS / "desk-migrate" / "scripts"))
+import migrate  # noqa: E402  前の版のワークスペースか（desk-migrate）
 
 
 def find_ws(start):
-    return next((d for d in (start, *start.parents) if (d / "factory.toml").is_file()), None)
+    return next((d for d in (start, *start.parents) if (d / "desk.toml").is_file()), None)
 
 
 def check(ws, local=False):
@@ -31,28 +31,31 @@ def check(ws, local=False):
     (ok if npx else warn)("mermaid の図", npx or "Node.js（npx）がない。doc.md の ```mermaid を組めない（ほかは組める）。https://nodejs.org/ で入れる")
     root = find_ws(ws)
     if not root:
-        ng("factory.toml", f"{ws} から上にない。factory-init で作る")
+        if old := migrate.workspace(ws):  # factory.toml だけがある、2026-10-25 より前のワークスペース
+            ng("前の版のワークスペース", f"{old} は前の版（factory.toml・.factory/）。desk-migrate で desk.toml・.desk/ に移す")
+        else:
+            ng("desk.toml", f"{ws} から上にない。desk-init で作る")
         return out
     ok("ワークスペース", str(root))
     try:
-        cfg = tomllib.loads((root / "factory.toml").read_text())
+        cfg = tomllib.loads((root / "desk.toml").read_text())
     except tomllib.TOMLDecodeError as e:
-        ng("factory.toml の書き方", str(e))
+        ng("desk.toml の書き方", str(e))
         return out
     for name, need in (("AGENTS.md", ng), ("CLAUDE.md", warn), ("references_index.md", warn)):
-        (ok if (root / name).is_file() else need)(name, "" if (root / name).is_file() else "ない。factory-init で置く")
+        (ok if (root / name).is_file() else need)(name, "" if (root / name).is_file() else "ない。desk-init で置く")
     if old := sorted((root / "Customers").glob("*/CLAUDE.md")):
         how = lambda p: f"{p.relative_to(root)}（{'memory.md に中身を移して消す' if (p.parent / 'memory.md').exists() else 'memory.md に名前を変える'}）"
         warn("顧客の memory", f"前の形の CLAUDE.md がある。Claude Code しか読まない（hook が Claude Code・Codex・pi で続けて出すのは memory.md）: {', '.join(map(how, old))}")
     agents = (root / "AGENTS.md").read_text() if (root / "AGENTS.md").is_file() else ""
     if "人がレビューするかも選んでもらう" in agents:  # 2026-10-13 までの雛形
-        warn("AGENTS.md の方針のレビュー", "前の雛形の「人がレビューするかも選んでもらう」が残っている。ワークスペースの決まりが優先するので、factory.toml の [review] plan_reviewer が効かず、資料ごとに聞く。factory-init の雛形の今の文（plan_reviewer に従う）に替える")
+        warn("AGENTS.md の方針のレビュー", "前の雛形の「人がレビューするかも選んでもらう」が残っている。ワークスペースの決まりが優先するので、desk.toml の [review] plan_reviewer が効かず、資料ごとに聞く。desk-init の雛形の今の文（plan_reviewer に従う）に替える")
     if "- ユーザーに返す前に、スキル `deck-review` で全体をレビューする。" in agents:  # 2026-10-19 までの雛形
-        warn("AGENTS.md の返したあとの直し", "前の雛形の「ユーザーに返す前に、スキル deck-review で全体をレビューする」が残っている。ワークスペースの決まりが優先するので、返したあとの小さな直しや問いでも全体のレビューを回す。factory-init の雛形の今の文（新しく作った資料は deck-review、返したあとは deck-practices/revise.md）に替える")
+        warn("AGENTS.md の返したあとの直し", "前の雛形の「ユーザーに返す前に、スキル deck-review で全体をレビューする」が残っている。ワークスペースの決まりが優先するので、返したあとの小さな直しや問いでも全体のレビューを回す。desk-init の雛形の今の文（新しく作った資料は deck-review、返したあとは deck-practices/revise.md）に替える")
     if old := migrate.needs(root):  # 前の名前の rules/ は読まれず、前の ID は台帳とつながらない
-        ng("前の版のワークスペース", f"factory-migrate で今の版へ移す（スキルの名前・ファイルの分け方・決まりの ID を 2026-10-24 に変えた）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
-    if cfg.get("factory", {}).get("source"):  # 2026-10-14 まで、factory-kaizen が worktree を作る checkout
-        warn("factory.source", "使わなくなった（factory-kaizen は .factory/kaizen/ に自分で clone する）。factory.toml から消す")
+        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変えた）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
+    if cfg.get("desk", {}).get("source"):  # 2026-10-14 まで、desk-kaizen が worktree を作る checkout（前の [factory] source。desk-migrate が [desk] にする）
+        warn("desk.source", "使わなくなった（desk-kaizen は .desk/kaizen/ に自分で clone する）。desk.toml から消す")
     names = sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md"))
     found = {}  # 実体ごとに 1 回（.claude/skills は .agents/skills へのリンクのことが多い）
     for d in (".agents/skills", ".claude/skills"):
@@ -98,9 +101,9 @@ def check(ws, local=False):
         ng("slides.themes", f"{', '.join(old)} はプラグインが読まない。テーマはワークスペースの themes/slides/<名前>.json（kind theme。色は colors の下に同じ名前で書く）に、"
                             "テンプレートの url は [slides.templates] の「<名前> = \"<url>\"」に移して消す（テンプレートのある名前は slides.py theme <url> でも写せる。../../slides-build/themes.md）")
     if "base_template" in sl:  # 2026-10-14 までの書き方
-        ng("slides の base", "slides.base_template を消す。元のテンプレートは factory.toml に持たず、template.py <テーマ> --from-base <元の URL> で渡す（渡さなければ白紙の pptx から作る）")
+        ng("slides の base", "slides.base_template を消す。元のテンプレートは desk.toml に持たず、template.py <テーマ> --from-base <元の URL> で渡す（渡さなければ白紙の pptx から作る）")
     if sl.get("template_folder"):  # 2026-10-12 までの書き方
-        warn("slides.template_folder", "プラグインは読まない。新しく作るテンプレートは [drive] factory の下の Themes に作る（前の版のスクリプトで動かさなくなったら消す）")
+        warn("slides.template_folder", "プラグインは読まない。新しく作るテンプレートは [drive] desk の下の Themes に作る（前の版のスクリプトで動かさなくなったら消す）")
     (ok if temps.get(theme) else warn)("slides.templates", ", ".join(temps) if temps.get(theme) else
                                        f"既定のテーマ {theme} のテンプレートがない。template.py {theme} --from-base で作るか、共有のテーマ（slides.py themes）を slides.py theme <url> で写す")
     if bare := [n for n in temps if n not in files]:
@@ -123,13 +126,13 @@ def check(ws, local=False):
         ng("review.deck_review_max_rounds", f"{n!r} は使えない。1〜3 の整数にする（直すと欠陥が増えるので 3 より多くしない）")
     if type(h := cfg.get("feedback", {}).get("google_comments", {}).get("watch_hours", 0)) not in (int, float) or not math.isfinite(h) or h < 0:  # 0 か書いていなければ、頼まれたときだけ見張る（deck-comments）
         ng("feedback.google_comments.watch_hours", f"{h!r} は使えない。時間の数にする（見張らないなら 0）")
-    for k in ("customers", "internal", "docs", "factory"):
+    for k in ("customers", "internal", "docs", "desk"):
         if not dr.get(k):
             warn(f"drive.{k}", "空。資料の置き場所が決まらない")
     if local:
         return out
 
-    os.chdir(root)  # gapi は今いるフォルダから factory.toml を探す
+    os.chdir(root)  # gapi は今いるフォルダから desk.toml を探す
     import gapi
     try:
         who = gapi.request("GET", f"{gapi.DRIVE}/about?fields=user(emailAddress)")["user"]["emailAddress"]
@@ -181,8 +184,11 @@ def main(args):
 def selftest():
     with tempfile.TemporaryDirectory() as tmp:
         kinds = lambda: {n: k for k, n, _ in check(Path(tmp), local=True)}
-        assert kinds()["factory.toml"] == "要修正"
-        subprocess.run([sys.executable, str(SKILLS / "factory-init" / "scripts" / "init.py"), tmp], check=True, capture_output=True)
+        assert kinds()["desk.toml"] == "要修正"
+        (Path(tmp) / "factory.toml").write_text("")
+        assert kinds()["前の版のワークスペース"] == "要修正"  # 2026-10-25 より前の名前
+        (Path(tmp) / "factory.toml").unlink()
+        subprocess.run([sys.executable, str(SKILLS / "desk-init" / "scripts" / "init.py"), tmp], check=True, capture_output=True)
         (Path(tmp) / ".agents" / "skills" / "slides-build").mkdir(parents=True)
         (Path(tmp) / ".agents" / "skills" / "slides-build" / "SKILL.md").write_text("x")
         k = kinds()
@@ -206,7 +212,7 @@ def selftest():
         assert "AGENTS.md の返したあとの直し" not in kinds()  # 今の雛形
         agents.write_text(agents.read_text().replace("- 新しく作った資料は、ユーザーに返す前に、", "- ユーザーに返す前に、"))
         assert kinds()["AGENTS.md の返したあとの直し"] == "要確認"
-        toml = Path(tmp) / "factory.toml"
+        toml = Path(tmp) / "desk.toml"
         assert kinds()["brand.copyright"] == "要修正" and kinds()["brand.company"] == "要確認"
         toml.write_text(toml.read_text().replace("[brand]", '[brand]\ncopyright = "© Acme 2026"', 1))
         assert kinds()["brand.copyright"] == "要修正"

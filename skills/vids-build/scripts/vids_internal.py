@@ -10,12 +10,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 JS = HERE / "vids_client.js"
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(HERE.parents[1] / "deck-practices" / "scripts"))  # gapi.py（factory.toml の [vids] browser）
+sys.path.insert(0, str(HERE.parents[1] / "deck-practices" / "scripts"))  # gapi.py（desk.toml の [vids] browser）
 import gapi  # noqa: E402
 
 
 def browser_url(arg=None):
-    return arg or os.environ.get("VIDS_BROWSER") or gapi.factory().get("vids", {}).get("browser") or "http://127.0.0.1:9222"
+    return arg or os.environ.get("VIDS_BROWSER") or gapi.config().get("vids", {}).get("browser") or "http://127.0.0.1:9222"
 
 
 

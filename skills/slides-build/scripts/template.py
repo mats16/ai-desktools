@@ -5,8 +5,8 @@
 usage:
   template.py audit <Google Slides の URL>  元にするテンプレートを読み、ページの大きさ・マスターの配色とコントラスト・レイアウト・書体と大きさ・和文の有無を出す（変えない）
   template.py <テーマ>                      配色・書体・ページ番号・見本のページをテーマに合わせ直す（ID は変わらない）
-  template.py <テーマ> --from-base [<元の URL>]  元のテンプレート（渡さなければ白紙の BLANK_PPTX）を [drive] factory の下の Themes に複製して作り直し、
-                                            URL を factory.toml の [slides.templates] に書き込む。元の URL は factory.toml に持たない（会話で渡されたものを使う）
+  template.py <テーマ> --from-base [<元の URL>]  元のテンプレート（渡さなければ白紙の BLANK_PPTX）を [drive] desk の下の Themes に複製して作り直し、
+                                            URL を desk.toml の [slides.templates] に書き込む。元の URL は desk.toml に持たない（会話で渡されたものを使う）
 表紙・扉のパターン（テーマの cover・section）の文字の幅と地の明るさを測り、ワークスペースのテーマのファイルに書き込む（lint が Google を読まずに使う）。
 作ったテンプレートのマスターには、テーマの値をすべて書く（slides.py の THEME_MARK。slides.py theme <URL> でテーマのファイルに戻せる）。Drive の説明に description を、
 プロパティにテーマの名前を書く。全社の共有テーマのフォルダ（[drive] shared_themes）に置くと、slides.py themes がほかの人に候補として出す。
@@ -18,7 +18,7 @@ from collections import Counter
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "deck-practices", "scripts"))  # gapi・brand・textlint（ドキュメントと共有する部品）
-from gapi import DRIVE, GSLIDES, PPTX, SLIDES, batch, factory, file_id, request, run, subfolder, trash, upload
+from gapi import DRIVE, GSLIDES, PPTX, SLIDES, batch, config, file_id, request, run, subfolder, trash, upload
 from lint import JA, cells, contrast, flatten, lum, paras, solid
 from slides import (BG, BLANK, CARD, CARD_DOWN, COPYRIGHT_PT, DECOR, EMU, GA, HEAD, INSET, NAVY, NAVY_BLOCK, ON_RED, OSS, PAD, PANEL, PREVIEW, RED, RED_ON_NAVY,
                     RED_SOFT, RED_TEXT, RULE, SLOTS, STAGE_TEXT, SUB, SUB_ON_NAVY, TEXT, WHITE, W, X, Y_BODY, Y_FOOT, build, cols, make_deck, number_style)
@@ -431,9 +431,9 @@ def styles(theme, t, master, blank, extras=None):
 
 
 def themes_folder():
-    """[drive] factory の下の Themes フォルダの ID。なければ作る（フォルダの ID や URL は factory.toml に持たない）。"""
-    if not (root := factory().get("drive", {}).get("factory")):
-        sys.exit(f"factory.toml の [drive] factory（個人の資料の根元）がない。テンプレートはその下の {THEMES_DIR} に作る")
+    """[drive] desk の下の Themes フォルダの ID。なければ作る（フォルダの ID や URL は desk.toml に持たない）。"""
+    if not (root := config().get("drive", {}).get("desk")):
+        sys.exit(f"desk.toml の [drive] desk（個人の資料の根元）がない。テンプレートはその下の {THEMES_DIR} に作る")
     return subfolder(root, THEMES_DIR, create=True)
 
 
@@ -447,13 +447,13 @@ def publish(pid, theme, t):
 
 def template(name, from_base=False, base=""):
     """テンプレートを作る（from_base。元は base の URL、空なら BLANK_PPTX）か、合わせ直す。Drive に複製する・テンプレートを書き換える前に、要るものを全部確かめる
-    （テーマのファイル、[brand] copyright、作るときは factory.toml に URL を書けるか）。作るときは、組んだあとに URL を [slides.templates] に書く。
+    （テーマのファイル、[brand] copyright、作るときは desk.toml に URL を書けるか）。作るときは、組んだあとに URL を [slides.templates] に書く。
     表紙・扉の文字の幅と地の明るさを測り、変わればワークスペースのテーマのファイルに書く。複製したあとで止まったら（URL を書けなかったときも）、複製をゴミ箱に移す。"""
     t = theme(name)  # 知らないテーマ・書けない値なら止まる
     use_theme(t)
     need_brand()  # 見本のページ（build）に著作権表示（テーマの copyright があればそれ）を書く
     if from_base:
-        record_template(name)  # factory.toml に URL を書けるか（書けないのに複製を残さない）
+        record_template(name)  # desk.toml に URL を書けるか（書けないのに複製を残さない）
     src, origin = file_id(base), ()
     if from_base:
         title = NAMES.get(name, f"テンプレート（{name}）")
@@ -466,7 +466,7 @@ def template(name, from_base=False, base=""):
         else:
             pid = request("POST", f"{DRIVE}/files/{src}/copy?supportsAllDrives=true&fields=id", {"name": title, "parents": [themes_folder()]})["id"]
     elif not (pid := templates().get(name)):
-        sys.exit(f"factory.toml の [slides.templates] に {name} がない。template.py {name} --from-base で作る")
+        sys.exit(f"desk.toml の [slides.templates] に {name} がない。template.py {name} --from-base で作る")
     try:
         p = request("GET", f"{SLIDES}/{pid}")
         master, blank, extras = pick(p, {k: [l["layout"] for l in t[k]] for k in ("cover", "section") if t.get(k)})
@@ -483,7 +483,7 @@ def template(name, from_base=False, base=""):
         if from_base:
             record_template(name, pid)  # 書けずに止まったときも、下で複製を片付ける
     except BaseException:
-        if from_base:  # 作りかけの複製を残さない（factory.toml にも書いていない）
+        if from_base:  # 作りかけの複製を残さない（desk.toml にも書いていない）
             trash(pid)
             print(f"作れなかったので、複製 {pid} をゴミ箱に移した", file=sys.stderr)
         raise
@@ -597,7 +597,7 @@ def main():
     if a[1:] and a[1] != "--from-base" or len(a) > 3:
         sys.exit(__doc__)
     pid = template(a[0], a[1:2] == ["--from-base"], a[2] if len(a) == 3 else "")  # 要るものの確かめは template() の頭、url を書くのは template() の中
-    print(f"テンプレート {a[0]}: {pid}" + ("  （factory.toml の [slides.templates] に書いた）" if "--from-base" in a else ""))
+    print(f"テンプレート {a[0]}: {pid}" + ("  （desk.toml の [slides.templates] に書いた）" if "--from-base" in a else ""))
 
 
 if __name__ == "__main__":

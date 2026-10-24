@@ -55,7 +55,7 @@ TIGHT, CODE_LS = 80, 85  # 表の中・図表の題・出典の行間と、コ�
 # と公式に書いてあり、直していないのに止まるので使わない（ワークスペースの Research/deck_research/log/20261009_en_gdocs_generation.md の 1-2。2 回読んで同じ指紋になることを確かめた）
 STAMP = "docs_py_body"
 FONTS = "docs_py_fonts"  # 組んだときの本文と等幅の書体（タブで区切る）。check はこれと比べる（今いるフォルダの doc.md が別の文書のものでも、取り違えない）
-SRC = "docs_py_src"  # 組んだ doc.md のフォルダ（factory.toml のフォルダからの相対パス）。check が build/ の外で動いても、照合の相手を見つける
+SRC = "docs_py_src"  # 組んだ doc.md のフォルダ（desk.toml のフォルダからの相対パス）。check が build/ の外で動いても、照合の相手を見つける
 P_FIELDS = ("namedStyleType,alignment,indentStart,indentFirstLine,indentEnd,shading,borderTop,borderBottom,borderLeft,borderRight,"
             "spaceAbove,spaceBelow,lineSpacing,keepWithNext")
 T_FIELDS = "bold,italic,underline,strikethrough,link,weightedFontFamily,fontSize,foregroundColor,backgroundColor"  # 書かない項目は、名前付きスタイルに戻す
@@ -152,7 +152,7 @@ class Doc:
 
     def cover(self, lines, left=None, logo=LOGO):
         """表紙のページ（テンプレートに表紙があるとき）。題の行を中央に大きく置き、その下に左の語（顧客のロゴの代わりの社名など）と
-        自社のロゴ（factory.toml の [brand] logo。なければ置かない）を並べ、改ページする。表紙を作るかは ../visual.md の 2（資料ごとに聞く）。"""
+        自社のロゴ（desk.toml の [brand] logo。なければ置かない）を並べ、改ページする。表紙を作るかは ../visual.md の 2（資料ごとに聞く）。"""
         if logo and not re.match(r"https?://", logo):
             logo = asset(logo)
         self.blocks.append(("cover", lines, left, logo or None))
@@ -503,7 +503,7 @@ def build(did, doc, force=False):
     footer(did, doc.name)
     gapi.stamp(did, f"{FONT}\t{MONO}", FONTS)  # 版（STAMP）より先に書く。途中で止まっても、版の新しい文書に前の書体が残らない
     gapi.stamp(did, fingerprint(did), STAMP)
-    gapi.stamp(did, os.path.relpath(os.getcwd(), gapi.factory_path().parent), SRC)
+    gapi.stamp(did, os.path.relpath(os.getcwd(), gapi.config_path().parent), SRC)
     used = {os.path.realpath(x) for x in imgs}  # doc.md が ./mermaid/… や絶対パスで指す画像も消さない
     for f in glob.glob(os.path.join(MERMAID_DIR, "*.png")):  # 書き直す前の mermaid の図（doc.md から消えた図）。指紋を残したあとに消す
         if os.path.realpath(f) not in used:
@@ -532,13 +532,13 @@ STYLE_PROPS = ("size", "color", "above", "below", "spacing")  # 大きさ（pt�
 
 
 def docs_cfg():
-    """factory.toml の [docs]（なければ空。selftest は factory.toml なしで回る）。"""
-    return gapi.factory().get("docs", {}) if gapi.find_factory() else {}
+    """desk.toml の [docs]（なければ空。selftest は desk.toml なしで回る）。"""
+    return gapi.config().get("docs", {}) if gapi.find_config() else {}
 
 
 def ws_themes():
-    """ワークスペースのテーマのフォルダ（themes/docs）。factory.toml がなければ None。"""
-    return ws.parent.joinpath(*WS_THEMES) if (ws := gapi.find_factory()) else None
+    """ワークスペースのテーマのフォルダ（themes/docs）。desk.toml がなければ None。"""
+    return ws.parent.joinpath(*WS_THEMES) if (ws := gapi.find_config()) else None
 
 
 def theme_names():
@@ -546,7 +546,7 @@ def theme_names():
 
 
 def read_theme(path):
-    """テーマのファイル path（kind theme）を確かめて dict にする（load_theme が読む形）。書けない値は、場所を付けてまとめて止める（組む前に。factory-doctor も呼ぶ）。
+    """テーマのファイル path（kind theme）を確かめて dict にする（load_theme が読む形）。書けない値は、場所を付けてまとめて止める（組む前に。desk-doctor も呼ぶ）。
     色のコントラストでは止めない（会社の文書のテンプレートの色に合わせるテーマなので。poc の見出しの 4A86E8 は白の地で 3.58:1）。"""
     if not re.fullmatch(r"[A-Za-z0-9_-]+", Path(path).stem):
         sys.exit(f"{path}: テーマのファイルの名前は英数字と - _ だけにする（名前がテーマの名前）")
@@ -598,7 +598,7 @@ def theme(name):
     if (d := ws_themes()) and (f := d / f"{name}.json").is_file():
         return load_theme(read_theme(f))
     if name in docs_cfg().get("themes", {}):  # 2026-10-19 までの書き方（standard も、書いた値を黙って捨てない）
-        sys.exit(f"テーマ {name} がない（themes/docs/{name}.json）。factory.toml の [docs.themes.{name}] はもう読まない。テーマのファイルに移す（docs-build の ../SKILL.md を開いてから、その themes.md の docs-write-010）")
+        sys.exit(f"テーマ {name} がない（themes/docs/{name}.json）。desk.toml の [docs.themes.{name}] はもう読まない。テーマのファイルに移す（docs-build の ../SKILL.md を開いてから、その themes.md の docs-write-010）")
     if name != STANDARD:
         sys.exit(f"テーマ {name} がない（themes/docs/{name}.json）。docs.py themes が一覧を出す（docs-build の ../SKILL.md を開いてから、その themes.md の docs-write-010）")
 
@@ -618,8 +618,8 @@ def cmd_themes():
 
 def need_theme(doc):
     """new で、standard のほかにテーマがあるのに doc.md の頭に theme: がなければ、一覧を出して止める（slides.py の need_theme と同じく、選ぶものがあるときだけ。
-    themes/docs/standard.json に説明だけを書いたときは止めない。factory-kaizen の検証では止めない）。"""
-    if not doc.meta.get("theme") and set(theme_names()) - {STANDARD} and not os.environ.get("FACTORY_VERIFY"):
+    themes/docs/standard.json に説明だけを書いたときは止めない。desk-kaizen の検証では止めない）。"""
+    if not doc.meta.get("theme") and set(theme_names()) - {STANDARD} and not os.environ.get("DESK_VERIFY"):
         cmd_themes()
         sys.exit(f"テーマを選んでから組む。上の description と、資料の種類・聞き手を突き合わせて、doc.md の頭に theme: <名前> を書く"
                  f"（既定のままなら theme: {docs_cfg().get('default_theme', STANDARD)}）。選んだテーマと理由は構成案の前提に書く")
@@ -794,7 +794,7 @@ def load_doc():
 
 def template_md(name):
     """テンプレートの doc.md（ワークスペースの rules/docs-build/templates/<名前>/。会社の文書の型なので、プラグインには入れない）。"""
-    p = gapi.factory_path().parent / "rules" / "docs-build" / "templates" / name / "doc.md"
+    p = gapi.config_path().parent / "rules" / "docs-build" / "templates" / name / "doc.md"
     if not p.is_file():
         sys.exit(f"テンプレート {name} がない（{p}）")
     return str(p)
@@ -1082,7 +1082,7 @@ def source_dir(did):
     if os.path.isfile("doc.md"):
         return os.getcwd()
     rel = request("GET", f"{DRIVE}/files/{did}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(SRC)
-    p = rel and os.path.join(gapi.factory_path().parent, rel)
+    p = rel and os.path.join(gapi.config_path().parent, rel)
     return p if p and os.path.isfile(os.path.join(p, "doc.md")) else None
 
 

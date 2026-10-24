@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""スライド（slides.py）とドキュメント（docs.py）で同じ、見た目の共通の値: 書体と字幅の表、色の既定、会社の著作権表示とロゴ（factory.toml の [brand]）、
+"""スライド（slides.py）とドキュメント（docs.py）で同じ、見た目の共通の値: 書体と字幅の表、色の既定、会社の著作権表示とロゴ（desk.toml の [brand]）、
 使い回す画像（asset）。どちらのテーマのファイルの font・mono も、ここの theme_font・theme_mono で確かめる。標準ライブラリだけ。
 usage: python3 brand.py --selftest"""
 import os, re, sys, tomllib
@@ -52,8 +52,8 @@ TEXT, RULE = "303F47", "DCE0E2"  # 本文／罫線（スライドでは濃紺の
 
 # ---- 会社の著作権表示とロゴ ----
 def _brand():
-    """factory.toml の [brand]（社名と著作権表示。../../slides-template/create.md）。import のときに読むので gapi.locate で探し、gapi の覚えた結果を作らない。
-    書き方の誤りでは止めない（factory() を呼ぶところと factory-doctor が止める）。"""
+    """desk.toml の [brand]（社名と著作権表示。../../slides-template/create.md）。import のときに読むので gapi.locate で探し、gapi の覚えた結果を作らない。
+    書き方の誤りでは止めない（config() を呼ぶところと desk-doctor が止める）。"""
     try:
         return tomllib.loads(p.read_text()).get("brand", {}) if (p := gapi.locate()) else {}
     except tomllib.TOMLDecodeError:
@@ -73,7 +73,7 @@ def need_brand(copyright=BRAND_COPYRIGHT):
     """著作権表示 copyright（[brand] の値。スライドはテーマの copyright があればそれを渡す）がなければ止める。仮の著作権表示を全ページに書いた資料を出さないため
     （lint は形しか見ないので、仮の値も通る）。スライド・ドキュメント・テンプレートを組む build が、Slides・Docs に送る前に呼ぶ。"""
     if copyright.strip() in ("", PLACEHOLDER_COPYRIGHT):  # 空（copyright = ""）と、前後に空白を付けた仮の値も、書いていないのと同じ（doctor と同じ判定）
-        sys.exit("factory.toml の [brand]（テーマごとに変えるなら、テーマのファイルの copyright）に copyright（例: copyright = \"© 2026 Acme, Inc. All rights reserved.\"）を書いてから組む。"
+        sys.exit("desk.toml の [brand]（テーマごとに変えるなら、テーマのファイルの copyright）に copyright（例: copyright = \"© 2026 Acme, Inc. All rights reserved.\"）を書いてから組む。"
                  "書かないと全ページの左下が仮の表示（Example, Inc.）になる")
 
 
@@ -99,7 +99,7 @@ ASSETS = Path(__file__).resolve().parents[2] / "slides-build" / "assets"  # プ�
 
 def asset(path):
     """使い回す画像のパス。ワークスペースの assets/ にあればそれを、なければプラグインの ASSETS を使う。"""
-    dirs = (gapi.factory_path().parent / "assets", ASSETS)
+    dirs = (gapi.config_path().parent / "assets", ASSETS)
     for d in dirs:
         if (d / path).is_file():
             return str(d / path)

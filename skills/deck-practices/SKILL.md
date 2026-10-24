@@ -41,7 +41,7 @@ Open the file for the step you are on; do not read ahead. Each file holds the st
 | Starting and waiting for any child agent | [agents.md](agents.md) |
 | A request after delivery (correction, question, comments) | [revise.md](revise.md) (classify it first; deck-flow-017) |
 
-**9. Review the whole with `/deck-review` before delivering.** Run it by the steps in `../deck-review/SKILL.md`, and start pass 2 of the source check together with round 1 (deck-flow-019). Another subagent's eyes and the contact sheet of all pages also catch cross-page defects. Run up to the `[review] deck_review_max_rounds` rounds in `factory.toml` (3 rounds if unset); if fixing increases the defects, revert. After fixing, rebuild decks and documents to the same URL ("Deliverables" in `../slides-build/SKILL.md`). For decks that went through the three representative pages, write the every-page defects found in the review under 「あと」 in the same section of the three-representative-pages log (if something remained even though it was applied in 8, say so).
+**9. Review the whole with `/deck-review` before delivering.** Run it by the steps in `../deck-review/SKILL.md`, and start pass 2 of the source check together with round 1 (deck-flow-019). Another subagent's eyes and the contact sheet of all pages also catch cross-page defects. Run up to the `[review] deck_review_max_rounds` rounds in `desk.toml` (3 rounds if unset); if fixing increases the defects, revert. After fixing, rebuild decks and documents to the same URL ("Deliverables" in `../slides-build/SKILL.md`). For decks that went through the three representative pages, write the every-page defects found in the review under 「あと」 in the same section of the three-representative-pages log (if something remained even though it was applied in 8, say so).
 
 ## Working practices (every step)
 
@@ -79,8 +79,8 @@ Do not wait for skills to be called automatically; open the following file when 
 | Making a Google Vids video from a deck (only when the user explicitly asks, also when building or fixing a deck), or, after the notes of a deck change, updating the video made from it (without asking) | `vids-build/SKILL.md` (beta; when to make or update, setup, `create`, `update`, voices) |
 | Creating or adjusting a template (from a company template) | `slides-template/SKILL.md` (a table of which file to open: `create.md` for the three cases, mapping colors to roles, and fixing contrast; `fonts.md`; `dark.md`; switching the default theme) |
 | Received a correction, adding a rule | `deck-practices/rules.md` (rule layers, routing corrections, verifying rules) |
-| Editing the plugin | `factory-kaizen/SKILL.md` (verifying on past materials, and the Issue) |
-| factory-doctor reports 「前の版のワークスペース」 | `factory-migrate/SKILL.md` (moving `rules/`, rule IDs, and the ledger to the current version) |
+| Editing the plugin | `desk-kaizen/SKILL.md` (verifying on past materials, and the Issue) |
+| desk-doctor reports 「前の版のワークスペース」 | `desk-migrate/SKILL.md` (moving `rules/`, rule IDs, and the ledger to the current version) |
 
 The history and the sources of the research are in the workspace's `Research/deck_research/log/` (the owner's logs; not included in the plugin). The abbreviations in parentheses in the text point to sections of those logs (the list of abbreviations is at the top of `state.md` in the same folder).
 

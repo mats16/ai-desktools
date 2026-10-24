@@ -9,7 +9,7 @@ usage:
   gslides.py keep   <URL か ID> <Drive のフォルダ> <Drive 上の名前> <ページ番号 ...>   複製して、指定したページだけをその順に残す（流用の段階 1）
   gslides.py jp     <URL か ID> [置き換え.json]     すべての文字を Noto Sans JP にし、置き換え（[["英語", "日本語"], …]）を入れる（keep で作った複製に使う）
 python3 gslides.py --selftest で自己確認。
-認証は gapi.py（環境変数 GOOGLE_OAUTH_ACCESS_TOKEN か、gcloud の ADC のファイル）。401・403 なら factory-doctor で確かめる。"""
+認証は gapi.py（環境変数 GOOGLE_OAUTH_ACCESS_TOKEN か、gcloud の ADC のファイル）。401・403 なら desk-doctor で確かめる。"""
 import glob, json, os, re, subprocess, sys, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 

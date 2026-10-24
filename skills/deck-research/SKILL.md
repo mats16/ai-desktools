@@ -11,7 +11,7 @@ Research results go into `deck-practices` (content, look, review), `slides-build
 
 | File | Content |
 |---|---|
-| `Research/deck_research/state.md` | The previous date, adopted findings and where they went (corrections the user gave while making materials go not here but in the rule ledger `.factory/ledger.jsonl`), passed-over findings and why, items awaiting the user's decision, items left unverified, and what to research next |
+| `Research/deck_research/state.md` | The previous date, adopted findings and where they went (corrections the user gave while making materials go not here but in the rule ledger `.desk/ledger.jsonl`), passed-over findings and why, items awaiting the user's decision, items left unverified, and what to research next |
 | [sources.md](sources.md) | Per field: good sources, search terms that worked, misses, and access tips |
 | `Research/deck_research/log/<YYYYMMDD>_<topic>.md` | The full report of each run (written by subagents). Names use only alphanumerics, hyphens, and underscores (e.g. `20261006_jp_content.md`). A file that contains internal information says so at the top |
 | `Research/deck_research/log/20261009_rep3_selection.md` | The record of how the three representative pages were chosen (the agent making materials adds one entry per material; up to 10 materials from 2026-10-13) |
@@ -25,11 +25,11 @@ Research results go into `deck-practices` (content, look, review), `slides-build
    - Japanese-language: practice of making slides with AI agents
    - English-language: how to write skills and project instructions
    - English-language: methods and research on AI slide generation
-   - Internal: the tools in `[sources]` of `factory.toml` (search, chat, wiki) and the plugins on this Mac
+   - Internal: the tools in `[sources]` of `desk.toml` (search, chat, wiki) and the plugins on this Mac
    [deck-research-001] Japanese-language posts are higher quality for material content, and English-language posts are more plentiful for the mechanisms (skills, instructions) (an assessment; the first run also found this).
 3. [deck-research-002] **Run one subagent per theme in parallel.** Run them in the background at the same time. In Claude Code pass `model: "opus"` (if omitted, a hook in the company settings makes it haiku). Use the prompt template below. Have them write the full report in `log/` and return only the key points here (saves conversation context and survives compaction).
 4. **Read the reports and compare with state.md.** Exclude what was already adopted or passed over; pick only what is new or changed since last time.
-5. **Decide where each finding goes.** Changes go into the plugin's `skills/` as an Issue through the skill `factory-kaizen` (edits to `sources.md` go into the same Issue's proposed change; `log/` and `state.md` stay in the workspace and do not go into the Issue). Put in only findings that hold for anyone; things specific to one person or organization become proposals to the workspace `AGENTS.md` or `rules/` ("Rule layers" in `deck-practices/rules.md`). Things that must always be followed and can be checked by machine → `lint.py`. Things needed only while making → `deck-practices` (content, look), or `slides-build`'s `pages.md` and the files next to it or `docs-build`'s `SKILL.md` (how to write for the Slides API and Docs API). Things needed in every conversation → `AGENTS.md` (keep it short; do not put in what is needed only when making materials; up to 20,000 bytes; step 4h of `dreaming/run.md`). When the same failure happens twice, add it to the instructions (`Research/deck_research/log/20261006_en_skills_instructions.md` 1-17). **Ask the user before applying anything that conflicts with a policy or value in AGENTS.md.**
+5. **Decide where each finding goes.** Changes go into the plugin's `skills/` as an Issue through the skill `desk-kaizen` (edits to `sources.md` go into the same Issue's proposed change; `log/` and `state.md` stay in the workspace and do not go into the Issue). Put in only findings that hold for anyone; things specific to one person or organization become proposals to the workspace `AGENTS.md` or `rules/` ("Rule layers" in `deck-practices/rules.md`). Things that must always be followed and can be checked by machine → `lint.py`. Things needed only while making → `deck-practices` (content, look), or `slides-build`'s `pages.md` and the files next to it or `docs-build`'s `SKILL.md` (how to write for the Slides API and Docs API). Things needed in every conversation → `AGENTS.md` (keep it short; do not put in what is needed only when making materials; up to 20,000 bytes; step 4h of `dreaming/run.md`). When the same failure happens twice, add it to the instructions (`Research/deck_research/log/20261006_en_skills_instructions.md` 1-17). **Ask the user before applying anything that conflicts with a policy or value in AGENTS.md.**
 6. **Update state.md and sources.md.** Also add new sources, search terms that missed, and access tips.
 
 ## Research rules
@@ -50,7 +50,7 @@ Fill in the `<>`. From the second run on, add: "The previous research (<date>) i
 You are the researcher. Today is <YYYY-MM-DD>.
 
 ## Background
-<the person in [user] profile of factory.toml (company and role)> has Claude Code make materials (Google Slides and Google Docs). Read these first.
+<the person in [user] profile of desk.toml (company and role)> has Claude Code make materials (Google Slides and Google Docs). Read these first.
 - <workspace>/AGENTS.md
 - <plugin>/skills/deck-practices/ (SKILL.md, content.md), slides-build/visual.md, docs-build/visual.md, and deck-review/ (SKILL.md, ask.md, fix.md)
 - <workspace>/Research/deck_research/state.md and <plugin>/skills/deck-research/sources.md

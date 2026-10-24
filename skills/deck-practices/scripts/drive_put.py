@@ -2,17 +2,17 @@
 """仕上げたファイル（html・csv など）を Google Drive のフォルダに上げる（deck-practices/drive.md）。スライドは slides.py が Drive に直接作る。
 同じ名前のファイルがフォルダにあれば中身だけ上書きする（ID・URL・共有の設定は変わらない）。なければ作る。Google Docs に変換するのは research だけ。
 usage: drive_put.py <ファイル> <フォルダの URL か ID> <Drive 上の名前（YYYYMMDD_ で始める。拡張子は省くと付ける）>
-       drive_put.py research <Research/<内容>_<YYYYMMDD>.md>   調べものを Google Docs に変換して、[drive] factory の下の Research（なければ作る）に
+       drive_put.py research <Research/<内容>_<YYYYMMDD>.md>   調べものを Google Docs に変換して、[drive] desk の下の Research（なければ作る）に
                                                               <YYYYMMDD>_<内容> の名前で上げる（ワークスペースの AGENTS.md の「調べもの」）
 出力: 上書きか作ったかと、名前・URL（社内メモに書き、報告に付ける）。"""
 import mimetypes, os, re, sys, urllib.parse
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from gapi import DRIVE, GDOCS, factory, folder_id, request, run, subfolder, upload
+from gapi import DRIVE, GDOCS, config, folder_id, request, run, subfolder, upload
 
 FIELDS = "id,name,webViewLink,modifiedTime"
-RESEARCH_DIR = "Research"  # 調べものの写しを置く Drive のフォルダ。[drive] factory の下（Themes と同じ。なければ作る）
+RESEARCH_DIR = "Research"  # 調べものの写しを置く Drive のフォルダ。[drive] desk の下（Themes と同じ。なければ作る）
 
 
 def main(path, folder, name, doc=False):
@@ -35,8 +35,8 @@ def main(path, folder, name, doc=False):
 def research(path):
     if not (m := re.fullmatch(r"(.+)_(\d{8})\.md", os.path.basename(path))):
         sys.exit("調べものの名前は <内容>_<YYYYMMDD>.md: " + path)
-    if not (root := factory().get("drive", {}).get("factory")):
-        sys.exit(f"factory.toml の [drive] factory（個人の資料の根元）がない。調べものはその下の {RESEARCH_DIR} に上げる")
+    if not (root := config().get("drive", {}).get("desk")):
+        sys.exit(f"desk.toml の [drive] desk（個人の資料の根元）がない。調べものはその下の {RESEARCH_DIR} に上げる")
     main(path, subfolder(root, RESEARCH_DIR, create=True), f"{m[2]}_{m[1]}", doc=True)
 
 

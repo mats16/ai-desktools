@@ -9,16 +9,16 @@
 ```sh
 cd <worktree>
 mkdir sandbox && cd sandbox
-cp ~/Documents/factory.toml .         # 本番のワークスペースから写す。なければ factory-init
+cp ~/Documents/desk.toml .         # 本番のワークスペースから写す。なければ desk-init
 cp -R ~/Documents/rules ~/Documents/AGENTS.md ~/Documents/CLAUDE.md .   # 本番の決まりで試すときだけ
 ```
 
-写した `factory.toml` は、Google の側で本番のものを書き換えないように替える。
+写した `desk.toml` は、Google の側で本番のものを書き換えないように替える。
 
 - `[drive]` は、検証用の Drive のフォルダにする（下の「消す」）。
-- テンプレートを試すときは、`[slides.templates]` を空にし、`template.py <テーマ> --from-base [<元の URL>]` で検証用の `[drive] factory` の下に作る（URL が書き込まれる）。`template.py <テーマ>` は `[slides.templates]` のテンプレートをその場で書き換えるので、本番の URL を残さない。本番のテーマで試すなら、本番の `themes/slides/` も写す（`template.py` は表紙・扉の幅と地の明るさをそこに書き込む）。
-- `sandbox/` で `git init` はしない（factory-init が聞いてくる）。入れ子のリポジトリになり、worktree の `git clean` で消えなくなる。
-- `factory-kaizen` だけは、この worktree を試さない。`kaizen.py start` は GitHub の `main` を `sandbox/.factory/kaizen/<名前>/repo` に clone する。
+- テンプレートを試すときは、`[slides.templates]` を空にし、`template.py <テーマ> --from-base [<元の URL>]` で検証用の `[drive] desk` の下に作る（URL が書き込まれる）。`template.py <テーマ>` は `[slides.templates]` のテンプレートをその場で書き換えるので、本番の URL を残さない。本番のテーマで試すなら、本番の `themes/slides/` も写す（`template.py` は表紙・扉の幅と地の明るさをそこに書き込む）。
+- `sandbox/` で `git init` はしない（desk-init が聞いてくる）。入れ子のリポジトリになり、worktree の `git clean` で消えなくなる。
+- `desk-kaizen` だけは、この worktree を試さない。`kaizen.py start` は GitHub の `main` を `sandbox/.desk/kaizen/<名前>/repo` に clone する。
 
 ## Claude Code
 
@@ -53,7 +53,7 @@ codex debug prompt-input ok | grep -oE 'desk-tools:[a-z-]+: ' | sort -u
 - ふだんの `~/.codex` で `codex plugin marketplace add ..` しない。マーケットプレイスの名前（`desk-tools`）は 1 つしか持てず、本番のワークスペースで足したものとぶつかる。
 - 会話は `$CODEX_HOME/plugins/cache/desk-tools/desk-tools/local/` の写しを読む。手元のパスで足しても写すので、直したら `codex plugin add desk-tools@desk-tools` を回し直す。
 - 分けた `CODEX_HOME` にはログインがない。会話を回すなら、`~/.codex/auth.json`（ChatGPT のログイン）か、`~/.codex/config.toml` の `model_provider`・`[model_providers.<名前>]` を写す。会話の記録も `$CODEX_HOME/sessions/` に残るので、dreaming の `sessions.py`（`~/.codex/sessions/` を読む）には出ない。
-- hook は信頼するまで動かない。対話の Codex の `/hooks` で信頼するか、`codex exec --dangerously-bypass-hook-trust` で回す。`sed -n 1,3p ../skills/slides-build/visual.md` を回させたあとと、`$desk-tools:factory-doctor` で呼んだときに、`sandbox/rules/` の目印が差し込まれることを確かめた。
+- hook は信頼するまで動かない。対話の Codex の `/hooks` で信頼するか、`codex exec --dangerously-bypass-hook-trust` で回す。`sed -n 1,3p ../skills/slides-build/visual.md` を回させたあとと、`$desk-tools:desk-doctor` で呼んだときに、`sandbox/rules/` の目印が差し込まれることを確かめた。
 
 ## pi
 
@@ -88,7 +88,7 @@ echo "{\"cwd\":\"$PWD\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$
 
 ## 見本を組んで画像で見る
 
-JSON のページの形と部品を直したら、`sandbox/` で `tests/render/run.py` を回す。見本（`skills/slides-build/samples/json/` の全ページと、部品 1 つの `component.json`）を `[drive] internal` に一時のデッキとして組み、lint（手元と組んだあと）と全ページの画像を取って、ページごとの見るところ（`tests/render/expect.json`）と並べた `sandbox/.factory/render/report.md` を書く。デッキは画像を取ったらゴミ箱に移す（`--keep` で残す）。
+JSON のページの形と部品を直したら、`sandbox/` で `tests/render/run.py` を回す。見本（`skills/slides-build/samples/json/` の全ページと、部品 1 つの `component.json`）を `[drive] internal` に一時のデッキとして組み、lint（手元と組んだあと）と全ページの画像を取って、ページごとの見るところ（`tests/render/expect.json`）と並べた `sandbox/.desk/render/report.md` を書く。デッキは画像を取ったらゴミ箱に移す（`--keep` で残す）。
 
 ```sh
 python3 ../tests/render/run.py            # report.md を書く。画像は自分で開いて見る

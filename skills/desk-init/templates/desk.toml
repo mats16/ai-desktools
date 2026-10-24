@@ -1,8 +1,8 @@
-# AI Desk Tools の設定（factory-init がワークスペースの直下に置く。自分の値にして、factory-doctor で確かめる）
+# AI Desk Tools の設定（desk-init がワークスペースの直下に置く。自分の値にして、desk-doctor で確かめる）
 #
-# ワークスペースは、資料のフォルダ（Customers/・Internal/・Research/）と、この factory.toml を置くフォルダ（例: ~/Documents）。
-# スクリプトは、今いるフォルダから上へたどって最初に見つかった factory.toml を読み、そのフォルダをワークスペースとして扱う。
-# 実行のたびに書く記録（lint の記録、dreaming の前回の時刻・報告・写し、コメントを前に取った時刻と見張りの起点）は、ワークスペースの .factory/ に置かれる。
+# ワークスペースは、資料のフォルダ（Customers/・Internal/・Research/）と、この desk.toml を置くフォルダ（例: ~/Documents）。
+# スクリプトは、今いるフォルダから上へたどって最初に見つかった desk.toml を読み、そのフォルダをワークスペースとして扱う。
+# 実行のたびに書く記録（lint の記録、dreaming の前回の時刻・報告・写し、コメントを前に取った時刻と見張りの起点）は、ワークスペースの .desk/ に置かれる。
 #
 # - ここに書くもの: 人や組織で変わる値だけ（社名は下の brand。会社のテンプレートの書体と色は、下のテーマのファイルに書く）。見た目の決まり（色の役割・余白・版面）は slides.py と slides-build/visual.md。
 # - 値の形: Google Slides と Drive のフォルダは URL のまま書く（スクリプトが ID を取り出す）。
@@ -10,21 +10,21 @@
 #   テーマごとのテンプレートの URL だけを書く（エージェントが slides.py themes で一覧を見て、資料ごとに選ぶ）。URL は template.py <名前> --from-base が書き込む。
 #   元のテンプレートの URL はここに持たない（--from-base <元の URL> で渡す。渡さなければ白紙の pptx から作る）。
 
-[factory]
-# private = ["アクメ", "ロードランナー"]  # factory-kaizen が Issue に入れたら止める語（顧客の日本語の名前、顧客の製品名など）。Customers/ の顧客と資料のフォルダの名前は書かなくても見る
+[desk]
+# private = ["アクメ", "ロードランナー"]  # desk-kaizen が Issue に入れたら止める語（顧客の日本語の名前、顧客の製品名など）。Customers/ の顧客と資料のフォルダの名前は書かなくても見る
 
 [user]
 profile = ""  # 使う人の名前・メール・会社・役割・担当の顧客を書いたファイル（markdown か text）。エージェントが要るときに読む
 
 [google]
 # トークンの取り方: 環境変数 GOOGLE_OAUTH_ACCESS_TOKEN、なければ認証情報の JSON
-# （GOOGLE_APPLICATION_CREDENTIALS、なければ gcloud の ADC。作るのは factory-doctor が出す gcloud auth application-default login のコマンド）
+# （GOOGLE_APPLICATION_CREDENTIALS、なければ gcloud の ADC。作るのは desk-doctor が出す gcloud auth application-default login のコマンド）
 quota_project = ""  # gcloud の既定の OAuth クライアントで取ったトークンは、これがないと Slides・Docs で 403。自分の OAuth クライアントなら空でよい
 
 [slides]
 default_theme = "visual"  # 説明で決まらないときのテーマ。テーマは資料ごとに選ぶ（slides.py themes が名前と説明を出す）。切り替えは slides-template の「Choosing the default theme」
 
-[brand]  # 表紙の社名と著作権表示（ドキュメントのフッターも）、ドキュメントの表紙のロゴ。copyright は要る（factory-doctor が見る）
+[brand]  # 表紙の社名と著作権表示（ドキュメントのフッターも）、ドキュメントの表紙のロゴ。copyright は要る（desk-doctor が見る）
 # company = "アクメ・ジャパン株式会社"  # 表紙の左下。書かなければ置かない
 # copyright = "© 2026 Acme, Inc. All rights reserved."  # 全ページの左下。lint が 9pt を通すのは「© <年> <社名> All rights reserved.」の形だけ
 # logo = "acme/logo.png"  # ドキュメントの表紙のロゴ。ワークスペースの assets/ の中のパスか URL。書かなければ置かない
@@ -48,7 +48,7 @@ deck_review_max_rounds = 3  # /deck-review を回すラウンドの上限（1〜
 watch_hours = 0  # 最後のコメント（なければ見張り始め）から何時間見張るか。新しいコメントがないまま過ぎたら終える。0 か、書かなければ見張らない（頼まれたときだけ）
 
 [sources]  # 材料を集める道具（deck-practices/materials.md）。値は MCP のサーバーかスキルの名前。使わない役割は書かない（資料や URL を貼ってもらう）
-# 道具ごとの使い方とその会社の探し場所は rules/deck-practices/materials.md に書く。factory-doctor が、書いた道具が使えるかを見る
+# 道具ごとの使い方とその会社の探し場所は rules/deck-practices/materials.md に書く。desk-doctor が、書いた道具が使えるかを見る
 # search   = "glean"       # 社内の横断検索
 # chat     = "slack"       # 社内のチャット（Microsoft Teams なら、その MCP の名前）
 # meetings = ""            # 会議の記録（議事録・文字起こし）
@@ -57,9 +57,9 @@ watch_hours = 0  # 最後のコメント（なければ見張り始め）から�
 # usage    = ""            # 顧客の利用額・利用状況
 
 [drive]
-factory = ""    # 個人の資料の根元（例: My Drive の AI Desk Tools）。template.py --from-base は、この下の Themes にテンプレートを作る（なければ作る）。gslides.py keep の差し替え用の複製は直下に、調べものの写し（drive_put.py research）はこの下の Research に作る
-shared_themes = ""  # 全社の共有テーマのフォルダ（管理者が template.py で作ったテンプレートの置き場所。見る権限でよい）。slides.py themes が、factory.toml にないテンプレートを候補に出す。
-                    # 使うときは slides.py theme <url> で写す（テーマのファイルと [slides.templates] に書く）。管理者は自分の factory の下の Themes を指してよい
+desk = ""       # 個人の資料の根元（例: My Drive の AI Desk Tools）。template.py --from-base は、この下の Themes にテンプレートを作る（なければ作る）。gslides.py keep の差し替え用の複製は直下に、調べものの写し（drive_put.py research）はこの下の Research に作る
+shared_themes = ""  # 全社の共有テーマのフォルダ（管理者が template.py で作ったテンプレートの置き場所。見る権限でよい）。slides.py themes が、desk.toml にないテンプレートを候補に出す。
+                    # 使うときは slides.py theme <url> で写す（テーマのファイルと [slides.templates] に書く）。管理者は自分の desk の下の Themes を指してよい
 customers = ""  # 顧客向けの資料の置き場所の根元（例: 共有ドライブ 10_Customers）
 internal = ""   # 顧客に紐づかないスライドの置き場所（例: AI Desk Tools/Slides）
 docs = ""       # 顧客に紐づかないドキュメントの置き場所（例: AI Desk Tools/Docs）

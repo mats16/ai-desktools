@@ -14,7 +14,7 @@ pi install -l git:github.com/mats16/ai-desktools   # git から
 
 - 書き込まれるのは `<ワークスペース>/.pi/settings.json` の `packages`。手元のパスは `.pi/` からの相対のパスで入るので、ワークスペースか checkout を動かしたら入れ直す。
 - 入るもの（`package.json` の `pi`）: `skills/` の 15 個のスキルと、`extensions/rules.ts`（プラグインのファイルを read・bash で開いたら、ワークスペースの `rules/` の同じパスを、顧客の資料の `構成案*.md` などを開いたら顧客の `memory.md` を続けて出す。今の文脈に残っているものは出し直さない）。
-- スキルは `/skill:factory-init` のように呼ぶ。入れたら `factory-init`、続けて `factory-doctor`（README の「入れ方」）。
+- スキルは `/skill:desk-init` のように呼ぶ。入れたら `desk-init`、続けて `desk-doctor`（README の「入れ方」）。
 
 ## project trust
 
@@ -37,7 +37,7 @@ cd ~ && pi list                   # User packages にだけ出る（ここに de
 (echo '{"type":"get_commands"}'; sleep 6) | pi --mode rpc --no-session | grep -o '"name":"skill:[^"]*"'
 ```
 
-ワークスペースでは 15 個（`factory-init` … `factory-kaizen`）が `scope: project` で出て、ほかのフォルダでは出ない。何も出ないときは、trust を保存していない（上の「project trust」）か、起動が返事より遅れている。`/trust` で保存するか、`sleep` を延ばしてもう一度回す。
+ワークスペースでは 15 個（`desk-init` … `desk-kaizen`）が `scope: project` で出て、ほかのフォルダでは出ない。何も出ないときは、trust を保存していない（上の「project trust」）か、起動が返事より遅れている。`/trust` で保存するか、`sleep` を延ばしてもう一度回す。
 
 ## pi はワークスペースの直下で起こす
 
@@ -48,7 +48,7 @@ cd ~ && pi list                   # User packages にだけ出る（ここに de
 
 ## 同じ名前のスキルがあるとき
 
-パッケージのスキルは、pi の中でいちばん優先が低い。同じ名前のスキルがほかにあると、そちらが勝ち、パッケージのものは読まれない（pi は名前がぶつかると優先の高いものを残して警告を出す）。勝つのは、ワークスペースか親の `.agents/skills/`（git のリポジトリならその根元まで）、`.pi/skills/`、ユーザーの `~/.agents/skills/`・`~/.pi/agent/skills/`、settings.json の `skills` に書いたもの。前から `.agents/skills/slides-build` などを置いていたフォルダに入れると、古いスキルのまま動く。移すときは `.agents/skills/` の同じ名前のものを外す（README の「残っている課題」の「Documents を移す」）。`factory-doctor` の「スキルの重なり」が見るのはワークスペースの直下の `.agents/skills/`・`.claude/skills/` だけなので、ほかの場所のものは、上の `get_commands` を grep なしで回し、スキルの `sourceInfo.path` と `scope` で出どころを見る。
+パッケージのスキルは、pi の中でいちばん優先が低い。同じ名前のスキルがほかにあると、そちらが勝ち、パッケージのものは読まれない（pi は名前がぶつかると優先の高いものを残して警告を出す）。勝つのは、ワークスペースか親の `.agents/skills/`（git のリポジトリならその根元まで）、`.pi/skills/`、ユーザーの `~/.agents/skills/`・`~/.pi/agent/skills/`、settings.json の `skills` に書いたもの。前から `.agents/skills/slides-build` などを置いていたフォルダに入れると、古いスキルのまま動く。移すときは `.agents/skills/` の同じ名前のものを外す（README の「残っている課題」の「Documents を移す」）。`desk-doctor` の「スキルの重なり」が見るのはワークスペースの直下の `.agents/skills/`・`.claude/skills/` だけなので、ほかの場所のものは、上の `get_commands` を grep なしで回し、スキルの `sourceInfo.path` と `scope` で出どころを見る。
 
 ## 外す
 
@@ -57,4 +57,4 @@ cd <ワークスペース>
 pi remove -l ~/Projects/ai-desktools   # 入れたときと同じ書き方で
 ```
 
-ワークスペースのファイル（`factory.toml`・`AGENTS.md`・`rules/`・`.factory/`）は残る。
+ワークスペースのファイル（`desk.toml`・`AGENTS.md`・`rules/`・`.desk/`）は残る。

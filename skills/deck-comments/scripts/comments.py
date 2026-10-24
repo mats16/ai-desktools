@@ -7,12 +7,12 @@ usage（資料のフォルダで）:
   comments.py reply <URL か ID> <コメントの ID> <文> [--resolve]   返信する。--resolve を付けると、返信と一緒に解決する
   comments.py watch <URL か ID>... [--hours <時間>] [--start]   --new を 90 秒ごとに回し、新しいコメントが出たら出して返る。出なければ 270 秒で
                                       「まだ」と返る（見張りの子が呼び直す。../prompt_watch.md）。最後のコメント（なければ見張り始め。--start で今にする）から
-                                      --hours（既定は factory.toml の [feedback.google_comments] watch_hours）のあいだ新しいコメントがなければ、「見張りを終える」と返る。
+                                      --hours（既定は desk.toml の [feedback.google_comments] watch_hours）のあいだ新しいコメントがなければ、「見張りを終える」と返る。
                                       資料には、AI が見張っていることと終える時刻をコメントに書き（知らせ）、終える時刻が延びたら返信し、終えたら返信して解決する
   comments.py watch-prompt <URL か ID>... [--hours <時間>] [--folder <資料のフォルダ>]   見張りの子に渡す依頼文（../prompt_watch.md を埋めたもの）を出す。
                                       資料のフォルダの既定は今いるフォルダ。埋め残しの差し込み先があれば止める
   comments.py --selftest
-前に取った時刻、reply で送った返信の ID（--new で新しいと数えない）、見張りの起点、知らせのコメントの ID と書いた終える時刻は、ワークスペースの .factory/comments.json に残す。"""
+前に取った時刻、reply で送った返信の ID（--new で新しいと数えない）、見張りの起点、知らせのコメントの ID と書いた終える時刻は、ワークスペースの .desk/comments.json に残す。"""
 import contextlib, datetime, html, json, math, os, re, shlex, sys, time, urllib.parse
 from pathlib import Path
 
@@ -40,12 +40,12 @@ def fetch(fid, since=None):
 
 
 def state_path():
-    return gapi.factory_path().parent / ".factory" / "comments.json"
+    return gapi.config_path().parent / ".desk" / "comments.json"
 
 
 @contextlib.contextmanager
 def state():
-    """.factory/comments.json を読んで渡し、ブロックを抜けたら書く（途中で止まったら書かない）。見張りの子と親の reply が同時に動いても
+    """.desk/comments.json を読んで渡し、ブロックを抜けたら書く（途中で止まったら書かない）。見張りの子と親の reply が同時に動いても
     互いの書き込みを消さないよう、そのあいだ錠をかけ、仮のファイルから差し替える。"""
     p = state_path()
     p.parent.mkdir(exist_ok=True)
@@ -224,7 +224,7 @@ def announce(fids, hours):
 
 
 def watch(urls, src, hours, start=False):
-    """新しいコメントが出るか、WAIT 秒たつか、期限が来るまで、POLL 秒ごとに見る。起点は .factory/comments.json の watch（ファイルごと）。"""
+    """新しいコメントが出るか、WAIT 秒たつか、期限が来るまで、POLL 秒ごとに見る。起点は .desk/comments.json の watch（ファイルごと）。"""
     fids = [file_id(u) for u in urls]
     with state() as st:
         for f in fids:
@@ -270,10 +270,10 @@ def opt(a, name):
 
 
 def watch_hours(given):
-    """見張る時間（正の数）。--hours の値（文字から読む）か、factory.toml の [feedback.google_comments] watch_hours（factory-doctor と同じく、数の型だけ受ける。
+    """見張る時間（正の数）。--hours の値（文字から読む）か、desk.toml の [feedback.google_comments] watch_hours（desk-doctor と同じく、数の型だけ受ける。
     true や "48" は受けない）。0 か、ないか、数でなければ止める。"""
     if given is None:
-        h = gapi.factory().get("feedback", {}).get("google_comments", {}).get("watch_hours", 0)
+        h = gapi.config().get("feedback", {}).get("google_comments", {}).get("watch_hours", 0)
         hours = float(h) if type(h) in (int, float) else -1.0  # bool は int の子なので type で見る
     else:
         h = given
@@ -282,7 +282,7 @@ def watch_hours(given):
         except ValueError:
             hours = -1.0
     if not (math.isfinite(hours) and hours > 0):
-        sys.exit(f"見張る時間が {h!r}。正の時間の数を --hours <時間> で渡すか、factory.toml の [feedback.google_comments] watch_hours に書く（0 か、なければ見張らない）")
+        sys.exit(f"見張る時間が {h!r}。正の時間の数を --hours <時間> で渡すか、desk.toml の [feedback.google_comments] watch_hours に書く（0 か、なければ見張らない）")
     return hours
 
 
@@ -294,8 +294,8 @@ def watch_prompt(urls, hours, folder):
     folder = Path(folder or ".").resolve()
     if not folder.is_dir():
         sys.exit(f"資料のフォルダがない: {folder}")
-    os.chdir(folder)  # factory.toml は、子が watch を回す資料のフォルダから上へたどる
-    gapi.factory_path()
+    os.chdir(folder)  # desk.toml は、子が watch を回す資料のフォルダから上へたどる
+    gapi.config_path()
     watch_hours(hours)  # 見張る時間が決まらなければ、子を起こす前に止める
     head, _, body = PROMPT.read_text().partition("\n")
     fill = {"<material folder>": shlex.quote(str(folder)), "<path to comments.py>": shlex.quote(str(Path(__file__).resolve())),
@@ -338,7 +338,7 @@ def selftest():
     assert bare('"text": "**売上**は<br>前年の 2 倍\\nです"') == "text:売上は前年の2倍です"
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
-        (root / "factory.toml").write_text("")
+        (root / "desk.toml").write_text("")
         b = root / "build"
         b.mkdir()
         (b / "p05.json").write_text('{\n  "title": "売上は **前年の 2 倍**",\n  "body": "ほか"\n}\n')
@@ -379,11 +379,11 @@ def selftest():
                 main()
             return out.getvalue(), err.getvalue()
 
-        real = gapi.request, gapi.factory_path, sys.argv, gapi.factory, time.sleep, time.time
+        real = gapi.request, gapi.config_path, sys.argv, gapi.config, time.sleep, time.time
         conf, clock = {"feedback": {"google_comments": {"watch_hours": 48}}}, [time.time()]  # sleep で進む時計
-        gapi.request, gapi.factory_path, gapi.factory = fake, lambda: root / "factory.toml", lambda: conf
+        gapi.request, gapi.config_path, gapi.config = fake, lambda: root / "desk.toml", lambda: conf
         time.sleep, time.time = lambda s: clock.__setitem__(0, clock[0] + s), lambda: clock[0]
-        saved = lambda: json.loads((root / ".factory" / "comments.json").read_text())
+        saved = lambda: json.loads((root / ".desk" / "comments.json").read_text())
         try:
             s, _ = call("--src", str(b), "https://docs.google.com/presentation/d/X1/edit")
             assert "未解決 4 件、うち新しい 4 件" in s and "[新] A 相手" in s and "p.1（p01.json）の「売上は前年の 2 倍」に: 出典は？ / 要確認" in s and "→ doc.md:3、p05.json:2" in s, s
@@ -498,7 +498,7 @@ def selftest():
                     raise AssertionError(f"{argv} を通した")
                 except SystemExit as e:
                     assert why in str(e) and ("watch_hours" in str(e) or why == "usage"), (argv, e)
-            for v in (True, "48", float("nan")):  # factory.toml は doctor と同じく数の型だけ（true も文字も受けない）
+            for v in (True, "48", float("nan")):  # desk.toml は doctor と同じく数の型だけ（true も文字も受けない）
                 conf["feedback"]["google_comments"]["watch_hours"] = v
                 try:
                     watch_hours(None)
@@ -511,7 +511,7 @@ def selftest():
             cwd, me = os.getcwd(), Path(__file__).resolve()
             try:
                 s, _ = call("watch-prompt", "--folder", str(root), "--hours", "2", "https://docs.google.com/presentation/d/X1/edit#slide=id.p", "X2")
-                assert Path.cwd() == root.resolve()  # factory.toml は資料のフォルダから上へたどる
+                assert Path.cwd() == root.resolve()  # desk.toml は資料のフォルダから上へたどる
                 (odd := root / "a<arguments>b").mkdir()
                 try:
                     call("watch-prompt", "--folder", str(odd), "X1")  # 埋めた値の < は、あとの置き換えと子が差し込み先と読み違える
@@ -537,16 +537,16 @@ def selftest():
             finally:
                 globals()["PROMPT"] = real_prompt
                 os.chdir(cwd)
-            before = (root / ".factory" / "comments.json").read_text()
+            before = (root / ".desk" / "comments.json").read_text()
             try:
                 with state() as st:
                     st["sent"].append("x")
                     raise gapi.ApiError("途中で止まった")
             except gapi.ApiError:
                 pass
-            assert (root / ".factory" / "comments.json").read_text() == before and not (root / ".factory" / "comments.tmp").exists()  # 止まったら書かない
+            assert (root / ".desk" / "comments.json").read_text() == before and not (root / ".desk" / "comments.tmp").exists()  # 止まったら書かない
         finally:
-            gapi.request, gapi.factory_path, sys.argv, gapi.factory, time.sleep, time.time = real
+            gapi.request, gapi.config_path, sys.argv, gapi.config, time.sleep, time.time = real
     print("selftest ok")
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 資料ごとの build/deck.json（kind deck。資料名と、ページのファイルの並び）と、1 ページ 1 つの build/p<番号>.json（kind page）に書く（../pages.md の slides-pages-034。書く形は schema）。
 前の資料の build/pages.py（NAME・ページの関数・make(d)。部品は Deck のメソッド）も組める。
 usage（資料の build/ で。deck.json か pages.py は今いるフォルダのもの）:
-  slides.py new <Drive のフォルダの URL か ID> <Drive 上の名前> [--theme <テーマ>]   テンプレートを複製して組む（テンプレートは factory.toml の [slides.templates] の <テーマ>。
+  slides.py new <Drive のフォルダの URL か ID> <Drive 上の名前> [--theme <テーマ>]   テンプレートを複製して組む（テンプレートは desk.toml の [slides.templates] の <テーマ>。
                                           組む前にマスターをテーマのファイルの値にそろえる。build も同じ）
   slides.py plan <URL か ID> [<ファイル>...]   build が書くもの（マスターのテーマの違い・作り直すページ・選んでいないので残すページ・消す枚数・並べ替え・画面での直し）を出す。書かない
   slides.py build <URL か ID> [<ファイル>...] [--force]   組み直す（中身の変わったページだけを作り直し、順をそろえる。URL は変わらない）。JSON のページ・デッキのファイルを渡すと、
@@ -17,10 +17,10 @@ usage（資料の build/ で。deck.json か pages.py は今いるフォルダ�
                                           テーマは lint と同じ。../pages.md）
   slides.py resolve [<ファイル>.json] [<URL か ID>]   JSON のページを解いた形（in の位置とすべての値。Deck のメソッドの呼び出し）を出す（../pages.md の slides-pages-034）
   slides.py schema [--brief]   JSON のページの書く形の JSON Schema を出す（--brief は型・キー・色の早見表）
-  slides.py stats   JSON のページの形の外の書き方（raw）を、キーごとに使った資料の数で出す（ワークスペースの .factory/spec_raw.jsonl。形に足す候補）
+  slides.py stats   JSON のページの形の外の書き方（raw）を、キーごとに使った資料の数で出す（ワークスペースの .desk/spec_raw.jsonl。形に足す候補）
   slides.py upgrade <ファイル>...   JSON のページの raw のうち、形のキーで書けるものを書き換える
   slides.py themes   テーマの名前・説明・テンプレートがあるか・既定か。資料ごとに選ぶ（../../deck-practices/start.md の 5）。
-                     [drive] shared_themes と [drive] factory の下の Themes の、[slides.templates] にないテンプレートも候補に出す
+                     [drive] shared_themes と [drive] desk の下の Themes の、[slides.templates] にないテンプレートも候補に出す
   slides.py theme <URL か ID> [<名前>] [--force]   テンプレートかデッキが持つテーマ（マスターの配色・書体・目印）を、ワークスペースの themes/slides/<名前>.json に書く。
                      テンプレートなら [slides.templates] にも書く（共有テーマを使い始めるとき、画面で直した色を戻すとき）
   slides.py merge <ファイル>...   pages.py の資料で、子が別のファイルに書いたページの関数を pages.py に合わせる（組まない。../../deck-review/prompt_fix.md）
@@ -35,12 +35,12 @@ sys.dont_write_bytecode = True  # build/ と scripts/ に __pycache__ を残さ�
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "deck-practices", "scripts"))  # ドキュメントと共有する部品（gapi・brand・textlint）
 import brand, gapi
-from gapi import (DRIVE, GSLIDES, PPTX, SLIDES, batch, carry, delete, factory, factory_path, file_id, folder_id, png, request, run, slide_ids, thumbnail,
+from gapi import (DRIVE, GSLIDES, PPTX, SLIDES, batch, carry, delete, config, config_path, file_id, folder_id, png, request, run, slide_ids, thumbnail,
                   trash, u16, upload)
 from brand import (ASCII_BOLD_EM, ASCII_EM, BRAND_COPYRIGHT, COMPANY, COPYRIGHT_PT, DM_SANS_BOLD_EM, DM_SANS_EM, FONT, FONT_EM, JP_FONTS, LIGATURE_MONO, LOGO,
                    MONO_DEFAULT, PLACEHOLDER_COPYRIGHT, RULE, TEXT, WHITE, asset, theme_font, theme_mono)  # 書体・字幅・色の既定・著作権表示はドキュメントと同じ
 
-# ---- テンプレート。ID・置き場所・既定のテーマは人ごとに違うので、Documents の直下の factory.toml の [slides] に置く（作り方は template.py） ----
+# ---- テンプレート。ID・置き場所・既定のテーマは人ごとに違うので、Documents の直下の desk.toml の [slides] に置く（作り方は template.py） ----
 BLANK = "Content E - Blank"  # テンプレートに残した、置き物のないレイアウト。ページ番号の枠だけを持つ
 
 # ---- 版面（visual.md の 1。上端は in） ----
@@ -82,7 +82,7 @@ HEAD, CARD, SUB_ON_NAVY, ON_RED = NAMED  # 本文のページの見出しの文�
 # Drive の複製でも残る（2026-10-13）ので、デッキはテーマの値をすべて持ち、theme_from で theme.json に戻せる
 THEME_MARK = re.compile(r"ai-deck-factory theme=([A-Za-z0-9_-]+)(?: (\{.*\}))?", re.S)
 THEME_PROP = "adf.theme"  # template.py がテンプレートの Drive のプロパティ（公開。どの OAuth クライアントでも読める）に書くテーマの名前。共有テーマのフォルダでテンプレートを見分ける
-THEMES_DIR = "Themes"  # template.py --from-base がテンプレートを作る Drive のフォルダ。[drive] factory の下（なければ作る）。使うテンプレートは [slides.templates] で 1 つずつ指す
+THEMES_DIR = "Themes"  # template.py --from-base がテンプレートを作る Drive のフォルダ。[drive] desk の下（なければ作る）。使うテンプレートは [slides.templates] で 1 つずつ指す
 # テーマのファイル（kind theme）。組み込みは slides-build/themes/<名前>.json、ワークスペースは themes/slides/<名前>.json（同じ名前ならワークスペースが勝つ）。
 # ドキュメントのテーマも、あとで themes/docs/<名前>.json に同じ形で置く
 BUILTIN_THEMES = Path(__file__).resolve().parent.parent / "themes"
@@ -2471,13 +2471,13 @@ def spec_out_hits(deck):
 
 
 def spec_log_path():
-    return gapi.factory_path().parent / ".factory" / "spec_raw.jsonl"
+    return gapi.config_path().parent / ".desk" / "spec_raw.jsonl"
 
 
 def spec_record(deck, pid):
-    """組んだ JSON のページのデッキの形の外の書き方の数を、ワークスペースの .factory/spec_raw.jsonl に 1 行で残す（slides.py stats が数える。raw がなくても残し、前の数を 0 にする）。資料の文は残さず、キーと数だけ。
-    名前に tmp の入った資料と、factory-kaizen の検証の資料（FACTORY_VERIFY）は数えない（lint_runs.jsonl と同じ）。"""
-    if not deck.resolved or os.environ.get("FACTORY_VERIFY") or "tmp" in deck.name.lower():  # JSON のページのデッキは、raw がなくても残す（前の数を 0 にする）
+    """組んだ JSON のページのデッキの形の外の書き方の数を、ワークスペースの .desk/spec_raw.jsonl に 1 行で残す（slides.py stats が数える。raw がなくても残し、前の数を 0 にする）。資料の文は残さず、キーと数だけ。
+    名前に tmp の入った資料と、desk-kaizen の検証の資料（DESK_VERIFY）は数えない（lint_runs.jsonl と同じ）。"""
+    if not deck.resolved or os.environ.get("DESK_VERIFY") or "tmp" in deck.name.lower():  # JSON のページのデッキは、raw がなくても残す（前の数を 0 にする）
         return
     path = spec_log_path()
     try:  # 組み終えたあとの記録。書けなくても組んだデッキは止めない
@@ -2490,7 +2490,7 @@ def spec_record(deck, pid):
 
 
 def spec_stats(path=None):
-    """形の外の書き方を、キーごとに、使った資料の数と使った数で出す（資料ごとに最後に組んだときの数）。2 本以上の資料で使ったキーは、形に足す候補（factory-kaizen）。"""
+    """形の外の書き方を、キーごとに、使った資料の数と使った数で出す（資料ごとに最後に組んだときの数）。2 本以上の資料で使ったキーは、形に足す候補（desk-kaizen）。"""
     path, last, bad = Path(path or spec_log_path()), {}, 0
     for line in path.read_text(encoding="utf-8").splitlines() if path.is_file() else []:
         try:
@@ -2615,7 +2615,7 @@ def use_layouts(p):
 
 def ws_themes():
     """ワークスペースのテーマのフォルダ（themes/slides）。ワークスペースの外なら None。"""
-    return ws.parent.joinpath(*WS_THEMES) if (ws := gapi.find_factory()) else None
+    return ws.parent.joinpath(*WS_THEMES) if (ws := gapi.find_config()) else None
 
 
 def theme_path(name):
@@ -2631,7 +2631,7 @@ def theme_names():
 def read_theme(path):
     """テーマのファイル path（kind theme）を確かめて、テーマの表（colors を開いた平らな dict。theme_values・template.py が読む形）にする。
     cover・section の名前だけの書き方は {"layout": 名前} にする。書けない値なら場所を付けて止める（組む前に。slides.py lint <ファイル> が見る）。"""
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", Path(path).stem):  # 目印（THEME_MARK）と factory.toml の [slides.templates] のキーに、引用符なしで書く
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", Path(path).stem):  # 目印（THEME_MARK）と desk.toml の [slides.templates] のキーに、引用符なしで書く
         sys.exit(f"{path}: テーマのファイルの名前は英数字と - _ だけにする（名前がテーマの名前）")
     try:
         o = json.loads(Path(path).read_text())
@@ -2769,12 +2769,12 @@ def theme_diff(name, t, p):
 
 
 def templates():
-    """テーマごとのテンプレートの ID（factory.toml の [slides.templates] の「名前 = URL」）。"""
-    return {k: file_id(u) for k, u in factory().get("slides", {}).get("templates", {}).items() if u} if gapi.find_factory() else {}
+    """テーマごとのテンプレートの ID（desk.toml の [slides.templates] の「名前 = URL」）。"""
+    return {k: file_id(u) for k, u in config().get("slides", {}).get("templates", {}).items() if u} if gapi.find_config() else {}
 
 
 def set_template(text, name, url):
-    """factory.toml の文字列の [slides.templates] の name の行を url にする（なければ表の頭に足し、表もなければファイルの最後に足す）。コメントと並びはそのまま。"""
+    """desk.toml の文字列の [slides.templates] の name の行を url にする（なければ表の頭に足し、表もなければファイルの最後に足す）。コメントと並びはそのまま。"""
     text = text if text.endswith("\n") else text + "\n"  # 見出しがファイルの最後の行でも見つける
     m = re.search(r"^\[slides\.templates\][^\n]*\n(.*?)(?=^\[|\Z)", text, re.S | re.M)
     if not m:
@@ -2785,16 +2785,16 @@ def set_template(text, name, url):
 
 
 def record_template(name, pid=None):
-    """テンプレートの URL を factory.toml の [slides.templates] に書く。書いたあとの TOML が読めて、URL が入っていることを確かめてから書く（壊さない）。
+    """テンプレートの URL を desk.toml の [slides.templates] に書く。書いたあとの TOML が読めて、URL が入っていることを確かめてから書く（壊さない）。
     pid が None なら、書けるかだけを確かめる（template.py --from-base が複製する前に呼ぶ。書けないのに Drive に複製を残さない）。"""
-    p, url = gapi.factory_path(), f"https://docs.google.com/presentation/d/{pid or 'CHECK'}/edit"
+    p, url = gapi.config_path(), f"https://docs.google.com/presentation/d/{pid or 'CHECK'}/edit"
     text = set_template(p.read_text(), name, url)
     try:
         ok = tomllib.loads(text)["slides"]["templates"][name] == url
     except (tomllib.TOMLDecodeError, KeyError):
         ok = False
     if not ok:
-        sys.exit(f"factory.toml の [slides.templates] に {name} を書けない（見出しの書き方が違うかもしれない。[slides.templates] の形にする）"
+        sys.exit(f"desk.toml の [slides.templates] に {name} を書けない（見出しの書き方が違うかもしれない。[slides.templates] の形にする）"
                  + (f"。テンプレートは {url}。手で {name} = \"{url}\" を書く" if pid else "。テンプレートはまだ作っていない"))
     if pid:
         p.write_text(text)
@@ -2811,20 +2811,20 @@ def theme_files(folder, named=True):
 def shared_files():
     """[drive] shared_themes（全社の共有テーマのフォルダ）のテンプレート（theme_files）。書いていなければ []。
     探すときだけ読む（使うテーマは slides.py theme <URL> でワークスペースに写す）。"""
-    if not (gapi.find_factory() and (f := factory().get("drive", {}).get("shared_themes"))):
+    if not (gapi.find_config() and (f := config().get("drive", {}).get("shared_themes"))):
         return []
     return theme_files(folder_id(f))
 
 
 def find_themes_folder(root):
-    """[drive] factory（root）の下の Themes の ID。なければ None（作るのは template.py の themes_folder）。"""
+    """[drive] desk（root）の下の Themes の ID。なければ None（作るのは template.py の themes_folder）。"""
     return gapi.subfolder(root, THEMES_DIR)
 
 
 @functools.cache
 def own_files():
-    """[drive] factory の下の Themes（template.py --from-base がテンプレートを作るフォルダ）のテンプレート（theme_files）。なければ []（作らない）。"""
-    if not (gapi.find_factory() and (root := factory().get("drive", {}).get("factory"))):
+    """[drive] desk の下の Themes（template.py --from-base がテンプレートを作るフォルダ）のテンプレート（theme_files）。なければ []（作らない）。"""
+    if not (gapi.find_config() and (root := config().get("drive", {}).get("desk"))):
         return []
     return theme_files(f) if (f := find_themes_folder(root)) else []
 
@@ -2834,7 +2834,7 @@ def unlisted():
     自分の Themes は、[slides.templates] にない名前の、いちばん新しいものだけ（--from-base で作り直す前の古いテンプレートを出さない）。同じファイルが両方にあれば共有（管理者が自分の Themes を共有のフォルダにしたとき。名前が同じでも別のファイルなら両方出す）。
     探すためだけなので、フォルダを読めなければ知らせて飛ばす（themes と new を止めない）。"""
     seen, own_skip, rows = set(templates().values()), set(templates()), []  # own_skip: 自分の Themes で出さない名前（テンプレートがある・もう出した）
-    for where, folder, get in (("共有", "[drive] shared_themes", shared_files), ("個人", f"[drive] factory の下の {THEMES_DIR}", own_files)):
+    for where, folder, get in (("共有", "[drive] shared_themes", shared_files), ("個人", f"[drive] desk の下の {THEMES_DIR}", own_files)):
         try:
             files = get()
         except READ_ERRORS as e:
@@ -2861,7 +2861,7 @@ def theme_fixed(t):
 def theme_values(t):
     """テーマの表 t の、組むときに引く値（固定の色, 著作権表示, 等幅の書体）。書いていなければ今の値。書けない値なら止める。"""
     c = t.get("copyright", BRAND_COPYRIGHT)
-    if "copyright" in t and not isinstance(c, str):  # [brand] の値は need_brand と factory-doctor が見る
+    if "copyright" in t and not isinstance(c, str):  # [brand] の値は need_brand と desk-doctor が見る
         sys.exit(f"テーマの copyright {c!r} は文字列でない（例: \"copyright\": \"© 2026 Acme, Inc. All rights reserved.\"）")
     return theme_fixed(t), c, theme_mono(t)
 
@@ -3310,8 +3310,8 @@ def refont(o, font):
 
 
 def default_theme():
-    """factory.toml の [slides] default_theme（書いていなければ visual。factory-doctor と同じ）。"""
-    return factory().get("slides", {}).get("default_theme", "visual") if gapi.find_factory() else "visual"
+    """desk.toml の [slides] default_theme（書いていなければ visual。desk-doctor と同じ）。"""
+    return config().get("slides", {}).get("default_theme", "visual") if gapi.find_config() else "visual"
 
 
 def theme_list():
@@ -3338,7 +3338,7 @@ def cmd_themes():
         print(f"{name}{'（既定）' if default else ''}\t{'テンプレートあり' if has else 'テンプレートなし'}\t{note}")
     if rows := unlisted():
         for name, url, note, where in rows:
-            state = "factory.toml の [slides.templates] にない" if name not in templates() else "[slides.templates] の同じ名前は別のテンプレート"
+            state = "desk.toml の [slides.templates] にない" if name not in templates() else "[slides.templates] の同じ名前は別のテンプレート"
             print(f"{name}（{where}。{state}）\t{url}\t{note}")
         print("共有・個人のテーマを使うときは、slides.py theme <url> を回す（テーマのファイルを themes/slides/<名前>.json に写し、[slides.templates] に url を書く。"
               "同じ名前のテーマがあれば、今のテンプレートの代わりになる）")
@@ -3346,8 +3346,8 @@ def cmd_themes():
 
 def need_theme(theme):
     """new で、テンプレートのあるテーマが 2 つ以上あるのに --theme がなければ、一覧を出して止める。資料ごとに description でテーマを選ばせる
-    （Agent Skills でスキルの一覧が毎回出るのと同じ役目。deck-practices/start.md の 5）。factory-kaizen の検証で組む仮の資料は止めない。"""
-    if theme is None and len(templates()) >= 2 and not os.environ.get("FACTORY_VERIFY"):
+    （Agent Skills でスキルの一覧が毎回出るのと同じ役目。deck-practices/start.md の 5）。desk-kaizen の検証で組む仮の資料は止めない。"""
+    if theme is None and len(templates()) >= 2 and not os.environ.get("DESK_VERIFY"):
         cmd_themes()
         sys.exit("テーマを選んでから組む。上の description と、資料の種類・聞き手を突き合わせて、slides.py new <フォルダ> <名前> --theme <名前> で渡す"
                  "（description で決まらなければ既定のテーマ）。選んだテーマと理由は構成案の前提に書く")
@@ -3356,7 +3356,7 @@ def need_theme(theme):
 def template_id(theme):
     """テーマのテンプレートの ID（[slides.templates]）。"""
     if theme not in (T := templates()):
-        sys.exit(f"テーマ {theme} のテンプレートが factory.toml の [slides.templates] にない（あるテーマ: {', '.join(T) or 'なし'}）。template.py {theme} --from-base で作る")
+        sys.exit(f"テーマ {theme} のテンプレートが desk.toml の [slides.templates] にない（あるテーマ: {', '.join(T) or 'なし'}）。template.py {theme} --from-base で作る")
     return T[theme]
 
 
@@ -3365,7 +3365,7 @@ def cmd_theme(url, name=None, force=False):
     共有テーマを使い始めるときと、画面のテーマビルダーで直した色・書体をファイルに戻すときに使う。テンプレート（Drive のプロパティにテーマの名前があるもの）なら、
     [slides.templates] にも URL を書く。中身の違う同じ名前のファイルがあれば、force がなければ止める（手で直した値を黙って消さない）。"""
     if not (d := ws_themes()):
-        sys.exit("slides.py theme はワークスペース（factory.toml のあるフォルダ）の中で回す")
+        sys.exit("slides.py theme はワークスペース（desk.toml のあるフォルダ）の中で回す")
     pid = file_id(url)
     p = request("GET", f"{SLIDES}/{pid}?fields={DECK_FIELDS}")
     mark = deck_theme(p)
@@ -3385,7 +3385,7 @@ def cmd_theme(url, name=None, force=False):
     f.write_text(json.dumps(theme_file(have), ensure_ascii=False, indent=1) + "\n")
     if template:
         record_template(name, pid)
-    print(f"{f} に書いた" + (f"。factory.toml の [slides.templates] に {name} を書いた" if template else ""))
+    print(f"{f} に書いた" + (f"。desk.toml の [slides.templates] に {name} を書いた" if template else ""))
 
 
 def new(folder, name, src):
@@ -3519,7 +3519,7 @@ def lint_local(path="pages.py", url=None, talk=False, pages=None):
         deck.finish()
     reqs = json.loads(resolved(deck, p))
     *_, digest = pages_of(deck, reqs)  # ノートだけ変えたページも見る
-    ws = gapi.find_factory()
+    ws = gapi.find_config()
     rules = [Path(__file__).with_name("lint.py"), Path(__file__), Path(brand.__file__).with_name("textlint.py"), Path(brand.__file__)] + ([ws.parent / "rules" / "slides-build" / "checks.py"] if ws else [])
     import lint
     facts = lint.load_facts()  # 資料のフォルダ（build/ の親）の出典の表。変われば、前に通ったページも見直す（deck-lint-026）
@@ -3591,10 +3591,10 @@ def merge(pages, fixes):
 
 
 def selftest():
-    assert gapi.find_factory.cache_info().currsize == 0  # import で [brand] を読んでも、gapi の覚えた結果を作らない（あとで今いるフォルダを変える factory-doctor のため）
+    assert gapi.find_config.cache_info().currsize == 0  # import で [brand] を読んでも、gapi の覚えた結果を作らない（あとで今いるフォルダを変える desk-doctor のため）
     assert paint(NAVY) == {"themeColor": "DARK1"} and paint("FFFFFF") == {"rgbColor": {"red": 1.0, "green": 1.0, "blue": 1.0}}
     assert u16("𝄞あ") == 3  # サロゲートペアは 2
-    if COPYRIGHT.strip() == PLACEHOLDER_COPYRIGHT:  # factory.toml の [brand] がないところで回したとき
+    if COPYRIGHT.strip() == PLACEHOLDER_COPYRIGHT:  # desk.toml の [brand] がないところで回したとき
         try:
             need_brand()
             raise AssertionError("仮の著作権表示のまま組める")
@@ -3946,7 +3946,7 @@ def selftest():
         files.append({"id": "t4", "properties": {THEME_PROP: "own"}})
         with contextlib.redirect_stdout(out := io.StringIO()):
             cmd_themes()
-        assert "acme\tテンプレートあり\t（テーマのファイルがない" in out.getvalue() and "corp（共有。factory.toml の [slides.templates] にない）" in out.getvalue()
+        assert "acme\tテンプレートあり\t（テーマのファイルがない" in out.getvalue() and "corp（共有。desk.toml の [slides.templates] にない）" in out.getvalue()
         assert "mine（個人。" in out.getvalue() and "own（共有。[slides.templates] の同じ名前は別のテンプレート）" in out.getvalue()
         globals().update(shared_files=gone, own_files=gone)
         assert unlisted() == []  # 共有テーマのフォルダと Themes を読めなくても、themes と new は止めない
@@ -4152,7 +4152,7 @@ def selftest_sample():
     assert not miss and geo == set(_GEO) and kinds == set(KINDS), ("見本に足りない型とキー", miss, set(_GEO) - geo, set(KINDS) - kinds)
     real = {k: globals()[k] for k in ("iconify", "asset")}
     globals()["iconify"] = lambda name, color=TEXT, w=512: f"https://x/{name}.png"  # アイコンの名前を問い合わせない
-    globals()["asset"] = lambda path: str(Path(__file__).resolve().parent.parent / "assets" / path)  # factory.toml のないところでも回す
+    globals()["asset"] = lambda path: str(Path(__file__).resolve().parent.parent / "assets" / path)  # desk.toml のないところでも回す
     try:
         with contextlib.redirect_stderr(io.StringIO()):
             d = make_deck(lambda x: x.spec(root / "deck.json"), "見本")
