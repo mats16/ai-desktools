@@ -40,7 +40,7 @@ mkdir -p .codex && { grep -qs 'desk-tools@desk-tools' .codex/config.toml || prin
 プラグインの hook（`rules/` と顧客の `memory.md` を続けて出すもの）は、信頼するまで動かない。対話の Codex で `/hooks` を開き、`desk-tools` の 2 つ（PostToolUse・UserPromptSubmit）を信頼する。
 
 - 信頼は hook の中身のハッシュに付く。`hooks/hooks.json` が変わった版を取ると、信頼し直すまで止まる（起動のときに `/hooks` を開くよう知らせが出る）。
-- `codex exec`（dreaming の `run.sh codex`、レビューの子）は聞けない。先に対話の Codex で信頼しておく。
+- `codex exec`（desk-dreaming の `run.sh codex`、レビューの子）は聞けない。先に対話の Codex で信頼しておく。
 - Codex はファイルをシェル（`cat`・`sed` など）で読むので、PostToolUse は `Bash` で効く。`$desk-tools:slides-build` のように呼んだスキルは、道具を使わずに SKILL.md が入るので、UserPromptSubmit がプロンプトから拾って `rules/<スキル>/SKILL.md` を出す。
 
 ## そのフォルダだけで効いているかを確かめる

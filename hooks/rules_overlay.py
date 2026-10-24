@@ -127,7 +127,7 @@ def cut(parts, what):
     if len(text) <= LIMIT:
         return text
     k = [m.end() for m in PART.finditer(text[:LIMIT])][-1]  # 途中で切れた部分の見出しは HEAD に合わない形にする（出したと数えず、次に開いたときに出し直す）
-    return text[:k - 2] + "（途中まで）: " + text[k:LIMIT] + f"\n\n（ここで切った。残りは {what}自分で開いて読む。{LIMIT} 字を超えたので、dreaming で分ける）"
+    return text[:k - 2] + "（途中まで）: " + text[k:LIMIT] + f"\n\n（ここで切った。残りは {what}自分で開いて読む。{LIMIT} 字を超えたので、desk-dreaming で分ける）"
 
 
 def main(mode):

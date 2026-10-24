@@ -1,6 +1,6 @@
-# Running the scheduled cleanup (dreaming)
+# Running the scheduled cleanup (desk-dreaming)
 
-Open from `SKILL.md` for a scheduled run. `SKILL.md` has why this cleanup proposes instead of rewriting (factory-dreaming-001) and the list of files. When the user replies to the report, follow [apply.md](apply.md).
+Open from `SKILL.md` for a scheduled run. `SKILL.md` has why this cleanup proposes instead of rewriting (desk-dreaming-001) and the list of files. When the user replies to the report, follow [apply.md](apply.md).
 
 ## Rules for running
 
@@ -100,5 +100,5 @@ Open from `SKILL.md` for a scheduled run. `SKILL.md` has why this cleanup propos
 - <安全の確かめや権限で止められた操作と、飛ばしたこと>。調べ直しの期限なのに回せなかったときは、その理由（Web に出られないなど）
 
 ## 戻し方
-`cd <ワークスペース> && sh <dreaming のフォルダ>/scripts/snapshot.sh restore <写し>`
+`cd <ワークスペース> && sh <desk-dreaming のフォルダ>/scripts/snapshot.sh restore <写し>`
 ```

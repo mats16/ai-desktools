@@ -310,7 +310,7 @@ def selftest():
     assert check_body(body, ["skills/slides-build/scripts/lint.py"], "x", []) == []
     assert len(check_body(body, ["skills/slides-build/visual.md"], "x", [])) == 1  # 見た目なのに画像がない
     assert len(check_body("## 理由", ["skills/slides-build/scripts/lint.py"], "", [])) == 6  # 節が 5 つと、検証がない
-    assert check_body(body + "\n検証しない理由: 文の直しだけ", ["skills/dreaming/SKILL.md"], "", []) == []
+    assert check_body(body + "\n検証しない理由: 文の直しだけ", ["skills/desk-dreaming/SKILL.md"], "", []) == []
     urls = {"deck1_p2.png": "u1", "sample_p1.png": "u2"}
     placed = place_images("### 組み直し\n\n<!-- img:deck1_p2.png -->\n", urls)
     assert placed.index("![deck1_p2.png](u1)") < placed.index("### ほかの画像") < placed.index("![sample_p1.png](u2)") and placed.count("](u1)") == 1  # 目印のない画像も落とさず、末尾に 1 回だけ

@@ -21,7 +21,7 @@ pi install -l git:github.com/mats16/ai-desktools   # git から
 `.pi/settings.json` のパッケージは、そのフォルダを信頼したときだけ読まれる（pi の `docs/security.md` の「project trust」）。
 
 - 対話の pi は、初めて開いたときに聞く。`/trust` で決めたことは `~/.pi/agent/trust.json` に残り、親のフォルダの決定も子に効く（ホームを信頼していれば、その下はすべて読まれる）。
-- `pi -p`・`--mode json`・`--mode rpc` は聞けない。決めていないフォルダでは読まれない。定期に回すもの（dreaming の `run.sh pi`）と `pi -p` の子のために、ワークスペースの trust は `/trust` で保存しておく。`--approve` を付けるとその回だけ読まれるが、保存した「信頼しない」も上書きするので、決まった仕組みには入れない。
+- `pi -p`・`--mode json`・`--mode rpc` は聞けない。決めていないフォルダでは読まれない。定期に回すもの（desk-dreaming の `run.sh pi`）と `pi -p` の子のために、ワークスペースの trust は `/trust` で保存しておく。`--approve` を付けるとその回だけ読まれるが、保存した「信頼しない」も上書きするので、決まった仕組みには入れない。
 - `--no-approve` で回すと、このパッケージのスキルは 1 つも出ない。
 
 ## そのフォルダだけで効いているかを確かめる

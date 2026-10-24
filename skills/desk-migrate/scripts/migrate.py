@@ -7,7 +7,8 @@
 ワークスペース（desk.toml か、前の版の factory.toml のあるフォルダ）を、今の版へ移す。2026-10-24 の版で、スキルの名前を slides-・docs- で始め、
 プラグインのファイルを読む場面ごとに分け、決まりの ID を主題で付け直した（ids_20261024.json）。ID の表は日付の順に当てる（あとの版で足すときは ids_<日付>.json を置く）。
 2026-10-25 の版で、名前を AI Desk Tools にそろえた（factory.toml → desk.toml、.factory/ → .desk/、factory-init・doctor・migrate・kaizen → desk-、
-[factory] → [desk]、[drive] factory → [drive] desk）。置き場所は変えない（どれもワークスペースの中）。
+[factory] → [desk]、[drive] factory → [drive] desk）。置き場所は変えない（どれもワークスペースの中）。同じ日に、dreaming を desk-dreaming に、
+決まりの ID の factory-dreaming を desk-dreaming にした（ids_20261025.json）。記録のフォルダ .desk/dreaming/ と台帳の by の値 dreaming は替えない。
 何度回してもよい。標準ライブラリだけ。"""
 import json, re, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
@@ -23,9 +24,9 @@ MOVES = [  # rules/ の下の前のパス → 今のパス（上から当てる�
     ("deck-practices/visual_doc.md", "docs-build/visual.md"), ("deck-build/slides.md", "slides-build/pages.md"),
     ("deck-build", "slides-build"), ("doc-build", "docs-build"), ("deck-template", "slides-template"),
     ("slides-speaker-notes", "vids-voice"), ("vids-beta", "vids-build"),
-    *((f"factory-{s}", f"desk-{s}") for s in ("init", "doctor", "migrate", "kaizen"))]
+    *((f"factory-{s}", f"desk-{s}") for s in ("init", "doctor", "migrate", "kaizen")), ("dreaming", "desk-dreaming")]
 OLD_CONF, OLD_DIR = "factory.toml", ".factory"  # 2026-10-25 より前の設定と記録のフォルダの名前
-NAMES = [  # 2026-10-25 の名前の替え。本文・台帳と、設定に当てる（決まりの ID の factory-dreaming は替えない。
+NAMES = [  # 2026-10-25 の名前の替え。本文・台帳と、設定に当てる（決まりの ID の factory-dreaming は ids_20261025.json で替える。
            # .factory は、パスの頭にあるものだけが記録のフォルダ。~/.factory・${HOME}/.factory・.factory-old はほかのもの）
     (r"(?<![A-Za-z0-9_-])factory-(init|doctor|migrate|kaizen)(?![A-Za-z0-9_-])", r"desk-\1"), (r"(?<![\w-])factory\.toml", "desk.toml"),
     (r"(?<![\w/.~}$-])\.factory(?![\w.-])", ".desk"), (r"\[drive\] factory\b", "[drive] desk"), (r"\bdrive\.factory\b", "drive.desk"), (r"\[factory\] private", "[desk] private")]
@@ -35,7 +36,7 @@ SPLIT = {  # 中身を場面ごとに分けたプラグインのファイル。�
     "slides-build/SKILL.md": "slides-build/SKILL.md・lint.md、deck-practices/drive.md（前の deck-build/SKILL.md）",
     "docs-build/SKILL.md": "docs-build/SKILL.md・lint.md・api.md・themes.md・templates.md（前の doc-build/SKILL.md）",
     "deck-review/SKILL.md": "deck-review/SKILL.md・ask.md・fix.md・prompt_fix.md、deck-practices/agents.md（子の起こし方）",
-    "dreaming/SKILL.md": "dreaming/SKILL.md・run.md・apply.md",
+    "desk-dreaming/SKILL.md": "desk-dreaming/SKILL.md・run.md・apply.md",
     "slides-template/SKILL.md": "slides-template/SKILL.md・create.md・dark.md・fonts.md",
     "vids-build/SKILL.md": "vids-build/SKILL.md・avatars.md",
     "deck-practices/content.md": "deck-practices/content.md・content_customer.md・content_internal.md・content_explain.md（§1 の資料の種類ごとの決まり）"}
@@ -45,7 +46,8 @@ PATHS = [  # 本文の中のパスとスキルの名前（決まりの ID は先
     (r"deck-practices/reuse\.md", "slides-build/reuse.md"), (r"deck-build/slides\.md", "slides-build/pages.md"),
     (r"deck-build/scripts/(docs|doc_layout)\.py", r"docs-build/scripts/\1.py"), (r"deck-build/scripts/(gapi|sheet|drive_put)\.py", r"deck-practices/scripts/\1.py"),
     *((rf"(?<![{B}]){a}(?![{B}])", b) for a, b in (("deck-build", "slides-build"), ("doc-build", "docs-build"), ("deck-template", "slides-template"),
-                                                    ("slides-speaker-notes", "vids-voice"), ("vids-beta", "vids-build"))), *NAMES]
+                                                    ("slides-speaker-notes", "vids-voice"), ("vids-beta", "vids-build"))), *NAMES,
+    (rf"(?<![{B}])(?<!\.desk/)dreaming(?![{B}])", "desk-dreaming")]  # .factory を .desk にしたあとに当てる。記録のフォルダ .desk/dreaming/ は替えない
 OLD_IDS = [re.compile(rf"(?<![{B}])(ws-)?(" + "|".join(sorted(map(re.escape, m["prefixes"]), key=len, reverse=True)) + rf")-(\d{{3}})(?![{B}])") for m in MAPS]
 WS_ID = re.compile(r"\[(ws-[\w-]+?-\d{3})\]")
 WS_ANY = re.compile(rf"(?<![{B}])ws-[a-z][\w-]*?-\d{{3}}(?![{B}])")  # ワークスペースの決まりの ID（角括弧のあるなしによらない）
@@ -143,6 +145,7 @@ def texts(ws):
 
 
 VERBATIM = {"quote", "a", "reason"}  # 台帳の、人の言葉をそのまま持つ欄（修正の指示の原文、判断待ちの答え、却下の理由）。書き換えない
+KEEP = VERBATIM | {"by"}  # by は書いた者の種類（session・dreaming・import）。ledger.py が値で数えるので、スキルの名前を替えても替えない
 
 
 def ledger_lines(path, fn):
@@ -153,7 +156,7 @@ def ledger_lines(path, fn):
         if isinstance(v, list):
             return [walk(x) for x in v]
         if isinstance(v, dict):
-            return {k: x if k in VERBATIM else walk(x) for k, x in v.items()}
+            return {k: x if k in KEEP else walk(x) for k, x in v.items()}
         return v
     out = []
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -413,7 +416,7 @@ def apply(ws):
         if mine:
             out.append(f"要判断: 主題の表にない接頭辞のワークスペースの ID がある（{'・'.join(mine)}）。ledger.py topics から主題を選び、rename-id で付け替える")
         if plug:
-            out.append(f"要判断: 角括弧なしで書いた、もうプラグインにない前の ID がある（{'・'.join(plug)}）。ids_20261024.json の prefixes で今の主題を見て、"
+            out.append(f"要判断: 角括弧なしで書いた、もうプラグインにない前の ID がある（{'・'.join(plug)}）。ids_*.json の prefixes で今の主題を見て、"
                        "その文を直すか、要らなければ消す（ID だと言い切れないので、ここでは替えない）")
     return out
 
@@ -479,7 +482,7 @@ def selftest():
         assert (ws / "AGENTS.md").read_text() == f"スキル slides-build の {IDS['deck-build-005']} と、{IDS['doc-build-010']}。スキルslides-templateの手順。"  # 和文が続いても替える
         led = [json.loads(x) for x in (ws / ".desk" / "ledger.jsonl").read_text().splitlines()]
         assert led == [{"ts": "2026-10-01T00:00:00Z", "kind": "correction", "id": "c-0001", "to": "ws-slides-visual-001", "file": "rules/slides-build/visual.md", "rule": "slides-visual-012"},
-                       {"ts": "2026-10-01T00:00:00Z", "kind": "proposal", "id": "P0009", "file": "rules/a.md", "old": "", "new": "x", "rule": "factory-dreaming-001"},  # 台帳の値がまるごと ID なら、もうない ID も接頭辞で替える
+                       {"ts": "2026-10-01T00:00:00Z", "kind": "proposal", "id": "P0009", "file": "rules/a.md", "old": "", "new": "x", "rule": "desk-dreaming-001"},  # 台帳の値がまるごと ID なら、もうない ID も接頭辞で替える
                        {"ts": "2026-10-01T00:00:00Z", "kind": "proposal", "id": "P0001", "rule": "", "file": "rules/deck-practices/SKILL.md", "old": "", "new": (r / "deck-practices" / "SKILL.md").read_text().strip()},
                        {"ts": "2026-10-01T00:00:00Z", "kind": "applied", "ref": "P0001", "prev": {}},
                        {"ts": "2026-10-01T00:00:00Z", "kind": "proposal", "id": "P0002", "rule": "", "file": "rules/deck-practices/SKILL.md", "old": "", "new": "- [ws-deck-flow-009] 却下した案"},
@@ -548,12 +551,26 @@ def selftest():
         assert (ws / "desk.toml").read_text() == '[desk]\nprivate = ["x"]  # desk-kaizen が見る\n\n[drive]\ndesk = "u"   # 根元\ncustomers = ""\n\n[slides.templates]\nfactory = "t"\n  [docs.templates]\n  factory = "d"\n'  # テーマとテンプレートの名前は替えない（字下げした見出しも）
         assert (ws / "rules" / "desk-kaizen" / "SKILL.md").is_file() and not (ws / "rules" / "factory-kaizen").exists()
         assert (ws / ".gitignore").read_text() == "/*\n!/rules/\n!/desk.toml"  # 設定を git に入れたまま
-        assert (ws / "AGENTS.md").read_text() == "`desk.toml` の `drive.desk`。台帳は `.desk/ledger.jsonl`。スキル desk-kaizen（factory-dreaming-001）。別の道具の ~/.factory/config・${HOME}/.factory/x、自分の .factory-old。\n"  # 決まりの ID と、ほかのパスは替えない
+        assert (ws / "AGENTS.md").read_text() == "`desk.toml` の `drive.desk`。台帳は `.desk/ledger.jsonl`。スキル desk-kaizen（desk-dreaming-001）。別の道具の ~/.factory/config・${HOME}/.factory/x、自分の .factory-old。\n"  # ほかのパスは替えない
         led = json.loads((ws / ".desk" / "ledger.jsonl").read_text())
-        assert led["file"] == "rules/desk-kaizen/SKILL.md" and led["quote"] == "factory-kaizen で出して" and led["to"] == "factory-dreaming-001"  # 原文は替えない
+        assert led["file"] == "rules/desk-kaizen/SKILL.md" and led["quote"] == "factory-kaizen で出して" and led["to"] == "desk-dreaming-001"  # 原文は替えない
         assert any(o.startswith("移した: factory.toml") for o in out) and needs(ws) == [] and apply(ws) == ["移すものはない（今の版）"]
         put("factory.toml", "[drive]\nfactory = \"v\"\n")  # desk.toml がもうあれば上書きしない
         assert any(o.startswith("移していない") for o in apply(ws)) and 'desk = "u"' in (ws / "desk.toml").read_text() and needs(ws) == ["factory.toml"]
+    with tempfile.TemporaryDirectory() as tmp:  # 2026-10-25: dreaming → desk-dreaming、factory-dreaming → desk-dreaming
+        ws = Path(tmp)
+        put = lambda rel, text: ((ws / rel).parent.mkdir(parents=True, exist_ok=True), (ws / rel).write_text(text))
+        put("desk.toml", "")
+        put("rules/dreaming/run.md", "- [ws-factory-dreaming-001] 朝に回す（factory-dreaming-001 より優先）。\n")
+        put("AGENTS.md", "スキル `dreaming`（`/desk-tools:dreaming`、`../dreaming/run.md`）。記録は `.desk/dreaming/log/`。\n")
+        put(".desk/ledger.jsonl", json.dumps({"ts": "2026-10-25T00:00:00Z", "kind": "correction", "id": "c-0001", "quote": "dreaming して", "to": "ws-factory-dreaming-001", "by": "dreaming"}, ensure_ascii=False) + "\n")
+        assert "rules/dreaming/run.md" in needs(ws)
+        apply(ws)
+        assert (ws / "rules" / "desk-dreaming" / "run.md").read_text() == "- [ws-desk-dreaming-001] 朝に回す（desk-dreaming-001 より優先）。\n" and not (ws / "rules" / "dreaming").exists()
+        assert (ws / "AGENTS.md").read_text() == "スキル `desk-dreaming`（`/desk-tools:desk-dreaming`、`../desk-dreaming/run.md`）。記録は `.desk/dreaming/log/`。\n"  # 記録のフォルダは替えない
+        led = json.loads((ws / ".desk" / "ledger.jsonl").read_text())
+        assert (led["to"], led["quote"], led["by"]) == ("ws-desk-dreaming-001", "dreaming して", "dreaming")  # 原文と、書いた者の種類は替えない
+        assert needs(ws) == [] and apply(ws) == ["移すものはない（今の版）"]
     print("selftest ok")
 
 

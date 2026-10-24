@@ -204,9 +204,9 @@ class Session:
         self.kind, self.sid, self.path = kind, sid, path
         self.cwd, self.title, self.start = "", "", ""
         self.said, self.opened, self.mentioned, self.errors = [], Counter(), Counter(), []
-        self.decks = []  # 道具の呼び出しごとの、資料のフォルダを指すかもしれない語。md() で資料のフォルダにする（dreaming が ledger.py add --deck に使う）
+        self.decks = []  # 道具の呼び出しごとの、資料のフォルダを指すかもしれない語。md() で資料のフォルダにする（desk-dreaming が ledger.py add --deck に使う）
         self.built, self.check_mentioned, self.check_calls = False, False, 0
-        self.built_at = ""  # 確認が初めて通った時刻。これより後のユーザーの発言は、確認で拾えなかった直しの候補（dreaming/run.md の 5）
+        self.built_at = ""  # 確認が初めて通った時刻。これより後のユーザーの発言は、確認で拾えなかった直しの候補（desk-dreaming/run.md の 5）
         self.pending, self.running = {}, {}
 
     def tool_input(self, name, args, tool_id):
@@ -399,10 +399,10 @@ def is_delegated(said):  # T3 Code が任せたサブエージェントの会話
     return bool(said) and re.match(r"Act as the [\w-]+ sub-agent for this task", said[0][1]) is not None
 
 
-DREAMING = re.compile(r"[/:]dreaming\b|スキル dreaming|dreaming/(SKILL|run|apply)\.md|dreaming ?(して|を回|の P\d)|提案を適用", re.I)
+DREAMING = re.compile(r"[/:](desk-)?dreaming\b|スキル (desk-)?dreaming|dreaming/(SKILL|run|apply)\.md|dreaming ?(して|を回|の P\d)|提案を適用", re.I)
 
 
-def is_dreaming(said):  # 整理を回す会話と、提案を適用する会話。最初の発言で、dreaming を呼んだものだけ（dreaming を説明する資料を作る会話は残す）
+def is_dreaming(said):  # 整理を回す会話と、提案を適用する会話。最初の発言で、desk-dreaming（2026-10-25 までは dreaming）を呼んだものだけ（desk-dreaming を説明する資料を作る会話は残す）
     return bool(said) and DREAMING.search(said[0][1]) is not None
 
 
@@ -572,10 +572,11 @@ def selftest():
         assert [t for _, t in a.said] == ['文字をもっと大きく', '矢印がずれている']
         assert a.md(root).count("（確認のあと）") == 1 and "（確認のあと）: 「矢印がずれている」" in a.md(root)  # 確認が通ったあとの発言だけに印
         assert "- ユーザー 2026-10-06T02:00:00Z（確認のあと）" in a.md(root)  # 時刻は秒まで出す（--at に渡す）
-        assert not is_dreaming(a.said) and is_dreaming([(ts, '…/skills/dreaming/SKILL.md を読み')]) and is_dreaming([(ts, '…/skills/dreaming/apply.md を読み')])
+        assert not is_dreaming(a.said) and is_dreaming([(ts, '…/skills/dreaming/SKILL.md を読み')]) and is_dreaming([(ts, '…/skills/dreaming/apply.md を読み')]) and is_dreaming([(ts, '…/skills/desk-dreaming/SKILL.md を読み')])
         assert not is_dreaming([(ts, '資料を作って'), (ts, 'dreaming でこの指示を拾って')])
         assert not is_dreaming([(ts, '決まりの台帳と dreaming の流れを紹介する資料を作って')])
-        assert all(is_dreaming([(ts, x)]) for x in ("スキル dreaming（Claude Code は /desk-tools:dreaming）を読み", "/skill:dreaming", "dreaming の P0001 を適用して", "dreaming して"))
+        assert all(is_dreaming([(ts, x)]) for x in ("スキル dreaming（Claude Code は /desk-tools:dreaming）を読み", "/skill:dreaming", "dreaming の P0001 を適用して", "dreaming して",
+                                        "スキル desk-dreaming（Claude Code は /desk-tools:desk-dreaming）を読み", "/skill:desk-dreaming", "desk-dreaming の P0001 を適用して"))  # 前の名前（替える前の会話）と今の名前
         folder = Path(home) / '.codex/sessions/2026/10/06'
         folder.mkdir(parents=True)
         rows = [{"type": "session_meta", "payload": {"id": "c", "cwd": root}}]
