@@ -227,10 +227,12 @@ def relink_files(ws):
 
 
 def in_split(ws):
-    """分け直す上書き（SPLIT）を変更先にする提案のうち、まだ当てていないものと当て済みのもの（却下・取り下げ・戻した・Issue にしたは見ない）。"""
+    """分け直す上書き（SPLIT）を変更先にする提案のうち、まだ当てていないものと当て済みのもの（却下・取り下げ・戻した・Issue にしたは見ない）。
+    プラグインへの提案（plugin。file は skills/ からのパス）は、ワークスペースの上書きを分けても変更先が変わらないので見ない。"""
     if not (ws / ".desk" / "ledger.jsonl").is_file():
         return []
-    return [p for p in ledger.state(ws)[1].values() if p["file"].removeprefix("rules/") in SPLIT and p["status"] in ("未適用", "適用済み")]
+    return [p for p in ledger.state(ws)[1].values()
+            if not p.get("plugin") and p["file"].removeprefix("rules/") in SPLIT and p["status"] in ("未適用", "適用済み")]
 
 
 def relinks(ws):
@@ -294,6 +296,7 @@ def relink(ws):
 def decide(ws, i, target):
     """エージェントが決めた、提案 i の行き先（rules/ のファイルか "split"）を台帳と relink_done.json に残す。"""
     p = ledger.state(ws)[1].get(i) or sys.exit(f"台帳に {i} がない")
+    p.get("plugin") and sys.exit(f"{i} はプラグインへの提案。変更先は skills/ の {p['file']} のままで、分け直しの行き先は決めない")
     if target == "--split":
         p["status"] == "適用済み" or sys.exit(f"{i} は {p['status']}。--split は当て済みの提案だけ（まだ当てていないものは、行き先のファイルを渡すか ledger.py withdraw）")
         target = "split"
@@ -542,6 +545,23 @@ def selftest():
         (ws / ".desk").mkdir()
         (ws / ".desk" / "ledger.jsonl").write_text(json.dumps({"ts": "2026-10-25T00:00:00Z", "kind": "proposal", "id": "P0001", "rule": "", "file": "rules/slides-build/pages.md", "old": "", "new": "y"}, ensure_ascii=False) + "\n")
         assert relinks(ws) == [] and needs(ws) == []
+        (ws / "rules" / "deck-practices").mkdir()  # プラグインへの提案は、分けたファイルと同じパスでも、ワークスペースの上書きから文を探さない
+        (ws / "rules" / "deck-practices" / "content.md").write_text("足す。\n")
+        with open(ws / ".desk" / "ledger.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": "2026-10-25T00:00:00Z", "kind": "proposal", "id": "P0026", "rule": "", "file": "deck-practices/content.md", "old": "プラグインの文", "new": "z", "plugin": True}, ensure_ascii=False) + "\n")
+        (ws / ".desk" / "migrate").mkdir()
+        (ws / ".desk" / "migrate" / "relink.json").write_text('["P0026"]')  # 直す前の版の apply が見張りに入れていた
+        assert [p["id"] for p in in_split(ws)] == ["P0001"] and relinks(ws) == [] and needs(ws) == []
+        (ws / ".desk" / "migrate" / "relink_done.json").write_text(json.dumps({"P0026": {"to": "deck-practices/content.md", "from": "deck-practices/content.md"}}))
+        assert relinks(ws) == [] and needs(ws) == [] and apply(ws) == ["移すものはない（今の版）"]  # 手で足した回り道の行があっても壊れない
+        for t in ("rules/deck-practices/content.md", "--split"):  # プラグインへの提案の変更先を、ワークスペースのファイルに付け替えない
+            before = [(ws / ".desk" / x).read_text() for x in ("ledger.jsonl", "migrate/relink_done.json")]
+            try:
+                decide(ws, "P0026", t)
+                raise AssertionError("プラグインへの提案に relink")
+            except SystemExit:
+                pass
+            assert [(ws / ".desk" / x).read_text() for x in ("ledger.jsonl", "migrate/relink_done.json")] == before
     with tempfile.TemporaryDirectory() as tmp:  # 2026-10-25: factory.toml → desk.toml、.factory/ → .desk/、factory-* → desk-*
         ws = Path(tmp)
         put = lambda rel, text: ((ws / rel).parent.mkdir(parents=True, exist_ok=True), (ws / rel).write_text(text))
