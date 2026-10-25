@@ -56,7 +56,7 @@ codex debug prompt-input ok | grep -oE 'desk-tools:[a-z-]+: ' | sort -u
 - Don't run `codex plugin marketplace add ..` with the usual `~/.codex`. Only one marketplace named `desk-tools` can exist, so it collides with the one added in the production workspace.
 - Conversations read the copy in `$CODEX_HOME/plugins/cache/desk-tools/desk-tools/local/`. Codex copies even a marketplace added by local path, so after each change, rerun `codex plugin add desk-tools@desk-tools`.
 - The separate `CODEX_HOME` has no login. To run conversations, copy `~/.codex/auth.json` (the ChatGPT login), or `model_provider` and `[model_providers.<name>]` from `~/.codex/config.toml`. Session logs also go to `$CODEX_HOME/sessions/`, so desk-dreaming's `sessions.py` (which reads `~/.codex/sessions/`) doesn't see them.
-- Hooks don't run until trusted. Trust them with `/hooks` in interactive Codex, or run `codex exec --dangerously-bypass-hook-trust`. Verified: the `sandbox/rules/` marker is injected after Codex runs `sed -n 1,3p ../skills/slides-build/visual.md`, and when the skill is invoked as `$desk-tools:desk-doctor`.
+- Hooks don't run until trusted. Trust them with `/hooks` in interactive Codex, or run `codex exec --dangerously-bypass-hook-trust`. Verified: the `sandbox/rules/` marker is injected after Codex runs `sed -n 1,3p ../skills/slides-build/visual.md` (also from inside code mode's `exec`), not again when the same file is read later, and when the skill is invoked as `$desk-tools:desk-doctor`.
 
 ## pi
 
@@ -77,7 +77,7 @@ The last command prints the 15 skills loaded from the worktree.
 
 ## Check that `rules/` is appended
 
-In `sandbox/`, write a one-line marker in `rules/slides-build/visual.md`, and have the conversation open `../skills/slides-build/visual.md`. If the marker is appended after it, the hook (Claude Code, Codex) and the extension (pi) work. When a skill is invoked as `/desk-tools:<skill>` (Claude Code) or `$desk-tools:<skill>` (Codex), `rules/<skill>/SKILL.md` is appended (UserPromptSubmit). The hook alone can be checked without opening a conversation:
+In `sandbox/`, write a one-line marker in `rules/slides-build/visual.md`, and have the conversation open `../skills/slides-build/visual.md`. If the marker is appended after it, the hook (Claude Code, Codex) and the extension (pi) work. When a skill is invoked as `/desk-tools:<skill>` (Claude Code) or `$desk-tools:<skill>` (Codex), `rules/<skill>/SKILL.md` is appended (UserPromptSubmit); in pi, `/skill:<name>` appends it (`before_agent_start`). In Claude Code, `/compact` after such a call shows it again (SessionStart). Reading two customer files in parallel in one message shows the customer's `memory.md` once. The hook alone can be checked without opening a conversation:
 
 ```sh
 mkdir -p rules/slides-build && echo "目印" > rules/slides-build/visual.md
