@@ -1,6 +1,6 @@
 # Review prompt (documents)
 
-[deck-review-012] The prompt given to the review child for a Google Docs review (step 3 of `SKILL.md`; [ask.md](ask.md)). For slides, see [prompt_slides.md](prompt_slides.md). Fill in the `<>` and pass it as the Agent tool's prompt. Do not have the child read the slide rules (`../slides-build/visual.md`). They do not apply to documents (body character counts, conclusion bands, the ban on 「です・ます」, and so on).
+[deck-review-012] The prompt given to the review child for a Google Docs review (step 3 of `SKILL.md`; [ask.md](ask.md)). For slides, see [prompt_slides.md](prompt_slides.md). Fill in the `<>` and pass it as the child's prompt. `<findings file>` is a new file for each child in the check output folder (`$D`: `/tmp/slides_<ID>/` or `/tmp/docs_<ID>/`), named `review_<what is reviewed>_<owner>.md` (in `/deck-review` rounds, `review_<round>_<owner>.md` as in `ask.md`; for example `review_rep3_all.md`, `review_fix_pages.md`, `review_fix_whole.md`), because children running at the same time must not write the same file. Delete an old file of the same name before starting the child, so that you never read an earlier request's findings. Do not have the child read the slide rules (`../slides-build/visual.md`). They do not apply to documents (body character counts, conclusion bands, the ban on 「です・ます」, and so on).
 
 When there are many pages and you split and ask in parallel, change it the same way as for slides (a whole-material child and page owners; the top of `prompt_slides.md`). Page owners check only aspect 2's matters within one section and aspect 5's checks on single-page images.
 
@@ -32,7 +32,7 @@ First check whether the document can be read and judged on its own (the reader c
 First, for each image you opened, write one line on what you saw (the headings, tables, and figures).
 Then one line per defect: `p<ページ> | <出所: 一覧・画像・テキスト> | <観点 1〜5> | <重さ: 直す／見直す／聞く> | <何が起きているか> | <直し方の案>`. For cross-page items, list the pages like 「p3・p5・p7」.
 Finally, up to 3 lines on tendencies worth fixing across the whole material. For an aspect with no defects, write 「なし」.
-Write all of the above to <findings file>, and in your reply write only the counts (per severity) and that path. (Only when asking a pi child. For other children, delete this line.)
+Write all of the above to <findings file>, and in your reply write only the counts (per severity) and that path.
 ```
 
 ## Reader test (documents only)

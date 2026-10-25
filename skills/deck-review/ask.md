@@ -1,6 +1,6 @@
 # Asking the review child agents (steps 2–3)
 
-Open at steps 2–3 of every round (`SKILL.md`). How to start a child in each environment is in `../deck-practices/agents.md`. The prompt itself is per format (slides: [prompt_slides.md](prompt_slides.md), documents: [prompt_doc.md](prompt_doc.md)).
+Open at steps 2–3 of every round (`SKILL.md`). How to start a child is in `../deck-practices/agents.md`. The prompt itself is per format (slides: [prompt_slides.md](prompt_slides.md), documents: [prompt_doc.md](prompt_doc.md)).
 
 ## Write the prompt
 
@@ -11,15 +11,15 @@ Open at steps 2–3 of every round (`SKILL.md`). How to start a child in each en
 
 ## How to ask
 
-- Start each child as `../deck-practices/agents.md` says (a new child without the conversation, the same model as the main agent; how to do it in Claude Code, Codex, and T3 Code).
+- Start each child as `../deck-practices/agents.md` says (a new child without the conversation, the same model and effort as the main agent, passed explicitly).
 - Pass the paths of the image folder (`$D`), the contact sheet, the text (`deck.md`, `text.md`), the outline, the root `AGENTS.md`, and, for customer-facing materials, that customer's `memory.md` (the audience's preferences) and `profile.md` (the customer's business and setup). Do not pass the page JSON, pages.py, or `build/doc.md` (so it looks with eyes that do not know how the material was made).
 - You may run two children side by side split by aspect (story and wording; visuals).
 - Do not have them give scores. Have them return only a list of defects.
-- **Have pi (T3 Code delegation) children write findings to a file and reply with only the counts and the path** (`<findings file>` is `$D/review_<round>_<owner>.md`). pi's summary keeps only the first 2,000 characters of a tool result. If a summary happens between receiving and fixing, the later findings are lost (2026-10-10; one child had 16k characters; `Research/pi_compaction_deck_workflow_20261010/README.md`). For other children, delete the line "Write all of the above to <findings file> …" from the prompt and receive the findings in the reply.
+- **Have children write findings to a file and reply with only the counts and the path** (`<findings file>` is `$D/review_<round>_<owner>.md` in a round; outside a round and for deleting an old file of the same name first, follow the top of `prompt_slides.md` or `prompt_doc.md`). A summary can keep only the beginning of a tool result, so if a summary happens between receiving and fixing, the later findings are lost (2026-10-10, pi kept the first 2,000 characters; one child had 16k characters; `Research/pi_compaction_deck_workflow_20261010/README.md`).
 
 ## Split and ask in parallel
 
-Defects contained in one page (aspect 2's single-page matters, and aspect 5's checks on single-page images) do not get missed more when split by page. When there are many pages and one child would likely look shallowly at the later pages, or when you want to cut the wait, split into owners per chapter (section divider) or per few pages and ask at the same time (in Claude Code, call several children in one message; with T3 Code delegation, make a separate task per owner). The main agent decides whether and how to split (round 1 on 12 pages took about 100k tokens and 3.4 minutes with one child; `Research/deck_review_skill_design_20261008.md`). When splitting, keep the following.
+Defects contained in one page (aspect 2's single-page matters, and aspect 5's checks on single-page images) do not get missed more when split by page. When there are many pages and one child would likely look shallowly at the later pages, or when you want to cut the wait, split into owners per chapter (section divider) or per few pages and ask at the same time (start all owners at once; with T3 Code delegation, make a separate task per owner). The main agent decides whether and how to split (round 1 on 12 pages took about 100k tokens and 3.4 minutes with one child; `Research/deck_review_skill_design_20261008.md`). When splitting, keep the following.
 
 - Keep one whole-material child. It covers cross-page matters (aspects 1 and 3, aspect 2's numbers across pages and rehashes, aspect 4's inconsistent notation and first use of abbreviations, and aspect 5's contact sheet). Do not have it report single-page matters, and let it open full-size images only to confirm a cross-page suspicion, up to 3 images (how to change the prompt is at the top of [prompt_slides.md](prompt_slides.md)). When split into two by aspect, the "story and wording" child is this one.
 - Have page owners open only the full-size images of their pages, and give them the full text (without knowing abbreviations and numbers explained on earlier pages, they report off-target findings). For cross-page matters, have them return only the suspicion, marked 「全体へ」. For an owner's page images and that page's lint and box_pad findings, you can pass the entries in `$D/changed.json` (from round 2) as they are. Have them use only images the parent took; do not let a child run check (they would compete for the limit of 60 images per minute per person).

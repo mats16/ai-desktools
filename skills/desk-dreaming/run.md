@@ -27,7 +27,7 @@ Open from `SKILL.md` for a scheduled run. `SKILL.md` has why this cleanup propos
    - Ledgers changed since the last run: `find $R/Customers $R/Internal -name references.md -newer $S/last_run` (all of them on the first run)
    - Claude Code memory: `MEMORY.md` and each file (`~/.claude/projects/<$R with / . _ replaced by ->/memory/`, the same as `MEM` in `scripts/run.sh`)
    If there are no new conversations, no findings whose destination is 「未」, and no changed `references.md`, do only the checks in step 6, the resurvey in step 7 if it is due, and steps 8–9 (step 8 writes the report only when the resurvey ran or could not run, and writes `last_run` last). Reply 「変化なし」 only if the resurvey did not run either.
-   When `/tmp/dreaming_sessions.md` exceeds 1,500 lines, have a subagent (in Claude Code, pass `model: "opus"`; if omitted, a hook in the company settings makes it haiku) return only the candidates for 4a, 4c, and 4d. In environments without subagents, read the conversations one at a time.
+   When `/tmp/dreaming_sessions.md` exceeds 1,500 lines, have a subagent (pass the main agent's model and reasoning effort explicitly, because the default can be another model) return only the candidates for 4a, 4c, and 4d. In environments without subagents, read the conversations one at a time.
 2. **Freeze a copy.** Before changing anything in step 3, note the path printed by `sh $D/scripts/snapshot.sh save`.
 3. **Fix directly** (only safe things).
    - a. **Index:** Add lines from changed `references.md` files that are not yet in `references_index.md` (in the format at the top of `references_index.md`).
