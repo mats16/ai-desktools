@@ -4106,7 +4106,7 @@ def selftest():
 
 def selftest_sample():
     """JSON のページの見本（../samples/json）は、形のすべての型とキーを使い（キーを足したら見本にも足す）、警告なしに組む要求まで作れる。
-    見た目は sandbox でこの見本を組んで画像で見る（AGENTS.md の「直したら確かめる」）。"""
+    見た目は sandbox でこの見本を組んで画像で見る（AGENTS.md の "Verify changes"）。"""
     root = Path(__file__).resolve().parent.parent / "samples" / "json"
     used, kinds, geo = defaultdict(set), set(), set()
 
