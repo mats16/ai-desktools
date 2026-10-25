@@ -27,7 +27,7 @@ usage（資料の build/ で。deck.json か pages.py は今いるフォルダ�
   slides.py --selftest
 テンプレートの管理は template.py。色は下の「色の役割」の名前で渡す。役割の名前はテーマの色（マスターの配色）を指すので、テンプレートを替えると色が変わる。
 見た目の決まりは ../visual.md の 1。"""
-import ast, atexit, contextlib, functools, hashlib, importlib, inspect, io, itertools, json, math, os, re, shutil, subprocess, sys, tempfile, time, tomllib, types, urllib.error, urllib.parse, urllib.request
+import ast, atexit, contextlib, decimal, functools, hashlib, importlib, inspect, io, itertools, json, math, os, re, shutil, subprocess, sys, tempfile, time, tomllib, types, urllib.error, urllib.parse, urllib.request
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -1531,8 +1531,11 @@ class SpecPage:
         threshold は、棒と同じ目盛りで赤の点線を引き、縦の棒は線の右、横の棒は線の上に札を置く（札の場所は棒の場所から引く）。
         直線が棒の端の数字を通るときは、その数字を棒の中（白）に入れる（線の外に出すと、線を越えた数に見える）。棒が短くて入らなければ警告する。"""
         items, hot, line, th = e["items"], set(e.get("hot", [])), e.get("line"), e.get("threshold")
-        top = max([v for _, v in items] + ([th["value"]] if th else [])) or 1  # 直線が棒より高ければ、直線が高さいっぱい
-        fmt = lambda v, unit=e.get("unit", ""): f"{int(v) if float(v).is_integer() else v:,}" + (" " + unit.strip() if unit.strip() else "")  # 100.0 も 100 と書く  # 単位の前は 1 字空ける（" 分" と書いても空きを 2 つにしない）
+        nums = [v for _, v in items] + ([th["value"]] if th else [])
+        top = max(nums) or 1  # 直線が棒より高ければ、直線が高さいっぱい
+        dp = max(max(0, -decimal.Decimal(str(v)).normalize().as_tuple().exponent) for v in nums)  # 棒と直線の数字の小数の桁は、いちばん桁の多い値にそろえる（4 と 4.3 → 4.0 と 4.3。100.0 は 100。1e-07 も桁で数える）。0 を足すだけで、丸めない
+        dp = dp if 0 < dp <= 6 else None  # 整数だけなら前の書き方のまま。7 桁以上は計算の誤差（0.1 + 0.2）。そろえると誤差がすべての棒に広がるので、値ごとの桁にする
+        fmt = lambda v, unit=e.get("unit", ""), dp=dp: (f"{decimal.Decimal(str(v + 0)):,.{dp}f}" if dp is not None else f"{int(v) if float(v).is_integer() else v:,}") + (" " + unit.strip() if unit.strip() else "")  # 0 は書いた数（str）に足す（float のまま足すと 2 進の誤差が出る。956217975835.8 → .800049）。+ 0 は -0.0 を 0.0 にする  # dp=None は値ごとの桁（折れ線と、誤差の残る棒）  # 単位の前は 1 字空ける（" 分" と書いても空きを 2 つにしない）
         tl = th and " ".join(filter(None, (th.get("label", "").strip(), fmt(th["value"]))))  # 直線の札（「目標 90 分」）
         tw = th and em_width(tl) * 11 / 72 + 0.1
         self.index.append((loc, " ".join(f"{n} {fmt(v)}" for n, v in items) + (f" {tl}" if th else "")))
@@ -1607,17 +1610,17 @@ class SpecPage:
             vals, lu = line["values"], line.get("unit", "")
             low, span, lo, hi = y + lh - B_LINE_GAP - B_DOT / 2, B_LINE - B_LABEL - B_LINE_GAP - B_DOT, min(vals), max(vals)
             pts = [(x + (i + 0.5) * slot, low - ((v - lo) / (hi - lo) if hi > lo else 0.5) * span) for i, v in enumerate(vals)]  # 数がみな同じなら段の中ほど
-            self.index.append((f"{loc}.line", " ".join([line.get("label", "")] + [fmt(v, lu) for v in vals]).strip()))
+            self.index.append((f"{loc}.line", " ".join([line.get("label", "")] + [fmt(v, lu, None) for v in vals]).strip()))
             if line.get("label"):
                 self.emit("text", f"{loc}.line.label", x=x, y=y, w=pw, h=B_LABEL - 0.04, parts=[(line["label"], {"color": SUB})], valign="BOTTOM", **common)
             for i, ((px, py), (qx, qy)) in enumerate(zip(pts, pts[1:])):
                 self.emit("arrow", f"{loc}.line.seg[{i}]", x1=px, y1=py, x2=qx, y2=qy, color=SUB, head=False, weight=2)
             for i, ((px, py), v) in enumerate(zip(pts, vals)):
                 l = f"{loc}.line.values[{i}]"
-                if est_lines(fmt(v, lu), slot, 11, bold=True) > 1:
-                    self.warns.append(f"{l}: 折れ線の数字「{fmt(v, lu)}」が折り返す見込み（1 本の幅 {slot:.2f} in）。単位を短くするか、幅を広げる")
+                if est_lines(fmt(v, lu, None), slot, 11, bold=True) > 1:
+                    self.warns.append(f"{l}: 折れ線の数字「{fmt(v, lu, None)}」が折り返す見込み（1 本の幅 {slot:.2f} in）。単位を短くするか、幅を広げる")
                 self.emit("box", l, x=px - B_DOT / 2, y=py - B_DOT / 2, w=B_DOT, h=B_DOT, fill=SUB, kind="ELLIPSE")
-                self.emit("text", f"{l}.value", x=px - slot / 2, y=py - B_DOT / 2 - B_LABEL, w=slot, h=B_LABEL - 0.04, parts=[(fmt(v, lu), {"bold": True, "color": SUB})],
+                self.emit("text", f"{l}.value", x=px - slot / 2, y=py - B_DOT / 2 - B_LABEL, w=slot, h=B_LABEL - 0.04, parts=[(fmt(v, lu, None), {"bold": True, "color": SUB})],
                           align="CENTER", valign="BOTTOM", **common)
 
     # ---- 大きさ ----
@@ -4833,6 +4836,27 @@ def selftest_spec():
         pass
     assert near(boxes[1]["h"], B_H - 2 * B_LABEL) and near(boxes[0]["h"], boxes[1]["h"] / 2) and boxes[1]["fill"] == RED and boxes[0]["fill"] == NAVY
     assert any(e["call"] == "text" and e["parts"] == [("100 件", {"bold": True, "color": RED_TEXT})] for e in els)
+    # 棒と直線の数字の小数の桁は、いちばん桁の多い値にそろえる。折れ線は値ごとの桁のまま
+    texts = lambda els: [e["parts"][0][0] for e in els if e["call"] == "text" and e["loc"].endswith(("].value", "threshold.label"))]
+    d, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 4], ["b", 4.3]], "unit": "分", "threshold": {"value": 4, "label": "目標"}, "line": {"values": [6.5, 8]}}]})
+    assert texts(els) == ["4.0 分", "4.3 分", "目標 4.0 分", "6.5", "8"] and [e["alt"] for e in els if e.get("alt")] == ["a 4.0 分", "b 4.3 分"]
+    assert [t for _, t in list(d.spec_index.values())[0] if t[:1] in "a6"] == ["a 4.0 分 b 4.3 分 目標 4.0 分", "6.5 8"]  # 索引も同じ字
+    _, els = run({"type": "slide", "body": [{"type": "bars", "horizontal": True, "items": [["a", 0.6], ["b", 1.03]], "threshold": {"value": 1}}]})
+    assert texts(els) == ["0.60", "1.03", "1.00"]
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 1], ["b", 2]], "threshold": {"value": 1.25}}]})
+    assert texts(els) == ["1.00", "2.00", "1.25"]  # 直線だけ桁が多くても丸めない
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 1e-5], ["b", 2.5e-5]]}]})
+    assert texts(els) == ["0.000010", "0.000025"]  # 指数で書いた数
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 0.1 + 0.2], ["b", 0.1]]}]})
+    assert texts(els) == ["0.30000000000000004", "0.1"]  # 計算の誤差は、ほかの棒に広げない（値ごとの桁）
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 1234567890.123456], ["b", 1]]}]})
+    assert texts(els) == ["1,234,567,890.123456", "1.000000"]  # 桁の多い数も丸めない
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 956217975835.8], ["b", 12345678901234567], ["c", 1.25]]}]})
+    assert texts(els) == ["956,217,975,835.80", "12,345,678,901,234,567.00", "1.25"]  # 0 を足すだけ（2 進の誤差を出さない）
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", -0.0], ["b", 0.5]]}]})
+    assert texts(els) == ["0.0", "0.5"]  # -0.0 は 0
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", -0.0], ["b", 12345678901234567]]}]})
+    assert texts(els) == ["0", "12,345,678,901,234,567"]  # 整数だけなら前の書き方
     # 折れ線: 棒の上の段に別の目盛りで引き（いちばん大きい数が段の上）、棒の高さは既定のまま。直線: 棒と同じ目盛りで、棒より高ければ高さいっぱい
     _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 50], ["b", 100], ["c", 80]], "line": {"values": [5, 10, 0], "unit": "%", "label": "率"}}]})
     segs, dots = [e for e in els if e["loc"].split(".")[-1].startswith("seg")], [e for e in els if e["call"] == "box" and e["kind"] == "ELLIPSE"]
