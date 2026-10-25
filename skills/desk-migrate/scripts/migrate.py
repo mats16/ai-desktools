@@ -123,8 +123,12 @@ def to_user(ws):
         return [f"移していない（{ws} に desk.toml がない。もう {dst} を読んでいる）"]
     if not dst:
         return ["移していない（DESK_CONFIG が空。移すなら DESK_CONFIG を外すか、置くパスにする）"]
+    if desk.old(ws):  # 移す前の名前が残っていると、個人の設定から指せない（desk.user が止める）
+        return [f"移していない（前の版の {OLD_CONF} が残っている。先に apply で移す）"]
     if dst.exists():
         return [f"移していない（{dst} がもうある。desk.toml の値を寄せてから、desk.toml を .desk/migrate/ に移す）"]
+    if up := desk.local(ws.parent):  # 移したあと、中で開くと上の desk.toml が勝つ（init.py --user と同じく作らない）
+        return [f"移していない（上の {up[0]} が、{ws} の中では勝つ。中と外で設定が変わるので、{ws} を {up[1]} の外に置いてから回す）"]
     text = desk.with_workspace(src.read_text(encoding="utf-8"), ws)
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(text, encoding="utf-8")
@@ -646,6 +650,12 @@ def selftest():
         assert to_user(ws)[0].startswith("移していない") and workspace(ws) == ws  # 2 回目は何もしない。上に desk.toml がなくても、個人の設定で見つかる
         (ws / "desk.toml").write_text("")
         assert to_user(ws)[0].startswith(f"移していない（{conf} がもうある") and (ws / "desk.toml").is_file()
+        conf.unlink()
+        (ws / OLD_CONF).write_text("")  # 前の版の factory.toml が残っている
+        assert to_user(ws)[0].startswith("移していない（前の版") and not conf.exists()
+        (ws / OLD_CONF).unlink()
+        Path(tmp, "desk.toml").write_text("")  # 上に desk.toml がある: 移すと、中で開いたときにそちらが勝つ
+        assert to_user(ws)[0].startswith("移していない（上の") and (ws / "desk.toml").is_file() and not conf.exists()
     print("selftest ok")
 
 

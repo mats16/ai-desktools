@@ -35,7 +35,7 @@ def check(ws, local=False):
         if old := migrate.workspace(ws):  # factory.toml だけがある、2026-10-25 より前のワークスペース
             ng("前の版のワークスペース", f"{old} は前の版（factory.toml・.factory/）。desk-migrate で desk.toml・.desk/ に移す")
         else:
-            ng("desk.toml", f"{ws} から上になく、{desk.user_config() or '個人の設定（DESK_CONFIG が空）'} もない。desk-init で作る")
+            ng("desk.toml", desk.missing(ws))
         return out
     conf, root = found
     ok("設定", str(conf))
@@ -45,9 +45,9 @@ def check(ws, local=False):
     except SystemExit as e:  # このワークスペースは自分の desk.toml を読むので動く
         user = None
         warn("個人の設定", f"{e}。ほかのフォルダで開いた会話とスクリプトが止まる")
-    if user and (user[1] / desk.NAME).is_file():  # 中で開くか外で開くかで、読む設定が変わる
-        warn("設定が 2 つ", f"{user[0]} の workspace（{user[1]}）にも desk.toml がある。中で開くとその desk.toml、外で開くと {user[0]} を読む（混ぜない）。"
-                         f"片方にする（desk-migrate の to-user で {user[0]} に寄せるか、{user[0]} を消す）")
+    if user and (loc := desk.local(user[1])):  # 既定のワークスペースか、その上に desk.toml がある。中で開くか外で開くかで、読む設定が変わる
+        warn("設定が 2 つ", f"{user[0]} の workspace（{user[1]}）の中では {loc[0]} を読む（外では {user[0]}。混ぜない）。片方にする: 値を {user[0]} に寄せて "
+                         f"{loc[0]} を .desk/migrate/ に移すか、{user[0]} を消す（desk-migrate の SKILL.md の「Move the settings to `~/.desk.toml`」の 2）")
     try:
         cfg = tomllib.loads(conf.read_text())
     except tomllib.TOMLDecodeError as e:
@@ -143,8 +143,8 @@ def check(ws, local=False):
     if local:
         return out
 
-    os.chdir(root)  # gapi は今いるフォルダから設定を探す（desk.py。ここで見つけたものと同じになる）
     import gapi
+    gapi.find_config = lambda: (conf, root)  # gapi も、ここで見つけて出した設定を読む（ワークスペースから探し直すと、上に desk.toml があるときに別のものを読む）
     try:
         who = gapi.request("GET", f"{gapi.DRIVE}/about?fields=user(emailAddress)")["user"]["emailAddress"]
         ok("Google の認証", who)
@@ -204,6 +204,9 @@ def selftest():
         (ws / "desk.toml").write_text("")
         r = rows(ws / "Customers")
         assert r["設定"] == ("OK", str(ws / "desk.toml")) and r["設定が 2 つ"][0] == "要確認" and rows(Path(tmp))["設定が 2 つ"][0] == "要確認"
+        (ws / "desk.toml").rename(Path(tmp, "desk.toml"))  # 既定のワークスペースの上にある desk.toml も、中で開くと勝つ
+        assert str(Path(tmp, "desk.toml")) in rows(conf.parent)["設定が 2 つ"][1]
+        Path(tmp, "desk.toml").rename(ws / "desk.toml")
         conf.write_text("[drive]\n")
         assert rows(Path(tmp))["個人の設定"][0] == "要修正" and rows(ws)["個人の設定"][0] == "要確認"  # 読めない ~/.desk.toml。中ではワークスペースの desk.toml で動く
     os.environ["DESK_CONFIG"] = ""  # 手元の ~/.desk.toml に左右されない
@@ -317,6 +320,11 @@ def selftest():
             assert shared().startswith("acme")
             slides.shared_files, slides.theme_files = lambda: [], unreadable
             assert "共有テーマ" not in {n for _, n, _ in check(Path(tmp))}  # 読めなければ出さない（止まらない）
+            (Path(tmp) / "w").mkdir()  # 外で回して ~/.desk.toml の w を出したら、gapi も同じものを読む（w から探し直すと、上の desk.toml を読む）
+            Path(tmp, "u.toml").write_text(f'workspace = "{Path(tmp, "w")}"\n')
+            os.environ["DESK_CONFIG"] = str(Path(tmp, "u.toml"))
+            assert next(d for _, n, d in check(Path("/")) if n == "設定") == str(Path(tmp, "u.toml")) and gapi.config_path() == Path(tmp, "u.toml")
+            os.environ["DESK_CONFIG"] = ""
         finally:
             gapi.request, slides.shared_files, slides.theme_files = saved
             os.chdir(cwd)

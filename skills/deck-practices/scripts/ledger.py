@@ -75,11 +75,7 @@ PLUGIN_ID = re.compile(r"(?<![\w-])(?!ws-)[a-z][\w-]*?-\d{3}")
 
 def workspace():
     """ワークスペース（探し方は desk.py）。"""
-    if f := desk.locate():
-        return f[1]
-    d = Path.cwd().resolve()
-    old = next((x for x in (d, *d.parents) if (x / "factory.toml").is_file()), None)
-    sys.exit(f"{old} は前の版のワークスペース（factory.toml）。desk-migrate で desk.toml に移す" if old else "desk.toml が見つからない（今いるフォルダから上へ探し、~/.desk.toml もない）。ワークスペースで回す")
+    return f[1] if (f := desk.locate()) else sys.exit(desk.missing())
 
 
 def path(ws):

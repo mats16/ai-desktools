@@ -83,13 +83,8 @@ def find_config():
 
 
 def _found():
-    """find_config の結果。なければ止まる（前の版の factory.toml があれば、desk-migrate を案内する）。"""
-    if f := find_config():
-        return f
-    if old := next((d for d in (Path.cwd(), *Path.cwd().parents) if (d / "factory.toml").is_file()), None):
-        sys.exit(f"{old} は前の版のワークスペース（factory.toml）。desk-migrate で desk.toml に移す")
-    sys.exit("desk.toml が見つからない（今いるフォルダから上へ探し、~/.desk.toml もない）。desk-init で作る（ワークスペースの直下の desk.toml か、~/.desk.toml）。"
-             "書き方は ../../slides-build/themes.md")
+    """find_config の結果。なければ止まる（前の版の factory.toml があれば desk-migrate、なければ desk-init を案内する）。"""
+    return find_config() or sys.exit(desk.missing())
 
 
 def config_path():

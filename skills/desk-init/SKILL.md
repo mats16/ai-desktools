@@ -18,7 +18,7 @@ When installing through a conversation (the repository's `INSTALL.md`), step 1 i
    python3 <this skill's folder>/scripts/init.py <workspace>          # settings in <workspace>/desk.toml
    python3 <this skill's folder>/scripts/init.py <workspace> --user   # settings in ~/.desk.toml, with workspace = "<workspace>"; none in the workspace
    ```
-   Relay the 「置いた」 and 「残した」 lines of the output as they are. With `--user`, `init.py` stops if the workspace already has `desk.toml`; to move it, use desk-migrate's `to-user`.
+   Relay the 「置いた」 and 「残した」 lines of the output as they are. With `--user`, `init.py` stops if the workspace (or a folder above it) already has `desk.toml` (to move the workspace's own, use desk-migrate's `to-user`), or if `~/.desk.toml` points to another workspace. Without it, `init.py` stops if `~/.desk.toml` points to this folder or one inside it, because a `desk.toml` there would win inside that workspace.
 3. **Fill in the settings (`desk.toml`, or `~/.desk.toml`).** Ask one item at a time and write it. Leave unknown items empty; they stay as `要確認` in doctor.
    - `[user] profile`: a file with the user's name, role, and customers in charge.
    - `[google]`: how to get a token. If gcloud is available, have the user run the `gcloud auth application-default login --scopes=…` that doctor prints, once (the user runs it themselves; a browser opens). If another mechanism gets the token, pass it in the environment variable `GOOGLE_OAUTH_ACCESS_TOKEN`. With gcloud's default OAuth client, `quota_project` is also required.
