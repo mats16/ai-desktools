@@ -1,47 +1,47 @@
-# 開発しながら動作を見る
+# Checking behavior while developing
 
-プラグインを直す人のための手順。直すのは元のリポジトリの worktree でし、その worktree の下に検証用のワークスペース `sandbox/` を置いて、資料を作って確かめる。`sandbox/` はリポジトリの `.gitignore` で無視しているので commit に入らず、worktree を消せば一緒に消える。worktree ごとに分かれるので、いくつかのブランチを並べて試せる。2026-10-12 に Claude Code と pi 1.0.0 で、Codex は 2026-10-20 に Codex CLI 0.162.1 で確かめた。利用者の入れ方は [claude-code-plugin.md](claude-code-plugin.md)・[codex-plugin.md](codex-plugin.md)・[pi.md](pi.md)。
+Procedures for changing the plugin. Make changes in a worktree of the repository, put a test workspace `sandbox/` under that worktree, and check by building materials there. `.gitignore` excludes `sandbox/`, so it stays out of commits and goes away with the worktree. Each worktree has its own sandbox, so you can try several branches side by side. Verified on 2026-10-12 with Claude Code and pi 1.0.0, and on 2026-10-20 with Codex CLI 0.162.1. For how users install the plugin, see [claude-code-plugin.md](claude-code-plugin.md), [codex-plugin.md](codex-plugin.md), and [pi.md](pi.md).
 
-元の checkout（`git worktree list` の 1 行目）は `main` のままにしておく。ほかのワークスペースにこの checkout のパスで入れたプラグインはここを読むので、利用者と同じものが動く（GitHub や git の URL で入れたものは、checkout とは別の版を読む）。
+Keep the original checkout (the first line of `git worktree list`) on `main`. Plugins installed in other workspaces by this checkout's path read it, so they run what users get (plugins installed from GitHub or a git URL read a version separate from the checkout).
 
-## 作る
+## Create the sandbox
 
 ```sh
 cd <worktree>
-mkdir sandbox && cd sandbox
-cp ~/Documents/desk.toml .         # 本番のワークスペースから写す。なければ desk-init
-cp -R ~/Documents/rules ~/Documents/AGENTS.md ~/Documents/CLAUDE.md .   # 本番の決まりで試すときだけ
+python3 skills/desk-init/scripts/init.py sandbox && cd sandbox   # templates; keeps files that already exist
+cp ~/Documents/desk.toml .         # from the production workspace; only to build on Google
+cp -R ~/Documents/rules ~/Documents/AGENTS.md ~/Documents/CLAUDE.md .   # only to test with the production rules
 ```
 
-写した `desk.toml` は、Google の側で本番のものを書き換えないように替える。
+Change the copied `desk.toml` so that nothing on the Google side of production gets overwritten:
 
-- `[drive]` は、検証用の Drive のフォルダにする（下の「消す」）。
-- テンプレートを試すときは、`[slides.templates]` を空にし、`template.py <テーマ> --from-base [<元の URL>]` で検証用の `[drive] desk` の下に作る（URL が書き込まれる）。`template.py <テーマ>` は `[slides.templates]` のテンプレートをその場で書き換えるので、本番の URL を残さない。本番のテーマで試すなら、本番の `themes/slides/` も写す（`template.py` は表紙・扉の幅と地の明るさをそこに書き込む）。
-- `sandbox/` で `git init` はしない（desk-init が聞いてくる）。入れ子のリポジトリになり、worktree の `git clean` で消えなくなる。
-- `desk-kaizen` だけは、この worktree を試さない。`kaizen.py start` は GitHub の `main` を `sandbox/.desk/kaizen/<名前>/repo` に clone する。
+- Point `[drive]` at a test Drive folder ("Clean up" below).
+- To try templates, empty `[slides.templates]` and create them under the test `[drive] desk` with `template.py <theme> --from-base [<source URL>]` (this writes the URL in). `template.py <theme>` rewrites the templates in `[slides.templates]` in place, so leave no production URLs there. To try a production theme, also copy the production `themes/slides/` (`template.py` writes the cover and section divider widths and the background brightness into it).
+- Don't run `git init` in `sandbox/` (desk-init asks about it). It would become a nested repository that `git clean` in the worktree doesn't remove.
+- `desk-kaizen` is the one skill that doesn't test this worktree: `kaizen.py start` clones GitHub's `main` into `sandbox/.desk/kaizen/<name>/repo`.
 
 ## Claude Code
 
-`sandbox/` で、入れずに `--plugin-dir` で渡して開く。
+In `sandbox/`, pass the plugin with `--plugin-dir` instead of installing it.
 
 ```sh
 claude --plugin-dir ..
 ```
 
-- 起動したときの `plugins` の `path` が worktree を指し、`desk-tools:` のスキルが 15 個読まれる。次で確かめる（worktree のパスと 15 個の名前が出る）。
+- At startup, the `path` of the plugin in `plugins` points to the worktree, and the 15 `desk-tools:` skills load. Check with the following (it prints the worktree path and the 15 names):
 
   ```sh
   claude --plugin-dir .. -p ok --model haiku --max-turns 1 --output-format stream-json --verbose 2>/dev/null \
     | python3 -c "import json,sys; e=next(e for e in map(json.loads, sys.stdin) if e.get('subtype')=='init'); print([p['path'] for p in e['plugins'] if p['name']=='desk-tools']); print(sorted(s for s in e['skills'] if s.startswith('desk-tools:')))"
   ```
 
-- `claude plugin marketplace add .. --scope project` で入れてはいけない。マーケットプレイスの名前（`desk-tools`）は `~/.claude/plugins/known_marketplaces.json` に 1 つしか持てず、本番のワークスペースで足したものとぶつかる。外すと、ほかで足したものの記録も消える。
-- そこから起こす `claude -p` の子（desk-dreaming の `run.sh claude` など）には、プラグインが入っていない。子まで確かめるときは pi で試す。
-- worktree が点で始まるフォルダの下（T3 Code の `~/.t3/worktrees` など）にあると、`claude -p` で回した会話は、sandbox の中のファイルを「sensitive file」として書けない（`--permission-mode acceptEdits` でも止まる）。`claude -p` で資料まで作って確かめるときは、sandbox を `/tmp/<名前>/` に写し、そこで `claude --plugin-dir <worktree>` を回す。終わったら消す。
+- Don't install with `claude plugin marketplace add .. --scope project`. `~/.claude/plugins/known_marketplaces.json` holds only one marketplace named `desk-tools`, so it collides with the one added in the production workspace, and removing it also deletes the record of the one added elsewhere.
+- `claude -p` children started from there (such as desk-dreaming's `run.sh claude`) don't have the plugin. To check children too, use pi.
+- If the worktree is under a folder whose name starts with a dot (such as T3 Code's `~/.t3/worktrees`), conversations run with `claude -p` can't write files in the sandbox, treating them as "sensitive files" (even with `--permission-mode acceptEdits`). To build materials with `claude -p`, copy the sandbox to `/tmp/<name>/` and run `claude --plugin-dir <worktree>` there. Delete it when done.
 
 ## Codex
 
-`sandbox/` で、`CODEX_HOME` を分けて worktree を入れる。
+In `sandbox/`, install the worktree into a separate `CODEX_HOME`.
 
 ```sh
 export CODEX_HOME=/tmp/adf-codex-$(basename "$(dirname "$PWD")") && mkdir -p $CODEX_HOME
@@ -49,32 +49,32 @@ codex plugin marketplace add .. && codex plugin add desk-tools@desk-tools
 codex debug prompt-input ok | grep -oE 'desk-tools:[a-z-]+: ' | sort -u
 ```
 
-- `CODEX_HOME` は worktree の外に置く。Codex は worktree（マーケットプレイスの根元）を丸ごと写すので、中に置くと自分を写し続けて止まる（`File name too long`）。
-- ふだんの `~/.codex` で `codex plugin marketplace add ..` しない。マーケットプレイスの名前（`desk-tools`）は 1 つしか持てず、本番のワークスペースで足したものとぶつかる。
-- 会話は `$CODEX_HOME/plugins/cache/desk-tools/desk-tools/local/` の写しを読む。手元のパスで足しても写すので、直したら `codex plugin add desk-tools@desk-tools` を回し直す。
-- 分けた `CODEX_HOME` にはログインがない。会話を回すなら、`~/.codex/auth.json`（ChatGPT のログイン）か、`~/.codex/config.toml` の `model_provider`・`[model_providers.<名前>]` を写す。会話の記録も `$CODEX_HOME/sessions/` に残るので、desk-dreaming の `sessions.py`（`~/.codex/sessions/` を読む）には出ない。
-- hook は信頼するまで動かない。対話の Codex の `/hooks` で信頼するか、`codex exec --dangerously-bypass-hook-trust` で回す。`sed -n 1,3p ../skills/slides-build/visual.md` を回させたあとと、`$desk-tools:desk-doctor` で呼んだときに、`sandbox/rules/` の目印が差し込まれることを確かめた。
+- Put `CODEX_HOME` outside the worktree. Codex copies the whole worktree (the marketplace root), so inside it, Codex keeps copying itself and stops (`File name too long`).
+- Don't run `codex plugin marketplace add ..` with the usual `~/.codex`. Only one marketplace named `desk-tools` can exist, so it collides with the one added in the production workspace.
+- Conversations read the copy in `$CODEX_HOME/plugins/cache/desk-tools/desk-tools/local/`. Codex copies even a marketplace added by local path, so after each change, rerun `codex plugin add desk-tools@desk-tools`.
+- The separate `CODEX_HOME` has no login. To run conversations, copy `~/.codex/auth.json` (the ChatGPT login), or `model_provider` and `[model_providers.<name>]` from `~/.codex/config.toml`. Session logs also go to `$CODEX_HOME/sessions/`, so desk-dreaming's `sessions.py` (which reads `~/.codex/sessions/`) doesn't see them.
+- Hooks don't run until trusted. Trust them with `/hooks` in interactive Codex, or run `codex exec --dangerously-bypass-hook-trust`. Verified: the `sandbox/rules/` marker is injected after Codex runs `sed -n 1,3p ../skills/slides-build/visual.md`, and when the skill is invoked as `$desk-tools:desk-doctor`.
 
 ## pi
 
-`sandbox/` で、worktree をパッケージとして入れる。
+In `sandbox/`, install the worktree as a package.
 
 ```sh
 pi install -l ..
-pi                                     # 初めては /trust で信頼を保存する（pi -p の子は聞けない）
+pi                                     # the first time, save trust with /trust (pi -p children can't ask)
 (echo '{"type":"get_commands"}'; sleep 8) | pi --mode rpc --no-session 2>/dev/null \
   | python3 -c "import json,os,sys; r=os.path.realpath('..'); e=next(e for e in map(json.loads, sys.stdin) if e.get('command')=='get_commands'); print(sorted(c['name'] for c in e['data']['commands'] if c.get('sourceInfo',{}).get('path','').startswith(r)))"
 ```
 
-最後のコマンドで、worktree から読まれた 15 個のスキルが出る。
+The last command prints the 15 skills loaded from the worktree.
 
-- `.pi/settings.json` に `../..`（`.pi/` からの相対のパス）で入り、worktree の 15 個のスキルと `extensions/rules.ts` が読まれる。`pi -p` の子（desk-dreaming の `run.sh pi`、レビューを頼むとき）も同じものを読む（`sandbox/` で `pi -p` を起こし、slides-build の `SKILL.md` が worktree のパスで出ることと、`../skills/slides-build/visual.md` を read すると `sandbox/rules/slides-build/visual.md` が続けて差し込まれることを確かめた）。
-- trust は、`sandbox/` で対話の pi を開いて `/trust` で保存する（`pi -p` の子は聞けないので、先に済ませる）。親のフォルダの決定も子に効く。ホームを信頼してあれば、`--approve` なしの `pi -p`・`--mode rpc` でも読まれた。worktree を置くフォルダ（T3 Code なら `~/.t3/worktrees`）ごと信頼すると、聞かれなくなる代わりに、あとからそこに置くほかのリポジトリの拡張も黙って読まれる（[pi.md](pi.md) の「project trust」）。
-- 同じ名前のスキルがほかにあると、パッケージのものは負ける（[pi.md](pi.md) の「同じ名前のスキルがあるとき」）。`get_commands` の `sourceInfo.path` が worktree を指しているかを確かめる。
+- The worktree is added to `.pi/settings.json` as `../..` (relative to `.pi/`), and its 15 skills and `extensions/rules.ts` load. `pi -p` children (desk-dreaming's `run.sh pi`, review requests) read the same. Verified by starting `pi -p` in `sandbox/`: slides-build's `SKILL.md` appears with the worktree path, and reading `../skills/slides-build/visual.md` appends `sandbox/rules/slides-build/visual.md`.
+- Save trust by opening interactive pi in `sandbox/` and running `/trust`. `pi -p` children can't ask, so do this first. A decision saved for a parent folder applies to its subfolders too: with the home folder trusted, the package loaded in `pi -p` and `--mode rpc` without `--approve`. Trusting the whole folder that holds the worktrees (`~/.t3/worktrees` for T3 Code) stops the prompts, but it also silently loads the extensions of any other repository placed there later (「project trust」 in [pi.md](pi.md)).
+- If another skill has the same name, the package's skill loses (「同じ名前のスキルがあるとき」 in [pi.md](pi.md)). Check that `sourceInfo.path` in `get_commands` points to the worktree.
 
-## `rules/` が続けて出るかを見る
+## Check that `rules/` is appended
 
-`sandbox/rules/slides-build/visual.md` に目印の 1 行を書き、会話で `../skills/slides-build/visual.md` を開かせる。目印が続けて差し込まれれば、hook（Claude Code・Codex）と拡張（pi）が効いている。`/desk-tools:<スキル>`（Claude Code）・`$desk-tools:<スキル>`（Codex）で呼んだときは、`rules/<スキル>/SKILL.md` が出る（UserPromptSubmit）。hook だけなら、会話を開かずに確かめられる。
+In `sandbox/`, write a one-line marker in `rules/slides-build/visual.md`, and have the conversation open `../skills/slides-build/visual.md`. If the marker is appended after it, the hook (Claude Code, Codex) and the extension (pi) work. When a skill is invoked as `/desk-tools:<skill>` (Claude Code) or `$desk-tools:<skill>` (Codex), `rules/<skill>/SKILL.md` is appended (UserPromptSubmit). The hook alone can be checked without opening a conversation:
 
 ```sh
 mkdir -p rules/slides-build && echo "目印" > rules/slides-build/visual.md
@@ -82,37 +82,37 @@ echo "{\"cwd\":\"$PWD\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$
   | python3 ../hooks/rules_overlay.py claude
 ```
 
-## 資料を作って確かめる
+## Build materials
 
-`sandbox/` の会話で、直したスキルを使う場面を通し（Claude Code は `/desk-tools:slides-build`、Codex は `$desk-tools:slides-build`、pi は `/skill:slides-build` など）、lint と Google が描いたページの画像で見る。
+In a `sandbox/` conversation, go through a scene that uses the changed skill (`/desk-tools:slides-build` in Claude Code, `$desk-tools:slides-build` in Codex, `/skill:slides-build` in pi, and so on), and check with lint and with images of the pages Google drew.
 
-## 見本を組んで画像で見る
+## Render the samples
 
-JSON のページの形と部品を直したら、`sandbox/` で `tests/render/run.py` を回す。見本（`skills/slides-build/samples/json/` の全ページと、部品 1 つの `component.json`）を `[drive] internal` に一時のデッキとして組み、lint（手元と組んだあと）と全ページの画像を取って、ページごとの見るところ（`tests/render/expect.json`）と並べた `sandbox/.desk/render/report.md` を書く。デッキは画像を取ったらゴミ箱に移す（`--keep` で残す）。
+After changing the JSON page schema or components, run `tests/render/run.py` in `sandbox/`. It builds the samples (every page in `skills/slides-build/samples/json/` and the single-component `component.json`) as a temporary deck in `[drive] internal`, runs lint (locally and after building), takes an image of every page, and writes `sandbox/.desk/render/report.md`, which sets each image beside its checks from `tests/render/expect.json`. After taking the images, it moves the deck to the trash (`--keep` keeps it).
 
 ```sh
-python3 ../tests/render/run.py            # report.md を書く。画像は自分で開いて見る
-python3 ../tests/render/run.py --judge    # 続けて claude -p に画像を見させ、ページごとの OK・NG を judge.md に書く
+python3 ../tests/render/run.py            # writes report.md; open the images yourself
+python3 ../tests/render/run.py --judge    # then has claude -p look at the images and write OK or NG per page to judge.md
 ```
 
-lint の要修正か、`--judge` の NG があれば、終わりの状態が 1 になる。`--judge` の見立ては LLM なので、NG のページは画像を開いて確かめる。見本のページを足したら、`expect.json` にも見るところを足す（`--selftest` が見る）。
+The exit status is 1 if lint reports `要修正` or `--judge` reports NG. `--judge` is an LLM's judgment, so open the images of NG pages to confirm. When you add a sample page, add its checks to `expect.json` (`--selftest` checks this).
 
-## 依頼文で試す
+## Test with fixture prompts
 
-JSON のページの形やスキルの説明を直したら、会話を持たない子に [fixtures/](fixtures/) の依頼文を渡して書かせ、各ファイルの「見るところ」で確かめる（pom の dev-fixtures にならった。2026-10-16）。説明だけで正しい部品を選べるかは、selftest では分からない。
+After changing the JSON page schema or the skill descriptions, give a prompt from [fixtures/](fixtures/) to a child agent with no conversation context, have it write the deck, and check the result against 「見るところ」 in each file (modeled on pom's dev-fixtures; 2026-10-16). Selftests can't tell whether the descriptions alone lead to the right components.
 
 ```sh
-rsync -a --exclude sandbox --exclude .git <worktree>/ /tmp/adf-plugin/   # 点で始まるフォルダの下だと、claude -p の子はプラグインも読めない（上の Claude Code の節）
-cp -R sandbox /tmp/adf-fixture && cd /tmp/adf-fixture
+rsync -a --exclude sandbox --exclude .git <worktree>/ /tmp/adf-plugin/   # under a dot folder, claude -p children can't read the plugin either ("Claude Code" above)
+cp -R <worktree>/sandbox /tmp/adf-fixture && cd /tmp/adf-fixture
 claude --plugin-dir /tmp/adf-plugin -p "$(sed -n '/^```text$/,/^```$/p' /tmp/adf-plugin/docs/fixtures/02-gantt.md | sed '1d;$d')" \
   --permission-mode acceptEdits --allowedTools "Bash(python3:*)" "Bash(uv run:*)" "Bash(ls:*)" "Bash(mkdir:*)"
 ```
 
-書いたファイルと lint の結果を見て、迷った書き方は形か説明を直す。依頼文は見本（`skills/slides-build/samples/json/`）と違う中身にする（同じだと、見本を写しただけか分からない）。終わったら `/tmp/adf-plugin` と `/tmp/adf-fixture` を消す。
+Look at the files the child wrote and the lint results, and where it hesitated over how to write something, fix the schema or the descriptions. Make each prompt differ in content from the samples (`skills/slides-build/samples/json/`); otherwise you can't tell whether the child only copied a sample. Delete `/tmp/adf-plugin` and `/tmp/adf-fixture` when done.
 
-## 本番のワークスペースで worktree の版を試す
+## Try the worktree in the production workspace
 
-本番のワークスペースの決まりや資料のまま試すときは、そのワークスペースの直下で、起動オプションで worktree を渡す。入れてあるものは変えない。
+To test with the production workspace's rules and materials, start from the workspace root and pass the worktree with launch options. Leave what is installed unchanged.
 
 ```sh
 cd ~/Documents
@@ -120,17 +120,17 @@ claude --plugin-dir <worktree>
 pi -ns --skill <worktree>/skills -ne -e <worktree>/extensions/rules.ts
 ```
 
-- Claude Code は、入れてあるものと重ねても、読まれるのは `--plugin-dir` の版だけ（二重にならない）。
-- pi は、`--skill` だけを足すと入れてあるパッケージのほうが勝つ。`-ns`（スキルを探さない）・`-ne`（拡張を探さない）を付けると、渡したものだけが読まれる。ほかのスキル（`~/.agents/skills` など）と拡張も止まる。
-- Codex には、入れずに渡す起動オプションがない。本番のワークスペースで試すなら、上の「Codex」と同じく `CODEX_HOME` を分けて入れる。
-- どちらも、子のプロセスには伝わらない。子は入れてある版（checkout のパスで入れたなら元の checkout）を読む。
+- Claude Code loads only the `--plugin-dir` version, even when the plugin is also installed (no duplicates).
+- In pi, adding only `--skill` lets the installed package win. With `-ns` (no skill discovery) and `-ne` (no extension discovery), only what you pass loads. Other skills (such as `~/.agents/skills`) and extensions stop loading too.
+- Codex has no launch option for passing a plugin without installing it. To test in the production workspace, install into a separate `CODEX_HOME` as in "Codex" above.
+- For both Claude Code and pi, the options don't reach child processes. Children read the installed version (the original checkout, if it was installed by that path).
 
-## 消す
+## Clean up
 
-worktree を消せば `sandbox/` も消える。worktree を残して作り直すときは `rm -rf sandbox`。worktree の中で `git clean -fdx` を回すと、`sandbox/` もほかの無視したファイル（`node_modules/` など）も消える。
+Deleting the worktree deletes `sandbox/`. To recreate the sandbox and keep the worktree, run `rm -rf sandbox`. `git clean -fdx` in the worktree deletes `sandbox/` and the other ignored files (`node_modules/` and so on).
 
-残るもの:
+What remains:
 
-- Google Drive に組んだスライドとドキュメント。`[drive]` に替えた検証用のフォルダごと消す。
-- Codex で試したときの `CODEX_HOME`（`/tmp/adf-codex-<worktree の名前>`）。`rm -rf` で消す。
-- Claude Code のメモリと会話の記録（`~/.claude/projects/<sandbox のパスの / . _ を - にしたもの>/`）と、pi の会話の記録（`~/.pi/agent/sessions/--<sandbox のパスの / を - にしたもの>--/`）。害はないが、たまに消す。
+- Slides and documents built on Google Drive. Delete the whole test folder set in `[drive]`.
+- The `CODEX_HOME` from Codex tests (`/tmp/adf-codex-<worktree name>`). Delete it with `rm -rf`.
+- Claude Code memory and session logs (`~/.claude/projects/<sandbox path with / . _ replaced by ->/`) and pi session logs (`~/.pi/agent/sessions/--<sandbox path with / replaced by ->--/`). They are harmless, but delete them now and then.
