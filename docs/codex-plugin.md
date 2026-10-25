@@ -37,11 +37,12 @@ mkdir -p .codex && { grep -qs 'desk-tools@desk-tools' .codex/config.toml || prin
 
 ## hook を信頼する
 
-プラグインの hook（`rules/` と顧客の `memory.md` を続けて出すもの）は、信頼するまで動かない。対話の Codex で `/hooks` を開き、`desk-tools` の 2 つ（PostToolUse・UserPromptSubmit）を信頼する。
+プラグインの hook（`rules/` と顧客の `memory.md` を続けて出すもの）は、信頼するまで動かない。対話の Codex で `/hooks` を開き、`desk-tools` の 5 つ（PostToolUse の Read・Bash・Skill、UserPromptSubmit、SessionStart）を信頼する。Read と Skill は Claude Code のためのもので、Codex では起きない。SessionStart（`compact`）は、Claude Code でコンパクションのあとに付け直されるスキルの上書きを出し直すためのもので、Codex では何も出さない（Codex はコンパクションで、呼んだスキルの中身も hook の差し込みも消す）。
 
 - 信頼は hook の中身のハッシュに付く。`hooks/hooks.json` が変わった版を取ると、信頼し直すまで止まる（起動のときに `/hooks` を開くよう知らせが出る）。
 - `codex exec`（desk-dreaming の `run.sh codex`、レビューの子）は聞けない。先に対話の Codex で信頼しておく。
 - Codex はファイルをシェル（`cat`・`sed` など）で読むので、PostToolUse は `Bash` で効く。`$desk-tools:slides-build` のように呼んだスキルは、道具を使わずに SKILL.md が入るので、UserPromptSubmit がプロンプトから拾って `rules/<スキル>/SKILL.md` を出す。
+- Codex は `hooks.json` の `if`（Claude Code が `.md` に触れない Read・Bash で hook を起こさないための条件）を読まないので、Bash のたびに hook が起き、出すものがなければすぐ終わる。Codex は hook の差し込みが約 2,500 トークン（和文で約 3,300 字）を超えるとファイルに逃がして頭と末尾だけを見せるので、`additionalContextLimit` を 0 にして逃がさない。量は hook が 9,000 字までに抑える（README の「決めたこと」の 2026-10-25）。
 
 ## そのフォルダだけで効いているかを確かめる
 
@@ -51,10 +52,10 @@ for d in <ワークスペース> /tmp; do
   (cd $d && codex debug prompt-input ok 2>/dev/null) | grep -oE 'desk-tools:[a-z-]+: ' | sort -u | wc -l
 done
 
-# hook と信頼: PostToolUse・UserPromptSubmit が trusted で出る
+# hook と信頼: PostToolUse の Read・Bash・Skill、UserPromptSubmit、SessionStart が trusted で出る
 cd <ワークスペース> && (printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"t","version":"0"}}}' '{"jsonrpc":"2.0","method":"initialized"}' '{"jsonrpc":"2.0","id":2,"method":"hooks/list","params":{}}'; sleep 5) \
   | codex app-server 2>/dev/null \
-  | python3 -c "import json,sys; r=next(e for e in map(json.loads, sys.stdin) if e.get('id')==2); [print(h['eventName'], h['trustStatus']) for d in r['result']['data'] for h in d['hooks'] if h.get('pluginId')=='desk-tools@desk-tools']"
+  | python3 -c "import json,sys; r=next(e for e in map(json.loads, sys.stdin) if e.get('id')==2); [print(h['eventName'], h.get('matcher'), h['trustStatus']) for d in r['result']['data'] for h in d['hooks'] if h.get('pluginId')=='desk-tools@desk-tools']"
 ```
 
 2026-10-20 に検証用のワークスペースで確かめた結果:

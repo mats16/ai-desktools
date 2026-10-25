@@ -1,4 +1,9 @@
 {"hooks": {
-  "PostToolUse": [{"matcher": "Read|Bash|Skill", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/rules_overlay.py\" claude", "timeout": 5}]}],
-  "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/rules_overlay.py\" claude", "timeout": 5}]}]
+  "PostToolUse": [
+    {"matcher": "Read", "hooks": [{"type": "command", "if": "Read(//**/*.md)", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/rules_overlay.py\" claude", "timeout": 5, "additionalContextLimit": 0}]},
+    {"matcher": "Bash", "hooks": [{"type": "command", "if": "Bash(*.md*)", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/rules_overlay.py\" claude", "timeout": 5, "additionalContextLimit": 0}]},
+    {"matcher": "Skill", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/rules_overlay.py\" claude", "timeout": 5, "additionalContextLimit": 0}]}
+  ],
+  "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/rules_overlay.py\" claude", "timeout": 5, "additionalContextLimit": 0}]}],
+  "SessionStart": [{"matcher": "compact", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/rules_overlay.py\" claude", "timeout": 5, "additionalContextLimit": 0}]}]
 }}
