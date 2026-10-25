@@ -1533,8 +1533,9 @@ class SpecPage:
         items, hot, line, th = e["items"], set(e.get("hot", [])), e.get("line"), e.get("threshold")
         nums = [v for _, v in items] + ([th["value"]] if th else [])
         top = max(nums) or 1  # 直線が棒より高ければ、直線が高さいっぱい
-        dp = max(max(0, -decimal.Decimal(str(v)).normalize().as_tuple().exponent) for v in nums)  # 棒と直線の数字の小数の桁は、いちばん桁の多い値にそろえる（4 と 4.3 → 4.0 と 4.3。100.0 は 100。1e-07 も桁で数える）
-        fmt = lambda v, unit=e.get("unit", ""), dp=dp: (f"{v:,.{dp}f}" if dp is not None else f"{int(v) if float(v).is_integer() else v:,}") + (" " + unit.strip() if unit.strip() else "")  # dp=None は値ごとの桁（折れ線）  # 単位の前は 1 字空ける（" 分" と書いても空きを 2 つにしない）
+        dp = max(max(0, -decimal.Decimal(str(v)).normalize().as_tuple().exponent) for v in nums)  # 棒と直線の数字の小数の桁は、いちばん桁の多い値にそろえる（4 と 4.3 → 4.0 と 4.3。100.0 は 100。1e-07 も桁で数える）。0 を足すだけで、丸めない
+        dp = dp if 0 < dp <= 6 else None  # 整数だけなら前の書き方のまま。7 桁以上は計算の誤差（0.1 + 0.2）。そろえると誤差がすべての棒に広がるので、値ごとの桁にする
+        fmt = lambda v, unit=e.get("unit", ""), dp=dp: (f"{decimal.Decimal(str(v + 0)):,.{dp}f}" if dp is not None else f"{int(v) if float(v).is_integer() else v:,}") + (" " + unit.strip() if unit.strip() else "")  # 0 は書いた数（str）に足す（float のまま足すと 2 進の誤差が出る。956217975835.8 → .800049）。+ 0 は -0.0 を 0.0 にする  # dp=None は値ごとの桁（折れ線と、誤差の残る棒）  # 単位の前は 1 字空ける（" 分" と書いても空きを 2 つにしない）
         tl = th and " ".join(filter(None, (th.get("label", "").strip(), fmt(th["value"]))))  # 直線の札（「目標 90 分」）
         tw = th and em_width(tl) * 11 / 72 + 0.1
         self.index.append((loc, " ".join(f"{n} {fmt(v)}" for n, v in items) + (f" {tl}" if th else "")))
@@ -4844,8 +4845,18 @@ def selftest_spec():
     assert texts(els) == ["0.60", "1.03", "1.00"]
     _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 1], ["b", 2]], "threshold": {"value": 1.25}}]})
     assert texts(els) == ["1.00", "2.00", "1.25"]  # 直線だけ桁が多くても丸めない
-    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 1e-7], ["b", 2e-7]]}]})
-    assert texts(els) == ["0.0000001", "0.0000002"]  # 指数で書いた数
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 1e-5], ["b", 2.5e-5]]}]})
+    assert texts(els) == ["0.000010", "0.000025"]  # 指数で書いた数
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 0.1 + 0.2], ["b", 0.1]]}]})
+    assert texts(els) == ["0.30000000000000004", "0.1"]  # 計算の誤差は、ほかの棒に広げない（値ごとの桁）
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 1234567890.123456], ["b", 1]]}]})
+    assert texts(els) == ["1,234,567,890.123456", "1.000000"]  # 桁の多い数も丸めない
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 956217975835.8], ["b", 12345678901234567], ["c", 1.25]]}]})
+    assert texts(els) == ["956,217,975,835.80", "12,345,678,901,234,567.00", "1.25"]  # 0 を足すだけ（2 進の誤差を出さない）
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", -0.0], ["b", 0.5]]}]})
+    assert texts(els) == ["0.0", "0.5"]  # -0.0 は 0
+    _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", -0.0], ["b", 12345678901234567]]}]})
+    assert texts(els) == ["0", "12,345,678,901,234,567"]  # 整数だけなら前の書き方
     # 折れ線: 棒の上の段に別の目盛りで引き（いちばん大きい数が段の上）、棒の高さは既定のまま。直線: 棒と同じ目盛りで、棒より高ければ高さいっぱい
     _, els = run({"type": "slide", "body": [{"type": "bars", "items": [["a", 50], ["b", 100], ["c", 80]], "line": {"values": [5, 10, 0], "unit": "%", "label": "率"}}]})
     segs, dots = [e for e in els if e["loc"].split(".")[-1].startswith("seg")], [e for e in els if e["call"] == "box" and e["kind"] == "ELLIPSE"]
