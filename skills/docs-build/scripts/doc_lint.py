@@ -14,6 +14,7 @@ from brand import FONT, MONO_DEFAULT  # noqa: E402
 from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, facts_hit, load_facts,  # noqa: E402
                       not_in_facts, workspace_checks)  # load_facts は docs.py が doc_lint から引く
 
+FIG_HEAD, TAB_HEAD = r"図 ?\d+|Figure \d+\.", r"表 ?\d+|Table \d+\."  # 図表の題の頭（docs.py が付ける）。英語は「Table 3 shows …」の文と分けるため「.」まで見る
 DOC_MIN_PT = 9  # ドキュメントの文字の下限。図表の題・出典・表の中・フッターが 9pt（docs-build/visual.md の 1）
 SENTENCE_MAX, PARA_SENT_MAX, LINE_MAX = 100, 8, 40  # 一文の字数（textlint の sentence-length の既定）、1 段落の文の数（3〜8 文。木下・倉島・サイボウズ）、
 # 1 行の字数（jlreq・デジタル庁）。docs-build/visual.md の 1・3
@@ -123,9 +124,9 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
                     r.hits["本文の幅を超える図"].append(f"{where}: 幅 {w:.0f}pt（本文 {width:.0f}pt）")
                 nxt = gdoc_text(paras[k + 1][1]).strip() if k + 1 < len(paras) else ""
                 cover = k + 1 < len(paras) and any("pageBreak" in y for y in paras[k + 1][1].get("elements", []))  # 表紙のロゴ（docs.py の cover。すぐ後ろが改ページ）
-                if not re.match(r"図 ?\d+", nxt) and not cover:
+                if not re.match(FIG_HEAD, nxt) and not cover:
                     r.hits["図の題がない"].append(f"{where}: 次の段落「{nxt[:20]}」。図の下に「図 N　…」を置く（d.image の caption）")
-        if before_table and not re.match(r"表 ?\d+", text):
+        if before_table and not re.match(TAB_HEAD, text):
             r.hits["表の題がない"].append(f"{where}: 表の上に「表 N　…」を置く（d.table の caption）")
         if not text.strip():
             empty = empty + 1 if not before_table and not any("inlineObjectElement" in x for x in p.get("elements", [])) and not tab else 0
@@ -137,7 +138,7 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
         if re.match(r"(出典|Sources?)[：:]", text, re.I) and not links_of(p):
             r.hits[NO_LINK].append(f"{where}: 「{text[:24]}」")
         sec_link |= bool(links_of(p))
-        if facts is not None and not re.match(r"(出典|Sources?|図|表) ?[：:\d]", text) and (miss := not_in_facts([text], facts)):  # 見出しの数字も（数字で結論を言う見出し）
+        if facts is not None and not re.match(f"(出典|Sources?|図|表) ?[：:\\d]|{FIG_HEAD}|{TAB_HEAD}", text) and (miss := not_in_facts([text], facts)):  # 見出しの数字も（数字で結論を言う見出し）
             r.hits[NOT_IN_FACTS].append(facts_hit(where, miss, facts))
         if style == "TITLE" and text.rstrip("。").endswith("について"):
             r.hits["題が「について」で終わる"].append(f"{where}: 「{text[:30]}」。主題と文書の性格（提案・報告・計画）を入れる（docs-build/visual.md の 2）")
@@ -164,12 +165,12 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
         if heads and heads[-1][2]:
             heads[-1][2] = None  # 本文が来た
         m = NUM.search(text)
-        if m and not re.match(r"(図|表) ?\d+", text):
+        if m and not re.match(f"{FIG_HEAD}|{TAB_HEAD}", text):
             sec_num.append(m.group())
         if "bullet" in p and not tab:
             lists[p["bullet"].get("listId")].append((where, text, rs))
         quote_or_code = "borderLeft" in p["paragraphStyle"] or "shading" in p["paragraphStyle"]  # 引用（d.quote）とコード（d.code）は本文に数えない
-        if style != "NORMAL_TEXT" or tab or quote_or_code or re.match(r"(出典|Sources?|図|表) ?[：:\d]", text):
+        if style != "NORMAL_TEXT" or tab or quote_or_code or re.match(f"(出典|Sources?|図|表) ?[：:\\d]|{FIG_HEAD}|{TAB_HEAD}", text):
             continue
         nxt = paras[k + 1] if k + 1 < len(paras) else None
         if ("bullet" not in p and rs and all(x.get("textStyle", {}).get("bold") for x in rs) and len(text) < 40 and nxt
@@ -237,6 +238,7 @@ def selftest():
     globals()["theme_pages"] = lambda: []  # 回す場所の desk.toml のテーマ（用紙）に左右されない
     globals()["workspace_checks"] = lambda *a: 0  # 回す場所のワークスペースの checks.py にも左右されない
     import contextlib, io
+    assert re.match(TAB_HEAD, "Table 1. 比べる") and re.match(FIG_HEAD, "図 2　流れ") and not re.match(TAB_HEAD, "Table 3 shows the result")  # 英語の文の頭は題でない
     # Google Docs: わざと欠陥を入れた文書で、規則がそれぞれ拾うか
     def gp(text, style="NORMAL_TEXT", bullet=None, **st):
         p = {"elements": [{"textRun": {"content": text + "\n", "textStyle": st}}], "paragraphStyle": {"namedStyleType": style}}

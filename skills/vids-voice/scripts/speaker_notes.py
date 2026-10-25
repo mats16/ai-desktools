@@ -4,7 +4,7 @@
 usage（資料の build/ で）:
   speaker_notes.py pull <URL か ID>              今のノートを台本の形で標準出力に出す。deck.json のページの speakerNotes と違うページを標準エラーに出す（画面でノートが直されている）
   speaker_notes.py lint <台本.json> [--lang ja|en]   台本を確かめる（要修正: 1 シーン 2,500 字を超える、最後に [short pause] がない。要確認: 空のシーン、確かめていないタグ、続けて置いたタグ、
-                                         1 シーンに 2 つ以上の感情のタグ、読み上げる記号、ページの参照、ja では英字。記号と参照は言語ごと〔既定は ja〕）。字数の合計も出す
+                                         1 シーンに 2 つ以上の感情のタグ、読み上げる記号、ページの参照、ja では英字。記号と参照は言語ごと〔既定は desk.toml の [desk] default_language。ja でなければ en〕）。字数の合計も出す
   speaker_notes.py push <URL か ID> <台本.json>  ノートを台本に書き換え、deck.json のページの speakerNotes も書き換える。資料のフォルダ（build/ の上）の md に
                                          デッキの ID がなければ、何も書かずに止める（別の資料の build/ で回していないか）。初めての push では、今のノートを
                                          notes_before_<日付>.json に控える（控えがあれば控えない。元に戻すときは、控えを push する）。書いたあとに読み直して比べる
@@ -252,7 +252,7 @@ def main():
     if len(a) == 2 and a[0] == "pull":
         return cmd_pull(file_id(a[1]))
     if len(a) == 2 and a[0] == "lint":
-        return cmd_lint(a[1], "ja")
+        return cmd_lint(a[1], "ja" if gapi.language() == "ja" else "en")
     if len(a) == 4 and a[0] == "lint" and a[2] == "--lang" and a[3] in LANGS:
         return cmd_lint(a[1], a[3])
     if len(a) == 3 and a[0] == "push":
