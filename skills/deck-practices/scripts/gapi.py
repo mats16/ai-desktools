@@ -103,6 +103,16 @@ def config():
     return tomllib.loads(config_path().read_text())
 
 
+def language():
+    """資料を作る言語（desk.toml の [desk] default_language）の主の部分を小文字で（ja-JP・ja_JP・JA も ja）。書かないか設定がなければ ja（selftest は設定なしで回る）。"""
+    return str((config().get("desk", {}).get("default_language") if find_config() else None) or "ja").strip().replace("_", "-").split("-")[0].lower()
+
+
+def source_head():
+    """出典の行の頭（slides.py・docs.py が、書いていなければ足す）。ja でなければ英語（lint はどちらも出典の行と見る）。"""
+    return "出典: " if language() == "ja" else "Source: "
+
+
 class ApiError(Exception):
     """API がエラーを返した。メッセージは状態コード・URL・返ってきた本文。"""
 

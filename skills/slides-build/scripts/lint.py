@@ -557,7 +557,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                         r.hits[CODE_NOT_MONO].append(f"p{i}: 「{t.strip()[:30]}」。JSON の code か、text の \"mono\": true にする（pages.py は d.code か d.text(…, mono=True)）")
                     if not dark[-1] and re.fullmatch(r"[\d.,]+", t.strip()) and max((size_of(st) or 0) for _, st in para[1]) >= BIG_NUM_PT:
                         r.hits[NUM_NO_UNIT].append(f"p{i}: 「{t.strip()}」。単位と何の数かを数字と同じ枠に書く（例: 16 モデル）")
-                    if "出典" in t:
+                    if "出典" in t or re.search(r"\bSources?\s*[：:]", t, re.I):  # 英語の出典の行（slides.py の source が default_language で足す）
                         has_src = True
                     elif not footer and not mono and NUM.search(t):
                         nums.append(t)
@@ -762,6 +762,8 @@ def selftest():
     assert body_lines(*flat(shape(9, y=7.08))) is None and body_lines(*flat(shape(9, prefix="出典："))) is None
     assert body_lines({"objectId": "t", **box(0, 2, 2, 2), "table": {}}, [0, 2 * EMU, 2 * EMU, 2 * EMU]) is None
     assert body_lines(*flat(shape(1, text=["あ" * 90]))) == 9 and body_lines(*flat(shape(1, size=24))) == 2  # 1 段落の折り返しも数える
+    res, _, _ = run(deck([(OAT, [title(), shape(1, text=["Revenue grew 40%"]), shape(1, y=6.6, prefix="Source: ", link=True)])]))
+    assert not res.hits[NO_SOURCE]  # 英語の出典の行も出典に数える
     assert src_without_link(shape(1, prefix="出典：")["shape"]) and not src_without_link(shape(1)["shape"]) and not src_without_link(shape(1, prefix="出典：", link=True)["shape"])
     for lines in (8, 9):
         res, _, hard = run(deck([(NAVY, [title(), shape(lines), shape(9, y=7.08), shape(9, prefix="出典：")])]))

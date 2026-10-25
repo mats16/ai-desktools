@@ -383,7 +383,7 @@ def create(args):
     # 1. シーン・台本・画像・BGM（1 分ほど）。ここで止まった Vids は捨てる（控えがなく update できない）。タブが落ちたら、新しい Vids で作り直す
     for n in range(1, 4):
         vid = request("POST", f"{DRIVE}/files?fields=id&supportsAllDrives=true",
-                      {"name": args.name or f"{meta['name']}_動画", "mimeType": "application/vnd.google-apps.vid", "parents": meta.get("parents", [])[:1]})["id"]
+                      {"name": args.name or meta['name'] + ("_動画" if gapi.language() == "ja" else "_video"), "mimeType": "application/vnd.google-apps.vid", "parents": meta.get("parents", [])[:1]})["id"]
         print(f"空の Vids を作った: https://docs.google.com/videos/d/{vid}/edit", flush=True)
         try:
             b = backend.build(args.browser, vid, slides_id, scenes, not args.no_music)

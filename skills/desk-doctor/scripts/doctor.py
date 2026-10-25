@@ -63,6 +63,8 @@ def check(ws, local=False):
         warn("AGENTS.md の方針のレビュー", "前の雛形の「人がレビューするかも選んでもらう」が残っている。ワークスペースの決まりが優先するので、desk.toml の [review] plan_reviewer が効かず、資料ごとに聞く。desk-init の雛形の今の文（plan_reviewer に従う）に替える")
     if "- ユーザーに返す前に、スキル `deck-review` で全体をレビューする。" in agents:  # 2026-10-19 までの雛形
         warn("AGENTS.md の返したあとの直し", "前の雛形の「ユーザーに返す前に、スキル deck-review で全体をレビューする」が残っている。ワークスペースの決まりが優先するので、返したあとの小さな直しや問いでも全体のレビューを回す。desk-init の雛形の今の文（新しく作った資料は deck-review、返したあとは deck-practices/revise.md）に替える")
+    if "- **日本語で作る。**" in agents:  # 2026-10-25 までの雛形
+        warn("AGENTS.md の資料の言語", "前の雛形の「日本語で作る」が残っている。ワークスペースの決まりが優先するので、desk.toml の [desk] default_language が効かない。desk-init の雛形の今の文（[desk] default_language の言語で作る）に替える")
     if old := migrate.needs(root):  # 前の名前の rules/ は読まれず、前の ID は台帳とつながらない
         ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変えた）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
     if cfg.get("desk", {}).get("source"):  # 2026-10-14 まで、desk-kaizen が worktree を作る checkout（前の [factory] source。desk-migrate が [desk] にする）
@@ -137,6 +139,8 @@ def check(ws, local=False):
         ng("review.deck_review_max_rounds", f"{n!r} は使えない。1〜3 の整数にする（直すと欠陥が増えるので 3 より多くしない）")
     if type(h := cfg.get("feedback", {}).get("google_comments", {}).get("watch_hours", 0)) not in (int, float) or not math.isfinite(h) or h < 0:  # 0 か書いていなければ、頼まれたときだけ見張る（deck-comments）
         ng("feedback.google_comments.watch_hours", f"{h!r} は使えない。時間の数にする（見張らないなら 0）")
+    if not (type(lang := cfg.get("desk", {}).get("default_language", "ja")) is str and re.fullmatch(r"[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*", lang)):  # スクリプトは主の部分だけを比べる（gapi.language）
+        ng("desk.default_language", f"{lang!r} は使えない。言語のコード（\"ja\"・\"en\"・\"zh-Hant\" など）にする")
     for k in ("customers", "internal", "docs", "desk"):
         if not dr.get(k):
             warn(f"drive.{k}", "空。資料の置き場所が決まらない")
@@ -240,6 +244,9 @@ def selftest():
         assert "AGENTS.md の返したあとの直し" not in kinds()  # 今の雛形
         agents.write_text(agents.read_text().replace("- 新しく作った資料は、ユーザーに返す前に、", "- ユーザーに返す前に、"))
         assert kinds()["AGENTS.md の返したあとの直し"] == "要確認"
+        assert "AGENTS.md の資料の言語" not in kinds()  # 今の雛形
+        agents.write_text(agents.read_text() + "\n- **日本語で作る。** 英語でと言われたときだけ英語にする。\n")
+        assert kinds()["AGENTS.md の資料の言語"] == "要確認"
         toml = Path(tmp) / "desk.toml"
         assert kinds()["brand.copyright"] == "要修正" and kinds()["brand.company"] == "要確認"
         toml.write_text(toml.read_text().replace("[brand]", '[brand]\ncopyright = "© Acme 2026"', 1))
@@ -292,6 +299,11 @@ def selftest():
         assert "review.plan_reviewer" not in kinds() and "review.deck_review_max_rounds" not in kinds()  # 雛形の既定
         toml.write_text(toml.read_text().replace('plan_reviewer = "ai"', 'plan_reviewer = "AI"').replace("deck_review_max_rounds = 3", "deck_review_max_rounds = 5"))
         assert kinds()["review.plan_reviewer"] == "要修正" and kinds()["review.deck_review_max_rounds"] == "要修正"
+        assert "desk.default_language" not in kinds()  # 雛形の ja
+        toml.write_text(toml.read_text().replace('default_language = "ja"', 'default_language = "日本語"'))
+        assert kinds()["desk.default_language"] == "要修正"
+        toml.write_text(toml.read_text().replace('default_language = "日本語"', 'default_language = "ja_JP"'))
+        assert "desk.default_language" not in kinds()
         toml.write_text(toml.read_text().replace('plan_reviewer = "AI"', 'plan_reviewer = "human"').replace("deck_review_max_rounds = 5", "deck_review_max_rounds = true"))
         assert "review.plan_reviewer" not in kinds() and kinds()["review.deck_review_max_rounds"] == "要修正"
         toml.write_text(toml.read_text().replace("deck_review_max_rounds = true", "deck_review_max_rounds = 1"))

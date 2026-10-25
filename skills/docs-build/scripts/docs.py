@@ -190,13 +190,13 @@ class Doc:
         self.para(text, quote=True)
 
     def src(self, text):
-        """出典の行（表と図の下）。リンクを付ける（content.md の 6）。「出典: 」がなければ付ける。"""
+        """出典の行（表と図の下）。リンクを付ける（content.md の 6）。「出典:」「Source:」がなければ、資料の言語のもの（gapi.source_head）を付ける。"""
         if not re.match(r"(出典|Sources?)[：:]", text):
-            text = "出典: " + text
+            text = gapi.source_head() + text
         self.para(text, small=True)
 
     def table(self, rows, caption=None, widths=None):
-        """表。rows の 1 行目は見出しの行（濃紺の地に白の太字。ページをまたぐと次のページにも出す）。caption は表の上に「表 N　…」で置く。
+        """表。rows の 1 行目は見出しの行（濃紺の地に白の太字。ページをまたぐと次のページにも出す）。caption は表の上に「表 N　…」（ja でなければ「Table N. …」）で置く。
         [docs-write-005] widths は列の幅の比（mm で書いてよい）。表は本文の左端から右端まで広げるので、
         合計を本文の幅 TEXT_MM に合わせて伸び縮みさせる。省くと均等。セルの中も **太字**・[リンク](URL) が書ける。"""
         n = max(map(len, rows))
@@ -207,12 +207,12 @@ class Doc:
         widths = widths and [round(x * TEXT_MM / sum(widths), 1) for x in widths]
         if caption:
             self.tab += 1
-            caption = f"表 {self.tab}　{caption}"
+            caption = (f"表 {self.tab}　" if gapi.language() == "ja" else f"Table {self.tab}. ") + caption
         self.blocks.append(("table", [[runs(c) for c in r] + [[]] * (n - len(r)) for r in rows], caption, widths))
 
     def image(self, src, caption=None, width=120):
         """図。src は assets/ の中のパス（"gcp/bigquery.png"）か、手元のパス、URL（SVG は png() で PNG にする）。
-        width は mm（本文の幅は TEXT_MM = 150 mm）。高さは縦横比のまま。caption は図の下に「図 N　…」で置く。"""
+        width は mm（本文の幅は TEXT_MM = 150 mm）。高さは縦横比のまま。caption は図の下に「図 N　…」（ja でなければ「Figure N. …」）で置く。"""
         width = round(width * SCALE, 1)
         if width > TEXT_MM:
             self.warn(f"図の幅 {width} mm が本文の幅 {TEXT_MM} mm を超える。{TEXT_MM} mm にした")
@@ -223,7 +223,7 @@ class Doc:
             src = asset(src)
         if caption:
             self.fig += 1
-            caption = f"図 {self.fig}　{caption}"
+            caption = (f"図 {self.fig}　" if gapi.language() == "ja" else f"Figure {self.fig}. ") + caption
         self.blocks.append(("image", src, caption, width))
 
     def mermaid(self, code, caption=None, width=None):
@@ -649,11 +649,11 @@ def load_theme(t):
 # 頭（--- で挟む）: name（資料名・秘密区分。docs.py の NAME と同じ）、theme、template（照合するテンプレートの名前）、omit（テンプレートの節のうち、外す節）、
 # cover（表紙の題の行の並び）と cover_left、title と subtitle、source（テンプレートだけ。元にした文書の URL。骨組みを比べる）。
 # 本文: # ## ### は見出し、段落は空行で区切る（行は「。」の後で分けてよい。組むときにつなぐ）、「出典: 」で始まる段落は出典の行、> は引用（書き手への注記も）、
-# - と 1. は箇条書き（2 字以上下げると 2 段目）、表の直前の「表: 題 {widths: 30 80 40}」は表の題と列の幅の比、| の表（1 行目が見出しの行）、
-# ![題](画像){width=150} は図（幅は mm）、``` はコード、```mermaid は mermaid の図（直前の「図: 題 {width: 120}」は図の題と幅）、\newpage は改ページ、
+# - と 1. は箇条書き（2 字以上下げると 2 段目）、表の直前の「表: 題 {widths: 30 80 40}」（Table: も）は表の題と列の幅の比、| の表（1 行目が見出しの行）、
+# ![題](画像){width=150} は図（幅は mm）、``` はコード、```mermaid は mermaid の図（直前の「図: 題 {width: 120}」（Figure: も）は図の題と幅）、\newpage は改ページ、
 # <br> は段落・セルの中の改行、<!-- --> は組まない覚え書き
-MD_CAPTION = re.compile(r"表[:：]\s*(.*?)\s*(?:\{widths?[:=]?\s*([\d.,\s]+)\})?")
-MD_FIGURE = re.compile(r"図[:：]\s*(.*?)\s*(?:\{width[:=]?\s*([\d.]+)\})?")
+MD_CAPTION = re.compile(r"(?:表|Table)[:：]\s*(.*?)\s*(?:\{widths?[:=]?\s*([\d.,\s]+)\})?")
+MD_FIGURE = re.compile(r"(?:図|Figure)[:：]\s*(.*?)\s*(?:\{width[:=]?\s*([\d.]+)\})?")
 MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)\s*(?:\{width[:=]?\s*([\d.]+)\})?")
 MD_ITEM = re.compile(r"( *)([-*]|\d+\.) +(.*)")
 MD_SEP = re.compile(r"\|?(\s*:?-+:?\s*\|)*\s*:?-+:?\s*\|?")
@@ -745,7 +745,7 @@ def from_md(path, apply_theme=True):
                 q.append(L[i].strip()[1:])
                 i += 1
             d.quote(join(q))
-        elif c := MD_CAPTION.fullmatch(s):
+        elif (c := MD_CAPTION.fullmatch(s)) and (s.startswith("表") or next((x.strip() for x in L[i + 1:] if x.strip()), "").startswith("|")):  # 次が表でない「Table: …」は本文の行（英語の文の頭にもなる）
             flush()
             cap = (c[1] or None, [float(x) for x in re.split(r"[,\s]+", c[2].strip())] if c[2] else None)
             i += 1
@@ -1358,6 +1358,9 @@ def mermaid_selftest():
         d = from_md(md)
         assert [b[0] for b in d.blocks] == ["image", "image", "p", "p"] and d.blocks[0][2:] == ("図 1　流れ", 100) and d.blocks[1][2:] == (None, 80), d.blocks
         assert render(d.blocks[2][2]) == "図: 浮いた題" and not d.warnings  # 次が ```mermaid でない「図: 」は本文の行のまま（落とさない）
+        assert MD_CAPTION.fullmatch("Table: a {widths: 1 2}").groups() == ("a", "1 2") and MD_FIGURE.fullmatch("Figure: b").group(1) == "b"  # 英語の題の書き方
+        open(md2 := os.path.join(tmp, "en.md"), "w", encoding="utf-8").write("---\nname: e\n---\nTable: x\n\n| a |\n|---|\n| b |\n\nTable: not a caption\n")
+        assert [b[0] for b in from_md(md2).blocks] == ["table", "p"]  # 次が表でない「Table: 」は本文の行のまま
         assert [b[0] for b in from_md(md, apply_theme=False).blocks] == ["p", "p"]  # テンプレートとして照合に読むときは描かない
         mermaid_png = fake(200)  # 本文の幅より広い図は本文の幅に縮め、文字が 9pt 未満になるなら警告する
         d = Doc("w")

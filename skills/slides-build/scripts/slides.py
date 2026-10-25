@@ -903,12 +903,13 @@ class Deck:
         return BAND_BOTTOM - h
 
     def source(self, sid, parts):
-        """出典の行。頭に「出典: 」がなければ足す（lint は「出典:」の文字で出典の行を見分ける）。名前には元のページへのリンクを付ける。"""
+        """出典の行。頭に「出典:」「Source:」がなければ、資料の言語のもの（gapi.source_head）を足す（lint はこの文字で出典の行を見分ける）。名前には元のページへのリンクを付ける。"""
         parts = [parts] if isinstance(parts, str) else list(parts)
         first = parts[0] if isinstance(parts[0], str) else parts[0][0]
         if not re.match(r"(出典|Sources?)[：:]", first):
-            parts.insert(0, "出典: ")
+            parts.insert(0, gapi.source_head())
         self.text(sid, X - INSET, Y_SRC, W + 2 * INSET, 0.3, parts, size=11, color=SUB, fit=False)
+        return parts
 
     def finish(self):
         """表紙・扉を含む全ページの左下に著作権表示。資料名は出さず、NAME の秘密区分だけを残す。表紙のページ番号の枠は消す。
@@ -2282,8 +2283,8 @@ def spec_page(d, p, base, loc, name=None):
     if p.get("body") and bottom > limit + 0.01:
         d.warn(f"本文が{'結論バンド' if band else '出典の行'}に重なる見込み（{loc}.body の下端 {bottom:.2f} in > {limit:.2f} in）。中身を減らすか、ページを分ける")
     if src := p.get("source"):
-        d.source(sid, parts := spec_md(src, SUB, f"{loc}.source"))
-        sp.index.append((f"{loc}.source", "出典: " + spec_plain(parts)))
+        parts = d.source(sid, spec_md(src, SUB, f"{loc}.source"))  # 足した頭も含める（lint の指摘の文字と突き合わせる）
+        sp.index.append((f"{loc}.source", spec_plain(parts)))
     if p.get("speakerNotes"):
         d.note(sid, p["speakerNotes"])
     d.spec_index[sid] = sp.index
