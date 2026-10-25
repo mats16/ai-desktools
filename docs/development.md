@@ -9,16 +9,19 @@ Keep the original checkout (the first line of `git worktree list`) on `main`. Pl
 ```sh
 cd <worktree>
 python3 skills/desk-init/scripts/init.py sandbox && cd sandbox   # templates; keeps files that already exist
-cp ~/Documents/desk.toml .         # from the production workspace; only to build on Google
+cp ~/Documents/desk.toml .         # the production settings; only to build on Google (if they are in ~/.desk.toml: cp ~/.desk.toml desk.toml)
 cp -R ~/Documents/rules ~/Documents/AGENTS.md ~/Documents/CLAUDE.md .   # only to test with the production rules
 ```
 
 Change the copied `desk.toml` so that nothing on the Google side of production gets overwritten:
 
+- If you copied `~/.desk.toml`, delete its `workspace` line. The sandbox's own `desk.toml` makes `sandbox/` the workspace and `workspace` there is not read, but the line misleads whoever reads the file.
 - Point `[drive]` at a test Drive folder ("Clean up" below).
 - To try templates, empty `[slides.templates]` and create them under the test `[drive] desk` with `template.py <theme> --from-base [<source URL>]` (this writes the URL in). `template.py <theme>` rewrites the templates in `[slides.templates]` in place, so leave no production URLs there. To try a production theme, also copy the production `themes/slides/` (`template.py` writes the cover and section divider widths and the background brightness into it).
 - Don't run `git init` in `sandbox/` (desk-init asks about it). It would become a nested repository that `git clean` in the worktree doesn't remove.
 - `desk-kaizen` is the one skill that doesn't test this worktree: `kaizen.py start` clones GitHub's `main` into `sandbox/.desk/kaizen/<name>/repo`.
+
+With `~/.desk.toml` in place, scripts and hooks run outside `sandbox/` (such as at the worktree root) use the production workspace: its settings, `rules/`, and `.desk/`. Run them in `sandbox/`, or start them with `DESK_CONFIG=` (an empty value skips `~/.desk.toml`; `deck-practices/scripts/desk.py`). Inside `sandbox/`, its own `desk.toml` is found first, so nothing from `~/.desk.toml` mixes in.
 
 ## Claude Code
 

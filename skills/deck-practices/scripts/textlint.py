@@ -129,8 +129,8 @@ def workspace_checks(kind, data, r):
     （修正の指示から育てる、そのワークスペースだけの点検。deck-practices/rules.md の「Rule layers」）。足された指摘のうち、checks.py の HARD にある名前は要修正、ほかは要確認。"""
     import importlib.util
     try:
-        path = gapi.config_path().parent / "rules" / CHECKS[kind] / "checks.py"
-    except SystemExit:  # desk.toml がない
+        path = gapi.workspace() / "rules" / CHECKS[kind] / "checks.py"
+    except SystemExit:  # ワークスペースがない
         return 0
     if not path.is_file():
         return 0
@@ -150,9 +150,9 @@ def workspace_checks(kind, data, r):
 
 
 def log_path():
-    """要確認の記録。ワークスペース（desk.toml のあるフォルダ）の .desk/ に置く（プラグインのフォルダは入れ直すと消える）。
+    """要確認の記録。ワークスペースの .desk/ に置く（プラグインのフォルダは入れ直すと消える）。
     ponytail: 足すだけで消さない（1 回 1 行）。重くなったら古い行を落とす"""
-    return str(gapi.config_path().parent / ".desk" / "lint_runs.jsonl")
+    return str(gapi.workspace() / ".desk" / "lint_runs.jsonl")
 
 
 def log_run(r, deck, path=None):

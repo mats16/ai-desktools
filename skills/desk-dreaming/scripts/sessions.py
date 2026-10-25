@@ -8,7 +8,10 @@ import glob, json, os, re, shlex, sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = next((str(d) for d in (Path.cwd(), *Path.cwd().parents) if (d / "desk.toml").is_file()), os.getcwd())  # ワークスペース（今いるフォルダから上へ、最初の desk.toml のフォルダ）
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "deck-practices" / "scripts"))
+import desk  # noqa: E402  ワークスペースの探し方
+
+ROOT = str(f[1]) if (f := desk.locate()) else os.getcwd()  # ワークスペース（今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace）
 AREAS = ("customers", "internal", "research", ".agents")
 RULE = re.compile(r"skills/([\w-]+/[\w./-]+\.(?:md|py|sh))|(AGENTS\.md|references_index\.md)|(?<![\w-])(rules/[\w-]+/[\w./-]+\.md)")  # 最後はワークスペースの rules/（rules/ を付けたまま数え、プラグインのファイルと分ける）
 TABLE = ("deck-practices/SKILL.md", "deck-practices/start.md", "slides-build/SKILL.md", "slides-build/pages.md", "slides-build/workflow.md", "slides-build/visual.md",

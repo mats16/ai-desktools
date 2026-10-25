@@ -40,7 +40,7 @@ from gapi import (DRIVE, GSLIDES, PPTX, SLIDES, batch, carry, delete, config, co
 from brand import (ASCII_BOLD_EM, ASCII_EM, BRAND_COPYRIGHT, COMPANY, COPYRIGHT_PT, DM_SANS_BOLD_EM, DM_SANS_EM, FONT, FONT_EM, JP_FONTS, LIGATURE_MONO, LOGO,
                    MONO_DEFAULT, PLACEHOLDER_COPYRIGHT, RULE, TEXT, WHITE, asset, theme_font, theme_mono)  # 書体・字幅・色の既定・著作権表示はドキュメントと同じ
 
-# ---- テンプレート。ID・置き場所・既定のテーマは人ごとに違うので、Documents の直下の desk.toml の [slides] に置く（作り方は template.py） ----
+# ---- テンプレート。ID・置き場所・既定のテーマは人ごとに違うので、設定（ワークスペースの desk.toml か ~/.desk.toml）の [slides] に置く（作り方は template.py） ----
 BLANK = "Content E - Blank"  # テンプレートに残した、置き物のないレイアウト。ページ番号の枠だけを持つ
 
 # ---- 版面（visual.md の 1。上端は in） ----
@@ -2471,7 +2471,7 @@ def spec_out_hits(deck):
 
 
 def spec_log_path():
-    return gapi.config_path().parent / ".desk" / "spec_raw.jsonl"
+    return gapi.workspace() / ".desk" / "spec_raw.jsonl"
 
 
 def spec_record(deck, pid):
@@ -2615,7 +2615,7 @@ def use_layouts(p):
 
 def ws_themes():
     """ワークスペースのテーマのフォルダ（themes/slides）。ワークスペースの外なら None。"""
-    return ws.parent.joinpath(*WS_THEMES) if (ws := gapi.find_config()) else None
+    return f[1].joinpath(*WS_THEMES) if (f := gapi.find_config()) else None
 
 
 def theme_path(name):
@@ -3365,7 +3365,7 @@ def cmd_theme(url, name=None, force=False):
     共有テーマを使い始めるときと、画面のテーマビルダーで直した色・書体をファイルに戻すときに使う。テンプレート（Drive のプロパティにテーマの名前があるもの）なら、
     [slides.templates] にも URL を書く。中身の違う同じ名前のファイルがあれば、force がなければ止める（手で直した値を黙って消さない）。"""
     if not (d := ws_themes()):
-        sys.exit("slides.py theme はワークスペース（desk.toml のあるフォルダ）の中で回す")
+        sys.exit("slides.py theme はワークスペースで回す（desk.toml が見つからない。~/.desk.toml もない）")
     pid = file_id(url)
     p = request("GET", f"{SLIDES}/{pid}?fields={DECK_FIELDS}")
     mark = deck_theme(p)
@@ -3520,7 +3520,7 @@ def lint_local(path="pages.py", url=None, talk=False, pages=None):
     reqs = json.loads(resolved(deck, p))
     *_, digest = pages_of(deck, reqs)  # ノートだけ変えたページも見る
     ws = gapi.find_config()
-    rules = [Path(__file__).with_name("lint.py"), Path(__file__), Path(brand.__file__).with_name("textlint.py"), Path(brand.__file__)] + ([ws.parent / "rules" / "slides-build" / "checks.py"] if ws else [])
+    rules = [Path(__file__).with_name("lint.py"), Path(__file__), Path(brand.__file__).with_name("textlint.py"), Path(brand.__file__)] + ([ws[1] / "rules" / "slides-build" / "checks.py"] if ws else [])
     import lint
     facts = lint.load_facts()  # 資料のフォルダ（build/ の親）の出典の表。変われば、前に通ったページも見直す（deck-lint-026）
     key = "\0".join([str(Path(path).resolve()), str(talk), json.dumps(p, sort_keys=True), str(facts)] + [f.read_text() if f.is_file() else "" for f in rules])  # lint の結果を変えるもの（見るテーマのマスター・レイアウト、--talk、規則の lint.py・slides.py・ワークスペースの checks.py）が変われば、前の記録を使わない
@@ -4152,7 +4152,7 @@ def selftest_sample():
     assert not miss and geo == set(_GEO) and kinds == set(KINDS), ("見本に足りない型とキー", miss, set(_GEO) - geo, set(KINDS) - kinds)
     real = {k: globals()[k] for k in ("iconify", "asset")}
     globals()["iconify"] = lambda name, color=TEXT, w=512: f"https://x/{name}.png"  # アイコンの名前を問い合わせない
-    globals()["asset"] = lambda path: str(Path(__file__).resolve().parent.parent / "assets" / path)  # desk.toml のないところでも回す
+    globals()["asset"] = lambda path: str(Path(__file__).resolve().parent.parent / "assets" / path)  # ワークスペースのないところでも回す
     try:
         with contextlib.redirect_stderr(io.StringIO()):
             d = make_deck(lambda x: x.spec(root / "deck.json"), "見本")

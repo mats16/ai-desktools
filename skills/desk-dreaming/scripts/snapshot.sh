@@ -4,8 +4,8 @@
 # diff はその写しから後の変更を出し、restore はその写しに戻す（写しのあとに足したファイルは消さない）。
 # 写しはワークスペースの .desk/dreaming/backup/。lint の記録（.desk/lint_runs.jsonl）は、戻すと消えるので入れない。
 set -eu
-ROOT=$(pwd -P)  # /tmp のようなリンクでも、Claude Code がメモリに使う実際のパスにする
-[ -f "$ROOT/desk.toml" ] || { echo "desk.toml のあるフォルダ（ワークスペース）で回す: $ROOT" >&2; exit 2; }
+# ワークスペース: 今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace（desk.py）。リンクをたどった実際のパスで、Claude Code がメモリに使うものと同じ
+ROOT=$(python3 "$(dirname "$0")/../../deck-practices/scripts/desk.py") || exit 2
 MEM=$HOME/.claude/projects/$(printf %s "$ROOT" | tr '/._' '---')/memory
 DIR=$ROOT/.desk/dreaming/backup
 CMD=${1:-} ARG=${2:-}

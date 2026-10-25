@@ -15,7 +15,7 @@ Open from `SKILL.md` for a scheduled run. `SKILL.md` has why this cleanup propos
 
 ## Steps
 
-`R` is the workspace (the folder with `desk.toml`, e.g. `~/Documents`), `D` is this skill's folder (where the plugin is installed), `S` is the record folder `$R/.desk/dreaming`, and `K` is `$D/../slides-build/scripts`. Run `cd $R` first (every script in `scripts/` reads the current folder as the workspace). Relative paths written in AGENTS.md and skills (`Customers/…`, `Internal/…`) are relative to `$R`.
+`R` is the workspace (the folder with `desk.toml`, or the `workspace` in `~/.desk.toml`; e.g. `~/Documents`), `D` is this skill's folder (where the plugin is installed), `S` is the record folder `$R/.desk/dreaming`, and `K` is `$D/../slides-build/scripts`. Run `cd $R` first (every script in `scripts/` reads the current folder as the workspace). Relative paths written in AGENTS.md and skills (`Customers/…`, `Internal/…`) are relative to `$R`.
 
 **Respect the rule layers.** The target of a proposal is first the workspace's `AGENTS.md`, `rules/<skill>/<file>`, or `rules/slides-build/checks.py`・`rules/docs-build/checks.py` (workspace rules take precedence over the plugin; `deck-practices/rules.md` "Rule layers"). Do not edit anything inside `$D` (where the plugin is installed), because it is lost on reinstall. Something that would help other people too becomes a proposal of kind 「プラグインに上げる」, and applying it means filing an Issue with the `desk-kaizen` skill (compare before and after on past materials, and include the reason, background, check results, and the diff of the proposed change. Show the user the body and images before filing).
 

@@ -6,6 +6,8 @@ usage: python3 gapi.py --selftest"""
 import datetime, functools, getpass, json, os, re, socket, subprocess, sys, tempfile, threading, time, tomllib, urllib.error, urllib.parse, urllib.request, uuid
 from pathlib import Path
 
+import desk  # ワークスペースと設定のファイルの探し方
+
 SLIDES = "https://slides.googleapis.com/v1/presentations"
 DOCS = "https://docs.googleapis.com/v1/documents"
 DRIVE = "https://www.googleapis.com/drive/v3"
@@ -69,13 +71,9 @@ CLOCK = Clock()  # 読み込んだときから数える
 
 
 def locate():
-    """desk.toml（人ごとに変わる設定値。ワークスペースの直下）を、今いるフォルダから上へ、次にこのスクリプトのフォルダから上へたどって探す。なければ None。
+    """(設定のファイル, ワークスペース)。探し方は desk.py（今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace）。なければ None。
     結果を覚えない。import のときに読むもの（slides.py の [brand]）はこちらを使う（覚えると、あとで今いるフォルダを変える desk-doctor が古い結果を使う）。"""
-    for base in (Path.cwd(), Path(__file__).resolve().parent):
-        for d in (base, *base.parents):
-            if (d / "desk.toml").is_file():
-                return d / "desk.toml"
-    return None
+    return desk.locate()
 
 
 @functools.cache
@@ -84,14 +82,19 @@ def find_config():
     return locate()
 
 
+def _found():
+    """find_config の結果。なければ止まる（前の版の factory.toml があれば desk-migrate、なければ desk-init を案内する）。"""
+    return find_config() or sys.exit(desk.missing())
+
+
 def config_path():
-    """find_config の結果。なければ止まる（前の版の factory.toml があれば、desk-migrate を案内する）。"""
-    if p := find_config():
-        return p
-    if old := next((d for b in (Path.cwd(), Path(__file__).resolve().parent) for d in (b, *b.parents) if (d / "factory.toml").is_file()), None):
-        sys.exit(f"{old} は前の版のワークスペース（factory.toml）。desk-migrate で desk.toml に移す")
-    sys.exit("desk.toml が見つからない（今いるフォルダとスクリプトのフォルダから上へ探した）。ワークスペース（資料のフォルダの上。例: ~/Documents/desk.toml）に置く。"
-             "書き方は ../../slides-build/themes.md")
+    """設定のファイル（ワークスペースの desk.toml か ~/.desk.toml）。"""
+    return _found()[0]
+
+
+def workspace():
+    """ワークスペース（資料・rules/・.desk/ を置くフォルダ）。"""
+    return _found()[1]
 
 
 @functools.cache
@@ -240,7 +243,7 @@ def guard(fid, rev, key, src, stop=True):
     """前に組んだあとに画面で直されていたら（rev が key に残した版か指紋と違う）、または未解決のコメントがあれば、止める。
     組み直すと画面での直しは消え、コメントは付け先を失う。src は直しを入れる先（pages.py・doc.md）。stop=False なら止めずに理由の並びを返す（slides.py plan）。"""
     last = request("GET", f"{DRIVE}/files/{fid}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(key)
-    st = config_path().parent / ".desk" / "comments.json"  # 見張りの知らせ（deck-comments の comments.py watch）は、直すコメントでないので数えない
+    st = workspace() / ".desk" / "comments.json"  # 見張りの知らせ（deck-comments の comments.py watch）は、直すコメントでないので数えない
     notice = {n["id"] for n in json.loads(st.read_text()).get("notice", {}).values()} if st.is_file() else set()
     comments = [c for c in request("GET", f"{DRIVE}/files/{fid}/comments?pageSize=100&fields=comments(id,resolved,deleted,content,quotedFileContent(value))")
                 .get("comments", []) if not c.get("resolved") and not c.get("deleted") and c.get("id") not in notice]

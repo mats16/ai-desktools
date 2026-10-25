@@ -3,11 +3,12 @@
 # launchd や cron から、定期の整理を CLI で回す（launchd は WorkingDirectory にワークスペースを書く）。スケジューラーのあるアプリでは、アプリに登録する（../schedule.md）。
 set -eu
 case ${1:-} in claude|codex|pi) ;; *) sed -n '2,3p' "$0" >&2; exit 2 ;; esac
-ROOT=$(pwd -P)  # /tmp のようなリンクでも、Claude Code がメモリに使う実際のパスにする
-[ -f "$ROOT/desk.toml" ] || { echo "desk.toml のあるフォルダ（ワークスペース）で回す: $ROOT" >&2; exit 2; }
-MEM=$HOME/.claude/projects/$(printf %s "$ROOT" | tr '/._' '---')/memory
+PATH=$HOME/.local/bin:$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH  # launchd の PATH は短い（python3 も 3.11 以上のものを先に見つける）
 PROMPT=$(cat "$(dirname "$0")/../prompt.txt")
-PATH=$HOME/.local/bin:$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH  # launchd の PATH は短い
+# ワークスペース: 今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace（desk.py）。リンクをたどった実際のパスで、Claude Code がメモリに使うものと同じ
+ROOT=$(python3 "$(dirname "$0")/../../deck-practices/scripts/desk.py") || exit 2
+cd "$ROOT"
+MEM=$HOME/.claude/projects/$(printf %s "$ROOT" | tr '/._' '---')/memory
 echo "== $(date '+%F %T') desk-dreaming $1"
 case $1 in
 claude) claude -p "$PROMPT" --permission-mode auto --add-dir "$MEM" ;;

@@ -1,6 +1,6 @@
 # このワークスペースの運用ルール
 
-AI Desk Tools（プラグイン）で、スライドとドキュメントを作るワークスペース。使う人の名前・役割・担当の顧客は、`desk.toml` の `user.profile` が指すファイルにある。要るときに読み、このフォルダの文書には写さない。顧客向けの資料（`Customers/`）、社内向けの資料（`Internal/`）、調べものの結果（`Research/`）を作り、置いておく。
+AI Desk Tools（プラグイン）で、スライドとドキュメントを作るワークスペース。使う人の名前・役割・担当の顧客は、設定（`desk.toml`）の `user.profile` が指すファイルにある。要るときに読み、このフォルダの文書には写さない。顧客向けの資料（`Customers/`）、社内向けの資料（`Internal/`）、調べものの結果（`Research/`）を作り、置いておく。
 
 このファイルには、どの会話でも要ることだけを書く。資料を作る・直すときにだけ要ることは、プラグインのスキルと、ここから指す `rules/` にある（下の「資料を作る・直すとき」）。
 
@@ -84,7 +84,7 @@ rules/slides-build/checks.py・rules/docs-build/checks.py … このワークス
 themes/slides/<名前>.json                         … スライドのテーマ（色・書体・表紙と扉のレイアウト。テンプレートの URL は desk.toml の [slides.templates]）
 assets/                                           … 自分だけの画像（ページの JSON の "src": "asset:<名前>" が先に探す）
 .desk/                                            … スクリプトが書く記録（lint・desk-dreaming・コメントの見張り）と、顧客の profile の前の版。手で直さない
-desk.toml                                         … 人ごとに変わる設定値（スクリプトが読む）
+desk.toml                                         … 人ごとに変わる設定値（スクリプトが読む。~/.desk.toml に置いたときは、ここに置かない）
 references_index.md                               … 過去に使った資料の索引
 ```
 
@@ -93,7 +93,7 @@ references_index.md                               … 過去に使った資料�
 - **過去に使った資料は、直下の `references_index.md` にまとめる。** 探すときは、検索より先に `grep -n <語> references_index.md`。
 - **エージェントが読み書きするファイルの名前は、英数字とハイフン・アンダーバーだけにする。** 納品物と、ユーザーが読む `構成案*.md`・`社内メモ_*.md` は日本語の名前のまま。
 - ワークスペースの直下に、上に書いたもののほかのファイルを作らない。
-- git で管理するのは、決まりと設定（`AGENTS.md`・`CLAUDE.md`・`desk.toml`・`rules/`・`themes/`・`assets/`）と、調べ直しの記録（`Research/deck_research/`）だけ（`.gitignore`）。資料と台帳は入れない。
+- git で管理するのは、決まり（`AGENTS.md`・`CLAUDE.md`・`rules/`・`themes/`・`assets/`）と、調べ直しの記録（`Research/deck_research/`）だけ（`.gitignore`）。資料と台帳、設定（`desk.toml`。人ごとの値）は入れない。
 
 ### 顧客とフォルダ
 
