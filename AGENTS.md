@@ -7,7 +7,7 @@ If the conversation was opened under `sandbox/`, ignore this file. That folder i
 ## Names
 
 - The repository is `mats16/ai-desktools`. The plugin, the marketplace, and the pi package are all named `desk-tools`: skills are called like `desk-tools:slides-build` and installed as `desk-tools@desk-tools`. In prose, the product is "AI Desk Tools".
-- Keep the former names (`ai-deck-factory`, "AI Deck Factory") where they refer to the past: past entries in 「決めたこと」 in README, moving installs made under the former name (「残っている課題」 in README), and things from earlier versions (such as the original pptx's corner radius, `slides-visual-018`). Don't update them to the new name.
+- Keep the former names (`ai-deck-factory`, "AI Deck Factory") where they refer to the past: past entries in 「決めたこと」 in README, moving installs made under the former name (「前の名前から移る」 and 「残っている課題」 in README), and things from earlier versions (such as the original pptx's corner radius, `slides-visual-018`). Don't update them to the new name.
 - Don't rename the markers written into Google Slides templates and decks (`ai-deck-factory theme=`, `ai-deck-factory layout=`, `ai-deck-factory bar`), because existing templates and decks are read by these strings.
 
 ## Layout
