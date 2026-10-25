@@ -1,23 +1,25 @@
 ---
 name: desk-init
-description: Create an AI Desk Tools workspace (the folder that holds materials and rules). Places templates of AGENTS.md, CLAUDE.md, desk.toml, references_index.md, rules/, and .gitignore, plus Customers/, Internal/, and Research/ (never overwrites existing files), fills in desk.toml with the user, and checks with desk-doctor. Use when asked 「ワークスペースを作って」, 「setup して」, or 「AI Desk Tools を使い始めたい」.
+description: Create an AI Desk Tools workspace (the folder that holds materials and rules). Places templates of AGENTS.md, CLAUDE.md, references_index.md, rules/, and .gitignore, plus Customers/, Internal/, and Research/, and the settings desk.toml in the workspace or in ~/.desk.toml (never overwrites existing files), fills in the settings with the user, and checks with desk-doctor. Use when asked 「ワークスペースを作って」, 「setup して」, or 「AI Desk Tools を使い始めたい」.
 ---
 
 # Create a workspace
 
-A workspace is the folder that holds the material folders and `desk.toml` (for example `~/Documents`). Scripts walk up from the current folder and treat the folder of the first `desk.toml` they find as the workspace. What goes in it, and the rule priority (the workspace AGENTS.md and `rules/` take priority over the plugin), are written in the placed `AGENTS.md`.
+A workspace is the folder that holds the material folders, the rules, and the records `.desk/` (for example `~/Documents`). Its settings `desk.toml` go in one of two places. Scripts and hooks walk up from the current folder and use the first `desk.toml` they find, and its folder is the workspace. If there is none, they read `~/.desk.toml` (or the path in the environment variable `DESK_CONFIG`) and use its `workspace`. They read only the one they find and never merge the two (`deck-practices/scripts/desk.py`). What goes in the workspace, and the rule priority (the workspace AGENTS.md and `rules/` take priority over the plugin), are written in the placed `AGENTS.md`.
 
 ## Steps
 
 When installing through a conversation (the repository's `INSTALL.md`), step 1 is already done. A conversation that just installed the plugin has not loaded this skill or any other skill, so for other skills (slides-build, slides-template, desk-doctor), open `skills/<skill>/SKILL.md` in the install location and follow it.
 
-1. **Decide the location.** If not told, ask whether the current folder is fine. If the folder already has `desk.toml` or `AGENTS.md`, tell the user (do not overwrite; place only what is missing).
+1. **Decide the location.** If not told, ask whether the current folder is fine. Always ask for the workspace folder, because materials must stay in a folder the user sees; never put them in a hidden folder under the home folder. If the folder already has `desk.toml` or `AGENTS.md`, tell the user (do not overwrite; place only what is missing).
+   - **Where the settings go.** Match how the plugin is installed. Installed only in the workspace (the repository's `INSTALL.md`, `--scope project`, `pi install -l`): in the workspace (`<workspace>/desk.toml`), because only conversations opened there load the plugin. Installed for the whole user: in `~/.desk.toml`, so that a conversation opened in any folder uses this workspace. A second workspace or a test one (`sandbox/`) always gets its own `desk.toml`. If `~/.desk.toml` already exists and points to another workspace, tell the user; there is only one.
 2. **Place the files.**
    ```sh
-   python3 <this skill's folder>/scripts/init.py <workspace>
+   python3 <this skill's folder>/scripts/init.py <workspace>          # settings in <workspace>/desk.toml
+   python3 <this skill's folder>/scripts/init.py <workspace> --user   # settings in ~/.desk.toml, with workspace = "<workspace>"; none in the workspace
    ```
-   Relay the 「置いた」 and 「残した」 lines of the output as they are.
-3. **Fill in `desk.toml`.** Ask one item at a time and write it. Leave unknown items empty; they stay as `要確認` in doctor.
+   Relay the 「置いた」 and 「残した」 lines of the output as they are. With `--user`, `init.py` stops if the workspace already has `desk.toml`; to move it, use desk-migrate's `to-user`.
+3. **Fill in the settings (`desk.toml`, or `~/.desk.toml`).** Ask one item at a time and write it. Leave unknown items empty; they stay as `要確認` in doctor.
    - `[user] profile`: a file with the user's name, role, and customers in charge.
    - `[google]`: how to get a token. If gcloud is available, have the user run the `gcloud auth application-default login --scopes=…` that doctor prints, once (the user runs it themselves; a browser opens). If another mechanism gets the token, pass it in the environment variable `GOOGLE_OAUTH_ACCESS_TOKEN`. With gcloud's default OAuth client, `quota_project` is also required.
    - `[brand]`: `copyright` (the copyright notice at the bottom left of every page, in the form 「© <年> <社名> All rights reserved.」) is required. Without it, slides, documents, and templates cannot be built. `company` (the company name at the bottom left of the cover) and `logo` (the logo on the document cover; a path inside `assets/` or a URL) are optional.
@@ -29,7 +31,7 @@ When installing through a conversation (the repository's `INSTALL.md`), step 1 i
    - `[feedback.google_comments] watch_hours`: how long to watch comments after delivering a material. When installing through a conversation, write the value asked in step 1 of `INSTALL.md`. Otherwise do not ask; keep the template's 0 (no watching), and change only when the user says so.
    - `[sources]`: tools for gathering material (internal search, chat, meeting records, wiki, customer ledger, spend). Offer candidates from the MCP servers and skills in your own tool list and ask. To make per-tool usage a rule, write it in `rules/deck-practices/materials.md`.
 4. **Adjust `AGENTS.md`.** Add the user's customers to the 「顧客とフォルダ」 table. Ask whether to create a profile for each added customer now; if yes, create it with the skill `customer-profile` (after filling `[sources]`). For template rules that do not fit, ask the user before changing them (workspace rules take priority, so changes here take effect).
-5. **Ask whether to use git.** To keep a history of growing rules and checks, run `git init` in the workspace and make the first commit (the placed `.gitignore` includes only rules and settings). The user decides whether to push to a remote.
+5. **Ask whether to use git.** To keep a history of growing rules and checks, run `git init` in the workspace and make the first commit (the placed `.gitignore` includes only the rules, themes, assets, and the research log; the settings hold per-person values and stay out). The user decides whether to push to a remote.
 6. **Check.** Run the skill `desk-doctor` and fix until there are 0 `要修正`.
 
 ## Notes

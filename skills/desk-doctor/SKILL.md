@@ -1,6 +1,6 @@
 ---
 name: desk-doctor
-description: Check the prerequisites for running AI Desk Tools. Looks at Python and uv, the workspace (desk.toml, AGENTS.md), overlapping skills, Google authentication (a token in an environment variable or a credentials JSON), whether templates and Drive folders are reachable, and the MCP servers for gathering material, and prints how to fix each problem. Use after desk-init, in a new environment, on 401 or 403, when 「desk.toml が見つからない」 appears, or when asked 「環境を確かめて」 or 「doctor して」.
+description: Check the prerequisites for running AI Desk Tools. Looks at Python and uv, which settings file and workspace are used (desk.toml in the workspace, or ~/.desk.toml), AGENTS.md, overlapping skills, Google authentication (a token in an environment variable or a credentials JSON), whether templates and Drive folders are reachable, and the MCP servers for gathering material, and prints how to fix each problem. Use after desk-init, in a new environment, on 401 or 403, when 「desk.toml が見つからない」 appears, or when asked 「環境を確かめて」 or 「doctor して」.
 ---
 
 # Check the prerequisites
@@ -19,6 +19,9 @@ Prints one item per line as 「OK」, 「要修正」, or 「要確認」. Exits
 |---|---|
 | Python 3.11 or later, uv | Install them. Without uv, the image measurements (`box_pad.py`, `doc_layout.py`, `sheet.py`) and lint's phrase-break check (BudouX) do not run |
 | `desk.toml`, `AGENTS.md` (`CLAUDE.md`, `references_index.md`) | Place them with desk-init |
+| 「設定」, 「ワークスペース」 | Always `OK`: the settings file and the workspace in use. The first `desk.toml` found walking up from the current folder, else `~/.desk.toml` (the path in `DESK_CONFIG` if set) and its `workspace` |
+| 「個人の設定」 | `~/.desk.toml` cannot be read, has no `workspace`, or its folder does not exist. Fix the file. `要修正` when this workspace uses it; `要確認` when this workspace has its own `desk.toml` (conversations opened in other folders stop) |
+| 「設定が 2 つ」 | The workspace in `~/.desk.toml` also has `desk.toml`, so conversations read different settings inside and outside it. Ask the user which to keep: move it with desk-migrate's `to-user` (after merging the values), or delete `~/.desk.toml` |
 | 「前の版のワークスペース」 | The workspace is still in the form of an earlier version: `factory.toml` or `.factory/` (names before 2026-10-25), or skill names, file paths, or rule IDs in `rules/` or the ledger from before 2026-10-24. Run desk-migrate (`../desk-migrate/SKILL.md`) |
 | `desk.source` | No longer used (desk-kaizen clones by itself). Tell the user and remove it |
 | Overlapping skills | The workspace's `.agents/skills/` or `.claude/skills/` has a skill with the same name. It is loaded twice along with the plugin's, so ask the user which one to use (the user decides whether to remove the workspace's copy) |

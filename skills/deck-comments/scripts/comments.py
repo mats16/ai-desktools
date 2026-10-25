@@ -40,7 +40,7 @@ def fetch(fid, since=None):
 
 
 def state_path():
-    return gapi.config_path().parent / ".desk" / "comments.json"
+    return gapi.workspace() / ".desk" / "comments.json"
 
 
 @contextlib.contextmanager
@@ -294,7 +294,7 @@ def watch_prompt(urls, hours, folder):
     folder = Path(folder or ".").resolve()
     if not folder.is_dir():
         sys.exit(f"資料のフォルダがない: {folder}")
-    os.chdir(folder)  # desk.toml は、子が watch を回す資料のフォルダから上へたどる
+    os.chdir(folder)  # 設定は、子が watch を回す資料のフォルダから探す（../../deck-practices/scripts/desk.py）
     gapi.config_path()
     watch_hours(hours)  # 見張る時間が決まらなければ、子を起こす前に止める
     head, _, body = PROMPT.read_text().partition("\n")
@@ -379,9 +379,9 @@ def selftest():
                 main()
             return out.getvalue(), err.getvalue()
 
-        real = gapi.request, gapi.config_path, sys.argv, gapi.config, time.sleep, time.time
+        real = gapi.request, gapi.workspace, sys.argv, gapi.config, time.sleep, time.time
         conf, clock = {"feedback": {"google_comments": {"watch_hours": 48}}}, [time.time()]  # sleep で進む時計
-        gapi.request, gapi.config_path, gapi.config = fake, lambda: root / "desk.toml", lambda: conf
+        gapi.request, gapi.workspace, gapi.config = fake, lambda: root, lambda: conf
         time.sleep, time.time = lambda s: clock.__setitem__(0, clock[0] + s), lambda: clock[0]
         saved = lambda: json.loads((root / ".desk" / "comments.json").read_text())
         try:
@@ -546,7 +546,7 @@ def selftest():
                 pass
             assert (root / ".desk" / "comments.json").read_text() == before and not (root / ".desk" / "comments.tmp").exists()  # 止まったら書かない
         finally:
-            gapi.request, gapi.config_path, sys.argv, gapi.config, time.sleep, time.time = real
+            gapi.request, gapi.workspace, sys.argv, gapi.config, time.sleep, time.time = real
     print("selftest ok")
 
 if __name__ == "__main__":

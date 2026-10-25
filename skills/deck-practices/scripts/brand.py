@@ -53,10 +53,10 @@ TEXT, RULE = "303F47", "DCE0E2"  # 本文／罫線（スライドでは濃紺の
 # ---- 会社の著作権表示とロゴ ----
 def _brand():
     """desk.toml の [brand]（社名と著作権表示。../../slides-template/create.md）。import のときに読むので gapi.locate で探し、gapi の覚えた結果を作らない。
-    書き方の誤りでは止めない（config() を呼ぶところと desk-doctor が止める）。"""
+    書き方の誤り（読めない ~/.desk.toml も）では止めない（config() を呼ぶところと desk-doctor が止める）。"""
     try:
-        return tomllib.loads(p.read_text()).get("brand", {}) if (p := gapi.locate()) else {}
-    except tomllib.TOMLDecodeError:
+        return tomllib.loads(p[0].read_text()).get("brand", {}) if (p := gapi.locate()) else {}
+    except (tomllib.TOMLDecodeError, SystemExit):
         return {}
 
 
@@ -99,7 +99,7 @@ ASSETS = Path(__file__).resolve().parents[2] / "slides-build" / "assets"  # プ�
 
 def asset(path):
     """使い回す画像のパス。ワークスペースの assets/ にあればそれを、なければプラグインの ASSETS を使う。"""
-    dirs = (gapi.config_path().parent / "assets", ASSETS)
+    dirs = (gapi.workspace() / "assets", ASSETS)
     for d in dirs:
         if (d / path).is_file():
             return str(d / path)

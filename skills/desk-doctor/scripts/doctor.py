@@ -11,11 +11,8 @@ sys.path.insert(0, str(SKILLS / "deck-practices" / "scripts"))
 sys.path.insert(0, str(SKILLS / "slides-build" / "scripts"))
 sys.path.insert(0, str(SKILLS / "docs-build" / "scripts"))
 sys.path.insert(0, str(SKILLS / "desk-migrate" / "scripts"))
+import desk  # noqa: E402  ワークスペースと設定のファイルの探し方
 import migrate  # noqa: E402  前の版のワークスペースか（desk-migrate）
-
-
-def find_ws(start):
-    return next((d for d in (start, *start.parents) if (d / "desk.toml").is_file()), None)
 
 
 def check(ws, local=False):
@@ -29,18 +26,32 @@ def check(ws, local=False):
     (ok if shutil.which("uv") else ng)("uv", shutil.which("uv") or "ない。画像での測り（box_pad.py・doc_layout.py・sheet.py）が動かない。https://docs.astral.sh/uv/ で入れる")
     npx = shutil.which("npx")  # docs.py の mermaid_png が mermaid-cli を取ってくる
     (ok if npx else warn)("mermaid の図", npx or "Node.js（npx）がない。doc.md の ```mermaid を組めない（ほかは組める）。https://nodejs.org/ で入れる")
-    root = find_ws(ws)
-    if not root:
+    try:
+        found = desk.locate(ws)
+    except SystemExit as e:  # 上に desk.toml がなく、~/.desk.toml が読めない・workspace がない
+        ng("個人の設定", str(e))
+        return out
+    if not found:
         if old := migrate.workspace(ws):  # factory.toml だけがある、2026-10-25 より前のワークスペース
             ng("前の版のワークスペース", f"{old} は前の版（factory.toml・.factory/）。desk-migrate で desk.toml・.desk/ に移す")
         else:
-            ng("desk.toml", f"{ws} から上にない。desk-init で作る")
+            ng("desk.toml", f"{ws} から上になく、{desk.user_config() or '個人の設定（DESK_CONFIG が空）'} もない。desk-init で作る")
         return out
+    conf, root = found
+    ok("設定", str(conf))
     ok("ワークスペース", str(root))
     try:
-        cfg = tomllib.loads((root / "desk.toml").read_text())
+        user = desk.user()
+    except SystemExit as e:  # このワークスペースは自分の desk.toml を読むので動く
+        user = None
+        warn("個人の設定", f"{e}。ほかのフォルダで開いた会話とスクリプトが止まる")
+    if user and (user[1] / desk.NAME).is_file():  # 中で開くか外で開くかで、読む設定が変わる
+        warn("設定が 2 つ", f"{user[0]} の workspace（{user[1]}）にも desk.toml がある。中で開くとその desk.toml、外で開くと {user[0]} を読む（混ぜない）。"
+                         f"片方にする（desk-migrate の to-user で {user[0]} に寄せるか、{user[0]} を消す）")
+    try:
+        cfg = tomllib.loads(conf.read_text())
     except tomllib.TOMLDecodeError as e:
-        ng("desk.toml の書き方", str(e))
+        ng(f"{conf.name} の書き方", str(e))
         return out
     for name, need in (("AGENTS.md", ng), ("CLAUDE.md", warn), ("references_index.md", warn)):
         (ok if (root / name).is_file() else need)(name, "" if (root / name).is_file() else "ない。desk-init で置く")
@@ -132,7 +143,7 @@ def check(ws, local=False):
     if local:
         return out
 
-    os.chdir(root)  # gapi は今いるフォルダから desk.toml を探す
+    os.chdir(root)  # gapi は今いるフォルダから設定を探す（desk.py。ここで見つけたものと同じになる）
     import gapi
     try:
         who = gapi.request("GET", f"{gapi.DRIVE}/about?fields=user(emailAddress)")["user"]["emailAddress"]
@@ -182,6 +193,20 @@ def main(args):
 
 
 def selftest():
+    with tempfile.TemporaryDirectory() as tmp:  # ~/.desk.toml の workspace を使う。ワークスペースにも desk.toml があれば要確認
+        ws, conf = Path(tmp, "Documents").resolve(), Path(tmp, "home", ".desk.toml")
+        os.environ["DESK_CONFIG"] = str(conf)
+        rows = lambda at: {n: (k, d) for k, n, d in check(at, local=True)}
+        assert rows(Path(tmp))["desk.toml"][0] == "要修正"  # どちらもない
+        subprocess.run([sys.executable, str(SKILLS / "desk-init" / "scripts" / "init.py"), str(ws), "--user"], check=True, capture_output=True)
+        r = rows(Path(tmp))  # ワークスペースの外で回しても
+        assert r["設定"] == ("OK", str(conf)) and r["ワークスペース"] == ("OK", str(ws)) and "設定が 2 つ" not in r and r["AGENTS.md"][0] == "OK"
+        (ws / "desk.toml").write_text("")
+        r = rows(ws / "Customers")
+        assert r["設定"] == ("OK", str(ws / "desk.toml")) and r["設定が 2 つ"][0] == "要確認" and rows(Path(tmp))["設定が 2 つ"][0] == "要確認"
+        conf.write_text("[drive]\n")
+        assert rows(Path(tmp))["個人の設定"][0] == "要修正" and rows(ws)["個人の設定"][0] == "要確認"  # 読めない ~/.desk.toml。中ではワークスペースの desk.toml で動く
+    os.environ["DESK_CONFIG"] = ""  # 手元の ~/.desk.toml に左右されない
     with tempfile.TemporaryDirectory() as tmp:
         kinds = lambda: {n: k for k, n, _ in check(Path(tmp), local=True)}
         assert kinds()["desk.toml"] == "要修正"

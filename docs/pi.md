@@ -57,4 +57,4 @@ cd <ワークスペース>
 pi remove -l ~/Projects/ai-desktools   # 入れたときと同じ書き方で
 ```
 
-ワークスペースのファイル（`desk.toml`・`AGENTS.md`・`rules/`・`.desk/`）は残る。
+ワークスペースのファイル（`desk.toml`・`AGENTS.md`・`rules/`・`.desk/`）と、個人の設定の `~/.desk.toml` は残る。

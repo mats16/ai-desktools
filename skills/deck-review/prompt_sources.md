@@ -18,7 +18,7 @@ You check the facts of a material against their sources. Open each source yourse
 ## How to open sources
 - Public pages: fetch the page itself (WebFetch, or `curl -sL`). A search result snippet is not the source. Read the tables and footnotes (legends such as ‡ in availability tables).
 - GitHub: `gh api repos/<owner>/<repo>`, `gh api repos/<owner>/<repo>/contents/<path>`, or raw.githubusercontent.com (README, package.json, Cargo.toml, and so on).
-- Google Slides and Docs: the file-storage tool in <workspace>/desk.toml `[sources]`, or `python3 <slides-build folder>/scripts/gslides.py export <URL> /tmp/<name>.pptx` and the slide XML text; for Docs `python3 <docs-build folder>/scripts/docs.py export <URL> /tmp/<name>.pdf` and `pdftotext`. Do not run `gslides.py check` (it takes page images and shares the parent's rate limit).
+- Google Slides and Docs: the file-storage tool in `[sources]` of the settings `desk.toml`, or `python3 <slides-build folder>/scripts/gslides.py export <URL> /tmp/<name>.pptx` and the slide XML text; for Docs `python3 <docs-build folder>/scripts/docs.py export <URL> /tmp/<name>.pdf` and `pdftotext`. Do not run `gslides.py check` (it takes page images and shares the parent's rate limit).
 - Meetings and chat: the `meetings` and `chat` tools in `[sources]`. Read the part the `出典` cell points to (time, message).
 - Local data (kind `データ`): open the file and recompute. For `計算` rows, recompute from the original values of the rows it cites, not from rounded values (deck-content-037).
 

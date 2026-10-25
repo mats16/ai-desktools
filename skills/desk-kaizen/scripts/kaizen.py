@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""プラグインの改善を、過去の資料で確かめてから Issue にする（手順は ../SKILL.md）。ワークスペース（desk.toml のあるフォルダ）で回す。
+"""プラグインの改善を、過去の資料で確かめてから Issue にする（手順は ../SKILL.md）。ワークスペース（探し方は ../../deck-practices/scripts/desk.py）で回す。
 usage:
   kaizen.py start   <名前>                          元のリポジトリ（plugin.json の repository）を clone して kaizen/<名前> のブランチを作る。前の版（main）も写す
   kaizen.py lint    <名前> <資料の URL ...>          いまの資料の JSON に、前の版と変えた版の lint をかけて比べる
@@ -40,7 +40,7 @@ def sh(*cmd, cwd=None, env=None, check=True):
 
 class Work:
     def __init__(self, name):
-        self.ws = gapi.config_path().parent
+        self.ws = gapi.workspace()
         self.name, self.branch = name, f"kaizen/{name}"
         self.dir = self.ws / ".desk" / "kaizen" / name
         self.repo, self.base, self.verify = self.dir / "repo", self.dir / "base", self.dir / "verify"

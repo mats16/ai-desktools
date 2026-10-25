@@ -55,7 +55,7 @@ TIGHT, CODE_LS = 80, 85  # 表の中・図表の題・出典の行間と、コ�
 # と公式に書いてあり、直していないのに止まるので使わない（ワークスペースの Research/deck_research/log/20261009_en_gdocs_generation.md の 1-2。2 回読んで同じ指紋になることを確かめた）
 STAMP = "docs_py_body"
 FONTS = "docs_py_fonts"  # 組んだときの本文と等幅の書体（タブで区切る）。check はこれと比べる（今いるフォルダの doc.md が別の文書のものでも、取り違えない）
-SRC = "docs_py_src"  # 組んだ doc.md のフォルダ（desk.toml のフォルダからの相対パス）。check が build/ の外で動いても、照合の相手を見つける
+SRC = "docs_py_src"  # 組んだ doc.md のフォルダ（ワークスペースからの相対パス）。check が build/ の外で動いても、照合の相手を見つける
 P_FIELDS = ("namedStyleType,alignment,indentStart,indentFirstLine,indentEnd,shading,borderTop,borderBottom,borderLeft,borderRight,"
             "spaceAbove,spaceBelow,lineSpacing,keepWithNext")
 T_FIELDS = "bold,italic,underline,strikethrough,link,weightedFontFamily,fontSize,foregroundColor,backgroundColor"  # 書かない項目は、名前付きスタイルに戻す
@@ -503,7 +503,7 @@ def build(did, doc, force=False):
     footer(did, doc.name)
     gapi.stamp(did, f"{FONT}\t{MONO}", FONTS)  # 版（STAMP）より先に書く。途中で止まっても、版の新しい文書に前の書体が残らない
     gapi.stamp(did, fingerprint(did), STAMP)
-    gapi.stamp(did, os.path.relpath(os.getcwd(), gapi.config_path().parent), SRC)
+    gapi.stamp(did, os.path.relpath(os.getcwd(), gapi.workspace()), SRC)
     used = {os.path.realpath(x) for x in imgs}  # doc.md が ./mermaid/… や絶対パスで指す画像も消さない
     for f in glob.glob(os.path.join(MERMAID_DIR, "*.png")):  # 書き直す前の mermaid の図（doc.md から消えた図）。指紋を残したあとに消す
         if os.path.realpath(f) not in used:
@@ -532,13 +532,13 @@ STYLE_PROPS = ("size", "color", "above", "below", "spacing")  # 大きさ（pt�
 
 
 def docs_cfg():
-    """desk.toml の [docs]（なければ空。selftest は desk.toml なしで回る）。"""
+    """設定の [docs]（なければ空。selftest は設定なしで回る）。"""
     return gapi.config().get("docs", {}) if gapi.find_config() else {}
 
 
 def ws_themes():
-    """ワークスペースのテーマのフォルダ（themes/docs）。desk.toml がなければ None。"""
-    return ws.parent.joinpath(*WS_THEMES) if (ws := gapi.find_config()) else None
+    """ワークスペースのテーマのフォルダ（themes/docs）。ワークスペースがなければ None。"""
+    return f[1].joinpath(*WS_THEMES) if (f := gapi.find_config()) else None
 
 
 def theme_names():
@@ -794,7 +794,7 @@ def load_doc():
 
 def template_md(name):
     """テンプレートの doc.md（ワークスペースの rules/docs-build/templates/<名前>/。会社の文書の型なので、プラグインには入れない）。"""
-    p = gapi.config_path().parent / "rules" / "docs-build" / "templates" / name / "doc.md"
+    p = gapi.workspace() / "rules" / "docs-build" / "templates" / name / "doc.md"
     if not p.is_file():
         sys.exit(f"テンプレート {name} がない（{p}）")
     return str(p)
@@ -1082,7 +1082,7 @@ def source_dir(did):
     if os.path.isfile("doc.md"):
         return os.getcwd()
     rel = request("GET", f"{DRIVE}/files/{did}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(SRC)
-    p = rel and os.path.join(gapi.config_path().parent, rel)
+    p = rel and os.path.join(gapi.workspace(), rel)
     return p if p and os.path.isfile(os.path.join(p, "doc.md")) else None
 
 

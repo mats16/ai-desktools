@@ -75,7 +75,7 @@ def main():
             except SystemExit:
                 pass
         return print("selftest ok")
-    ws = gapi.config_path().parent
+    ws = gapi.workspace()
     folder = gapi.config().get("drive", {}).get("internal") or sys.exit("desk.toml の [drive] internal が空。一時のデッキを置く Drive のフォルダ（検証用）を書く")
     out = ws / ".desk" / "render"
     shutil.rmtree(out, ignore_errors=True)

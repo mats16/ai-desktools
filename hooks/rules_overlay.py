@@ -7,9 +7,13 @@
 usage: rules_overlay.py claude   （標準入力に Claude Code か Codex の hook の JSON）
        rules_overlay.py pi       （標準入力に {"cwd", "text", "isPath", "seen"}。isPath は text が読んだファイルのパスのとき。seen は今の文脈に残る、前に出したもの。出力は {"context": …}）
        rules_overlay.py --selftest
-標準ライブラリだけ。ワークスペース（desk.toml のあるフォルダ）の外や、rules/ と memory.md がないときは何も出さない。"""
+標準ライブラリだけ。ワークスペースが見つからない（探し方は skills/deck-practices/scripts/desk.py）か、rules/ と memory.md がないときは何も出さない。"""
 import json, os, re, shlex, sys, tempfile
 from pathlib import Path
+
+sys.dont_write_bytecode = True  # プラグインの scripts/ に __pycache__ を残さない
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "deck-practices" / "scripts"))
+import desk  # noqa: E402  ワークスペースの探し方（スキルのスクリプトと同じ）
 
 SKILLS = {p.parent.name for p in (Path(__file__).resolve().parent.parent / "skills").glob("*/SKILL.md")}
 REF = re.compile(rf"(?<![\w-])({'|'.join(map(re.escape, SKILLS))})/([\w./-]+\.md)")  # スキルの名前で始まるパス（前のフォルダは問わない）
@@ -24,8 +28,11 @@ LIMIT = 20000  # 差し込む字数の上限（決まりが育ちすぎたら、
 
 
 def workspace(cwd):
-    d = Path(cwd).resolve()
-    return next((x for x in (d, *d.parents) if (x / "desk.toml").is_file()), None)
+    """cwd から上へたどった desk.toml のフォルダ、なければ ~/.desk.toml の workspace。個人の設定が読めなくても止めない（スクリプトが止めて知らせる）。"""
+    try:
+        return f[1] if (f := desk.locate(cwd)) else None
+    except SystemExit:
+        return None
 
 
 def words(command):
@@ -149,6 +156,7 @@ def main(mode):
 
 
 def selftest():
+    os.environ["DESK_CONFIG"] = ""  # 手元の ~/.desk.toml に左右されない
     with tempfile.TemporaryDirectory() as ws:
         (Path(ws) / "desk.toml").write_text("")
         (Path(ws) / "rules" / "deck-practices").mkdir(parents=True)
@@ -168,6 +176,15 @@ def selftest():
         assert "最初に聞くこと" in called(ws, "/desk-tools:deck-practices を回して") and called(ws, "$desk-tools:slides-build") == ""  # rules/ に SKILL.md のないスキル
         assert called(ws, "/desk-tools:deck-practices $desk-tools:deck-practices").count("最初に聞くこと") == 1
         assert overlays("/", "/plug/skills/slides-build/visual.md") == ""  # ワークスペースの外
+        with tempfile.TemporaryDirectory() as home:  # 上に desk.toml がなければ、~/.desk.toml の workspace の rules/ を出す
+            (Path(home) / "Documents" / "rules" / "slides-build").mkdir(parents=True)
+            (Path(home) / "Documents" / "rules" / "slides-build" / "visual.md").write_text("既定のワークスペースは 18pt")
+            (Path(home) / ".desk.toml").write_text('workspace = "Documents"\n')
+            os.environ["DESK_CONFIG"] = str(Path(home) / ".desk.toml")
+            assert "18pt" in overlays("/", "/plug/skills/slides-build/visual.md") and "16pt" in overlays(sub, "slides-build/visual.md")  # 中で開けば、そのフォルダの desk.toml
+            (Path(home) / ".desk.toml").write_text("workspace = \n")
+            assert overlays("/", "/plug/skills/slides-build/visual.md") == ""  # 読めない設定でも止まらない
+            os.environ["DESK_CONFIG"] = ""
         deck = Path(ws) / "Customers" / "acme" / "deck_202610"
         deck.mkdir(parents=True)
         (Path(ws) / "Customers" / "acme" / "memory.md").write_text("- [ws-memory-001] 敬称は様")

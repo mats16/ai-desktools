@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """決まりの台帳。修正の指示（指摘）、決まりの変更の提案・適用・却下、判断待ち、レビューの結果を、ワークスペースの .desk/ledger.jsonl に 1 件 1 行で足していく。
 決まりの本文には ID（slides-visual-<番号>・ws-slides-visual-<番号> を角括弧で囲む。接頭辞は何についての決まりか〔TOPICS〕で、置き場所が変わっても変えない）と短い理由だけを書き、日付・原文・どの資料か・ユーザーが決めたかは、ここに ID でつなぐ。
-決まりの層と戻し方は ../rules.md。ワークスペース（今いるフォルダから上へ、最初の desk.toml のフォルダ）で回す。標準ライブラリだけ。
+決まりの層と戻し方は ../rules.md。ワークスペース（探し方は desk.py）で回す。標準ライブラリだけ。
 usage:
   ledger.py add --deck <資料のフォルダ> --quote <ユーザーの言葉> [--fix <直した箇所>] [--to <決まりの ID・ファイル・未・戻さない>] [--check lint|レビュー|なし] [--session <会話 ID>] [--at <言われた時刻（UTC）>] [--decided] [--plan AI|人] [--once]
                                                    --plan は構成の見逃し（方針のレビューのあとに、聞き手・問い・主張・順序を変えた指摘。値はその資料の方針のレビュー）
@@ -39,6 +39,8 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+import desk  # ワークスペースの探し方
+
 try:
     import fcntl
 except ImportError:  # ponytail: Windows では鍵をかけない。同時に書く会話があれば番号が重なりうる
@@ -72,11 +74,12 @@ PLUGIN_ID = re.compile(r"(?<![\w-])(?!ws-)[a-z][\w-]*?-\d{3}")
 
 
 def workspace():
+    """ワークスペース（探し方は desk.py）。"""
+    if f := desk.locate():
+        return f[1]
     d = Path.cwd().resolve()
-    if ws := next((x for x in (d, *d.parents) if (x / "desk.toml").is_file()), None):
-        return ws
     old = next((x for x in (d, *d.parents) if (x / "factory.toml").is_file()), None)
-    sys.exit(f"{old} は前の版のワークスペース（factory.toml）。desk-migrate で desk.toml に移す" if old else "desk.toml が見つからない。ワークスペースで回す")
+    sys.exit(f"{old} は前の版のワークスペース（factory.toml）。desk-migrate で desk.toml に移す" if old else "desk.toml が見つからない（今いるフォルダから上へ探し、~/.desk.toml もない）。ワークスペースで回す")
 
 
 def path(ws):

@@ -1,11 +1,11 @@
 ---
 name: desk-migrate
-description: Move a workspace made with an earlier version of AI Desk Tools to the current one (the 2026-10-24 renaming of skills, splitting of plugin files, and new rule IDs; the 2026-10-25 renaming of factory.toml to desk.toml, .factory/ to .desk/, factory-* skills to desk-*, and dreaming to desk-dreaming with its rule IDs). After a backup, renames the settings and records, moves rules/ files, and rewrites rule IDs, names, and paths in rules/, AGENTS.md, customers' memory.md, and the rule ledger, then has you split overrides whose plugin file was split. Use when desk-doctor reports 「前の版のワークスペース」, after updating the plugin, or when asked 「移行して」「migrate して」.
+description: Move a workspace made with an earlier version of AI Desk Tools to the current one (the 2026-10-24 renaming of skills, splitting of plugin files, and new rule IDs; the 2026-10-25 renaming of factory.toml to desk.toml, .factory/ to .desk/, factory-* skills to desk-*, and dreaming to desk-dreaming with its rule IDs). After a backup, renames the settings and records, moves rules/ files, and rewrites rule IDs, names, and paths in rules/, AGENTS.md, customers' memory.md, and the rule ledger, then has you split overrides whose plugin file was split. Also moves the workspace's desk.toml to ~/.desk.toml when the plugin is installed for the whole user. Use when desk-doctor reports 「前の版のワークスペース」, after updating the plugin, or when asked 「移行して」「migrate して」「設定を ~/.desk.toml に移して」.
 ---
 
 # Move a workspace to the current version
 
-Run in the workspace (the folder with `desk.toml`, or `factory.toml` before 2026-10-25). `migrate.py` changes only the workspace's own files (`rules/`, `AGENTS.md`, `Customers/*/memory.md`, `.desk/ledger.jsonl`) and takes a backup first, because these hold the user's rules and their history.
+Run in the workspace (the folder with `desk.toml`, or `factory.toml` before 2026-10-25; a workspace set in `~/.desk.toml` is found from any folder). `migrate.py` changes only the workspace's own files (`rules/`, `AGENTS.md`, `Customers/*/memory.md`, `.desk/ledger.jsonl`) and takes a backup first, because these hold the user's rules and their history.
 
 ```sh
 M=<this skill's folder>/scripts/migrate.py
@@ -13,6 +13,7 @@ python3 $M check                 # what would move and change. Changes nothing
 python3 $M apply                 # backup to .desk/migrate/<time>/, then move and rewrite
 python3 $M relink <P-ID> <rules/ file>|--split   # decide where a ledger proposal goes after the split (from 「要判断」)
 python3 $M rename-id <old> <new> # rename one workspace rule ID everywhere (rules/, AGENTS.md, memory.md, the ledger); only for a mistyped or colliding ID
+python3 $M to-user               # move <workspace>/desk.toml to ~/.desk.toml and add workspace (see below)
 ```
 
 ## Steps
@@ -35,6 +36,15 @@ python3 $M rename-id <old> <new> # rename one workspace rule ID everywhere (rule
      - an applied proposal whose text you split across files: `migrate.py relink <P-ID> --split`. It records the split; that proposal can then no longer be undone, and `ledger.py drift` lists it as text that is gone (say both in the report). If its text is in one file, `relink` to that file instead.
 4. **Check again.** Run `check` (it should print 「移すものはない（今の版）」) and `desk-doctor` (`python3 <desk-doctor folder>/scripts/doctor.py --local`).
 5. **Report.** In one message: what moved, the rules you split and where they went, and the backup folder. Tell the user that deleting the backup is their call.
+
+## Move the settings to `~/.desk.toml`
+
+Only when the user installs the plugin for the whole user, or asks for it (2026-10-25 in 「決めたこと」 in README). A workspace with its own `desk.toml` keeps working as it is, so do not suggest this otherwise.
+
+1. Run `to-user` in the workspace. It writes `~/.desk.toml` (the path in `DESK_CONFIG` if set) from the workspace's `desk.toml` with `workspace = "<workspace>"` added at the top, and moves the old file to `.desk/migrate/desk.toml`. Relay its line as it is.
+2. 「移していない（… がもうある）」: `~/.desk.toml` already exists. Show both to the user, merge the values they choose into `~/.desk.toml` (keep `workspace`), then move the workspace's `desk.toml` to `.desk/migrate/` by hand, because the two are never merged when read.
+3. If the workspace is a git repository, tell the user that `desk.toml` now shows as deleted (the current `.gitignore` template no longer includes it).
+4. Run `desk-doctor` from a folder outside the workspace: 「設定」 should be `~/.desk.toml` and 「ワークスペース」 this workspace.
 
 ## Notes
 

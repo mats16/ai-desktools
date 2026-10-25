@@ -39,6 +39,7 @@ Run every check in `sandbox/` (see "Sandbox" below), and paste the results as-is
 ## Rules for changes
 
 - Use the same source for Claude Code, Codex, and pi. Codex reads the Claude Code layout (`.claude-plugin/`, `hooks/hooks.json`) as is, so don't add Codex-specific files. When changing how `rules/` is appended, check both `hooks/hooks.json` and `extensions/rules.ts`. Don't make a fix that works for only one agent.
+- Find the workspace and the settings only through `skills/deck-practices/scripts/desk.py` (walk up for `desk.toml`, else `~/.desk.toml` and its `workspace`; `DESK_CONFIG` overrides the path, and empty skips it). Scripts, `hooks/rules_overlay.py` (and through it `extensions/rules.ts`), and desk-dreaming's `run.sh` and `snapshot.sh` all use it, so the lookup order stays the same everywhere. Take the workspace from `gapi.workspace()` or `desk.locate()`, not from the folder of the settings file, because `~/.desk.toml` sits outside the workspace.
 - Write scripts with the standard library only. Only scripts that need packages such as Pillow declare them in a leading `# /// script` block and run with `uv run`. Target Python 3.11 or later.
 - Keep the body of each `SKILL.md` within 5,000 tokens, because after compaction Claude Code re-attaches only the first 5,000 tokens of each invoked skill. Move sections needed only in some situations (conditional steps, failure handling, steps used by a separate call) into a file linked directly from the table in `SKILL.md`. Don't create files reachable only from other files, because nested files tend to be read only in part. When you split a file, add it to `SPLIT` in `desk-migrate/scripts/migrate.py` (2026-10-24 in 「決めたこと」 in README).
 - When another skill's files or a script message send the reader to a file split out of a `SKILL.md`, write "open `../<skill>/SKILL.md`, then its `<file>`" (in Japanese text such as script messages, 「`../<スキル>/SKILL.md` を開いてから、その `<ファイル>`」). The hook appends only `rules/<skill>/<file>` for the exact path opened, so opening the split file directly skips the workspace overrides in `rules/<skill>/SKILL.md`. References that only cite a rule's source by number (such as 「`desk-dreaming/run.md` の 5 で見る」) and script comments can stay as they are.
@@ -84,13 +85,13 @@ Put a test workspace `sandbox/` directly under the worktree, and pass it the wor
    python3 ../skills/desk-doctor/scripts/doctor.py --local   # skips the Google APIs
    ```
 
-   With the template `desk.toml`, nothing can be built on Google (doctor keeps reporting `要修正`). To build, copy the production workspace's `desk.toml` and point `[drive]` at a test Drive folder, so production files are never overwritten ("Create the sandbox" in docs/development.md). Don't run `git init` in `sandbox/`.
+   With the template `desk.toml`, nothing can be built on Google (doctor keeps reporting `要修正`). To build, copy the production settings (the workspace's `desk.toml`, or `~/.desk.toml`; from `~/.desk.toml`, delete the `workspace` line after copying) and point `[drive]` at a test Drive folder, so production files are never overwritten ("Create the sandbox" in docs/development.md). Don't run `git init` in `sandbox/`.
 
-2. **Run the selftests.** Run in `sandbox/` (`template.py` looks for `desk.toml`), with Python 3.11, the lowest supported version:
+2. **Run the selftests.** Run in `sandbox/` (`template.py` looks for `desk.toml`), with Python 3.11, the lowest supported version, and with `DESK_CONFIG` empty, so that your own `~/.desk.toml` does not change the results:
 
    ```sh
    for f in ../hooks/*.py ../skills/*/scripts/*.py ../tests/*/*.py; do
-     grep -q -e --selftest "$f" && echo "$f: $(uv run -q --python 3.11 "$f" --selftest 2>&1 | tail -1)"
+     grep -q -e --selftest "$f" && echo "$f: $(DESK_CONFIG= uv run -q --python 3.11 "$f" --selftest 2>&1 | tail -1)"
    done
    ```
 

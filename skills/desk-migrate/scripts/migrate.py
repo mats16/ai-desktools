@@ -3,6 +3,7 @@
        migrate.py apply                         控えを .desk/migrate/<時刻>/ に取ってから、rules/ を移し、決まりの ID とパスを書き換える
        migrate.py relink <P-ID> <rules/ のファイル>|--split   分け直しで行き先が決まらない台帳の提案の、行き先を決める（apply の要判断に出る）
        migrate.py rename-id <前の ID> <今の ID>   ワークスペースの決まりの ID を 1 つ付け替える（rules/・AGENTS.md・memory.md・台帳）
+       migrate.py to-user                       ワークスペースの desk.toml を個人の設定（~/.desk.toml。DESK_CONFIG があればそのパス）に移し、workspace を足す
        migrate.py --selftest
 ワークスペース（desk.toml か、前の版の factory.toml のあるフォルダ）を、今の版へ移す。2026-10-24 の版で、スキルの名前を slides-・docs- で始め、
 プラグインのファイルを読む場面ごとに分け、決まりの ID を主題で付け直した（ids_20261024.json）。ID の表は日付の順に当てる（あとの版で足すときは ids_<日付>.json を置く）。
@@ -10,12 +11,13 @@
 [factory] → [desk]、[drive] factory → [drive] desk）。置き場所は変えない（どれもワークスペースの中）。同じ日に、dreaming を desk-dreaming に、
 決まりの ID の factory-dreaming を desk-dreaming にした（ids_20261025.json）。記録のフォルダ .desk/dreaming/ と台帳の by の値 dreaming は替えない。
 何度回してもよい。標準ライブラリだけ。"""
-import json, re, shutil, subprocess, sys, tempfile, time
+import json, os, re, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PLUGIN = HERE.parents[1]  # プラグインの skills/
 sys.path.insert(0, str(PLUGIN / "deck-practices" / "scripts"))
+import desk  # noqa: E402  ワークスペースの探し方
 import ledger  # noqa: E402  台帳の提案の状態（state）
 from ledger import TOPICS, WS_ONLY  # noqa: E402  決まりの ID の主題
 MAPS = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(HERE.glob("ids_*.json"))]  # 日付の順。ids: 前の ID → 今の ID、prefixes: 前の接頭辞 → 今の接頭辞（ws- と、もうない ID に使う）
@@ -56,9 +58,11 @@ PLUGIN_ID = re.compile(rf"(?<![{B}])(?!ws-)([a-z][\w-]*?)-\d{{3}}(?![{B}])")
 
 
 def workspace(start="."):
-    """今の版（desk.toml）か前の版（factory.toml）のワークスペース。"""
+    """今の版（desk.toml）か前の版（factory.toml）のワークスペース。上へたどって見つからなければ ~/.desk.toml の workspace（desk.py）。"""
     d = Path(start).resolve()
-    return next((x for x in (d, *d.parents) if (x / "desk.toml").is_file() or (x / OLD_CONF).is_file()), None)
+    if ws := next((x for x in (d, *d.parents) if (x / "desk.toml").is_file() or (x / OLD_CONF).is_file()), None):
+        return ws
+    return f[1] if (f := desk.locate(d)) else None
 
 
 def conf_keys(text):
@@ -109,6 +113,27 @@ def move_data(ws):
         gi.write_text(n, encoding="utf-8")
         out.append(f"書き換えた: .gitignore（!/{OLD_CONF} → !/desk.toml）")
     return out
+
+
+def to_user(ws):
+    """ワークスペースの desk.toml を個人の設定に移し、頭に workspace を足す（全体に入れるとき。頼まれたときだけ回す）。前のものは .desk/migrate/ に控える。
+    個人の設定がもうあれば、上書きせずに出す（寄せるのは人が決める）。"""
+    src, dst = ws / "desk.toml", desk.user_config()
+    if not src.is_file():
+        return [f"移していない（{ws} に desk.toml がない。もう {dst} を読んでいる）"]
+    if not dst:
+        return ["移していない（DESK_CONFIG が空。移すなら DESK_CONFIG を外すか、置くパスにする）"]
+    if dst.exists():
+        return [f"移していない（{dst} がもうある。desk.toml の値を寄せてから、desk.toml を .desk/migrate/ に移す）"]
+    text = desk.with_workspace(src.read_text(encoding="utf-8"), ws)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(text, encoding="utf-8")
+    bak = ws / ".desk" / "migrate" / "desk.toml"
+    if bak.exists():  # 前に移したときの控えを上書きしない
+        bak = bak.with_name(f"desk_{time.strftime('%Y%m%d-%H%M%S')}.toml")
+    bak.parent.mkdir(parents=True, exist_ok=True)
+    src.rename(bak)
+    return [f"移した: desk.toml → {dst}（workspace = {ws}。前のものは {bak.relative_to(ws)} に控えた）"]
 
 
 def rewrite(text, paths=True, seen=None, ws_map=None):
@@ -609,6 +634,18 @@ def selftest():
         (ws / ".desk" / "dreaming").mkdir(parents=True)
         (ws / "rules" / "dreaming").mkdir()  # 空のフォルダだけが残る（前の名前は何も残らない）
         assert apply(ws) == ["移すものはない（今の版）"]
+    with tempfile.TemporaryDirectory() as tmp:  # to-user: ワークスペースの desk.toml を個人の設定に移す
+        ws, conf = Path(tmp, "ws").resolve(), Path(tmp, "home", ".desk.toml")
+        (ws / ".desk" / "migrate").mkdir(parents=True)
+        (ws / "desk.toml").write_text('# 頭\n[drive]\ndesk = "u"\n')
+        (ws / ".desk" / "migrate" / "desk.toml").write_text("前に移したもの")
+        os.environ["DESK_CONFIG"] = str(conf)
+        out = to_user(ws)
+        assert out[0].startswith(f"移した: desk.toml → {conf}") and not (ws / "desk.toml").exists() and desk.locate(ws) == (conf, ws) == desk.locate(tmp)
+        assert desk.with_workspace('# 頭\n[drive]\ndesk = "u"\n', ws) == conf.read_text() and (ws / ".desk" / "migrate" / "desk.toml").read_text() == "前に移したもの"  # 前の控えを上書きしない
+        assert to_user(ws)[0].startswith("移していない") and workspace(ws) == ws  # 2 回目は何もしない。上に desk.toml がなくても、個人の設定で見つかる
+        (ws / "desk.toml").write_text("")
+        assert to_user(ws)[0].startswith(f"移していない（{conf} がもうある") and (ws / "desk.toml").is_file()
     print("selftest ok")
 
 
@@ -631,5 +668,7 @@ if __name__ == "__main__":
         print("\n".join(decide(ws, a[1], a[2])))
     elif len(a) == 3 and a[0] == "rename-id":
         print("\n".join(rename_id(ws, a[1], a[2])))
+    elif a == ["to-user"]:
+        print("\n".join(to_user(ws)))
     else:
         sys.exit(__doc__)
