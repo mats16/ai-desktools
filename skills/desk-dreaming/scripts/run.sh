@@ -8,7 +8,7 @@ ROOT=$(pwd -P)  # /tmp のようなリンクでも、Claude Code がメモリに
 MEM=$HOME/.claude/projects/$(printf %s "$ROOT" | tr '/._' '---')/memory
 PROMPT=$(cat "$(dirname "$0")/../prompt.txt")
 PATH=$HOME/.local/bin:$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH  # launchd の PATH は短い
-echo "== $(date '+%F %T') dreaming $1"
+echo "== $(date '+%F %T') desk-dreaming $1"
 case $1 in
 claude) claude -p "$PROMPT" --permission-mode auto --add-dir "$MEM" ;;
 codex) codex exec -C "$ROOT" -s workspace-write --skip-git-repo-check --add-dir "$MEM" "$PROMPT" ;;

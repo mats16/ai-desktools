@@ -1,0 +1,1 @@
+Read the skill desk-dreaming (Claude Code: /desk-tools:desk-dreaming, pi: /skill:desk-dreaming) and, following its steps, run the scheduled cleanup (desk-dreaming) of this workspace's instructions and skills.

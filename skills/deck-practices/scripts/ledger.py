@@ -24,7 +24,7 @@ usage:
   ledger.py pending [--status 却下|適用済み|戻した|取り下げ|Issue にした|all]   提案と差分（既定は未適用。却下は理由も）
   ledger.py apply <P-ID ...|all>                   提案を当てる（今の文がそのまま 1 か所にあるときだけ。プラグインへの提案は当てない）
   ledger.py sent <P-ID> --issue <URL> [--rule <ID>]   プラグインへの提案を Issue にした（出典の指摘をその決まりにつなぐ。--rule は Issue で提案と違う ID にしたとき）
-  ledger.py reject <P-ID> --reason <理由>           ユーザーが却下した（dreaming は同じ趣旨の提案をもう出さない）。Issue にしたものが断られたときも（出典の指摘は前の戻し先に戻る）
+  ledger.py reject <P-ID> --reason <理由>           ユーザーが却下した（desk-dreaming は同じ趣旨の提案をもう出さない）。Issue にしたものが断られたときも（出典の指摘は前の戻し先に戻る）
   ledger.py withdraw <P-ID か Q-ID> --reason <理由>   出した側が取り下げる（書き間違いの出し直しなど。却下には数えない）
   ledger.py undo <P-ID>                            当てた提案を逆向きに当てて戻す
   ledger.py drift                                  当てたあとに手で直された・消えた決まり（ユーザーが直したものとして扱う）
@@ -51,8 +51,8 @@ KEY = re.compile(rf"{ID}|lint:.+")  # レビューの表の「決まり」の列
 CITE = re.compile(rf"\[?({ID})\]?\s*「([^」]*)」")  # 決まりの列の ID に添えた、その決まりの文から写した語句（slides-visual-013「単語や文節の途中で折り返さない」）
 RESULTS = ("直した", "残した（誤り）", "残した", "聞く")
 NO_RULE = ("未", "戻さない")  # 決まりにつないでいない戻し先
-TWICE = 2  # 2 本以上の資料・2 社以上の顧客に出たら、たまたまでないとみなす（dreaming/run.md の 4c・4i・5）
-AUTO = ("重なり", "古い記述")  # 会話を出典にしない片付け。--auto で、出してすぐ当てる（dreaming/run.md の 3d）
+TWICE = 2  # 2 本以上の資料・2 社以上の顧客に出たら、たまたまでないとみなす（desk-dreaming/run.md の 4c・4i・5）
+AUTO = ("重なり", "古い記述")  # 会話を出典にしない片付け。--auto で、出してすぐ当てる（desk-dreaming/run.md の 3d）
 RECS = ("適用", "様子見", "却下")
 TOPICS = {  # 決まりの ID の主題（何についての決まりか）。ID は一度付けたら、ファイルを分けても移しても変えない（../rules.md の "Rule IDs"）
     "deck-flow": "1〜11 の工程と、どの工程でも守ること", "deck-agents": "子の起こし方と待ち方", "deck-content": "構成案と言葉",
@@ -64,7 +64,7 @@ TOPICS = {  # 決まりの ID の主題（何についての決まりか）。ID
     "slides-api": "Slides API の落とし穴", "slides-legacy": "pages.py と pptx の古いデッキ", "slides-reuse": "社内のデッキの流用", "slides-lint": "スライドの lint と画像での測り",
     "docs-write": "doc.md の書き方と組み方", "docs-visual": "ドキュメントの見た目", "docs-lint": "ドキュメントの lint", "docs-api": "Docs API の落とし穴",
     "vids-voice": "動画の読み上げの台本（スピーカーノート）", "vids-voice-ja": "日本語の読み上げの台本", "vids-voice-en": "英語の読み上げの台本",
-    "vids-video": "動画を作る・差し替える", "factory-dreaming": "定期の整理"}
+    "vids-video": "動画を作る・差し替える", "desk-dreaming": "定期の整理"}
 WS_ONLY = {"agents": "ワークスペースの AGENTS.md", "memory": "顧客の memory"}  # ワークスペースだけの主題（ws-agents・ws-memory）
 PLAN_RULE = "deck-flow-004"  # 構成案の AI レビューの頼み方。これを見直すかの判断待ちに答えたら、構成の見逃しをその答えのあとから数え直す
 OVERRIDE = re.compile(rf"\[(ws-[\w-]+?-\d{{3}})\][^\n\[]*?[（(]([^（）()\n]*?)\s*より優先")  # [ws-slides-visual-003] …（slides-visual-012 より優先）。括弧の中の ID を全部取る
@@ -241,7 +241,7 @@ def customers(decks):
 
 
 def count(rows):
-    """件数と、それが出た資料の数（dreaming は資料の数で決める）。"""
+    """件数と、それが出た資料の数（desk-dreaming は資料の数で決める）。"""
     return f"{len(rows)}（資料 {len({r['deck'] for r in rows} - {''})}）"
 
 
@@ -301,7 +301,7 @@ def summary(ws):
 
 
 def weekly(ws, weeks=8):
-    """週ごとに、誰が指摘を書いたか。dreaming が拾った分が取りこぼし（作る会話が台帳に書かなかった）。コンパクションの前に拾う hook を入れるかの材料。
+    """週ごとに、誰が指摘を書いたか。desk-dreaming が拾った分が取りこぼし（作る会話が台帳に書かなかった）。コンパクションの前に拾う hook を入れるかの材料。
     構成の見逃しは、方針のレビュー（AI・人）ごとの件数。構成案のレビューの頼み方を変えたあとに減ったかを見る。"""
     n = {}
     for c in state(ws)[0].values():
@@ -325,7 +325,7 @@ def texts(roots, skip=()):
 
 
 def candidates(ws, plugin=PLUGIN):
-    """決まりごとの次の一手。境目はここで決め、dreaming は趣旨（その人の好みか、顧客の事情か）と提案の文だけを考える。"""
+    """決まりごとの次の一手。境目はここで決め、desk-dreaming は趣旨（その人の好みか、顧客の事情か）と提案の文だけを考える。"""
     _, ps, _, _ = state(ws)
     plug = "\n".join(texts([plugin], {Path(__file__).resolve()}))
     mine = "\n".join(texts([ws / "AGENTS.md", ws / "rules", *(ws / "Customers").glob("*/memory.md")]))  # ワークスペースの決まりと顧客の memory
@@ -363,7 +363,7 @@ def candidates(ws, plugin=PLUGIN):
 
 def landed(p, plugin):
     """プラグインへの提案の文（Issue で ID を替えたなら、替えた ID にした文）が、入っているプラグインの行き先のファイルにあるか。
-    ID だけでは見ない（今ある決まりを書き直す提案は、ID が前からある）。Issue で文を変えたら届いたとは分からないので、写しを消す案を出さない（重なりは dreaming/run.md の 4e で見る）。"""
+    ID だけでは見ない（今ある決まりを書き直す提案は、ID が前からある）。Issue で文を変えたら届いたとは分からないので、写しを消す案を出さない（重なりは desk-dreaming/run.md の 4e で見る）。"""
     tag = f"[{p['proposed']}]"
     want = [x.replace(tag, f"[{p['rule']}]").strip() for x in p["new"].splitlines() if p["proposed"] and tag in x]
     f = plugin / p["file"]
@@ -444,7 +444,7 @@ def auto_ok(ws, a):
     """--auto で当ててよいか。会話の指摘を出典にせず、AGENTS.md・rules/ の .md で、ID の付いた決まりを丸ごと（続きの行も）消すだけで
     （ほかの行は持ち主の決まりごと並びどおりに残り、ID のない見出し・前置き・空行は 1 行も消さない）、残る決まりの文が変わらず、
     ユーザーが決めた・当てたあとに手で直した決まりに触れないもの。
-    人を通さずに新しい文が決まりに入らないようにする（factory-dreaming-001）。--new には前か後ろの行を残す（undo の目印。空の --new は戻せない）。
+    人を通さずに新しい文が決まりに入らないようにする（desk-dreaming-001）。--new には前か後ろの行を残す（undo の目印。空の --new は戻せない）。
     よければ (ファイル, 前の文, 当てたあとの文) を返す。"""
     def no(why):
         sys.exit(f"--auto にできない（{why}）。--auto を外して提案にする")
@@ -1253,7 +1253,7 @@ def selftest_candidates(quiet):
             assert {("下ろす", "ws-slides-visual-001"), ("上げる", "ws-slides-visual-001"), ("上書きを見直す", "slides-visual-012"), ("古い上書き", "ws-slides-visual-003")} <= acts
             over = [(k, w) for a, k, w in out if a == "上書きを見直す"]
             assert sorted(k for k, _ in over) == ["slides-visual-012", "slides-visual-012", "slides-visual-013"] and all("ws-slides-visual-004" not in w for _, w in over)  # 1 行に 2 つの決まり、2 つの ID、空白なし
-            assert not any(k == "ws-memory-001" for _, k in acts)  # 顧客の memory は、ほかの顧客に上げない（趣旨が同じなら dreaming が rules/ に寄せる）
+            assert not any(k == "ws-memory-001" for _, k in acts)  # 顧客の memory は、ほかの顧客に上げない（趣旨が同じなら desk-dreaming が rules/ に寄せる）
             # 上げた決まりがプラグインに届くまでは、写しを残す
             with quiet():
                 main(["propose", "--plugin", "--file", "slides-build/visual.md", "--new", "- [slides-visual-099] 表は分ける。", "--rule", "slides-visual-099", "--why", "上げる", "--src", "c-0001,c-0002"])

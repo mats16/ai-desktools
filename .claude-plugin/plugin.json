@@ -1,6 +1,6 @@
 {
   "name": "desk-tools",
-  "description": "日本語のスライド（Google Slides）とドキュメント（Google Docs）を API で組み、lint・画像・別の目のレビューで確かめ、会話の記録から決まりを直していく（dreaming）。",
+  "description": "日本語のスライド（Google Slides）とドキュメント（Google Docs）を API で組み、lint・画像・別の目のレビューで確かめ、会話の記録から決まりを直していく（desk-dreaming）。",
   "author": { "name": "Kazuki Matsuda" },
   "license": "MIT",
   "repository": "https://github.com/mats16/ai-desktools",

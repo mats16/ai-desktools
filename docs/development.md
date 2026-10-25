@@ -36,7 +36,7 @@ claude --plugin-dir ..
   ```
 
 - `claude plugin marketplace add .. --scope project` で入れてはいけない。マーケットプレイスの名前（`desk-tools`）は `~/.claude/plugins/known_marketplaces.json` に 1 つしか持てず、本番のワークスペースで足したものとぶつかる。外すと、ほかで足したものの記録も消える。
-- そこから起こす `claude -p` の子（dreaming の `run.sh claude` など）には、プラグインが入っていない。子まで確かめるときは pi で試す。
+- そこから起こす `claude -p` の子（desk-dreaming の `run.sh claude` など）には、プラグインが入っていない。子まで確かめるときは pi で試す。
 - worktree が点で始まるフォルダの下（T3 Code の `~/.t3/worktrees` など）にあると、`claude -p` で回した会話は、sandbox の中のファイルを「sensitive file」として書けない（`--permission-mode acceptEdits` でも止まる）。`claude -p` で資料まで作って確かめるときは、sandbox を `/tmp/<名前>/` に写し、そこで `claude --plugin-dir <worktree>` を回す。終わったら消す。
 
 ## Codex
@@ -52,7 +52,7 @@ codex debug prompt-input ok | grep -oE 'desk-tools:[a-z-]+: ' | sort -u
 - `CODEX_HOME` は worktree の外に置く。Codex は worktree（マーケットプレイスの根元）を丸ごと写すので、中に置くと自分を写し続けて止まる（`File name too long`）。
 - ふだんの `~/.codex` で `codex plugin marketplace add ..` しない。マーケットプレイスの名前（`desk-tools`）は 1 つしか持てず、本番のワークスペースで足したものとぶつかる。
 - 会話は `$CODEX_HOME/plugins/cache/desk-tools/desk-tools/local/` の写しを読む。手元のパスで足しても写すので、直したら `codex plugin add desk-tools@desk-tools` を回し直す。
-- 分けた `CODEX_HOME` にはログインがない。会話を回すなら、`~/.codex/auth.json`（ChatGPT のログイン）か、`~/.codex/config.toml` の `model_provider`・`[model_providers.<名前>]` を写す。会話の記録も `$CODEX_HOME/sessions/` に残るので、dreaming の `sessions.py`（`~/.codex/sessions/` を読む）には出ない。
+- 分けた `CODEX_HOME` にはログインがない。会話を回すなら、`~/.codex/auth.json`（ChatGPT のログイン）か、`~/.codex/config.toml` の `model_provider`・`[model_providers.<名前>]` を写す。会話の記録も `$CODEX_HOME/sessions/` に残るので、desk-dreaming の `sessions.py`（`~/.codex/sessions/` を読む）には出ない。
 - hook は信頼するまで動かない。対話の Codex の `/hooks` で信頼するか、`codex exec --dangerously-bypass-hook-trust` で回す。`sed -n 1,3p ../skills/slides-build/visual.md` を回させたあとと、`$desk-tools:desk-doctor` で呼んだときに、`sandbox/rules/` の目印が差し込まれることを確かめた。
 
 ## pi
@@ -68,7 +68,7 @@ pi                                     # 初めては /trust で信頼を保存�
 
 最後のコマンドで、worktree から読まれた 15 個のスキルが出る。
 
-- `.pi/settings.json` に `../..`（`.pi/` からの相対のパス）で入り、worktree の 15 個のスキルと `extensions/rules.ts` が読まれる。`pi -p` の子（dreaming の `run.sh pi`、レビューを頼むとき）も同じものを読む（`sandbox/` で `pi -p` を起こし、slides-build の `SKILL.md` が worktree のパスで出ることと、`../skills/slides-build/visual.md` を read すると `sandbox/rules/slides-build/visual.md` が続けて差し込まれることを確かめた）。
+- `.pi/settings.json` に `../..`（`.pi/` からの相対のパス）で入り、worktree の 15 個のスキルと `extensions/rules.ts` が読まれる。`pi -p` の子（desk-dreaming の `run.sh pi`、レビューを頼むとき）も同じものを読む（`sandbox/` で `pi -p` を起こし、slides-build の `SKILL.md` が worktree のパスで出ることと、`../skills/slides-build/visual.md` を read すると `sandbox/rules/slides-build/visual.md` が続けて差し込まれることを確かめた）。
 - trust は、`sandbox/` で対話の pi を開いて `/trust` で保存する（`pi -p` の子は聞けないので、先に済ませる）。親のフォルダの決定も子に効く。ホームを信頼してあれば、`--approve` なしの `pi -p`・`--mode rpc` でも読まれた。worktree を置くフォルダ（T3 Code なら `~/.t3/worktrees`）ごと信頼すると、聞かれなくなる代わりに、あとからそこに置くほかのリポジトリの拡張も黙って読まれる（[pi.md](pi.md) の「project trust」）。
 - 同じ名前のスキルがほかにあると、パッケージのものは負ける（[pi.md](pi.md) の「同じ名前のスキルがあるとき」）。`get_commands` の `sourceInfo.path` が worktree を指しているかを確かめる。
 
