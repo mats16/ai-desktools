@@ -1,4 +1,4 @@
-# AGENTS.md の「sandbox で確かめる」の 1 で sandbox を作り、2 の selftest を回す（doctor は雛形のままでは要修正が残るので回さない）。
+# AGENTS.md の "Sandbox" の 1 で sandbox を作り、2 の selftest を回す（doctor は雛形のままでは要修正が残るので回さない）。
 name: selftest
 on:
   push:

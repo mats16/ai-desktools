@@ -21,7 +21,7 @@ desk-kaizen の Issue（skills/desk-kaizen/SKILL.md の「Body template」）か
 <!-- 回したコマンドと結果を、そのまま貼る。回していないものは「回していない」と書く。文だけの直しなら「検証しない理由:」を書く。
 見た目が変わる直し（visual*.md、slides.py・template.py・docs.py・box_pad.py・doc_layout.py、assets/）は、前後の画像を貼る。 -->
 
-- selftest（`sandbox/` で Python 3.11。AGENTS.md の「sandbox で確かめる」の 2）:
+- selftest（`sandbox/` で Python 3.11。AGENTS.md の "Sandbox" の 2）:
 - Claude Code（`claude --plugin-dir ..`）:
 - pi（`pi install -l ..`）:
 - 資料を作って確かめたこと:
