@@ -296,6 +296,7 @@ def relink(ws):
 def decide(ws, i, target):
     """エージェントが決めた、提案 i の行き先（rules/ のファイルか "split"）を台帳と relink_done.json に残す。"""
     p = ledger.state(ws)[1].get(i) or sys.exit(f"台帳に {i} がない")
+    p.get("plugin") and sys.exit(f"{i} はプラグインへの提案。変更先は skills/ の {p['file']} のままで、分け直しの行き先は決めない")
     if target == "--split":
         p["status"] == "適用済み" or sys.exit(f"{i} は {p['status']}。--split は当て済みの提案だけ（まだ当てていないものは、行き先のファイルを渡すか ledger.py withdraw）")
         target = "split"
@@ -553,6 +554,14 @@ def selftest():
         assert [p["id"] for p in in_split(ws)] == ["P0001"] and relinks(ws) == [] and needs(ws) == []
         (ws / ".desk" / "migrate" / "relink_done.json").write_text(json.dumps({"P0026": {"to": "deck-practices/content.md", "from": "deck-practices/content.md"}}))
         assert relinks(ws) == [] and needs(ws) == [] and apply(ws) == ["移すものはない（今の版）"]  # 手で足した回り道の行があっても壊れない
+        for t in ("rules/deck-practices/content.md", "--split"):  # プラグインへの提案の変更先を、ワークスペースのファイルに付け替えない
+            before = [(ws / ".desk" / x).read_text() for x in ("ledger.jsonl", "migrate/relink_done.json")]
+            try:
+                decide(ws, "P0026", t)
+                raise AssertionError("プラグインへの提案に relink")
+            except SystemExit:
+                pass
+            assert [(ws / ".desk" / x).read_text() for x in ("ledger.jsonl", "migrate/relink_done.json")] == before
     with tempfile.TemporaryDirectory() as tmp:  # 2026-10-25: factory.toml → desk.toml、.factory/ → .desk/、factory-* → desk-*
         ws = Path(tmp)
         put = lambda rel, text: ((ws / rel).parent.mkdir(parents=True, exist_ok=True), (ws / rel).write_text(text))
