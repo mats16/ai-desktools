@@ -14,7 +14,7 @@ If the conversation was opened under `sandbox/`, ignore this file. That folder i
 
 | Path | Contents |
 | --- | --- |
-| `skills/<skill>/` | 15 skills (`SKILL.md`, per-situation files, `scripts/`). All three agents read them |
+| `skills/<skill>/` | 16 skills (`SKILL.md`, per-situation files, `scripts/`). All three agents read them |
 | `hooks/` | `rules_overlay.py` (appends the workspace's `rules/` files) and `hooks.json`, which calls it from Claude Code and Codex |
 | `extensions/rules.ts` | The pi extension. Calls `rules_overlay.py` |
 | `.claude-plugin/` | Plugin and marketplace definitions. Codex reads these too |
@@ -44,7 +44,7 @@ Run every check in `sandbox/` (see "Sandbox" below), and paste the results as-is
 - Write scripts with the standard library only. Only scripts that need packages such as Pillow declare them in a leading `# /// script` block and run with `uv run`. Target Python 3.11 or later.
 - Keep the body of each `SKILL.md` within 5,000 tokens, because after compaction Claude Code re-attaches only the first 5,000 tokens of each invoked skill. Move sections needed only in some situations (conditional steps, failure handling, steps used by a separate call) into a file linked directly from the table in `SKILL.md`. Don't create files reachable only from other files, because nested files tend to be read only in part. When you split a file, add it to `SPLIT` in `desk-migrate/scripts/migrate.py` (2026-10-24 in 「決めたこと」 in README).
 - When another skill's files or a script message send the reader to a file split out of a `SKILL.md`, write "open `../<skill>/SKILL.md`, then its `<file>`" (in Japanese text such as script messages, 「`../<スキル>/SKILL.md` を開いてから、その `<ファイル>`」). The hook appends only `rules/<skill>/<file>` for the exact path opened, so opening the split file directly skips the workspace overrides in `rules/<skill>/SKILL.md`. References that only cite a rule's source by number (such as 「`desk-dreaming/run.md` の 5 で見る」) and script comments can stay as they are.
-- When adding, removing, or renaming a skill, update every place that names or counts the skills: the table in README, the count in `docs/` ("15"), and paths pointing to it from other skills such as `deck-practices`.
+- When adding, removing, or renaming a skill, update every place that names or counts the skills: the table in README, the count in `docs/` ("16"), and paths pointing to it from other skills such as `deck-practices`.
 - Record user decisions in 「決めたこと」 in README, with the date and the user's own words, verbatim. Record deferred work in 「残っている課題」.
 - Write PR bodies with the sections of `.github/pull_request_template.md`. Paste the commands you ran and their output as-is. In 「レビューで見てほしいところ」, list file:line locations and the judgments you are unsure of, because reviewers, human and AI, start reading there.
 - 日本語で書くところは、平易な和文で、言い切りの「〜する」。漢語やカタカナ語より、やさしい言い方を選ぶ（「検証」より「確かめる」、「ルール」より「決まり」）。例外: `/deck-review` を回す単位は「ラウンド」（README の「決めたこと」の 2026-10-19）。

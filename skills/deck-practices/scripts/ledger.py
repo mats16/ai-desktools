@@ -68,7 +68,7 @@ TOPICS = {  # 決まりの ID の主題（何についての決まりか）。ID
     "slides-api": "Slides API の落とし穴", "slides-legacy": "pages.py と pptx の古いデッキ", "slides-reuse": "社内のデッキの流用", "slides-lint": "スライドの lint と画像での測り",
     "docs-write": "doc.md の書き方と組み方", "docs-visual": "ドキュメントの見た目", "docs-lint": "ドキュメントの lint", "docs-api": "Docs API の落とし穴",
     "vids-voice": "動画の読み上げの台本（スピーカーノート）", "vids-voice-ja": "日本語の読み上げの台本", "vids-voice-en": "英語の読み上げの台本",
-    "vids-video": "動画を作る・差し替える", "desk-dreaming": "定期の整理"}
+    "vids-video": "動画を作る・差し替える", "desk-dreaming": "定期の整理", "source-scout": "定期の見張りで読む先を管理し、学ぶ"}
 WS_ONLY = {"agents": "ワークスペースの AGENTS.md", "memory": "顧客の memory"}  # ワークスペースだけの主題（ws-agents・ws-memory）
 PLAN_RULE = "deck-flow-004"  # 構成案の AI レビューの頼み方。これを見直すかの判断待ちに答えたら、構成の見逃しをその答えのあとから数え直す
 AGENTS_MAX = 20000  # ワークスペースの AGENTS.md のバイト数の上限（desk-dreaming/run.md の 4h。Codex は 32 KiB で切り、Claude Code は毎回すべて読む）

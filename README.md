@@ -21,6 +21,7 @@
 | `vids-voice` | Google Vids の AI の読み上げ（voiceover）の台本を書く。台本の置き場所は、元の Google Slides の各ページのスピーカーノート。声の長さと間も、Vids の画面でなく台本（字数・audio tags）で直す。資料はノートなしで組み、ノートは頼まれたときだけ、組んだあとに資料全体の台本としてまとめて書く。ノートのある資料も、この手順で書き直す。スライドを読み上げず動画全体の筋を通し、Vids が読む audio tags を入れる。言語によらない決まりは `SKILL.md`、言語に結びつく決まり（文体、字数、読み、記号、ほかのシーンの指し方、タグの置き場所）は `ja.md`・`en.md`（lint は `--lang`）。スライドは組み直さず、ノートだけを書き換える（`speaker_notes.py pull`・`lint`・`push`。前のノートは `build/notes_before_<日付>.json` に控える） |
 | `vids-build` | ベータ版（Vids の編集の公開の API がまだないので、Vids の画面と同じ内部の呼び出しを使う。呼び出しは 1 つのファイルにまとめてあり、公開の API が出たら、そのファイルだけを差し替える）。動画は、作るとはっきり頼まれたときだけ、組んだ Google Slides から Google Vids で作る。スピーカーノートが変わったら、頼まれなくても、その資料から作った動画の変わったシーンだけを差し替える。ページを足した・消した・直したときは動画を追わせず、頼まれたら作り直す（新しい Vids に作るか、`--vids` で同じ Vids の中身を消して組み直す）（`vids.py create`・`update`・`check`・`voices`・`download`）。動画は資料そのものから作り、動画のための Slides の写しを作らない。全ページをシーンにし、各ページのスピーカーノートを Conversational voice（既定は Elio。audio tags が効く）で読ませる。指定したページだけ AI avatar（Conversational voices で話す 30 体）に読ませることもでき、ページの空いた隅に丸く置く（`vids.py layout` で置き方を決め、円を描いた一覧の画像で確かめる）。動画は Slides と同じフォルダに作る。Vids の編集には公開の API がないので、対象の Google アカウントにログイン済みの Chrome のタブの中から、Vids の画面と同じ内部の呼び出しを使う（`internal_api.md`） |
 | `customer-profile` | 顧客の profile（`Customers/<顧客>/profile.md`。事業、組織、技術の構成、エンジニアの好みと文化、いまの取り組み）を `[sources]` と公開の情報から作る・取り直す・書き足す。ユーザーが言った行は残す |
+| `source-scout` | 定期に回す集めの作業で、読む先（Slack のチャンネルと検索、メールの検索、RSS、wiki・web のページ）を管理し、回ごとに学ぶ（`scout.py`）。毎回読む先、探索する候補、休ませる先、取れなかった先の読み直しを記録から決め、子に並べて読ませ、見つけた項目を 1 つにまとめる。読む先の台帳と回の記録は `.desk/scout/<話題>/`。目的・期間・分類・まとめの形はプロンプトで受け取る |
 | `deck-research` | ベストプラクティスの調べ直し。調べた記録（`state.md`・`log/`）はワークスペースの `Research/deck_research/` |
 | `desk-dreaming` | 会話の記録から、決まりを定期的に整理する |
 
@@ -29,7 +30,7 @@ INSTALL.md                        会話で入れるときに、エージェン�
 .claude-plugin/plugin.json        Claude Code のプラグイン（Codex もこれを読む）
 .claude-plugin/marketplace.json   このリポジトリをそのままマーケットプレイスにする
 package.json                      pi のパッケージ（pi.skills: ./skills）
-skills/                           上の 15 個（Claude Code・Codex・pi で共通）
+skills/                           上の 16 個（Claude Code・Codex・pi で共通）
 hooks/hooks.json                  Claude Code と Codex の hook（プラグインのファイルを読むかスキルを呼んだら rules/ を、顧客の資料を読んだら memory.md を続けて出す）
 hooks/rules_overlay.py            その中身（Claude Code・Codex・pi で共有）
 extensions/rules.ts               pi の拡張（同じことを pi の read・bash で）
@@ -109,7 +110,7 @@ pi install git:github.com/mats16/ai-desktools        # git から
 - `Customers/<顧客>/memory.md`: その顧客の資料への好み（どう作るか。相手が何者かは `profile.md`）（顧客の memory）。その顧客の資料の `構成案*.md` などを開くと、hook が続けて出す。
 - `Customers/<顧客>/profile.md`: その顧客の事業・組織・技術の構成・エンジニアの好み（顧客の profile。行ごとに出典と日付）。`customer-profile` が作り、顧客向けの資料の作り始めに読む。30 日より古ければ取り直す。
 - `Customers/`・`Internal/`・`Research/`、`references_index.md`: 資料と台帳。資料のフォルダの `references.md`（出典の台帳。出典ごとに S の ID）と構成案の「出典の表」（ページに出す事実の台帳。事実ごとに F の ID）は `deck-practices/scripts/refs.py` が足し、確かめる。`Research/deck_research/` は `deck-research` の調べ直しの記録（`state.md`・`log/`。代表の 3 枚の選び方の記録も）。
-- `.desk/`: スクリプトが書く記録。`ledger.jsonl`（決まりの台帳。修正の指示、決まりの ID ごとの出典と再発、desk-dreaming の提案・適用・却下とプラグインへの提案の Issue、判断待ちと答え、deck-review の指摘の結果。`deck-practices/scripts/ledger.py` が読み書きする）、`lint_runs.jsonl`（`lint.py --stats` が読む）、`spec_raw.jsonl`（JSON のページの形の外の書き方の数。`slides.py stats` が読む）、`dreaming/last_run`・`dreaming/log/`・`dreaming/backup/`、`profile/`（`customer-profile` が取り直す前の顧客の profile）、`comments.json`（`deck-comments` の `comments.py` が前に取った時刻・送った返信・見張りの起点・見張りの知らせのコメントを残す）。
+- `.desk/`: スクリプトが書く記録。`ledger.jsonl`（決まりの台帳。修正の指示、決まりの ID ごとの出典と再発、desk-dreaming の提案・適用・却下とプラグインへの提案の Issue、判断待ちと答え、deck-review の指摘の結果。`deck-practices/scripts/ledger.py` が読み書きする）、`lint_runs.jsonl`（`lint.py --stats` が読む）、`spec_raw.jsonl`（JSON のページの形の外の書き方の数。`slides.py stats` が読む）、`dreaming/last_run`・`dreaming/log/`・`dreaming/backup/`、`profile/`（`customer-profile` が取り直す前の顧客の profile）、`comments.json`（`deck-comments` の `comments.py` が前に取った時刻・送った返信・見張りの起点・見張りの知らせのコメントを残す）、`scout/<話題>/`（`source-scout` の読む先の台帳 `sources.json`、回の記録 `runs.jsonl`、その回の読み方 `plan.json`）。
 
 自分だけの画像は `assets/` に置く。`slides.asset()` はここを先に探し、なければ `slides-build/assets/` を使う。
 
@@ -320,14 +321,24 @@ gcloud の既定の OAuth クライアントで作った認証情報は、`googl
 - 2026-10-26: `card` に箱の角の `corner`（`pill`・`square`。書かなければ既定の 0.1 in の角丸）を足す。`pill` の丸みは組んだカードの短い辺の半分にするので、`row` で伸びても `h` を変えてもピルのまま。丸みを数で書く `radius` は `card` に足さない（Issue #15 の案 2 は採らない）。`card` の `shape` は番号の形のまま（ユーザー「ピル型や角が四角いボックスを表現可能にするように card を拡張したいです。自由に曲率を変えられると選択肢が増えすぎますが図を生成する際のコストを下げたいです。」）。
 - 2026-10-26: `vids-build` の保存は、編集画面の HTML がくれる `sid` で送り、読んで開いたセッションは使い終わったら `/leave` で閉じる（ユーザー「裏をとらず、ブラウザ操作を尊重して sid を適切に管理できるように改修してください。」）。編集画面の JS と通信を読んで分かったこと: サーバーは編集画面を読むたびに新しいセッションを開いて `sid` を HTML に書き、画面はその `sid` で保存して、タブを閉じるときに `/leave` を送る。前のクライアントは自分で作った `sid` で保存し、`create` の中で編集画面を何度も読んで、開いたセッションを閉じていなかった。画面は 550 を送り直さず（`CLIENT_ERROR` で保存を止め、読み直しを待つ）、`di` も読まない。自動保存は、編集のたびに応答を待って 1 本ずつ送るだけで、間を空ける仕組みはない。直したあと、4 ページの資料で、`create`・同じ Vids への `create --vids` 2 回・新しい Vids の `create` 2 回・`update`・`check` を 5 分ほどで続けて回し、どれも 550 なしの 1 回で通った（2026-10-26。前は 2026-10-24 に `create` 5 回のうち 3 回が最初の保存で断られ、2026-10-26 に `create --vids` が続けて断られていた）。
 - 2026-10-26: `vids-build` は公開されていない編集画面の作りを読んで真似ているので、作りが変わっても止まらないようにする（ユーザー「適切であれば良いですが、フロントエンドをリバースエンジニアリングして実装しているので、仕様が変わる可能性も考慮してくださいね。」）。編集画面の HTML に `sid` がなければ、2026-10-26 までのように自分で作った `sid` で保存を続け（それでも保存は通っていた）、閉じるセッションがわからないので `/leave` は送らず、`vids.py` が「要確認」を 1 回出す（止まったときはエラーに添える）。`sid` の形は 16 桁の 16 進に決め打ちしない。`/leave` は、断られても返ってこなくても止めず、待つのは 10 秒まで。
+- 2026-10-26: 定期のアップデート集めで、読む先（Slack のチャンネルと検索の語、メールの検索、RSS、wiki）を管理し、回ごとに学ぶスキル `source-scout` を足す。話題は持たず、目的・聞き手・分類・期間・まとめの形はプロンプトで受け取る（ユーザー「定期的に実行しアップデート情報を収集する際に参照する slack チャンネルなどを継続的に改善・学習するための仕組み・skills を作成してください。」「skills 自体は汎用的に作り、条件や目的はプロンプトで受け取る想定で仕上げてください。」「現状の実装にとらわれず、似たようなことをより効率的に行なっている OSS なども参考にしてください。」）。持ち主のワークスペースの `databricks-updates`（`sources.py`・`slack.md`）から、次を変える。
+  - 先を Slack に限らず `<kind>:<ref>` で持ち、台帳は JSON（`.desk/scout/<話題>/sources.json`）にする。md の表を正規表現で読むと、表の形を変えたときに黙って読めなくなるため。人が読む表は `scout.py sources` が出す。
+  - 載せた項目の手柄を、その項目が見えた先で割って配る（そこでしか見えなかった項目は 1、2 つの先なら 0.5 ずつ）。読むのをやめたら失う項目の数を見るため。前の数え方は元の投稿のチャンネルだけに数えたので、チャンネルを要約する bot は載せた項目の元にならず、2026-10-26 までの 12 回の記録を写すと、その bot は 0 件、新しい数え方では 20.5 件で、いちばん上になった。
+  - 新しい回ほど重くする（1 回古くなるごとに 0.93 倍。約 10 回で半分）。チャンネルの中身は時期で変わるため。候補の探索は、見込みの上限（UCB1）の高い順にし、新しいチャンネルを先にする。下げることは自動ではせず、ユーザーに聞く（前と同じ）。
+  - 前の回で取れなかった先は、取れなかった期間の始まりから読み直す（7 日まで）。Singer・Airbyte の stream ごとの bookmark にならう。タイムアウトで取れなかった先が、前は「取れなかった」と書くだけで、その日の分を落としていたため。
+  - 読み方の学びは、先ごとの短い覚え書きにし、効いた・外れたの票を数え、ほとんど同じ覚え書きは足さずに票を足す。ACE（Agentic Context Engineering、arXiv 2510.04618）の、項目に分けた playbook を差分で直す作りにならう。前は学びを SKILL.md と `slack.md` の文に書き足し、SKILL.md が 75 KB になって、毎回の文脈を食っていたため。
+  - 重複は、URL をそろえて（追跡の引数・`#`・末尾の `/` を外す）比べ、題の似たもの（difflib で 0.85 以上）は印だけ付ける。Horizon・auto-news など、RSS や SNS をまとめる OSS が、取ったあとに URL と中身の近さで重複を落としてから AI に選ばせる作りにならう（どちらも検索で見た説明による。コードは読んでいない）。
+  - 読み手の反応（スレッドの「要らない」など）は、項目の値（既定 1、要らないは 0）として、その項目が見えた先の手柄に戻す。
+  - 名前は `source-scout` にする。初めの `updates-digest` は、まとめ（digest）を作るスキルに見え、読む先を管理して学ぶという中身に合わないため。まとめを書くのは呼ぶ側で、このスキルは何を載せるかを決めない（ユーザー「updates-digest という名前は適切ですか？ 定期的に実行する際に、参照する先をインテリジェントに管理する。自己学習する という意図には合っていないように思います。」、候補の `source-scout`・`watchlist`・`desk-scout` から `source-scout` を選んだ）。記録の置き場所は `.desk/scout/<話題>/`、`record` の引数は `--published`（載せた md）にそろえた。
 
 ## 入れていないもの
 
-`databricks-updates`（毎朝のアップデートのまとめ）と `pi-compaction-report`（pi の運用レポート）は、使う人のチャット・フォルダ・セッションに結びついた個人の定期の作業なので入れていない。
+`databricks-updates`（毎朝のアップデートのまとめ）と `pi-compaction-report`（pi の運用レポート）は、使う人のチャット・フォルダ・セッションに結びついた個人の定期の作業なので入れていない。`databricks-updates` のうち、どこを読むかを集めて学ぶ部分は、話題を持たない `source-scout` として入れた（「決めたこと」の 2026-10-26）。分類・書き方・投稿先は、ワークスペースの側に残す。
 
 ## 残っている課題
 
 - **持ち主の本番の移し（後回し）:** 持ち主の本番は前の checkout（`~/Projects/ai-deck-factory`）を読んでいる。README の「前の名前から移る」のプロンプトで移す（ユーザー「プラグイン名の変更などが終わってないので、一旦後回しです」）。
+- **`source-scout` の残り（2026-10-26）:** 持ち主の `databricks-updates` は、まだ前の `sources.py` で回っている。このスキルが `main` に入ったら、`runs.jsonl` と `slack.md` の表を写し（`via` が B の項目は要約の bot のチャンネルを `seen_in` に足す。写しの試しは 2026-10-26 に `/tmp` で回した）、SKILL.md の 0・2 と `slack.md` の 7〜9 を `scout.py` の手順に替える。分類ごとの重み（社外秘の項目を公開の項目より重く数える、など）と、Thompson sampling（乱数で選ぶので selftest で確かめにくい）は入れていない。手柄の数え方は、写した 12 回の記録でしか確かめていない。
 - **流れの再編の残り（2026-10-18）:** `kaizen.py rebuild` が JSON のデッキで止まる（mats16/ai-desktools#57）。`visual.md` の決まりの例には、まだ Python の書き方（`d.note`・`d.table`・`d.label` など）が残る。
 - **ワークスペースのテーマの章番号の色（2026-10-16）:** テーマの確かめに「扉の章番号 / 扉の地、3:1」を足したので、章番号を地に近い色にしていたテーマは `slides.py lint <テーマのファイル>` で届かないと出る（持ち主の手元の 7 つのうち 6 つ。1.28〜1.90:1）。直す色の案は lint が出す。どの色にするかは、テーマごとに画像で見て持ち主が決める。
 - **WCAG 3 のコントラストの物差しが決まったら、lint を合わせる（2026-10-16）:** 今の lint は WCAG 2 の比で見る（4.5:1、18pt 以上は 3:1。太字だけは 11pt 以上を 3:1 にした。slides-visual-039）。WCAG 3 の草案（2026-09-10）は、文字のコントラストの物差しを「まだ決まっていない」としている。候補の 1 つの APCA（W3C の外で作られた計算）は、大きさと太さで要る値が細かく変わる（本文でない文字は 16px の太字で Lc 60）。太字の境目を 11pt に下げた決まり（slides-visual-039）も、そのときに決め直す。決まったら、lint の色の組のすべてと、4.5:1 に合わせて決めたテーマの色（visual.md・`themes/`・ワークスペースのテーマ）を測り直し、見本を `tests/render/run.py` で組んで画像で比べる。
