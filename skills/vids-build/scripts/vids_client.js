@@ -81,24 +81,38 @@
     return parse(t);
   }
 
-  // 保存は、ときどき 550 で断られる（[["er",…,550,…],["di",<40〜63>]]。断られた保存は何も書かない）。短い間に保存を重ねたあと（同じ Vids にも、同じアカウントの
-  // ほかの Vids にも）に続き、5〜10 分保存しないと通る（2026-10-22）。di の意味は分からない。同じ sid・reqId のまま、di より 5 秒長く待ち、版を読み直して送り直す（3 回まで）
+  // 保存は、短い間に保存を重ねると 550 で断られる（[["er",…,550,…,13],["di",<秒>]]。断られた保存は何も書かない）。保存はシーンごとに分けずにまとめ、
+  // 断られたら、di 秒から倍にして REST_CAP 秒まで待ち、RESENDS 回まで送り直す（notebooklm-py などの、Retry-After から倍にして上限で止める待ち方）。
+  // それでも断られたら止める（呼んだ側が、続きのコマンドを出す）。版は送り直す前に読み直す
+  const RESENDS = 3, REST_CAP = 300;
+  const REST = { scale: 1 }; // selftest で 0 にする（待たない）
+  const refused = (e) => String(e).includes("HTTP 550");
+  const restSeconds = (e, n) => Math.min(Number(String(e).match(/"di",(\d+)/)?.[1] ?? 60) * 2 ** n, REST_CAP); // n 回目（0 から）の送り直しの前に待つ秒
+
+  async function rest(doc, e, n) {
+    const s = restSeconds(e, n);
+    doc.waited.push(s);
+    await new Promise((r) => setTimeout(r, s * 1000 * REST.scale));
+    doc.rev = Math.max(doc.rev, ...(await editPage(doc.id).catch(() => ({ chunks: [] }))).chunks.map((c) => c.revision)); // 読み直せなくても送り直す（版は前のまま）
+  }
+
+  async function saveOnce(doc, commands, blobIdMap = {}, reqId = doc.reqId++) { // 送り直すときは同じ reqId
+    const res = await docs(doc, "save", {
+      rev: String(doc.rev), bundles: JSON.stringify([{ commands, sid: doc.sid, reqId }]),
+      ...(Object.keys(blobIdMap).length ? { blobIdMap: JSON.stringify(blobIdMap) } : {}),
+    }, { sid: doc.sid, vc: "1", c: "1", w: "1", flr: "0", smb: "[9, ]" });
+    doc.rev = res.revisionRanges.at(-1).at(-1);
+    return res;
+  }
+
   async function save(doc, commands, blobIdMap = {}) {
     const reqId = doc.reqId++;
-    for (let tries = 0; ; tries++) {
+    for (let n = 0; ; n++) {
       try {
-        const res = await docs(doc, "save", {
-          rev: String(doc.rev), bundles: JSON.stringify([{ commands, sid: doc.sid, reqId }]),
-          ...(Object.keys(blobIdMap).length ? { blobIdMap: JSON.stringify(blobIdMap) } : {}),
-        }, { sid: doc.sid, vc: "1", c: "1", w: "1", flr: "0", smb: "[9, ]" });
-        doc.rev = res.revisionRanges.at(-1).at(-1);
-        return res;
+        return await saveOnce(doc, commands, blobIdMap, reqId);
       } catch (e) {
-        if (tries === 3 || !String(e).includes("HTTP 550")) throw e;
-        const di = Number(String(e).match(/"di",(\d+)/)?.[1] ?? 60);
-        doc.waited.push(di + 5);
-        await new Promise((r) => setTimeout(r, (di + 5) * 1000));
-        doc.rev = Math.max(doc.rev, ...(await editPage(doc.id).catch(() => ({ chunks: [] }))).chunks.map((c) => c.revision)); // 読み直せなくても送り直す（版は前のまま）
+        if (!refused(e) || n === RESENDS) throw e;
+        await rest(doc, e, n);
       }
     }
   }
@@ -216,7 +230,7 @@
         181, `${title} (Provided by Shutterstock)`, 184, sceneIds[0], 190, 2, 200, 1, 204, -6, 58, p]]);
     }
 
-    // 元からあるシーン（空の Vids の 5 秒の空シーン "p"）を消す。[13, 今の並びの位置, 0, null, id] は画面の Delete と同じ
+    // 元からあるシーン（空の Vids の 5 秒の空シーン "p"。create --vids なら前の中身のすべて）を消す。[13, 今の並びの位置, 0, null, id] は画面の Delete と同じ
     // 同じ保存に入れると 550 になるので、組んだあとの保存で消す。音声の付いたシーンは消せない（550）ので、先に音声を [59] で消す（avatar も先に消す）
     const st = state(doc.model), old = st.scenes;
     await save(doc, [[20], [4, groups.flat()], ...(audio.length ? [[4, audio]] : [])], blobIdMap); // [20] は画面の最初の保存にあった。文字のコマンドと一緒に送ると 550
@@ -224,8 +238,8 @@
     const drop = [...oldMedia.map((m) => [59, m]), ...old.flatMap((id) => unplace(st, id))];
     if (drop.length) await save(doc, [[4, drop]]);
     const now = state((await editPage(doc.id)).chunks.flatMap((c) => c.chunk)).scenes; // 新しいシーンの入った並び
-    for (const id of old.filter((x) => now.includes(x)).sort((a, b) => now.indexOf(b) - now.indexOf(a))) // 後ろから消すと、前の位置は変わらない
-      await save(doc, [[13, now.indexOf(id), 0, null, id]]);
+    const gone = old.filter((x) => now.includes(x)).sort((a, b) => now.indexOf(b) - now.indexOf(a)); // 後ろから消すと、前の位置は変わらない
+    if (gone.length) await save(doc, [[4, gone.map((id) => [13, now.indexOf(id), 0, null, id])]]); // シーンごとに分けず 1 回で（保存を重ねると 550）
     return { vidsId, scenes: sceneIds.length, musicMs, revision: doc.rev, waited: doc.waited };
   }
 
@@ -345,34 +359,46 @@
     if (homeless.length) throw new Error(`シーン ${homeless} に avatar を置く場所がない（vids.py layout の --layout を渡す）`);
     // 控えは avatar なのに Vids に avatar が 1 つもない（音声だけから替える update が途中で止まった）。--layout なしでは音声のまま通ってしまうので止める
     if (avatar && !places && !Object.keys(av).length) throw new Error("この Vids には avatar がまだない。同じ --layout を渡して回し直す");
-    const jobs = [], moved = [];
+    const jobs = [], moved = [], text = [], moves = [];
     for (const { id, i, s, a, v, tf, want } of plan) {
       const cur = script(id);
       const good = cur === s && (s ? (want ? a?.md5 === md5b64(s) && a.actor === avatar.id && !v : v?.md5 === md5b64(s) && v.label?.endsWith(` - ${label}`) && !a) : !v && !a);
       if (good) {
-        if (want && JSON.stringify(tf) !== JSON.stringify(a.tf)) { await save(doc, [[6, a.id, tf]]); moved.push(i + 1); } // 動かすだけなら作り直さない
+        if (want && JSON.stringify(tf) !== JSON.stringify(a.tf)) { moves.push([6, a.id, tf]); moved.push(i + 1); } // 動かすだけなら作り直さない
         continue;
       }
-      if (cur !== s) await save(doc, [...(cur ? [[16, `${id}:notes_text`, null, 0, cur.length]] : []), ...(s ? [[15, `${id}:notes_text`, null, 0, s]] : [])]);
+      if (cur !== s) text.push(...(cur ? [[16, `${id}:notes_text`, null, 0, cur.length]] : []), ...(s ? [[15, `${id}:notes_text`, null, 0, s]] : []));
       jobs.push({ i, id, s, want, tf, look: a && { type: a.type, props: a.props }, drop: [...(v ? [[59, v.id]] : []), ...unplace(st, id)] });
     }
+    // 台本の文字と avatar の移動は、シーンごとに分けず、それぞれ 1 回で保存する（保存を重ねると 550）。文字は文字だけの保存で送る（[20] と一緒だと 550。internal_api.md）
+    if (text.length) await save(doc, [[4, text]]);
+    if (moves.length) await save(doc, [[4, moves]]);
     // 作るのは並べて（avatar は 3 つずつ）、できたものから保存する（タブが落ちても、保存したシーンは残る。回し直すと残りだけ作る）。
-    // 新しい音声は SAVE_EVERY シーンずつ 1 回の保存にまとめる（短い間に保存を重ねると 550 が続く。create は前から全シーンの音声を 1 回で保存していた）。
-    // avatar と、古い音声を外すシーンは 1 つずつすぐ保存する（使った avatar の回数を捨てない。外すのと置くのを何シーンも 1 回にまとめたことはない）。
-    // avatar の作業を先に回す（最初の 1 つの応答で、残りの回数が足りるかを見る）
+    // 音声は、古い音声を外すシーンも、SAVE_EVERY シーンずつ 1 回の保存にまとめる（短い間に保存を重ねると 550 が続く）。
+    // avatar は 1 つずつすぐ保存する（使った avatar の回数を捨てない）。avatar の作業を先に回す（最初の 1 つの応答で、残りの回数が足りるかを見る）
     jobs.sort((x, y) => y.want - x.want);
     const quota = {}, ready = [];
     let saving = Promise.resolve();
     const flush = () => (saving = saving.then(async () => { // 保存は 1 つずつ順に（版を順に進める）
-      const batch = ready.splice(0), cmds = batch.flatMap((b) => b.cmds);
-      if (cmds.length) await save(doc, [[4, cmds]], Object.assign({}, ...batch.map((b) => b.blobIdMap)));
+      for (let n = 0; ready.length; n++) {
+        const batch = ready.splice(0), cmds = batch.flatMap((b) => b.cmds);
+        if (!cmds.length) return;
+        try {
+          await saveOnce(doc, [[4, cmds]], Object.assign({}, ...batch.map((b) => b.blobIdMap)));
+          return;
+        } catch (e) {
+          if (!refused(e) || n === RESENDS) throw e;
+          ready.unshift(...batch);
+          await rest(doc, e, n); // 待つ間にできた音声も、次の 1 回にまとめて送る
+        }
+      }
     }));
     const made = await pool(jobs, avatar ? 3 : 1, async (j) => {
       const blobIdMap = {};
       const r = !j.s ? null : j.want ? await makeAvatar(doc, blobIdMap, j.id, j.s, avatar, j.tf, j.look) : await voiceover(doc, blobIdMap, j.id, j.s, voice, label, `${j.id}_vo_${doc.sid}`);
       lowest(quota, r?.quota);
       ready.push({ blobIdMap, cmds: [...j.drop, ...(r?.commands ?? (j.drop.length ? [[18, [j.id], [], [16, 5000]]] : []))] }); // 音声を外したシーンは、空の Vids の空シーンと同じ 5 秒にする（古い音声の長さのまま無音にしない）
-      if (j.want || j.drop.length || ready.length >= SAVE_EVERY) await flush();
+      if (j.want || ready.length >= SAVE_EVERY) await flush();
       return r ?? {};
     }, (r) => checkQuota(r, jobs.slice(1).filter((j) => j.want).length, quota));
     await flush(); // 残り。止まったときも、できたものは置いてから投げる
@@ -393,6 +419,6 @@
       ms: scenes.map((id) => (avatar[id] ? props(avatar[id].props).get(176) : voice[id]?.ms) ?? null) };
   }
 
-  window.VidsClient = { createFromSlides, updateScenes, inspect, _test: { SAVE_EVERY, md5b64, draftBody, ttsBody, avatarBody, avatarElement, state, unplace, pool } };
+  window.VidsClient = { createFromSlides, updateScenes, inspect, _test: { SAVE_EVERY, REST, RESENDS, restSeconds, md5b64, draftBody, ttsBody, avatarBody, avatarElement, state, unplace, pool } };
   return "VidsClient loaded";
 })();

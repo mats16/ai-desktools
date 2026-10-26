@@ -180,8 +180,8 @@ def check_closed(browser, vid):
 
 
 def build(browser, vid, slides_id, scenes, music):
-    """空の Vids に、Slides のページ（scenes の pageId）をシーンにして、台本（script）・画像・BGM（music が真なら）を保存する。音声と avatar は作らない。
-    前からあるシーン（空の Vids の空シーン）は、組んだあとに消える。1 回だけ回す（途中でつながりがなくなれば Lost。作りかけの Vids の始末は呼んだ側）。
+    """Vids に、Slides のページ（scenes の pageId）をシーンにして、台本（script）・画像・BGM（music が真なら）を保存する。音声と avatar は作らない。
+    前からあるシーン（空の Vids の空シーン。create --vids なら前の中身のすべて）は、音声・BGM・avatar と一緒に、組んだあとに消える。1 回だけ回す（途中でつながりがなくなれば Lost。作りかけの Vids の始末は呼んだ側）。
     戻り: {"scenes", "musicMs", "waited", …}"""
     r, = in_tab(browser, ("createFromSlides", {"vidsId": vid, "slidesId": slides_id, "music": music,
                                               "scenes": [{"pageId": s["pageId"], "script": s["script"]} for s in scenes]}))
@@ -241,6 +241,8 @@ for (const s of ["", "abc", "[enthusiasm] 日本語の台本です。".repeat(40
 const d = t.draftBody("V", "S", [{pageId: "p1", script: "台本"}], "docs-preset-voice-achird");
 if (d[0][0] !== 33 || d[0][2][25][0][0][0][0] !== "S" || d[0][2][8][3][0][0][7][2][0][0] !== "V") throw new Error("draft ids");
 if (d[0][3][28][1][3][0][0][8][1][0][1][13][2][2] !== "台本" || d[0][4][3][0][8][0] !== "docs-preset-voice-achird") throw new Error("draft scene");
+// 断られたら di 秒から倍にして待ち、300 秒で止める（di がなければ 60 秒から）
+if ([0, 1, 2, 3].map((n) => t.restSeconds('[["di",50]]', n)).join() !== "50,100,200,300" || t.restSeconds("HTTP 550", 0) !== 60) throw new Error("restSeconds");
 const s = t.ttsBody("台本", "Achird");
 if (s[0] !== 254 || s[2][11][0] !== 16 || s[2][19] !== 1 || s[2].length !== 41 || s[3][2] !== "台本" || s[4][25][0] !== "Achird") throw new Error("tts");
 // 文書のモデルの読み方: シーンの追加と削除、台本の文字の挿入と削除、音声の追加と削除（画面の保存の形、2026-10-21）
@@ -270,8 +272,8 @@ if ("a" in gone.avatar || gone.timing.a.join() !== "x") throw new Error("state a
 // updateScenes: 新しい音声は SAVE_EVERY シーンずつ保存し、途中で止まっても、できたシーンは保存してから止まる。回し直すと残りだけ作る
 // （タブが落ちたときの続き。通信は fetch の差し替えで、Vids の文書のモデルに保存を足していく）
 async function resumes() {
-  const n = t.SAVE_EVERY + 2, model = [], saves = [];
-  let tts = 0, failAt = n;
+  const n = t.SAVE_EVERY + 2, model = [], saves = [], drops = [];
+  let tts = 0, failAt = n, calls = 0, refused = 0, refuse = () => false;
   for (let i = 0; i < n; i++) model.push([12, `s${i}`, null, 0], [15, `s${i}:notes_text`, null, 0, `台本${i}`]);
   globalThis.document = { cookie: "SAPISID=x" };
   const ok = (o) => ({ ok: true, text: async () => (typeof o === "string" ? o : JSON.stringify(o)) });
@@ -280,8 +282,9 @@ async function resumes() {
     if (url.includes("/genai/generate")) return ++tts === failAt ? { ok: false, status: 500, text: async () => "x" } : ok([[`K${tts}`, "bard_storage", null, "lookup_temp_data"]]);
     if (url.includes("/insertmedia")) return ok({ [Object.keys(JSON.parse(new URLSearchParams(opt.body).get("insert_media_requests")))[0]]: { ms: "OK", ni: "N", sb: "4844" } });
     if (url.includes("/save")) {
+      if (refuse(++calls)) { refused++; return { ok: false, status: 550, text: async () => ')]}\'\n[["er",null,null,null,null,550,null,null,null,13],["di",1]]' }; }
       const cmds = JSON.parse(new URLSearchParams(opt.body).get("bundles"))[0].commands.flatMap((c) => (c[0] === 4 ? c[1] : [c]));
-      saves.push(cmds.filter((c) => c[0] === 58).length); model.push(...cmds);
+      saves.push(cmds.filter((c) => c[0] === 58).length); drops.push(cmds.filter((c) => c[0] === 59).length); model.push(...cmds);
       return ok({ revisionRanges: [[1, 2]] });
     }
     throw new Error("fetch " + url);
@@ -292,6 +295,16 @@ async function resumes() {
   failAt = 0; saves.length = 0;
   const r = await run();
   if (saves.join() !== "1" || r.updated.join() !== String(n)) throw new Error(`updateScenes の続き: ${saves} ${JSON.stringify(r.updated)}`);
+  // 全シーンの台本が変わった: 文字は 1 回で保存し、古い音声を外すシーンも SAVE_EVERY シーンずつまとめる。
+  // 音声の保存が 550 で断られたら待って送り直す（待つあいだにできた音声も同じ 1 回に。シーンごとに送り直さない）
+  t.REST.scale = 0; saves.length = 0; drops.length = 0; calls = 0; refuse = (k) => k === 2;
+  const r2 = await window.VidsClient.updateScenes({ vidsId: "V", scripts: Array.from({ length: n }, (_, i) => `新しい台本${i}`) });
+  if (saves.join() !== `0,${t.SAVE_EVERY},${n - t.SAVE_EVERY}` || drops.join() !== `0,${t.SAVE_EVERY},${n - t.SAVE_EVERY}` || refused !== 1 || r2.waited.length !== 1)
+    throw new Error(`updateScenes の保存の数: ${saves} ${drops} 断り ${refused} 待ち ${r2.waited}`);
+  // 送り直しも断られ続けたら止める（1 つの保存で、初めの 1 回と送り直し RESENDS 回まで）
+  refused = 0; refuse = () => true;
+  const stuck = await window.VidsClient.updateScenes({ vidsId: "V", scripts: Array.from({ length: n }, (_, i) => `三つめの台本${i}`) }).then(() => null, (e) => e);
+  if (!String(stuck).includes("HTTP 550") || refused !== t.RESENDS + 1) throw new Error(`断られ続けた保存: ${refused} 回 ${stuck}`);
 }
 // pool: 1 つ失敗したら、ほかの手は新しく始めない（avatar の回数を捨てる結果に使わない）
 // できたものは残して、失敗を out.stopped で返す（呼んだ側が置いてから投げる）
