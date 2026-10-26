@@ -17,7 +17,7 @@ usage:
   scout.py set <topic> --from <file.json>        台帳に読む先をまとめて足す（[{"id": …, "tier": …}, …]）
   scout.py --selftest
 先の id は <kind>:<ref>（slack:C0123456789、slack-search:japaneast、gmail:label:product-news、feed:https://…/feed.xml、wiki:<ページ>）。"""
-import difflib, html, ipaddress, json, math, re, sys, urllib.parse, urllib.request
+import difflib, html, ipaddress, json, math, re, sys, urllib.error, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -400,6 +400,18 @@ def unsafe_feed(url):
     return "" if ip.is_global else "手元・社内の IP アドレスの URL は開かない"
 
 
+class SafeRedirect(urllib.request.HTTPRedirectHandler):
+    """転送先にも unsafe_feed を当てる（公開の URL から 127.0.0.1 などへ 302 で送られても、つなぐ前に止める）。"""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if why := unsafe_feed(newurl):
+            raise urllib.error.URLError(f"転送先を開かない（{why}）: {newurl}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+OPENER = urllib.request.build_opener(SafeRedirect)
+
+
 def feeds(topic, out=None):
     reg, rows = registry(topic), runs(topic)
     p = read_json(folder(topic) / "plan.json", None) or sys.exit("plan.json がない。先に plan を回す")
@@ -414,7 +426,7 @@ def feeds(topic, out=None):
             continue
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=60) as r:
+            with OPENER.open(req, timeout=60) as r:
                 got = parse_feed(r.read(), start(since, until, st[sid]))
         except Exception as x:  # 1 つのフィードが落ちても、ほかは取る。取れなかった先は次の回に取り戻す
             res["reads"].append({"source": sid, "name": e.get("name", ""), "ok": False, "error": str(x)[:200]})
@@ -444,6 +456,8 @@ def merge(topic, files, out):
     by = {}
     for f in files:
         d = read_input(f)
+        if isinstance(d, dict) and ("items" in d or "id" in d):
+            sys.exit(f"{f} は回の記録（merge の出力）で、子の返事ではない。子の返事と feeds の出力だけを渡す")
         if not isinstance(d, dict) or not all(isinstance(d.get(k, []), list) and all(isinstance(x, dict) for x in d.get(k, []))
                                               for k in ("reads", "candidates", "discovered", "misses", "lessons", "votes", "feedback")):
             sys.exit(f"{f} は子の返事の形でない（../prompt_collect.md の Return。各項目はオブジェクトのリスト）")
@@ -456,18 +470,28 @@ def merge(topic, files, out):
         for k in ("discovered", "misses", "lessons", "votes", "feedback"):
             run[k] += d.get(k, [])
         for c in d.get("candidates", []):
-            ks = keys(c)
-            hit = next((by[k] for k in ks if k in by), None)
-            if hit is None:
+            hits = []
+            for k in keys(c):  # 候補の URL のどれかで当たった前の項目を、全部集める（別名で 2 つの項目がつながることがある）
+                if k in by and all(by[k] is not h for h in hits):
+                    hits.append(by[k])
+            if not hits:
                 hit = {**c, "seen_in": sorted(set(c.get("seen_in", [])))}
                 run["items"].append(hit)
-            else:  # 同じ項目: 見えた先と別の URL を足す。いちばん元の投稿（origin）は、先に書いた子のものを残す
-                hit["seen_in"] = sorted(set(hit["seen_in"]) | set(c.get("seen_in", [])))
-                hit["urls"] = sorted((set(hit.get("urls", [])) | {c.get("url")} | set(c.get("urls", []))) - {hit.get("url"), None})
-                if c.get("origin") and not hit.get("origin"):
-                    hit["origin"] = c["origin"]
+            else:  # 同じ項目: 見えた先と別の URL を足す。いちばん元の投稿（origin）は、先に出た項目のものを残す
+                hit = hits[0]
+                for other in [*hits[1:], c]:
+                    hit["seen_in"] = sorted(set(hit["seen_in"]) | set(other.get("seen_in", [])))
+                    hit["urls"] = sorted((set(hit.get("urls", [])) | {other.get("url")} | set(other.get("urls", []))) - {hit.get("url"), None})
+                    if other.get("origin") and not hit.get("origin"):
+                        hit["origin"] = other["origin"]
+                run["items"] = [i for i in run["items"] if all(i is not h for h in hits[1:])]
             for k in keys(hit):
                 by[k] = hit
+    got = {rd["source"] for rd in run["reads"]}
+    for sid, since in starts.items():  # plan にあって返事のない先（子が落ちた組、feeds を回さなかった）は、取れなかったとして次の回に読み直す
+        if sid not in got:
+            run["reads"].append({"source": sid, "ok": False, "since": since, "error": "返事がない（子が落ちたか、組を渡さなかった）",
+                                 **({"explore": True} if sid in explore else {})})
     for i in run["items"]:
         if d := next((pub[k] for k in keys(i) if k in pub), None):
             i["dup"] = d[0][:10]
@@ -887,6 +911,26 @@ def selftest():
                 raise AssertionError(f"形の違う子の返事で止まらない: {bad_child}")
             except SystemExit:
                 pass
+        alias = {"candidates": [{"title": "A", "url": "https://n/a", "seen_in": ["slack:A"]}, {"title": "B", "url": "https://n/b", "seen_in": ["slack:B"]},
+                                {"title": "A", "url": "https://n/a", "urls": ["https://n/b"], "seen_in": ["slack:M"]}]}
+        (Path(d) / "alias.json").write_text(json.dumps(alias))
+        q(merge, "t", [str(Path(d) / "alias.json")], str(Path(d) / "alias_run.json"))
+        alias_run = json.loads((Path(d) / "alias_run.json").read_text())
+        items = alias_run["items"]
+        planned = {e["id"]: e["since"] for g in read_json(folder("t") / "plan.json", {})["groups"] for e in g["sources"]}
+        assert planned and {r["source"]: (r["ok"], r["since"]) for r in alias_run["reads"]} == {k: (False, v) for k, v in planned.items()}  # 返事のない先は取れなかった読み
+        assert len(items) == 1 and items[0]["seen_in"] == ["slack:A", "slack:B", "slack:M"], items  # 別名でつながった 2 項目は 1 つに
+        try:
+            q(merge, "t", [str(Path(d) / "alias_run.json")], str(Path(d) / "x.json"))  # 前の回の記録を子の返事として取り込まない
+            raise AssertionError("回の記録を子の返事として取り込んだ")
+        except SystemExit:
+            pass
+        req = urllib.request.Request("https://example.com/feed.xml")
+        try:
+            SafeRedirect().redirect_request(req, None, 302, "Found", {}, "http://127.0.0.1/x")
+            raise AssertionError("手元への転送で止まらない")
+        except urllib.error.URLError:
+            pass
         mixed = [{"id": "a", "until": "2026-10-26T07:00+09:00"}, {"id": "b", "until": "2026-10-25T23:30+00:00"}]
         assert [r["id"] for r in sorted(mixed, key=run_time)] == ["a", "b"]  # 時差が違っても時刻の順
         assert unsafe_feed("http://169.254.169.254/x") and unsafe_feed("http://localhost/f") and unsafe_feed("http://10.0.0.1/f")
