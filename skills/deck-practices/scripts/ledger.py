@@ -814,6 +814,8 @@ def effects(ws, plugin=PLUGIN):
             verdict = "指摘なし（前も後も出ていないので、効いたかは分からない）"  # 守られているだけのこともある（rules.md の "Verifying rules"）。下ろす案にしない
         elif rate(mis, after) > rate(mis, before):
             verdict = "害が出た（誤りか聞くが増えた）"
+        elif rate(sig, after) > rate(sig, before) and len(sig & after) >= TWICE:  # 指摘の出た資料の割合が増えた（後の 1 本だけなら揺れのうち）
+            verdict = "害が出た（指摘が増えた）"
         elif rate(sig, after) < rate(sig, before):
             verdict = "効いた"
         else:
@@ -1415,6 +1417,31 @@ def selftest_effects(quiet):
         with quiet():
             assert "slides-visual-900" not in {rid for rid, *_ in effects(ws, plug)}  # 前の資料（読めない控えの指紋）が数えられなくなり、比べる前がない
         assert not list((ws / ".desk" / "harness").glob("*.part"))
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as root:  # 1 つだけ変えた決まりの、悪くなった・同じ・よくなった（ほかの決まりは別のファイル）
+        ws, plug = Path(d).resolve(), Path(root) / "skills"
+        (ws / "desk.toml").write_text("")
+        for name, rid in (("w", "slides-visual-910"), ("s", "slides-visual-911"), ("b", "slides-visual-912")):
+            (plug / name).mkdir(parents=True)
+            (plug / name / "a.md").write_text(f"- [{rid}] 前の文。\n")
+        made = lambda deck, fp: write(ws, {"kind": "harness", "deck": deck, "fp": fp})
+        said = lambda deck, to: write(ws, {"kind": "correction", "deck": deck, "quote": "x", "fix": "", "to": to, "check": "なし", "session": "", "decided": False, "by": "session"}, ("correction", "c-", 4))
+        fp0 = fingerprint(ws, plug)
+        for deck in ("Internal/b1", "Internal/b2"):
+            made(deck, fp0)
+        for deck in ("Internal/b1", "Internal/b2"):
+            said(deck, "slides-visual-911")  # 同じ: 前 2/2
+            said(deck, "slides-visual-912")  # よくなった: 前 2/2
+        for name in ("w", "s", "b"):
+            (plug / name / "a.md").write_text((plug / name / "a.md").read_text().replace("前の文", "後の文"))
+        fp1 = fingerprint(ws, plug)
+        for deck in ("Internal/a1", "Internal/a2"):
+            made(deck, fp1)
+            said(deck, "slides-visual-910")  # 悪くなった: 前 0/2 → 後 2/2
+            said(deck, "slides-visual-911")  # 同じ: 後 2/2
+        with quiet():
+            got = {rid: (b, a, verdict) for rid, _, b, a, verdict in effects(ws, plug)}
+        assert got["slides-visual-910"] == ((2, 0, 0), (2, 2, 0), "害が出た（指摘が増えた）"), got
+        assert got["slides-visual-911"][2] == "変わらない" and got["slides-visual-912"][2] == "効いた", got
     with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as root:  # 決まりをきっかけの指摘と同じ会話で書いても、同じときに変わったほかの決まりを「混ざっている」に出す
         ws, plug = Path(d).resolve(), Path(root) / "skills"
         (ws / "desk.toml").write_text("")
