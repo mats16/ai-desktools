@@ -19,6 +19,7 @@ If the conversation was opened under `sandbox/`, ignore this file. That folder i
 | `extensions/rules.ts` | The pi extension. Calls `rules_overlay.py` |
 | `.claude-plugin/` | Plugin and marketplace definitions. Codex reads these too |
 | `tests/render/` | Builds the samples and checks them as images (`run.py`; per-page checks in `expect.json`) |
+| `tests/skills/` | Checks the shape of each skill (`check.py`: `SKILL.md` size, `description` length, every file linked from `SKILL.md`). Runs with the selftests and before `kaizen.py open` |
 | `docs/` | Installation and development guides. `docs/fixtures/` holds the prompts for prompt tests |
 | 「決めたこと」 and 「残っている課題」 in README | Decisions the user made, and work deferred |
 

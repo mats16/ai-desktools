@@ -105,13 +105,17 @@ The exit status is 1 if lint reports `要修正` or `--judge` reports NG. `--jud
 After changing the JSON page schema or the skill descriptions, give a prompt from [fixtures/](fixtures/) to a child agent with no conversation context, have it write the deck, and check the result against 「見るところ」 in each file (modeled on pom's dev-fixtures; 2026-10-16). Selftests can't tell whether the descriptions alone lead to the right components.
 
 ```sh
-rsync -a --exclude sandbox --exclude .git <worktree>/ /tmp/adf-plugin/   # under a dot folder, claude -p children can't read the plugin either ("Claude Code" above)
+rsync -a --exclude sandbox --exclude .git --exclude docs --exclude tests <worktree>/ /tmp/adf-plugin/   # under a dot folder, claude -p children can't read the plugin either ("Claude Code" above)
 cp -R <worktree>/sandbox /tmp/adf-fixture && cd /tmp/adf-fixture
-claude --plugin-dir /tmp/adf-plugin -p "$(sed -n '/^```text$/,/^```$/p' /tmp/adf-plugin/docs/fixtures/02-gantt.md | sed '1d;$d')" \
-  --permission-mode acceptEdits --allowedTools "Bash(python3:*)" "Bash(uv run:*)" "Bash(ls:*)" "Bash(mkdir:*)"
+claude --plugin-dir /tmp/adf-plugin -p "$(sed -n '/^```text$/,/^```$/p' <worktree>/docs/fixtures/02-gantt.md | sed '1d;$d')" \
+  --permission-mode acceptEdits --disallowedTools WebFetch WebSearch --allowedTools "Bash(python3:*)" "Bash(uv run:*)" "Bash(ls:*)" "Bash(mkdir:*)"
 ```
 
+Leave `docs/` and `tests/` out of the copy, so the child can't read 「見るところ」 (the checks you grade it by) or `tests/render/expect.json`. A child that can reach the answer key may read it without being told to: Harness² found a Codex run fetching its own task's rubric (2026-10-25 in 「決めたこと」 in README). The fixtures are also public on GitHub, so keep web tools away from the child: `claude -p` inherits the allow rules in your `~/.claude/settings.json` (such as `WebFetch(domain:github.com)`), and `--allowedTools` only adds to them, so deny them with `--disallowedTools`, which wins over allow rules.
+
 Look at the files the child wrote and the lint results, and where it hesitated over how to write something, fix the schema or the descriptions. Make each prompt differ in content from the samples (`skills/slides-build/samples/json/`); otherwise you can't tell whether the child only copied a sample. Delete `/tmp/adf-plugin` and `/tmp/adf-fixture` when done.
+
+To compare a change against `main` on the same fixtures, `kaizen.py probe` in `desk-kaizen` does this for both versions and has a blind child pick one. It compares `.desk/kaizen/<name>/repo` with `base/` (GitHub's `main`, both made by `kaizen.py start`), not the worktree, so commit the change in `repo/` first.
 
 ## Try the worktree in the production workspace
 

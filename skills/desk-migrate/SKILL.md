@@ -12,7 +12,7 @@ M=<this skill's folder>/scripts/migrate.py
 python3 $M check                 # what would move and change. Changes nothing
 python3 $M apply                 # backup to .desk/migrate/<time>/, then move and rewrite
 python3 $M relink <P-ID> <rules/ file>|--split   # decide where a ledger proposal goes after the split (from 「要判断」)
-python3 $M rename-id <old> <new> # rename one workspace rule ID everywhere (rules/, AGENTS.md, memory.md, the ledger); only for a mistyped or colliding ID
+python3 $M rename-id <old> <new> # rename one workspace rule ID everywhere (rules/, AGENTS.md, memory.md, the ledger, the harness snapshots in .desk/harness/); only for a mistyped or colliding ID
 python3 $M to-user               # move <workspace>/desk.toml to ~/.desk.toml and add workspace (see below)
 ```
 

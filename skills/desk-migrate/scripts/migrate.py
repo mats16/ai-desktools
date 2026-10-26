@@ -39,6 +39,7 @@ SPLIT = {  # 中身を場面ごとに分けたプラグインのファイル。�
     "docs-build/SKILL.md": "docs-build/SKILL.md・lint.md・api.md・themes.md・templates.md（前の doc-build/SKILL.md）",
     "deck-review/SKILL.md": "deck-review/SKILL.md・ask.md・fix.md・prompt_fix.md、deck-practices/agents.md（子の起こし方）",
     "desk-dreaming/SKILL.md": "desk-dreaming/SKILL.md・run.md・apply.md",
+    "desk-dreaming/run.md": "desk-dreaming/run.md・prompt_propose.md（4 の a〜d の案の出し方。2026-10-25）",
     "slides-template/SKILL.md": "slides-template/SKILL.md・create.md・dark.md・fonts.md",
     "vids-build/SKILL.md": "vids-build/SKILL.md・avatars.md",
     "deck-practices/content.md": "deck-practices/content.md・content_customer.md・content_internal.md・content_explain.md（§1 の資料の種類ごとの決まり）"}
@@ -468,6 +469,15 @@ def rename_id(ws, old, new):
         if p.is_file() and pat.search(t := p.read_text(encoding="utf-8")):
             p.write_text(ledger_lines(p, lambda v: pat.sub(new, v)) if p.suffix == ".jsonl" else pat.sub(new, t), encoding="utf-8")
             out.append(f"書き換えた: {p.relative_to(ws)}")
+    for p in sorted((ws / ".desk" / "harness").glob("*.json")):  # 指紋ごとの決まりの控え（ledger.py effects が読む）も同じ ID にする（前の資料が、ID が変わっただけで「前」に入らないように）
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        if old in d.get("rules", {}):
+            d["rules"][new] = d["rules"].pop(old)
+            p.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+            out.append(f"書き換えた: {p.relative_to(ws)}")
     return out or [f"{old} はどこにもない"]
 
 
@@ -564,7 +574,9 @@ def selftest():
         assert relink_files(ws)[2]["P0003"] == {"to": "rules/slides-build/workflow.md", "from": "rules/deck-practices/SKILL.md"}
         put("rules/slides-build/workflow.md", moved)
         assert needs(ws) == [] and apply(ws) == ["移すものはない（今の版）"]  # 2 回目は何もしない
+        put(".desk/harness/abc-def.json", json.dumps({"ts": "x", "rules": {"ws-slides-visual-001": ["rules/slides-build/visual.md", "12345678"]}}))
         assert rename_id(ws, "ws-slides-visual-001", "ws-slides-pages-001") and "ws-slides-pages-001" in (ws / ".desk" / "ledger.jsonl").read_text()
+        assert json.loads((ws / ".desk" / "harness" / "abc-def.json").read_text())["rules"] == {"ws-slides-pages-001": ["rules/slides-build/visual.md", "12345678"]}  # 控えも同じ ID に
         assert "[ws-slides-pages-001]" in (r / "slides-build" / "visual.md").read_text()
     with tempfile.TemporaryDirectory() as tmp:  # 今の版で作ったワークスペースの、普通の足す提案は前の版にしない
         ws = Path(tmp)
