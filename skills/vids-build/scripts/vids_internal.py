@@ -271,17 +271,24 @@ const gone = t.state([...am, [36, 0, "a"], [0, ["a_av_actor50_s"]]]);
 if ("a" in gone.avatar || gone.timing.a.join() !== "x") throw new Error("state avatar removed");
 // updateScenes: 新しい音声は SAVE_EVERY シーンずつ保存し、途中で止まっても、できたシーンは保存してから止まる。回し直すと残りだけ作る
 // （タブが落ちたときの続き。通信は fetch の差し替えで、Vids の文書のモデルに保存を足していく）
+// 保存は、編集画面の HTML が渡した sid（読むたびに新しいセッション）で送り、開いたセッションはすべて /leave で閉じる（止まったときも）
 async function resumes() {
-  const n = t.SAVE_EVERY + 2, model = [], saves = [], drops = [];
-  let tts = 0, failAt = n, calls = 0, refused = 0, refuse = () => false;
+  const n = t.SAVE_EVERY + 2, model = [], saves = [], drops = [], opened = new Set(), left = new Set();
+  let tts = 0, failAt = n, calls = 0, refused = 0, refuse = () => false, hang = false, noSid = false;
   for (let i = 0; i < n; i++) model.push([12, `s${i}`, null, 0], [15, `s${i}:notes_text`, null, 0, `台本${i}`]);
   globalThis.document = { cookie: "SAPISID=x" };
   const ok = (o) => ({ ok: true, text: async () => (typeof o === "string" ? o : JSON.stringify(o)) });
   globalThis.fetch = async (url, opt = {}) => {
-    if (url.endsWith("/edit")) return ok(`"info_params":{"token":"t","ouid":"o"} "espresso_api_key":"k" var modelChunk = ${JSON.stringify({ chunk: model, revision: 1 })}; var modelChunkParseEnd`);
+    if (url.endsWith("/edit")) {
+      const sid = (opened.size + 1).toString(16).padStart(16, "0"); opened.add(sid);
+      return ok(`"info_params":{"token":"t","ouid":"o"} "espresso_api_key":"k" ${noSid ? "" : `sid: '${sid}', `}session: 'x' var modelChunk = ${JSON.stringify({ chunk: model, revision: 1 })}; var modelChunkParseEnd`);
+    }
+    if (url.includes("/leave")) { left.add(new URL(url, "https://x").searchParams.get("sid")); return hang ? new Promise(() => {}) : ok("{}"); }
     if (url.includes("/genai/generate")) return ++tts === failAt ? { ok: false, status: 500, text: async () => "x" } : ok([[`K${tts}`, "bard_storage", null, "lookup_temp_data"]]);
     if (url.includes("/insertmedia")) return ok({ [Object.keys(JSON.parse(new URLSearchParams(opt.body).get("insert_media_requests")))[0]]: { ms: "OK", ni: "N", sb: "4844" } });
     if (url.includes("/save")) {
+      const sid = new URL(url, "https://x").searchParams.get("sid");
+      if (noSid ? !/^[0-9a-f]{16}$/.test(sid) || opened.has(sid) : !opened.has(sid) || left.has(sid) || JSON.parse(new URLSearchParams(opt.body).get("bundles"))[0].sid !== sid) throw new Error(`開いていないセッションの保存: ${sid}`);
       if (refuse(++calls)) { refused++; return { ok: false, status: 550, text: async () => ')]}\'\n[["er",null,null,null,null,550,null,null,null,13],["di",1]]' }; }
       const cmds = JSON.parse(new URLSearchParams(opt.body).get("bundles"))[0].commands.flatMap((c) => (c[0] === 4 ? c[1] : [c]));
       saves.push(cmds.filter((c) => c[0] === 58).length); drops.push(cmds.filter((c) => c[0] === 59).length); model.push(...cmds);
@@ -305,6 +312,19 @@ async function resumes() {
   refused = 0; refuse = () => true;
   const stuck = await window.VidsClient.updateScenes({ vidsId: "V", scripts: Array.from({ length: n }, (_, i) => `三つめの台本${i}`) }).then(() => null, (e) => e);
   if (!String(stuck).includes("HTTP 550") || refused !== t.RESENDS + 1) throw new Error(`断られ続けた保存: ${refused} 回 ${stuck}`);
+  if (opened.size !== 4 + 1 + t.RESENDS || [...opened].some((x) => !left.has(x))) throw new Error(`閉じていないセッション: 開いた ${opened.size}、閉じた ${left.size}`);
+  // /leave が返ってこなくても、待つのは LEAVE.ms まで（呼び出しの結果は返す）
+  t.LEAVE.ms = 10; hang = true;
+  const seen = await window.VidsClient.inspect({ vidsId: "V", scripts: [] });
+  if (seen.scenes !== n) throw new Error(`/leave が返らないときの inspect: ${JSON.stringify(seen)}`);
+  // 編集画面に sid がなければ（画面の作りが変わった）、自分で作った sid で保存を続け、/leave は送らず、ownSid で知らせる
+  hang = false; noSid = true; refuse = () => false; left.clear(); saves.length = 0;
+  const own = await window.VidsClient.updateScenes({ vidsId: "V", scripts: Array.from({ length: n }, (_, i) => `四つめの台本${i}`) });
+  if (!own.ownSid || !saves.length || left.size) throw new Error(`sid のない編集画面: ${JSON.stringify(own)} 保存 ${saves} 閉じた ${left.size}`);
+  // 自分で作った sid で止まったら、そのことをエラーに添える（原因かもしれない）
+  refuse = () => true;
+  const ownStuck = await window.VidsClient.updateScenes({ vidsId: "V", scripts: Array.from({ length: n }, (_, i) => `五つめの台本${i}`) }).then(() => null, (e) => e);
+  if (!String(ownStuck).includes("HTTP 550") || !String(ownStuck).includes(t.OWN_SID)) throw new Error(`自分の sid で止まったとき: ${ownStuck}`);
 }
 // pool: 1 つ失敗したら、ほかの手は新しく始めない（avatar の回数を捨てる結果に使わない）
 // できたものは残して、失敗を out.stopped で返す（呼んだ側が置いてから投げる）

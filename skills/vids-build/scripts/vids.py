@@ -319,11 +319,17 @@ def report(c, scenes, ok_readers):
 
 
 def waited(r):
+    if r.get("ownSid") and not waited.told:  # create は 2 回の呼び出しの結果を出すので、知らせるのは 1 回
+        waited.told = True
+        print("要確認: 編集画面の sid を読めなかったので、自分で作った sid で保存した。画面の作りが変わったかもしれない（vids-build/internal_api.md）")
     if r.get("waited"):
         print(f"保存が 550 で断られ、待って送り直した: {len(r['waited'])} 回、{sum(r['waited'])} 秒")
     q = r.get("quota") or {}
     if "left" in q:
         print(f"avatar の今月の残り: {q['left']} 回（上限 {q['limit']}）")
+
+
+waited.told = False
 
 
 def music_of(ms):
@@ -573,6 +579,10 @@ def selftest():
     except SystemExit as e:
         assert "--avatar none" in str(e)
     import contextlib, io
+    with contextlib.redirect_stdout(io.StringIO()) as out:  # 編集画面の sid を読めなかったら、1 回だけ知らせる
+        waited({"ownSid": True, "waited": []}); waited({"ownSid": True, "waited": []})
+    assert out.getvalue().count("要確認") == 1
+    waited.told = False
 
     def stops(*a):
         try:

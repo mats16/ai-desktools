@@ -55,20 +55,60 @@
     return parse(t);
   }
 
-  async function editPage(vidsId) { // 編集画面の HTML の info_params（token・ouid）と、文書のモデルの塊
+  // 編集画面の HTML の info_params（token・ouid）、sid、文書のモデルの塊。サーバーは読むたびに新しいセッションを開き、その sid を HTML に書く
+  // （sid: '<16 桁の 16 進>'。画面はこの sid で保存し、タブを閉じるときに /leave で閉じる。2026-10-26）。読んだら、使い終わったところで leave する
+  async function editPage(vidsId) {
     const t = await (await fetch(`/videos/d/${vidsId}/edit`, { credentials: "include" })).text();
     const info = t.match(/"info_params":(\{[^}]*\})/), chunks = [...t.matchAll(/var modelChunk = (\{.*?\}); var modelChunkParseEnd/gs)].map((m) => JSON.parse(m[1]));
     if (!info || !chunks.length) throw new Error(`Vids ${vidsId} の編集画面を読めない（ログインの画面か、画面の作りが変わった）`);
-    return { info: JSON.parse(info[1]), key: t.match(/"espresso_api_key":"([\w-]+)"/)?.[1], chunks };
+    return { info: JSON.parse(info[1]), key: t.match(/"espresso_api_key":"([\w-]+)"/)?.[1], sid: t.match(/\bsid: '([\w-]+)'/)?.[1], chunks };
   }
 
-  async function openDoc(vidsId) { // 編集画面の HTML から、token・ouid・リビジョン。sid は自分で作る（16 桁の 16 進）
-    const { info, key, chunks } = await editPage(vidsId);
-    if (!key) throw new Error("編集画面に genai のキー（espresso_api_key）がない");
-    const rev = Math.max(...chunks.map((c) => c.revision));
-    const sid = [...crypto.getRandomValues(new Uint8Array(8))].map((x) => x.toString(16).padStart(2, "0")).join("");
-    return { id: vidsId, token: info.token, ouid: info.ouid, key, rev, sid, reqId: 0, ph: 0, waited: [], model: chunks.flatMap((c) => c.chunk) };
+  // 編集画面の HTML から、token・ouid・sid・リビジョン。1 回の呼び出しは、この 1 つのセッションで保存する。
+  // 内部の作りは公開されておらず変わりうるので、sid が読めなければ、2026-10-26 までのように自分で作った sid で続ける（それでも保存は通っていた）。
+  // そのときは閉じるセッションがわからないので leave しない（ownSid。vids.py が知らせる）
+  async function openDoc(vidsId) {
+    const { info, key, sid, chunks } = await editPage(vidsId);
+    const doc = { id: vidsId, token: info.token, ouid: info.ouid, sid };
+    if (!key) {
+      await leave(doc);
+      throw new Error("編集画面に genai のキー（espresso_api_key）がない");
+    }
+    const opened = { ...doc, key, rev: Math.max(...chunks.map((c) => c.revision)), reqId: 0, ph: 0, waited: [], model: chunks.flatMap((c) => c.chunk) };
+    if (sid) return opened;
+    return { ...opened, sid: [...crypto.getRandomValues(new Uint8Array(8))].map((x) => x.toString(16).padStart(2, "0")).join(""), ownSid: true };
   }
+
+  // セッションを閉じる（画面がタブを閉じるときの /leave と同じ）。閉じられなくても止めない（サーバーの時間切れで閉じる）。
+  // 応答は LEAVE.ms ミリ秒まで待つ（終わった呼び出しの結果を、閉じる応答の遅れで返しそびれない）
+  const LEAVE = { ms: 10000 }; // selftest で縮める
+  async function leave(doc) {
+    if (!doc.sid || doc.ownSid) return;
+    let timer;
+    await Promise.race([docs(doc, "leave", {}, { sid: doc.sid }), new Promise((r) => (timer = setTimeout(r, LEAVE.ms)))]).catch(() => {});
+    clearTimeout(timer);
+  }
+
+  async function reread(doc) { // 文書をもう一度読む。読むと別のセッションが開くので、すぐ閉じる（保存は doc のセッションのまま）
+    const page = await editPage(doc.id);
+    await leave({ id: doc.id, token: page.info.token, ouid: page.info.ouid, sid: page.sid });
+    return page;
+  }
+
+  const OWN_SID = "要確認: 編集画面の sid を読めなかったので、自分で作った sid で保存した。画面の作りが変わったかもしれない（vids-build/internal_api.md）";
+  // 呼び出しごとに 1 つのセッションを開き、終わったら（止まっても）閉じる。タブが落ちたときは閉じられない（サーバーの時間切れで閉じる）
+  const session = (fn) => async (args) => {
+    const doc = await openDoc(args.vidsId);
+    try {
+      const r = await fn(doc, args);
+      return doc.ownSid ? { ...r, ownSid: true } : r;
+    } catch (e) { // 自分で作った sid で止まったなら、それが原因かもしれないので添える
+      if (doc.ownSid && e instanceof Error) e.message += `（${OWN_SID}）`;
+      throw e;
+    } finally {
+      await leave(doc);
+    }
+  };
 
   async function docs(doc, path, form, extra = {}) {
     const q = new URLSearchParams({ id: doc.id, ...extra, token: doc.token, ouid: doc.ouid });
@@ -93,7 +133,7 @@
     const s = restSeconds(e, n);
     doc.waited.push(s);
     await new Promise((r) => setTimeout(r, s * 1000 * REST.scale));
-    doc.rev = Math.max(doc.rev, ...(await editPage(doc.id).catch(() => ({ chunks: [] }))).chunks.map((c) => c.revision)); // 読み直せなくても送り直す（版は前のまま）
+    doc.rev = Math.max(doc.rev, ...(await reread(doc).catch(() => ({ chunks: [] }))).chunks.map((c) => c.revision)); // 読み直せなくても送り直す（版は前のまま）
   }
 
   async function saveOnce(doc, commands, blobIdMap = {}, reqId = doc.reqId++) { // 送り直すときは同じ reqId
@@ -189,8 +229,7 @@
   // Slides のページをすべて Vids のシーンにし、ページごとの台本を入れて保存する（音声と avatar は、このあと updateScenes が入れる）。
   // 声を作るのが時間の大半（38 ページで 10 分ほど）なので、それより前にシーンを保存しておく。タブが落ちても、続きは updateScenes を回し直せば作れる。
   // scenes: [{pageId, script}]（Slides のページの objectId と、そのページのノート）。preset: 下書きの声のプリセット（動画の声は決めない。updateScenes が全シーンの声を作る）
-  async function createFromSlides({ vidsId, slidesId, scenes, preset, music = true }) {
-    const doc = await openDoc(vidsId);
+  async function createFromSlides(doc, { vidsId, slidesId, scenes, preset, music = true }) {
     const draft = await genai(doc, "streamGenerate", draftBody(vidsId, slidesId, scenes, preset || "docs-preset-voice-achird"));
     const modelStr = findString(draft, (s) => s.startsWith('[["[[4,'));
     if (!modelStr) throw new Error("下書きの応答にシーンのコマンドがない");
@@ -237,7 +276,7 @@
     const oldMedia = Object.keys(st.media).filter((m) => old.includes(st.media[m]));
     const drop = [...oldMedia.map((m) => [59, m]), ...old.flatMap((id) => unplace(st, id))];
     if (drop.length) await save(doc, [[4, drop]]);
-    const now = state((await editPage(doc.id)).chunks.flatMap((c) => c.chunk)).scenes; // 新しいシーンの入った並び
+    const now = state((await reread(doc)).chunks.flatMap((c) => c.chunk)).scenes; // 新しいシーンの入った並び
     const gone = old.filter((x) => now.includes(x)).sort((a, b) => now.indexOf(b) - now.indexOf(a)); // 後ろから消すと、前の位置は変わらない
     if (gone.length) await save(doc, [[4, gone.map((id) => [13, now.indexOf(id), 0, null, id])]]); // シーンごとに分けず 1 回で（保存を重ねると 550）
     return { vidsId, scenes: sceneIds.length, musicMs, revision: doc.rev, waited: doc.waited };
@@ -347,8 +386,7 @@
   // 画面で台本を直して Update voiceover を押したときと同じ保存（文字は [16]・[15] を 1 回、音声は [4, [[59, 古い音声], [58, 新しい音声], [18, シーンの長さ]]] を 1 回）。
   // avatar: {id, voice} なら、台本のあるシーンを AI avatar にする（avatar と台本が合っていれば作り直さない）。置く場所は places[i]（[倍率, 0, 0, 倍率, x, y]、
   // null はそのシーンだけ音声）。places がなければ、今の avatar の場所のまま（今が音声だけのシーンは音声のまま）。シーンの数が違えば何もしない
-  async function updateScenes({ vidsId, scripts, voice = "Achird", label = "Elio", avatar = null, places = null }) {
-    const doc = await openDoc(vidsId);
+  async function updateScenes(doc, { scripts, voice = "Achird", label = "Elio", avatar = null, places = null }) {
     const st = state(doc.model), { scenes, script, voice: vo, avatar: av } = st;
     if (scenes.length !== scripts.length) return { sceneCount: scenes.length, updated: [] };
     const plan = scenes.map((id, i) => {
@@ -408,8 +446,7 @@
 
   // 読み直して確かめる: シーンの数、シーンごとに台本の文字が scripts と合うか、読む要素（avatar か音声）の台本の MD5（194）が合うか（どちらもなければ null）、
   // 読むのが誰か（avatar の ID か、音声の名札の声。どちらもなければ null）、avatar と音声の両方があるシーン、読む要素の長さ（ミリ秒）
-  async function inspect({ vidsId, scripts }) {
-    const doc = await openDoc(vidsId);
+  async function inspect(doc, { scripts }) {
     const { scenes, script, voice, avatar } = state(doc.model);
     const reader = (id) => avatar[id] ?? voice[id];
     return { scenes: scenes.length, revision: doc.rev, textMatch: scenes.map((id, i) => script(id) === (scripts[i] ?? "")),
@@ -419,6 +456,6 @@
       ms: scenes.map((id) => (avatar[id] ? props(avatar[id].props).get(176) : voice[id]?.ms) ?? null) };
   }
 
-  window.VidsClient = { createFromSlides, updateScenes, inspect, _test: { SAVE_EVERY, REST, RESENDS, restSeconds, md5b64, draftBody, ttsBody, avatarBody, avatarElement, state, unplace, pool } };
+  window.VidsClient = { createFromSlides: session(createFromSlides), updateScenes: session(updateScenes), inspect: session(inspect), _test: { SAVE_EVERY, REST, LEAVE, RESENDS, OWN_SID, restSeconds, md5b64, draftBody, ttsBody, avatarBody, avatarElement, state, unplace, pool } };
   return "VidsClient loaded";
 })();
