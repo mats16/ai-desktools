@@ -76,7 +76,8 @@ def not_in_facts(texts, facts):
     丸めた値は、ページの書き方のまま表の「言うこと」に書く（deck-sources-007。表 3.24 倍だけならページの 3.2 倍は出す）。
     ponytail: 単位と意味（15% と 15 社、範囲の下の値、NUM が数えない数）は見ない。それは照合の子の 2 回目（deck-review/prompt_sources.md の "Pages"）が見る"""
     norm = lambda t: re.sub(r"(?<=\d),(?=\d{3})", "", unicodedata.normalize("NFKC", t))
-    have, out = set(NUMBER.findall(norm(facts or ""))), []
+    bare = lambda d: d.rstrip("0").rstrip(".") if "." in d else d  # 小数の終わりの 0 は見ない（bars は桁をそろえて 40 を 40.0 と書く）
+    have, out = {bare(d) for d in NUMBER.findall(norm(facts or ""))}, []
     for t in texts:
         t, end = norm(URL.sub("", t)), 0
         for m in NUM.finditer(t):
@@ -84,7 +85,7 @@ def not_in_facts(texts, facts):
                 continue
             n = DIGITS.match(t, m.start() + re.search(r"\d", m.group()).start())  # NUM の $ の形は 1 字だけを取るので、数の終わりまで読む
             end = n.end()
-            if n.group() not in have and (shown := t[m.start():max(m.end(), n.end())].strip()) not in out:
+            if bare(n.group()) not in have and (shown := t[m.start():max(m.end(), n.end())].strip()) not in out:
                 out.append(shown)
     return out
 
@@ -213,6 +214,7 @@ def selftest():
         Path(tmp, "構成案.md").write_text("## 出典の表\n\n| ID | 言うこと | 種類 | 出典 | 確認 |\n|---|---|---|---|---|\n| F1 | 40% | 数字 | S1 | 済 |\n")
         assert load_facts(tmp) == "40%" and load_facts(os.path.join(tmp, "nothing")) is None  # 資料のフォルダの出典の表を読み、構成案も台帳もなければ None
     assert not_in_facts(["売上は 1,200 億円", "３．２倍", "12%"], "1200 億円、3.2 倍") == ["12%"]  # 桁区切り・全角はそろえ、表にない値だけを出す
+    assert not_in_facts(["40.0 %", "0.60 ドル", "100 件", "3.2 倍"], "40%、0.6 ドル、100.0 件、3.24 倍") == ["3.2 倍"]  # 小数の終わりの 0 は見ない。丸めた値は出す
     # ワークスペースの点検: HARD の名前だけ要修正になる。スライドとドキュメントは、それぞれのスキルの checks.py
     with tempfile.TemporaryDirectory() as ws, contextlib.chdir(ws), contextlib.redirect_stdout(io.StringIO()):
         Path(ws, "desk.toml").write_text("")
