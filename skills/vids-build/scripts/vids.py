@@ -8,12 +8,14 @@ Slides のページをすべてシーンにし、ページごとのスピーカ�
 ログイン済みの Chrome（--remote-debugging-port で起動したもの）のタブの中で vids_client.js が内部 API を呼ぶ。Cookie と token はそのタブの外に出さない。
 
 usage（ワークスペースの下で）:
-  uv run vids.py create <Slides の URL か ID> [--name 名前] [--voice Elio | --avatar Oliver --layout <avatar_layout.json>] [--no-music]
+  uv run vids.py create <Slides の URL か ID> [--name 名前 | --vids <Vids の URL か ID>] [--voice Elio | --avatar Oliver --layout <avatar_layout.json>] [--no-music]
       Slides と同じフォルダに Vids を作る。先にシーン・台本・画像・BGM を保存し、そのあと音声（avatar）を作ったシーンから保存していく。
       途中でタブがなくなったら、新しいタブで続きから回し直す。音声の途中で止まったら Vids は残し、続きを作る update のコマンドを出す。
       作ったあと読み直して、全シーンの音声（avatar）が台本と合っているかを確かめる。
       元の Slides の ID と声と avatar は、Vids の appProperties に残す（update が読む）。同じ Slides から前に作った Vids は、元の Slides の控えを外す
       （ページを足した・消した・並べ替えた・見た目を直したあとは、組み直さずに create で作り直す。前の Vids は消さずに残る）
+      --vids なら新しく作らず、その Vids の中身（シーン・音声・BGM・avatar・画面での編集）を消して組み直す（URL と共有はそのまま）。
+      ほかの Slides の控えがある Vids なら止める
   uv run vids.py layout <Slides の URL か ID> --pages 1,5|all [--out build/vids_avatar] [--reset]
       --pages のページに avatar を置く隅と大きさを、Google が描いたページの画像の空きから決め（表紙は大きいものから試す。ほかのページは音声だけ）、
       <out>/avatar_layout.json と、円を描いた一覧の画像 <out>/avatar_sheet*.png を作る。JSON があれば、その置き方のまま描き直す（--reset で決め直す）
@@ -43,6 +45,7 @@ from gapi import DRIVE, SLIDES, file_id, request  # noqa: E402
 MAX = 2500  # Vids の 1 シーンの台本の上限（字。vids-voice の lint と同じ）
 SLIDES_KEY, VOICE_KEY, AVATAR_KEY = "vidsSlides", "vidsVoice", "vidsAvatar"  # Vids の appProperties: 元の Slides の ID、声の表示名、avatar の表示名（音声だけならない）
 PAGES_KEY = "vidsPages"  # Vids の appProperties: 作ったときのページの印（look）。update は、今のページの印と違えば止まる
+VID = "application/vnd.google-apps.vid"
 # Conversational voices（Gemini の TTS）。表示名 → (Gemini の声の名前, 画面の説明)。画面の「Select a voice」の並び（Gemini の名前の ABC 順）と、
 # 試聴の音声のファイル名（…/voice_samples/gemini-v4s-tts/1.1/en/<名前>.wav）で対応を取った（2026-10-21）。音声を作って確かめたのは Elio だけ
 VOICES = {
@@ -351,12 +354,14 @@ def mode_of(args, voice_default, avatar_default=None):
     return AVATARS[avatar][1], avatar
 
 
-def adopt(slides_id, vid):
+def adopt(slides_id, vid, others=False):
     """その Slides から作った Vids のうち、vid より前に作ったものの控えを外す（update <Slides> が新しい Vids だけを探すように）。
     後から作ったもの（重なった create）は外さない。いちばん後に作った Vids を残す（重なった create が互いに外し合って、どれにも控えが残らなくならないように。
-    PR #95 の Pullfrog の指摘）。前の Vids は消さない（共有した URL かもしれない）。"""
+    PR #95 の Pullfrog の指摘）。others（create --vids）なら、vid のほかはすべて外す（前の Vids に組み直すと、後から作ったものより vid を追わせたい）。
+    ponytail: create --vids と同じ Slides の create が重なると、互いに外し合うことがある。重ねて回すことが出てきたら、組み直した時刻を控えに持つ。
+    前の Vids は消さない（共有した URL かもしれない）。"""
     mine = (request("GET", f"{DRIVE}/files/{vid}?fields=createdTime&supportsAllDrives=true")["createdTime"], vid)
-    for f in (f for f in made_from(slides_id) if (f["createdTime"], f["id"]) < mine):
+    for f in (f for f in made_from(slides_id) if f["id"] != vid and (others or (f["createdTime"], f["id"]) < mine)):
         stamp(f["id"], {SLIDES_KEY: None})
         print(f"前の Vids の控えを外した（もう update しない）: {f['name']} https://docs.google.com/videos/d/{f['id']}/edit", flush=True)
 
@@ -370,6 +375,19 @@ def resume_cmd(vid, avatar=None, layout=None, browser=None):
                        *(["--avatar", avatar, "--layout", str(Path(layout).resolve())] if avatar else []), *(["--browser", browser] if browser else [])])
 
 
+def into(vid, slides_id):
+    """create --vids で中身を消して組み直す Vids。Vids でないか、ゴミ箱にあるか、ほかの Slides から作ったものなら止める（中身をすべて消すので）。
+    ゴミ箱の Vids に組むと、ほかの Vids の控えを外したあと、update <Slides> がどの Vids も見つけられない（made_from は trashed を見ない）。"""
+    f = request("GET", f"{DRIVE}/files/{vid}?supportsAllDrives=true&fields=mimeType,trashed,appProperties")
+    if f["mimeType"] != VID:
+        sys.exit(f"--vids に Vids でないファイルを渡した（{f['mimeType']}）。Vids の URL を渡す")
+    if f.get("trashed"):
+        sys.exit("この Vids はゴミ箱にある。Drive で戻してから回すか、別の Vids を渡す")
+    other = f.get("appProperties", {}).get(SLIDES_KEY)
+    if other and other != slides_id:
+        sys.exit(f"この Vids は別の Slides（{other}）から作った。中身を消さずに止める。その Slides を渡すか、別の Vids を渡す")
+
+
 def create(args):
     slides_id = file_id(args.slides)
     label, avatar = mode_of(args, DEFAULT_VOICE)
@@ -377,32 +395,45 @@ def create(args):
         sys.exit("--avatar には --layout が要る（vids.py layout で置き方を決め、一覧の画像で見てから渡す）")
     if args.layout and not avatar:
         sys.exit("--layout は --avatar と一緒に使う（avatar を選ばないと、置き方は使わない）")
+    if args.vids and args.name:
+        sys.exit("--name は新しく作る Vids の名前。--vids の Vids は名前を変えない")
     meta = request("GET", f"{DRIVE}/files/{slides_id}?fields=name,parents&supportsAllDrives=true")
     scenes, pages = scenes_of(slides_id), look_of(slides_id)
     places = places_of(args.layout, scenes) if avatar else None
-    # 1. シーン・台本・画像・BGM（1 分ほど）。ここで止まった Vids は捨てる（控えがなく update できない）。タブが落ちたら、新しい Vids で作り直す
+    others = bool(args.vids)  # --vids なら、後から作った Vids の控えも外す（adopt）
+    if args.vids:  # 書く前に止める
+        vid = file_id(args.vids)
+        into(vid, slides_id)
+        backend.check_closed(args.browser, vid)
+    # 1. シーン・台本・画像・BGM（1 分ほど）。ここで止まった Vids は捨てる（控えがなく update できない）。タブが落ちたら、新しい Vids で作り直す。
+    # --vids なら、その Vids に組み、前からあるシーン・音声・BGM・avatar を組んだあとに消す（止まっても捨てない。回し直すと、そのとき Vids にあるものをすべて消す）
     for n in range(1, 4):
-        vid = request("POST", f"{DRIVE}/files?fields=id&supportsAllDrives=true",
-                      {"name": args.name or meta['name'] + ("_動画" if gapi.language() == "ja" else "_video"), "mimeType": "application/vnd.google-apps.vid", "parents": meta.get("parents", [])[:1]})["id"]
-        print(f"空の Vids を作った: https://docs.google.com/videos/d/{vid}/edit", flush=True)
+        if not args.vids:
+            vid = request("POST", f"{DRIVE}/files?fields=id&supportsAllDrives=true",
+                          {"name": args.name or meta['name'] + ("_動画" if gapi.language() == "ja" else "_video"), "mimeType": VID, "parents": meta.get("parents", [])[:1]})["id"]
+            print(f"空の Vids を作った: https://docs.google.com/videos/d/{vid}/edit", flush=True)
         try:
             b = backend.build(args.browser, vid, slides_id, scenes, not args.no_music)
             stamp(vid, {SLIDES_KEY: slides_id, PAGES_KEY: pages, VOICE_KEY: label, AVATAR_KEY: avatar})
             break
         except BaseException as e:  # Ctrl-C・接続の切れ・ブラウザーの落ちも
-            try:
-                gapi.trash(vid)  # 作りかけを残さない（控えのない Vids は update できず、同じフォルダに名前の同じものが溜まる）
-                print("作りかけの Vids をゴミ箱に移した", file=sys.stderr)
-            except BaseException:  # ゴミ箱に移せなくても、元のエラーを隠さない
-                print(f"作りかけの Vids をゴミ箱に移せなかった。手で移す: https://docs.google.com/videos/d/{vid}/edit", file=sys.stderr)
+            if args.vids:
+                if not isinstance(e, backend.Lost) or n == 3:
+                    print("シーンを組む途中で止まった。前の中身と新しいシーンが残っていることがある。理由を直してから、同じコマンドを回し直す", file=sys.stderr)
+            else:
+                try:
+                    gapi.trash(vid)  # 作りかけを残さない（控えのない Vids は update できず、同じフォルダに名前の同じものが溜まる）
+                    print("作りかけの Vids をゴミ箱に移した", file=sys.stderr)
+                except BaseException:  # ゴミ箱に移せなくても、元のエラーを隠さない
+                    print(f"作りかけの Vids をゴミ箱に移せなかった。手で移す: https://docs.google.com/videos/d/{vid}/edit", file=sys.stderr)
             if not isinstance(e, backend.Lost):
                 raise
             if n == 3:
-                sys.exit(f"{e}。3 回ともシーンを組む前にタブがなくなった")
-            print(f"{e}。新しい Vids で作り直す（{n}/2）", file=sys.stderr, flush=True)
+                sys.exit(f"{e}。3 回とも、シーンを組み終える前にタブがなくなった")
+            print(f"{e}。" + ("新しいタブで組み直す" if args.vids else "新しい Vids で作り直す") + f"（{n}/2）", file=sys.stderr, flush=True)
     # 控えを付けたらすぐ、前の Vids の控えを外す（音声の途中で止まって update で仕上げても、Slides から探して見つかるのが新しい Vids だけになる）
     try:
-        adopt(slides_id, vid)
+        adopt(slides_id, vid, others=others)
     except (Exception, SystemExit) as e:  # 外せなくても音声は作る。作り終えたあとにもう一度外す
         print(f"前の Vids の控えを外せなかった（{e!r}）。音声を作ったあとにもう一度外す", file=sys.stderr, flush=True)
     waited(b)
@@ -423,11 +454,11 @@ def create(args):
     finally:
         # もう一度外す。止まったとき（音声の途中・要修正）も、1 回目が失敗していても、音声を作る間に別の create が作ったものも
         try:
-            adopt(slides_id, vid)
+            adopt(slides_id, vid, others=others)
         except BaseException as e:  # 回線の切れ・Ctrl-C も。どれを update に渡すかを残す
-            why = f"前の Vids の控えを外し終えなかった（{e!r}）。update にはこの Slides でなく新しい Vids の URL を渡す: https://docs.google.com/videos/d/{vid}/edit"
+            why = f"前の Vids の控えを外し終えなかった（{e!r}）。update にはこの Slides でなく、作った Vids の URL を渡す: https://docs.google.com/videos/d/{vid}/edit"
             if done:
-                sys.exit(f"新しい Vids はできた。{why}")
+                sys.exit(f"Vids はできた。{why}")
             print(why, file=sys.stderr)  # 止まった理由のほうを隠さない
     print(f"https://docs.google.com/videos/d/{vid}/edit")
 
@@ -454,7 +485,7 @@ def update(args):
     slides_id, old = p[SLIDES_KEY], (p.get(VOICE_KEY, DEFAULT_VOICE), p.get(AVATAR_KEY))
     if PAGES_KEY in p and look_of(slides_id) != p[PAGES_KEY]:  # 印のない Vids（この印を残す前に作ったもの）は見ない
         sys.exit("要修正: 動画を作ったあと、ページが変わった（足した・消した・並べ替えた・見た目を直した。前の会話での直しも）。"
-                 "動画はページに追従しないので、update しない。頼まれたら vids.py create で作り直す")
+                 "動画はページに追従しないので、update しない。頼まれたら vids.py create で作り直す（同じ Vids の中身を消して組み直すなら --vids）")
     label, avatar = mode_of(args, *old)
     scenes = scenes_of(slides_id)
     if avatar and not old[1] and not args.layout:  # 音声だけの Vids には置き場所がない（--layout なしでは声だけ替わって終わる）
@@ -634,7 +665,7 @@ def selftest():
     backend.build, backend.fill_and_inspect = lambda browser, *a: {"scenes": 1, "musicMs": 30000, "waited": []}, stops
     try:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            create(types.SimpleNamespace(slides="S", voice=None, avatar=None, layout=None, browser=None, no_music=False, name=None))
+            create(types.SimpleNamespace(slides="S", voice=None, avatar=None, layout=None, browser=None, no_music=False, name=None, vids=None))
         raise AssertionError("止まった create が通った")
     except SystemExit as e:
         assert str(e) == "音声の途中で止まった", e
@@ -642,6 +673,56 @@ def selftest():
         g.update(saved)
         backend.build, backend.fill_and_inspect = saved_backend
     assert stamps[0][0] == "NEW" and stamps[1:] == [("OLD", {SLIDES_KEY: None})] and calls["made"] == 2, stamps
+    # create --vids: Vids を新しく作らず、組む途中で止まってもゴミ箱に移さない。組めたら、後から作った Vids の控えも外す。ほかの Slides の Vids は消さずに止める
+    posts, trashed, built = [], [], []
+
+    def req(method, url, body=None):
+        posts.append(url) if method == "POST" else None
+        return {"name": "資料", "parents": ["F"], "createdTime": "1", "mimeType": VID, "appProperties": {SLIDES_KEY: "S"}}
+
+    def build_once(browser, vid, *a):
+        built.append(vid)
+        if len(built) == 1:
+            raise RuntimeError("保存が断られた")
+        return {"scenes": 1, "musicMs": 0, "waited": []}
+    stamps.clear()
+    lookups = []
+
+    def made_twice(sid):  # 組めた回の 1 回目の adopt は失敗し、最後の adopt だけが外す（そこでも後から作った Vids を外す）
+        lookups.append(sid)
+        if len(lookups) == 1:
+            raise gapi.ApiError("一時的なエラー")
+        return [{"id": "OLD", "name": "前", "createdTime": "1"}, {"id": "LATER", "name": "後", "createdTime": "3"}]
+    g.update(request=req, scenes_of=lambda sid: [{"pageId": "p", "script": "a"}], look_of=lambda sid: "L", stamp=lambda vid, props: stamps.append((vid, props)),
+             made_from=made_twice)
+    saved_trash, gapi.trash = gapi.trash, trashed.append
+    backend.build, backend.fill_and_inspect = build_once, lambda *a: ({"waited": []}, {"scenes": 1, "textMatch": [True], "voiceMatch": [True], "who": ["Elio"], "both": [], "ms": [1000]})
+    saved_closed, backend.check_closed = backend.check_closed, lambda browser, vid: None
+    rebuild = types.SimpleNamespace(slides="S", voice=None, avatar=None, layout=None, browser=None, no_music=False, name=None, vids="OLD")
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            try:
+                create(rebuild)
+                raise AssertionError("組めなかった create --vids が通った")
+            except RuntimeError:
+                pass
+            create(rebuild)  # 回し直し
+            try:
+                into("OLD", "OTHER")
+                raise AssertionError("ほかの Slides から作った Vids を組み直そうとした")
+            except SystemExit as e:
+                assert "別の Slides" in str(e)
+            g["request"] = lambda method, url, body=None: {"mimeType": VID, "trashed": True, "appProperties": {SLIDES_KEY: "S"}}
+            try:
+                into("OLD", "S")
+                raise AssertionError("ゴミ箱の Vids を組み直そうとした")
+            except SystemExit as e:
+                assert "ゴミ箱" in str(e)
+    finally:
+        g.update(saved)
+        backend.build, backend.fill_and_inspect, backend.check_closed, gapi.trash = *saved_backend, saved_closed, saved_trash
+    assert not posts and not trashed and built == ["OLD", "OLD"], (posts, trashed, built)
+    assert stamps[0][0] == "OLD" and stamps[1:] == [("LATER", {SLIDES_KEY: None})] and len(lookups) == 2, (stamps, lookups)
     # 続きのコマンド: 出たとおりに貼れば、同じ Vids・置き場所・Chrome で回る（どのフォルダからでも、空白のあるパスでも）
     import shlex
     cmd = shlex.split(resume_cmd("V", "Oliver", "my build/l.json", "http://127.0.0.1:9333"))
@@ -657,7 +738,7 @@ def main():
         return selftest()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("create"); c.add_argument("slides"); c.add_argument("--name"); c.add_argument("--no-music", action="store_true")
+    c = sub.add_parser("create"); c.add_argument("slides"); c.add_argument("--name"); c.add_argument("--vids"); c.add_argument("--no-music", action="store_true")
     u = sub.add_parser("update"); u.add_argument("vids")
     k = sub.add_parser("check"); k.add_argument("vids"); k.add_argument("slides", nargs="?")
     lo = sub.add_parser("layout"); lo.add_argument("slides"); lo.add_argument("--out", default="build/vids_avatar"); lo.add_argument("--reset", action="store_true"); lo.add_argument("--pages")
