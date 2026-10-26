@@ -62,6 +62,10 @@ BAND_PAD_X, BAND_PAD_Y = 0.25, 0.2
 # [slides-component-001] 正円の番号の直径（in）と数字（pt）。medium・large は数字の高さが円の 4 割ほど。small は周りの 11pt の文字に合わせて 11pt（11pt の太字なので、赤に白の 3.62:1 で届く。visual.md の 3 の slides-visual-039）
 NUM = {"small": (0.3, 11), "medium": (0.36, 14), "large": (0.48, 18)}  # 図の中の印／カードと手順（既定）／大きな段
 NUM_SHAPES = ("ellipse", "round_rectangle")  # 番号の形。角丸は高さを円の直径にし、幅を数字に合わせる（num_w）
+# カードの箱の角（Deck.card の corner）。round は CORNER_RADIUS、square は四角、pill は短い辺の半分の丸み（組んだ大きさで決めるので、h が変わってもピルのまま）。
+# 丸みを数で書かせないのは、選べる値を 3 つに絞るため（2026-10-26）
+CORNERS = ("round", "square", "pill")
+PILL_MAX = 1.2  # ピルのカードの短い辺の上限（in）。これより大きいと半円（半径 0.6 in より大）が、角から 0.18 in ほどの見出しの 1 字目にかかる
 # [slides-component-002] 赤（RED）の線の太さ（pt）。強調の囲みは実線でも点線でも 2pt（強調のための線なので、細くしない）。ほかの枠線は 0.75pt
 EMPH_PT = 2
 
@@ -709,19 +713,22 @@ class Deck:
         parts = [(ln + ("\n" if i < len(lines) - 1 else ""), {"color": RED_ON_NAVY, "bold": True} if i in hot else {}) for i, ln in enumerate(lines)]
         return self.text(sid, x + 0.22, y + 0.14, w - 0.4, h - 0.24, parts, size=size, color=WHITE, spacing=110, edge=True, mono=True)
 
-    def card(self, sid, x, y, w, h=None, head=None, body=None, items=None, fill=CARD, line=RULE, step=None, bullets=False):
+    def card(self, sid, x, y, w, h=None, head=None, body=None, items=None, fill=CARD, line=RULE, step=None, bullets=False, corner="round"):
         """見出しと本文の箱。箱の上に一回り小さい文字の枠を重ねる（文字の枠の内側の余白は変えられないので、枠と文字の間をここで空ける）。
         head・body・items を省くと、白い地に罫線の箱だけを置く（中身を自分で組むカード。h を渡す）。
         body は 1 つの文字の枠に入れるもの（text の parts と同じ。bullets で箇条書き）。
         items は (見出し, 説明) の並びで、既定では 1 つの文字の枠に空行を挟んで流す（1 行と 2 行の項目が混ざっても間がそろう）。
         [slides-component-009] step（in）を渡すと、前のように項目ごとに決まった間隔で置く（左右のカードで項目の上端をそろえたいときだけ。
         決まった間隔だと、行数の違う項目の間がそろわない）。
-        h を省くと中身から決める（card_h）。戻りは箱の下端（in。下に置く要素の位置に使う）。"""
+        h を省くと中身から決める（card_h）。corner は箱の角（CORNERS）。戻りは箱の下端（in。下に置く要素の位置に使う）。"""
+        if corner not in CORNERS:
+            raise ValueError(f"カードの角 {corner!r} は書けない（{'・'.join(CORNERS)}）")
         if h is None:
             if not (head or body or items):
                 raise ValueError("中身を自分で組むカードは h を渡す")
             h = card_h(w, head, body, items, step, bullets)
-        self.anchor = self.box(sid, x, y, w, h, fill, line)
+        self.anchor = self.box(sid, x, y, w, h, fill, line, {"square": "RECTANGLE", "pill": "ROUND_RECTANGLE"}.get(corner),
+                               min(w, h) / 2 if corner == "pill" else CORNER_RADIUS)
         top = y + card_top(w, head)
         if head:
             self.text(sid, x + PAD, y + 0.1 + CARD_DOWN, w - 2 * PAD, top - y - 0.16 - CARD_DOWN, head, size=12, color=HEAD, bold=True, spacing=100)  # card_top は 1 行 0.2 in で下げる
@@ -991,7 +998,7 @@ SPEC_EL = {  # type → (要るキー, 書けるキー)
     "text": ({"text": "md"}, {**_TEXT, **_BOX, "valign": tuple(VALIGN)}),
     "label": ({"text": "md"}, {k: _TEXT[k] for k in ("size", "color", "bold", "align", "mono", "pad")} | {"fill": "c", "radius": "n"}),
     "card": ({}, {"head": "s", "text": "md", "items": "items", "fill": "c", "line": "c", "step": "p",
-                  "icon": "s", "num": "ns", "image": "s", "shape": NUM_SHAPES, "align": ("left", "center"), "valign": ("top", "middle")}),  # icon・num・image は印（どれか 1 つ）。shape は num の形
+                  "icon": "s", "num": "ns", "image": "s", "shape": NUM_SHAPES, "align": ("left", "center"), "valign": ("top", "middle"), "corner": CORNERS}),  # icon・num・image は印（どれか 1 つ）。shape は num の形、corner は箱の角
     "stat": ({"value": "s"}, {"unit": "s", "label": "s", "sub": "s", "size": "p", "color": "c", "fill": "c", "line": "c", "align": ("left", "center")}),  # 数字の強調
     "code": ({"text": "s"}, {"hot": "ints", "size": "p"}),
     "table": ({"rows": "rows"}, {"widths": "nums", "header": "hn", "first_col": "b", "zebra": "b", "align": "aligns", "valign": tuple(VALIGN), "borders": TABLE_BORDERS,
@@ -1038,7 +1045,7 @@ SPEC_THEME = ({}, {"description": "s", "font": "s", "mono": "s", "copyright": "s
 # raw に書いた Deck の引数のうち、形のキーで書けるもの（type, 引数 → 形のキー）。lint が知らせ、slides.py upgrade が書き換える。形に足したらここにも足す
 # 同じ名前で同じ意味のもの（数え始めや単位の違う mono_cols・hot・fills・widths と、stat の size・color〔数字の大きさと色〕は入れない。2026-10-16 のレビュー）
 _SAME = {"text": "size color bold align valign mono fill line dash weight radius pad spacing", "label": "size color fill bold align mono pad radius",
-         "card": "head fill line step", "code": "size", "table": "size header first_col zebra align valign borders row_h", "image": "alt", "icon": "size color",
+         "card": "head fill line step corner", "code": "size", "table": "size header first_col zebra align valign borders row_h", "image": "alt", "icon": "size color",
          "num": "size fill shape", "box": "fill line dash weight radius", "arrow": "color head dash weight", "stat": "fill line align"}
 SPEC_PROMOTED = {(t, k): k for t, ks in _SAME.items() for k in ks.split()} | {("text", "gap"): "para_gap", ("text", "kind"): "shape", ("box", "kind"): "shape"}
 MD = re.compile(r"\\([\\*`\[\]<{}])|\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\{(\d+(?:\.\d+)?):(.+?)\}|`([^`]+)`|\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)|<br>")  # URL の中の 1 段の () も読む
@@ -1833,7 +1840,8 @@ class SpecPage:
             self.warns.append(f"{loc}（card）: 中身の高さ {hi - lo:.2f} in がカードの高さ {h:.2f} in の半分までで、上寄せのため下が上より {h - need:.2f} in 広く空く。"
                               "\"valign\": \"middle\" にするか、h を外して中身に合わせる（隣のカードと見出しの高さをそろえるなら \"valign\": \"top\" を書く）")
         self.index.append((loc, spec_plain(head) + spec_plain(body or "")))
-        self.emit("card", loc, e, x=x, y=y, w=w, h=h, fill=spec_color(fill), line=spec_color(e.get("line", "RULE" if fill == "CARD" else None)))
+        self.emit("card", loc, e, x=x, y=y, w=w, h=h, fill=spec_color(fill), line=spec_color(e.get("line", "RULE" if fill == "CARD" else None)),
+                  **({"corner": e["corner"]} if "corner" in e else {}))
         mx = x + (w - mw) / 2 if center else x + MARK_IN
         # 印と文字を合わせた範囲の上端（枠の上端から）。valign middle は枠のちょうど中央（構成図の箱。矢印は箱の辺の中央に付く）。
         # h を書いて中身より低くしたカードは、上下の空きの比を保って縮める（h が need なら、文字の上は start）
@@ -1960,6 +1968,9 @@ class SpecPage:
             if (need := self.measure(e, w, loc, least=True)) > e["h"] + 0.05:  # 文字の高さは見積もりなので 0.05 in まで許す
                 full = self.measure({k: v for k, v in e.items() if k != "h"}, w, loc)
                 self.warns.append(f"{loc}（{kind}）: h {e['h']} in では中身が収まらない見込み（中身に要る高さ {need:.2f} in。h を省くと {full:.2f} in）。h を外すか、文字を短くする")
+        if kind == "card" and e.get("corner") == "pill" and min(w, h) > PILL_MAX:  # row・grid で隣に合わせて伸びたときも、組む大きさで見る
+            self.warns.append(f"{loc}（card）: ピルの短い辺が {min(w, h):.2f} in で {PILL_MAX} in より大きく、半円が文字にかかる見込み。"
+                              "背の高いカードと同じ行に置かない、文字を減らす、corner を外すのどれかにする")
         if e.get("shape") == "rectangle" and (fill or kind == "label"):
             self.warns.append(f"{loc}: 塗りの箱を四角（shape: rectangle）にした。塗りの箱は、書かなければ角丸（visual.md の 4）。四角にする理由がなければ shape を外す")
         if kind in ("text", "label"):
@@ -1986,7 +1997,8 @@ class SpecPage:
         if kind == "card":
             if (e.get("align") or e.get("valign")) and not self.mark(e):
                 sys.exit(f"{loc}（card）: align・valign は、印（icon・num・image）のあるカードで使う")
-            colors = dict(fill=spec_color(e.get("fill", "CARD")), line=spec_color(e.get("line", "RULE" if e.get("fill", "CARD") == "CARD" else None)))
+            colors = dict(fill=spec_color(e.get("fill", "CARD")), line=spec_color(e.get("line", "RULE" if e.get("fill", "CARD") == "CARD" else None)),
+                          **({"corner": e["corner"]} if "corner" in e else {}))
             if "step" in e:  # 項目を決まった間隔で置く（左右のカードで項目の上端をそろえる）。d.card の items のまま渡すので、記法は書けない
                 if not e.get("items") or any(re.search(r"\*\*|\]\(|<br>|\{\d", b) for _, b in e["items"]):
                     sys.exit(f"{loc}（card）: step は items と使い、items に記法を書かない")
@@ -3626,6 +3638,17 @@ def selftest():
     items = [("項目 1", "1 行"), ("項目 2", "2 行になる長い説明")]
     assert texts(lambda: cards.card(csid, 1, 1, 4, 3, head="見出し", items=items)) == 2  # items は既定で 1 つの枠に流す（見出し＋本文）
     assert texts(lambda: cards.card(csid, 1, 1, 4, 3, head="見出し", items=items, step=0.9)) == 3  # step を渡すと項目ごとの枠
+    for corner, w, h, want in (("pill", 4, 0.8, 0.8), ("pill", 1.5, 3, 1.5), ("square", 4, 0.8, None)):  # ピルは組んだ短い辺が円の直径（縦長は幅）。四角は円を使わない
+        start = len(cards.reqs)
+        cards.card(csid, 1, 1, w, h, fill=PANEL, line=None, corner=corner)
+        made = [r["createShape"] for r in cards.reqs[start:] if "createShape" in r]
+        dias = {round(c["elementProperties"]["size"]["width"]["magnitude"] / EMU, 4) for c in made if c["shapeType"] == "ELLIPSE"}
+        assert dias == ({want} if want else set()) and (want or made[0]["shapeType"] == "RECTANGLE"), (corner, dias)
+    try:
+        cards.card(csid, 1, 1, 4, 1, corner="oval")
+        raise AssertionError("知らない角")
+    except ValueError:
+        pass
     start = len(corners.reqs)
     corners.box(sid,1,1,4,2,fill=CARD,line=RULE)  # 枠線つき: 線の色の角丸 + 内側の塗りの角丸。線（createLine）は使わない（継ぎ目の段が出る）
     made = [r["createShape"] for r in corners.reqs[start:] if "createShape" in r]
@@ -4559,6 +4582,10 @@ def selftest_spec():
     assert any("横 1 列" in w for w in d.warnings)
     d, _ = run({"title": "t", "body": [{"type": "box", "h": 0.5, "fill": "PANEL", "shape": "rectangle"}, {"type": "box", "h": 0.5, "line": "RULE", "shape": "rectangle"}]})
     assert sum("四角（shape: rectangle）" in w for w in d.warnings) == 1  # 塗りの箱だけ知らせる（枠線だけの箱は四角が既定）
+    d, els = run({"title": "t", "body": [{"type": "row", "items": [{"type": "card", "head": "ピル", "corner": "pill"}, {"type": "card", "num": 1, "head": "印", "corner": "square"},
+                                                                   {"type": "card", "head": "高い", "text": "行\n行\n行\n行\n行"}]}]})
+    assert [e.get("corner") for e in els if e["call"] == "card"] == ["pill", "square", None]  # 印のないカードも印のあるカードも、角を Deck.card に渡す
+    assert any("ピルの短い辺" in w and "items[0]" in w for w in d.warnings) and sum("ピルの短い辺" in w for w in d.warnings) == 1  # 5 行の隣に合わせて伸びたピルだけ（伸びる前の短いピルは見本で警告が出ない）
     mid = lambda t, h=None: {"type": "card", "num": 1, "valign": "middle", "head": "見出し", "text": t, "w": 5, **({"h": h} if h else {})}  # #52 の番号のある上下中央のカード（幅 5 in）
     one, two = "1 行の本文", "2 行になる本文。" * 4
     sp = SpecPage(Path("."))

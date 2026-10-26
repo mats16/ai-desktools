@@ -1,0 +1,14 @@
+{"apiVersion": "slides/v1", "kind": "page",
+ "title": "カードの角は 3 つから選ぶ", "lead": "既定の角丸のほか、元の資料をなぞるときはピルか四角にする（丸みの数は書かない）", "kicker": "card の corner",
+ "body": [
+  {"type": "row", "arrows": true, "items": [
+    {"type": "card", "icon": "tabler:database", "head": "取り込む", "text": "取り込みと変換", "valign": "middle", "corner": "pill"},
+    {"type": "card", "icon": "tabler:chart-bar", "head": "見る", "text": "ダッシュボード", "valign": "middle", "corner": "pill", "fill": "NAVY"},
+    {"type": "card", "icon": "tabler:message", "head": "聞く", "text": "自然な言葉で聞く", "valign": "middle", "corner": "pill", "fill": "PANEL"}]},
+  {"type": "row", "items": [
+    {"type": "card", "head": "Bronze", "text": "届いたままのファイル", "corner": "square"},
+    {"type": "card", "head": "Silver", "text": "- 型をそろえる\n- 重複を外す", "corner": "square"},
+    {"type": "card", "head": "Gold", "text": "業務で使う、信頼できるデータ", "corner": "square", "fill": "PANEL"},
+    {"type": "card", "head": "既定の角丸", "text": "corner を書かないカード"}]},
+  {"type": "card", "head": "全体の決まり", "text": "権限・監査・系譜をまとめて見る", "corner": "pill", "fill": "PANEL"}],
+ "authorNotes": ["上の列は印のあるピルのカードを矢印でつなぐ。中の列は四角のカードと、比べるための既定の角丸。下は印のない横長のピル。ピルの丸みは組んだ短い辺の半分なので、row で伸びても形が崩れない。"]}
