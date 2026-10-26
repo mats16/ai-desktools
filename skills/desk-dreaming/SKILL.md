@@ -17,6 +17,7 @@ Corrections are written back into rules on the spot, in the conversation that ma
 | Situation | Open |
 |---|---|
 | A scheduled run (the one line in `prompt.txt`), or the user says 「整理して」「desk-dreaming して」 | [run.md](run.md) (rules for running, the steps, the report format) |
+| Step 4 of a run: the request for the two child agents that draft proposal candidates (INV and DOM; desk-dreaming-002) | [prompt_propose.md](prompt_propose.md) |
 | The user replies to a report (「適用」「推奨どおり」「推奨どおり、P0002 は却下」, answers to pending questions, or choices) | [apply.md](apply.md) |
 | Registering the run with a scheduler | [schedule.md](schedule.md) |
 
@@ -25,6 +26,7 @@ Corrections are written back into rules on the spot, in the conversation that ma
 | File | Contents |
 |---|---|
 | `prompt.txt` | The one line to give the scheduler |
+| [prompt_propose.md](prompt_propose.md) | The request for the child agents of step 4 (territories, the order of evidence desk-dreaming-003, the candidate format) |
 | [schedule.md](schedule.md) | How to register with each scheduler |
 | `scripts/sessions.py` | Extracts user messages, opened rule files, and tool errors from conversations since the last run (has `--selftest`) |
 | `scripts/snapshot.sh` | Freezes a copy before changes (`save`), shows the diff since then (`diff`), restores it (`restore`) |

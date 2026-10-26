@@ -9,10 +9,11 @@ usage:
                                                    --once は前の形の構成案から取り込むときだけ（同じ資料・言葉・会話がもうあれば足さない）
   ledger.py route <c-ID> <戻し先>                 指摘の戻し先を決める・変える
   ledger.py plan <c-ID> AI|人|なし                 台帳にある指摘に、構成の見逃しの印をあとから付ける（なしは付け間違いを外す）
-  ledger.py list [--deck <フォルダ>] [--open] [--to <戻し先>]   指摘の一覧（--open は戻し先が「未」のものだけ）
+  ledger.py list [--deck <フォルダ>] [--open] [--to <戻し先>] [--odd]   指摘の一覧（--open は戻し先が「未」のものだけ。--odd は決まりに結び付かない前の書き方の戻し先）
   ledger.py why <決まりの ID>                      その決まりの出典（指摘・日付・原文、再発か）と、資料・顧客の数、ユーザーが決めたか、レビューの結果
   ledger.py rules                                  決まりごとの数（指摘・再発・資料・顧客・レビューの結果）と、週ごとの取りこぼしと構成の見逃し
   ledger.py candidates                             決まりごとの次の一手（下ろす・書き直す・条件を足す・上げる・写しを消す・上書きを見直す）と、その決まりへの前の提案
+  ledger.py effects                                文を変えた決まりごとに、変わる前と後に作った資料での指摘の数と見立て（効いた・変わらない・害が出た・指摘なし・まだ分からない、混ざっている）
   ledger.py next <接頭辞>                          次の決まりの ID（接頭辞は TOPICS の主題。ワークスペースの決まりは ws-slides-visual のように ws- を付ける）
   ledger.py where <決まりの ID>                    その決まりが書いてある場所（プラグインとワークスペースの [ID] のファイルと行）
   ledger.py topics                                 決まりの ID の主題の一覧
@@ -33,8 +34,9 @@ usage:
   ledger.py questions [--all]                      判断待ち（--all は答えたものと取り下げたものも）
   ledger.py review --deck <資料のフォルダ> --table <指摘の表のファイル>   deck-review の指摘の表から、決まりの列のある行の結果を取り込む（同じ行は 2 度数えず、ラウンドをまたぐ同じ行はあとのラウンドの結果）
   ledger.py --selftest
-台帳の原文には顧客のことが入る。.desk/ から外（Issue・チャット）に写さない。"""
-import argparse, difflib, hashlib, json, re, sys, tempfile, time
+台帳の原文には顧客のことが入る。.desk/ から外（Issue・チャット）に写さない。
+add と review は、そのときのハーネス（プラグインと、ワークスペースの AGENTS.md・rules/）の指紋も残す。指紋ごとの決まりの文の控えは .desk/harness/<指紋>.json（effects が読む）。"""
+import argparse, difflib, hashlib, json, os, re, sys, tempfile, time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -53,7 +55,7 @@ KEY = re.compile(rf"{ID}|lint:.+")  # レビューの表の「決まり」の列
 CITE = re.compile(rf"\[?({ID})\]?\s*「([^」]*)」")  # 決まりの列の ID に添えた、その決まりの文から写した語句（slides-visual-013「単語や文節の途中で折り返さない」）
 RESULTS = ("直した", "残した（誤り）", "残した", "聞く")
 NO_RULE = ("未", "戻さない")  # 決まりにつないでいない戻し先
-TWICE = 2  # 2 本以上の資料・2 社以上の顧客に出たら、たまたまでないとみなす（desk-dreaming/run.md の 4c・4i・5）
+TWICE = 2  # 2 本以上の資料・2 社以上の顧客に出たら、たまたまでないとみなす（desk-dreaming の prompt_propose.md の c、run.md の 4i・5）
 AUTO = ("重なり", "古い記述")  # 会話を出典にしない片付け。--auto で、出してすぐ当てる（desk-dreaming/run.md の 3d）
 RECS = ("適用", "様子見", "却下")
 TOPICS = {  # 決まりの ID の主題（何についての決まりか）。ID は一度付けたら、ファイルを分けても移しても変えない（../rules.md の "Rule IDs"）
@@ -69,6 +71,8 @@ TOPICS = {  # 決まりの ID の主題（何についての決まりか）。ID
     "vids-video": "動画を作る・差し替える", "desk-dreaming": "定期の整理"}
 WS_ONLY = {"agents": "ワークスペースの AGENTS.md", "memory": "顧客の memory"}  # ワークスペースだけの主題（ws-agents・ws-memory）
 PLAN_RULE = "deck-flow-004"  # 構成案の AI レビューの頼み方。これを見直すかの判断待ちに答えたら、構成の見逃しをその答えのあとから数え直す
+AGENTS_MAX = 20000  # ワークスペースの AGENTS.md のバイト数の上限（desk-dreaming/run.md の 4h。Codex は 32 KiB で切り、Claude Code は毎回すべて読む）
+HARNESS = ("skills", "hooks", "extensions")  # 指紋に入れるプラグインのフォルダ（リポジトリの根元から）
 OVERRIDE = re.compile(rf"\[(ws-[\w-]+?-\d{{3}})\][^\n\[]*?[（(]([^（）()\n]*?)\s*より優先")  # [ws-slides-visual-003] …（slides-visual-012 より優先）。括弧の中の ID を全部取る
 PLUGIN_ID = re.compile(r"(?<![\w-])(?!ws-)[a-z][\w-]*?-\d{3}")
 
@@ -129,6 +133,27 @@ def introduces(p):
     """提案が決まりの ID を新しく書き入れるか。今ある決まりを書き直す提案は、決まりを作らない。"""
     tag = f"[{p['rule']}]"
     return bool(p["rule"]) and tag in p["new"] and tag not in p["old"]
+
+
+def linked(to, ws=None):
+    """戻し先が決まりの ID・ファイル（後ろに（）の注を付けてよい）・未・戻さない のどれか 1 つか。ID とファイルを並べた戻し先は、決まりに結び付かない
+    （why と、ユーザーが決めた決まりの守りが効かない）。前の記録にある並べた形は、auto_ok が読み、list --odd が出す（desk-dreaming/run.md の 3c で付け直す）。"""
+    real = re.fullmatch(r"(.+?\.\w+)(?:（([^）]*)）)?", to)  # ワークスペースかプラグインに実際にあるフォルダの中のファイルなら、名前に・や（）があってもよい（Customers/アクメ・ジャパン/memory.md）
+    exists = lambda b, f: (b / f).is_file() or (b / f).parent != b and (b / f).parent.is_dir() and re.fullmatch(r"[^\s・、,（#]+\.\w+", Path(f).name)  # ファイルがあるか、根元でないフォルダの中の、ふつうの名前のファイル
+    if ws and real and any(exists(b, real.group(1)) for b in (ws, PLUGIN)) and not re.search(rf"(?:^|[^\w/.-]){ID}(?:[^\w/.-]|$)", real.group(1) + "（" + (real.group(2) or "") + "）"):
+        return True
+    path = re.fullmatch(r"([^・、,（#]+\.\w+)(?:（([^）]*)）)?", to)  # パスには空白が入ってよい（Customers/Acme Corp/memory.md）。ID を並べたもの・ファイルを 2 つ並べたものは除く
+    alone = rf"(?:^|[^\w/.-]){ID}(?:[^\w/.-]|$)"  # パスの区切り（/）の中でない ID（ws-a-003:rules/a.md・rules/a.md ws-a-003）。Customers/client-001/memory.md は通す
+    one = path and not re.search(alone, path.group(1)) and sum(bool(re.search(r"\.\w+$", x)) for x in path.group(1).split()) == 1
+    return bool(re.fullmatch(ID, to) or to in NO_RULE or one and not re.search(rf"(?<![\w-]){ID}(?![\w-])", path.group(2) or ""))
+
+
+def to_arg(s):
+    """add と route の --to。決まりに結び付かない書き方は止める。"""
+    if linked(s, (f := desk.locate()) and f[1]):
+        return s
+    raise argparse.ArgumentTypeError(f"戻し先は決まりの ID・ファイル・未・戻さない のどれか 1 つ: {s}（ID とファイルを並べると決まりに結び付かない。"
+                                     "点検に下ろした決まりも、その決まりの ID にする。その資料だけの直しは 戻さない にし、理由は --fix に書く）")
 
 
 def ws_rules_arg(s):
@@ -224,7 +249,8 @@ def add(ws, a):
         return
     rec = write(ws, {"kind": "correction", "deck": deck, "quote": a.quote, "fix": a.fix or "", "to": a.to, "check": a.check,
                      "session": a.session or "", "decided": a.decided, "by": "import" if a.once else "dreaming" if a.at else "session",
-                     **({"at": utc(a.at)} if a.at else {}), **({"plan": a.plan} if a.plan else {})}, ("correction", "c-", 4))
+                     **({"at": utc(a.at)} if a.at else {}), **({"plan": a.plan} if a.plan else {}),
+                     **({} if a.once or a.at else {"fp": fingerprint(ws)})}, ("correction", "c-", 4))  # あとで拾った指摘は、言われたときのハーネスが分からない
     print(rec["id"])
 
 
@@ -386,10 +412,10 @@ def known(ws, prefix):
     return any(re.search(rf"\[{re.escape(prefix)}-\d{{3}}\]", t) for t in texts([ws / "rules", ws / "AGENTS.md", ws / "Customers"]))
 
 
-def where(ws, rid):
-    """[rid] が書いてあるファイルと行（プラグインは skills/ から、ワークスペースは rules/ などから）。"""
+def where(ws, rid, plugin=True):
+    """[rid] が書いてあるファイルと行（プラグインは skills/ から、ワークスペースは rules/ などから）。plugin=False はワークスペースだけ。"""
     out = []
-    for root, base in ((PLUGIN, PLUGIN), (ws / "rules", ws), (ws / "AGENTS.md", ws), (ws / "Customers", ws)):
+    for root, base in [*[(PLUGIN, PLUGIN)][:plugin], (ws / "rules", ws), (ws / "AGENTS.md", ws), (ws / "Customers", ws)]:
         if root.is_file():
             files = [root]
         elif root.is_dir():
@@ -502,8 +528,11 @@ def pending(ws, status="未適用"):
 
 
 def apply(ws, ids):
+    """提案を当てる。先に、どの提案も手元で当てて確かめ、1 つでも止まれば、どのファイルも書かない（途中で止まって、決まりが 2 か所に残ったり、どこからも消えたりしないように）。
+    同じファイルへの提案は、並べた順に、前の提案を当てた文へ当てる。"""
     ps = state(ws)[1]
     ids = [i for i, p in ps.items() if p["status"] == "未適用" and not p.get("plugin")] if ids == ["all"] else ids
+    after, todo = {}, []  # ファイル → 当てたあとの文（まだ書かない）・当てる提案
     for i in ids:
         p = ps.get(i) or sys.exit(f"提案がない: {i}")
         if p["status"] != "未適用":
@@ -512,17 +541,48 @@ def apply(ws, ids):
             print(f"{i}: プラグインへの提案なので当てない（desk-kaizen で Issue にし、ledger.py sent {i} --issue <URL> で残す）")
             continue
         f = target(ws, p["file"])
-        text = f.read_text(encoding="utf-8") if f.exists() else ""
+        text = after[f] if f in after else f.read_text(encoding="utf-8") if f.exists() else ""
         if p["old"]:
             if text.count(p["old"]) != 1:
-                sys.exit(f"{i}: 今の文が {p['file']} に {text.count(p['old'])} か所ある（1 か所のときだけ当てる）。提案のあとで変わったので、合わせた文を見せて聞く")
+                sys.exit(f"{i}: 今の文が {p['file']} に {text.count(p['old'])} か所ある（1 か所のときだけ当てる。どの提案もまだ当てていない）。提案のあとで変わったので、合わせた文を見せて聞く")
             text = text.replace(p["old"], p["new"])
         else:
             text = text + ("" if not text or text.endswith("\n") else "\n") + p["new"] + "\n"
-        f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_text(text, encoding="utf-8")
+        after[f] = text
+        todo.append(p)
+    for f, text in after.items():
+        if bad := gate(ws, f, f.read_text(encoding="utf-8") if f.exists() else "", text, after):
+            who = ",".join(p["id"] for p in todo if target(ws, p["file"]) == f)
+            sys.exit(f"{who}: 当てない（" + "。".join(bad) + "。どの提案もまだ当てていない）。理由に合わせて直した提案を 1 回だけ出し直す（withdraw のあと propose）。それでも止まれば報告に書く")
+    written = []  # (ファイル, 前の文か None)。書く途中で止まったら（書けない・空きがない）、書いた分を戻す
+    try:
+        for f, text in after.items():
+            f.parent.mkdir(parents=True, exist_ok=True)
+            written.append((f, f.read_text(encoding="utf-8") if f.exists() else None))
+            f.write_text(text, encoding="utf-8")
+    except BaseException:
+        for f, prev in written:
+            f.write_text(prev, encoding="utf-8") if prev is not None else f.unlink(missing_ok=True)
+        raise
+    for p in todo:
         close(ws, p, "applied", appended=not p["old"])
-        print(f"{i}: {p['file']} に当てた")
+        print(f"{p['id']}: {p['file']} に当てた")
+
+
+def gate(ws, f, before, after, batch=None, size=True):
+    """当てたあとの文の検査。止める理由の一覧（Harness² が、直した候補のハーネスを検査し、通らなければ理由を添えて 1 回だけ出し直させるのにならう）。
+    AGENTS.md を上限より大きくしない（小さくする提案は通す。戻すとき〔size=False〕は見ない）。新しく書き入れる [ID] は、ほかのファイルにないもの（接頭辞は ledger.py next が見る）。
+    batch は一緒に当てるファイル → 当てたあとの文。そのファイルは、ディスクの今の文でなく当てたあとの文で見る（決まりを別のファイルへ移す組〔desk-dreaming/run.md の 4e・4h〕は通し、2 つのファイルに同じ ID を足す組は止める）。"""
+    bad, n, batch = [], len(after.encode()), batch or {}
+    if size and f == ws / "AGENTS.md" and n > AGENTS_MAX and n > len(before.encode()):
+        bad.append(f"AGENTS.md が {n:,} バイトになる（{AGENTS_MAX:,} まで。作るときだけ要るものは rules/ の同じパスのファイルへ）")
+    here = f"{f.relative_to(ws)}:"
+    for rid in sorted(set(RULE_ID.findall(after)) - set(RULE_ID.findall(before))):
+        on_disk = [x for x in where(ws, rid, plugin=not rid.startswith("ws-")) if not x.startswith(here) and (ws / x.rsplit(":", 1)[0]).resolve() not in batch]  # プラグインにある ws- の ID は試しの例
+        in_batch = [str(g.relative_to(ws)) for g, text in batch.items() if g != f and f"[{rid}]" in text]
+        if other := on_disk + in_batch:
+            bad.append(f"{rid} はもう {other[0]} にある（[ID] は 1 か所にだけ書き、ほかからは角括弧なしで指す。新しい決まりは ledger.py next の ID）")
+    return bad
 
 
 def close(ws, p, kind, **extra):
@@ -550,7 +610,10 @@ def undo(ws, i):
     new = p["new"] + "\n" if p.get("appended") else p["new"]
     if text.count(new) != 1:
         sys.exit(f"{i}: 当てた文が {p['file']} に {text.count(new)} か所ある。手で直されたので、snapshot.sh restore か手で戻す")
-    f.write_text(text.replace(new, p["old"], 1), encoding="utf-8")
+    back = text.replace(new, p["old"], 1)
+    if bad := gate(ws, f, text, back, size=False):  # 移した組の消す側だけを戻すと、ID が 2 か所に残る。大きさは見ない（AGENTS.md を縮めた提案も戻せるように）
+        sys.exit(f"{i}: 戻さない（" + "。".join(bad) + "）。決まりを移した組なら、足した側の提案を先に戻す")
+    f.write_text(back, encoding="utf-8")
     write(ws, {"kind": "undone", "ref": i})
     reopen(ws, p)
     print(f"{i}: 戻した")
@@ -667,8 +730,11 @@ def review(ws, deck, table):
             rows.pop(key, None)  # あとの行を後ろに置き直す
             rows[key] = {"kind": "review", "deck": deck, "rule": k, "page": cells[0], "from": cells[1], "result": res, "key": key}
     new = [r for key, r in rows.items() if last.get(key) != r["result"]]
+    fp = fingerprint(ws)
+    if not any(r["kind"] == "harness" and (r["deck"], r["fp"]) == (deck, fp) for r in records(ws)):  # 決まりの列のある行がなくても、この資料をこのハーネスで作ったと残す（effects の分母）
+        write(ws, {"kind": "harness", "deck": deck, "fp": fp})
     for r in new:
-        write(ws, r)
+        write(ws, {**r, "fp": fp})
     print(f"取り込んだ {len(new)} 件（決まりか結果のない行 {skip}、取り込み済み {len(rows) - len(new)}）")
     for w in wrong:
         print(f"取り込まなかった: {w}（ID の付け違い。当たる決まりを引き直すか、- にする）")
@@ -677,18 +743,112 @@ def review(ws, deck, table):
     return len(new)
 
 
+def fingerprint(ws, plugin=PLUGIN):
+    """いまのハーネスの指紋（<プラグインの 8 字>-<ワークスペースの 8 字>）。プラグインは HARNESS のフォルダ、ワークスペースは AGENTS.md と rules/ の中身から。
+    初めて見る指紋なら、決まりの ID ごとに、書いてあるファイルと文のハッシュを .desk/harness/<指紋>.json に控える（effects が、どの資料をどの文で作ったかを見る）。
+    ponytail: 控えは指紋が変わるたびに 1 つ増える（数十 KB）。重くなったら、どの資料からも指されない控えを消す"""
+    root = plugin.parent
+    def files(roots):  # __pycache__ と点で始まるもの（.DS_Store）は、動かすだけで変わるので入れない
+        return sorted(f for r in roots if r.exists() for f in ([r] if r.is_file() else r.rglob("*"))
+                      if f.is_file() and not any(x.startswith((".", "__pycache__")) for x in f.relative_to(r.parent).parts))
+    def digest(fs, base):
+        h = hashlib.sha1()
+        for f in fs:
+            h.update(f"{f.relative_to(base)}\0".encode() + f.read_bytes() + b"\0")
+        return h.hexdigest()[:8]
+    mine, theirs = files([root / d for d in HARNESS]), files([ws / "AGENTS.md", ws / "rules"])
+    fp = f"{digest(mine, root)}-{digest(theirs, ws)}"
+    snap = ws / ".desk" / "harness" / f"{fp}.json"
+    if not snap.exists():
+        skip = {Path(__file__).resolve(), (plugin / "desk-migrate" / "scripts" / "migrate.py").resolve()}  # selftest の試しの ID
+        rules = {}
+        for fs, base in ((mine, root), (theirs, ws)):
+            for f in fs:
+                if f.suffix in (".md", ".py") and f.resolve() not in skip:
+                    for rid, body in bodies(f.read_text(encoding="utf-8", errors="ignore"), {}).items():
+                        if not (base == root and rid.startswith("ws-")):  # プラグインの中の ws- の ID は試しの例（gate と同じ）
+                            rules[rid] = [str(f.relative_to(base)), hashlib.sha1(body.replace(rid, "").encode()).hexdigest()[:8]]  # 自分の ID は入れない（rename-id で ID だけ変えても、同じ文のまま）
+        snap.parent.mkdir(parents=True, exist_ok=True)
+        part = snap.with_name(f"{snap.name}.{os.getpid()}.part")  # 書き終えてから置き換える（途中で止まっても、壊れた控えを残さない。同時に書く会話とも混ざらない）
+        part.write_text(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "rules": rules}, ensure_ascii=False), encoding="utf-8")
+        os.replace(part, snap)
+    return fp
+
+
+def effects(ws, plugin=PLUGIN):
+    """文を変えた決まりごとに、変わる前と後に作った資料の数と、指摘（指摘と、レビューの「直した」）と、誤りか聞く（レビューの「残した（誤り）」「聞く」）の出た資料の数。
+    当てた・入ったことは、効いた証拠ではない（Harness² の振り返り: 採用されたのは成果物がよく見えたからで、どの直しが効いたかではない）。
+    資料は、台帳に初めて出たとき（指摘・レビュー）の指紋で作ったとみなし、そのときの記録に指紋がなければ数えない。前と後は、いまの文のハッシュがその指紋の控えにあるか。
+    その決まりを作るきっかけの資料（再発でない指摘のある資料）は前に数える。同じファイルのほかの決まりも同じときに変わっていれば、混ざっている（どちらが効いたか分けられない）。
+    指紋のない前の記録は数えない。"""
+    cs, ps, _, rv = state(ws)
+    def load(fp):  # 読めない控えは、ないものとする（その指紋で作った資料は数えない）
+        try:
+            return json.loads((ws / ".desk" / "harness" / f"{fp}.json").read_text(encoding="utf-8"))["rules"]
+        except (OSError, ValueError, KeyError):
+            return None
+    first = {}  # 資料 → (台帳に初めて出た時刻, そのときの指紋か None)
+    for r in records(ws):
+        if r.get("deck") and r["kind"] in ("correction", "review", "harness"):
+            t = when(r) if r["kind"] == "correction" else r["ts"]  # あとで拾った指摘は、言われた時刻
+            if r["deck"] not in first or t < first[r["deck"]][0]:
+                first[r["deck"]] = (t, r.get("fp"))
+    snaps = {fp: s for fp in {fp for _, fp in first.values() if fp} if (s := load(fp)) is not None}
+    first = {d: x for d, x in first.items() if x[1] in snaps}  # 初めの記録に指紋がない資料（あとで拾った指摘・前の記録）は、どの版で作ったか分からないので数えない
+    now = load(fingerprint(ws, plugin)) or {}
+    last = {p["rule"]: p for p in sorted(ps.values(), key=lambda p: p["id"])}
+    rate = lambda xs, side: len(xs & side) / len(side) if side else 0
+    out = []
+    for rid, (file, h) in sorted(now.items()):
+        if all(snaps[fp].get(rid, [None, None])[1] == h for _, fp in first.values()):
+            continue  # 数える資料はみないまの文で作った（文が変わっていない。きっかけの指摘があっても「前」を作らない）
+        taught = {c["deck"] for c in cs.values() if c["to"] == rid and not c.get("recur")} & set(first)
+        after = {d for d, (_, fp) in first.items() if snaps[fp].get(rid, [None, None])[1] == h} - taught
+        before = set(first) - after
+        sig = {c["deck"] for c in cs.values() if c["to"] == rid and (c.get("recur") or c["deck"] not in after)}
+        sig |= {r["deck"] for r in rv if r["rule"] == rid and r["result"] == "直した"}
+        mis = {r["deck"] for r in rv if r["rule"] == rid and r["result"] in ("残した（誤り）", "聞く")}
+        if len(after) < TWICE:
+            verdict = "まだ分からない"
+        elif not (sig | mis) & (before | after):
+            verdict = "指摘なし（前も後も出ていないので、効いたかは分からない）"  # 守られているだけのこともある（rules.md の "Verifying rules"）。下ろす案にしない
+        elif rate(mis, after) > rate(mis, before):
+            verdict = "害が出た（誤りか聞くが増えた）"
+        elif rate(sig, after) > rate(sig, before) and len(sig & after) >= TWICE:  # 指摘の出た資料の割合が増えた（後の 1 本だけなら揺れのうち）
+            verdict = "害が出た（指摘が増えた）"
+        elif rate(sig, after) < rate(sig, before):
+            verdict = "効いた"
+        else:
+            verdict = "変わらない"
+        old = [first[d] for d in before if snaps[first[d][1]].get(rid, [None, None])[1] != h]  # いまの文でない版で作った資料（きっかけの資料は、もういまの文のことがある）
+        if after and old:  # 変わり目の前後の控えで、同じファイルのほかの決まりが変わったか
+            b = snaps[max(old, key=lambda x: x[0])[1]]
+            a = snaps[min((first[d] for d in after), key=lambda x: x[0])[1]]
+            also = sorted(k for k in set(a) | set(b) if k != rid and file in (a.get(k, [""])[0], b.get(k, [""])[0]) and a.get(k) != b.get(k))
+            if also:
+                verdict += f"・混ざっている（同じファイルの {', '.join(also[:3])}{' ほか' if len(also) > 3 else ''} も同じときに変わった）"
+        out.append((rid, file, (len(before), len(sig & before), len(mis & before)), (len(after), len(sig & after), len(mis & after)), verdict))
+    print("前・後は「資料・指摘の出た資料・誤りか聞くの出た資料」。資料は台帳に初めて出たときのハーネスで分ける（1 本ずつの比べなので、1 本の差は揺れのうち）")
+    print("決まり\tファイル\t前\t後\t見立て\t前の提案")
+    for rid, file, b, a, verdict in out:
+        p = last.get(rid)
+        print(f"{rid}\t{file}\t{'・'.join(map(str, b))}\t{'・'.join(map(str, a))}\t{verdict}\t{p['id'] + ' ' + p['status'] if p else '-'}")
+    return out
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("add")
     s.add_argument("--deck", required=True); s.add_argument("--quote", required=True); s.add_argument("--fix")
-    s.add_argument("--to", default="未"); s.add_argument("--check", default="なし"); s.add_argument("--session"); s.add_argument("--at"); s.add_argument("--decided", action="store_true"); s.add_argument("--plan", choices=("AI", "人")); s.add_argument("--once", action="store_true")
-    s = sub.add_parser("route"); s.add_argument("id"); s.add_argument("to")
+    s.add_argument("--to", default="未", type=to_arg); s.add_argument("--check", default="なし"); s.add_argument("--session"); s.add_argument("--at"); s.add_argument("--decided", action="store_true"); s.add_argument("--plan", choices=("AI", "人")); s.add_argument("--once", action="store_true")
+    s = sub.add_parser("route"); s.add_argument("id"); s.add_argument("to", type=to_arg)
     s = sub.add_parser("plan"); s.add_argument("id"); s.add_argument("mode", choices=("AI", "人", "なし"))
-    s = sub.add_parser("list"); s.add_argument("--deck"); s.add_argument("--open", action="store_true"); s.add_argument("--to")
+    s = sub.add_parser("list"); s.add_argument("--deck"); s.add_argument("--open", action="store_true"); s.add_argument("--to"); s.add_argument("--odd", action="store_true")
     s = sub.add_parser("why"); s.add_argument("id")
     sub.add_parser("rules")
     sub.add_parser("candidates")
+    sub.add_parser("effects")
     s = sub.add_parser("next"); s.add_argument("prefix")
     s = sub.add_parser("where"); s.add_argument("id")
     sub.add_parser("topics")
@@ -720,7 +880,7 @@ def main(argv):
     elif a.cmd == "list":
         deck = rel(ws, a.deck) if a.deck else None
         for c in state(ws)[0].values():
-            if (not deck or c["deck"] == deck) and (not a.open or c["to"] == "未") and (not a.to or c["to"] == a.to):
+            if (not deck or c["deck"] == deck) and (not a.open or c["to"] == "未") and (not a.to or c["to"] == a.to) and (not a.odd or not linked(c["to"], ws)):
                 print(show(c))
     elif a.cmd == "why":
         why(ws, a.id)
@@ -728,6 +888,8 @@ def main(argv):
         summary(ws)
     elif a.cmd == "candidates":
         candidates(ws)
+    elif a.cmd == "effects":
+        effects(ws)
     elif a.cmd == "next":
         known(ws, a.prefix) or sys.exit(f"主題の表にない接頭辞: {a.prefix}。TOPICS（ledger.py topics）から選ぶ。新しい主題が要るなら、先に TOPICS に足す（../rules.md の「Rule IDs」）")
         print(next_id(ws, a.prefix))
@@ -1032,8 +1194,16 @@ def selftest():
             (ws / "rules").mkdir(exist_ok=True)
             a = ws / "rules" / "a.md"
             a.write_text("- [ws-a-001] 本文は 16pt。\n- [ws-a-002] 本文は 16pt。\n- [ws-a-003] 決めた行。\n  決めた続き。\n", encoding="utf-8")
-            with quiet():
-                main(["add", "--deck", ".", "--quote", "決めた", "--decided", "--to", "rules/a.md ws-a-003"])
+            write(ws, {"kind": "correction", "deck": ".", "quote": "決めた", "fix": "", "to": "rules/a.md ws-a-003", "check": "なし", "session": "", "decided": True, "by": "session"}, ("correction", "c-", 4))  # 前の記録にある、ファイルと ID を並べた戻し先（今の add は止める）
+            assert not any(map(linked, ("rules/a.md ws-a-003", "戻さない（この資料だけ）", "rules/a.md#ws-a-003", "ws-a-003 rules/a.md", "この資料", "rules/a.md（ws-a-003 に足す）", "rules/a.md rules/b.md", "ws-a-003:rules/a.md", "ws-a-003→rules/a.md", "ws-slides-visual-004／rules/slides-build/visual.md")))
+            assert all(map(linked, ("desk.toml", "rules/a.md（見出しの下）", "Customers/Acme Corp/memory.md", "Internal/plan_202610/構成案.md", "Customers/client-001/memory.md")))
+            for bad in ("rules/a.md ws-a-003", "rules/x.md ws-x-001・rules/slides-build/checks.py", "ws-a-001・ws-a-002", "この資料"):
+                try:
+                    with quiet(), contextlib.redirect_stderr(io.StringIO()):
+                        main(["add", "--deck", ".", "--quote", "x", "--to", bad])
+                    raise AssertionError(f"並べた戻し先を通した: {bad}")
+                except SystemExit as e:
+                    assert e.code == 2
             dup = ["--old", "- [ws-a-001] 本文は 16pt。\n- [ws-a-002] 本文は 16pt。", "--new", "- [ws-a-001] 本文は 16pt。"]
             base = ["propose", "--auto", "--file", "rules/a.md", "--why", "片付け"]
             n = len(state(ws)[1])
@@ -1191,7 +1361,213 @@ def selftest():
         finally:
             os.chdir(cwd)
     selftest_candidates(quiet)
+    selftest_effects(quiet)
     print("selftest ok")
+
+
+def selftest_effects(quiet):
+    """指紋と控え、決まりごとの前後の数と見立て、当てる前の検査。"""
+    import os
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as root:
+        ws, plug = Path(d).resolve(), Path(root) / "skills"
+        (ws / "desk.toml").write_text("")
+        (ws / "rules" / "slides-build").mkdir(parents=True)
+        v, a = ws / "rules" / "slides-build" / "visual.md", plug / "slides-build" / "visual.md"
+        v.write_text("- [ws-slides-visual-001] 表は分ける。\n")
+        a.parent.mkdir(parents=True)
+        a.write_text("- [slides-visual-900] 線は細く。\n- [slides-visual-901] 色は 2 つまで。\n")
+        made = lambda deck, fp: write(ws, {"kind": "harness", "deck": deck, "fp": fp})
+        said = lambda deck, to, fp: write(ws, {"kind": "correction", "deck": deck, "quote": "x", "fix": "", "to": to, "check": "なし", "session": "", "decided": False, "by": "session", "fp": fp}, ("correction", "c-", 4))
+        fp0 = fingerprint(ws, plug)
+        (a.parent / "__pycache__").mkdir()
+        (a.parent / "__pycache__" / "x.pyc").write_text("x")
+        assert fingerprint(ws, plug) == fp0 and (ws / ".desk" / "harness" / f"{fp0}.json").is_file()  # 動かすだけでできるものでは変わらない
+        (a.parent / "example.py").write_text('EXAMPLE = "- [ws-memory-001] 試しの例"\n')
+        assert "ws-memory-001" not in json.loads((ws / ".desk" / "harness" / f"{fingerprint(ws, plug)}.json").read_text())["rules"]  # プラグインの中の ws- の ID は控えない
+        (a.parent / "example.py").unlink()
+        snap = json.loads((ws / ".desk" / "harness" / f"{fp0}.json").read_text())["rules"]
+        assert snap["slides-visual-900"][0] == "skills/slides-build/visual.md" and snap["ws-slides-visual-001"][0] == "rules/slides-build/visual.md"
+        for deck in ("Internal/d1", "Internal/d2"):  # 前の文で作った 2 本。どちらも 900 の指摘が出た
+            made(deck, fp0)
+        said("Internal/d1", "slides-visual-900", fp0)
+        write(ws, {"kind": "review", "deck": "Internal/d2", "rule": "slides-visual-900", "page": "p1", "from": "子", "result": "直した", "key": "k1", "fp": fp0})
+        a.write_text("- [slides-visual-900] 線は 1pt にする。\n- [slides-visual-901] 色は 3 つまで。\n")  # 2 つの決まりを同時に変えた
+        fp1 = fingerprint(ws, plug)
+        assert fp1 != fp0 and fp1.split("-")[1] == fp0.split("-")[1]  # ワークスペースの側は同じ
+        for deck in ("Internal/d3", "Internal/d4"):
+            made(deck, fp1)
+        v.write_text("- [ws-slides-visual-001] 表は分ける。\n- [ws-slides-visual-002] 図は左から右。\n")  # その場で足した決まり（指摘を書く前に文を足した）
+        fp2 = fingerprint(ws, plug)
+        said("Internal/d5", "ws-slides-visual-002", fp2)
+        with quiet():
+            got = {rid: (b, af, verdict) for rid, _, b, af, verdict in effects(ws, plug)}
+        assert got["slides-visual-900"][:2] == ((2, 2, 0), (3, 0, 0)) and got["slides-visual-900"][2].startswith("効いた・混ざっている（同じファイルの slides-visual-901")
+        assert got["slides-visual-901"][2].startswith("指摘なし（") and "・混ざっている" in got["slides-visual-901"][2]  # 前も後も指摘がなければ「変わらない」と言わない
+        assert got["ws-slides-visual-002"] == ((5, 1, 0), (0, 0, 0), "まだ分からない")  # きっかけの資料は前に数える
+        assert "ws-slides-visual-001" not in got  # 記録の始まりから同じ文
+        said("Internal/d2", "ws-slides-visual-001", fp0)  # 前からある決まりに、あとで指摘をつないでも（3c の route）、文が変わっていなければ出さない
+        with quiet():
+            assert "ws-slides-visual-001" not in {rid for rid, *_ in effects(ws, plug)}
+        write(ws, {"kind": "correction", "deck": "Internal/d6", "quote": "x", "fix": "", "to": "slides-visual-900", "check": "なし", "session": "", "decided": False, "by": "dreaming", "at": "2000-01-01T00:00:00Z"}, ("correction", "c-", 4))
+        made("Internal/d6", fp2)  # あとで拾った指摘（指紋なし）が先にある資料は、あとのレビューの指紋で「後」に数えない
+        with quiet():
+            assert {rid: b for rid, _, b, af, _ in effects(ws, plug)}["slides-visual-900"] == (2, 2, 0) and got["slides-visual-900"][1] == (3, 0, 0)
+            assert {rid: af for rid, _, b, af, _ in effects(ws, plug)}["slides-visual-900"] == (3, 0, 0)
+        (ws / ".desk" / "harness" / f"{fp0}.json").write_text("{壊れた")  # 読めない控えは、ないものとする（その指紋の資料は数えない）
+        with quiet():
+            assert "slides-visual-900" not in {rid for rid, *_ in effects(ws, plug)}  # 前の資料（読めない控えの指紋）が数えられなくなり、比べる前がない
+        assert not list((ws / ".desk" / "harness").glob("*.part"))
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as root:  # 1 つだけ変えた決まりの、悪くなった・同じ・よくなった（ほかの決まりは別のファイル）
+        ws, plug = Path(d).resolve(), Path(root) / "skills"
+        (ws / "desk.toml").write_text("")
+        for name, rid in (("w", "slides-visual-910"), ("s", "slides-visual-911"), ("b", "slides-visual-912")):
+            (plug / name).mkdir(parents=True)
+            (plug / name / "a.md").write_text(f"- [{rid}] 前の文。\n")
+        made = lambda deck, fp: write(ws, {"kind": "harness", "deck": deck, "fp": fp})
+        said = lambda deck, to: write(ws, {"kind": "correction", "deck": deck, "quote": "x", "fix": "", "to": to, "check": "なし", "session": "", "decided": False, "by": "session"}, ("correction", "c-", 4))
+        fp0 = fingerprint(ws, plug)
+        for deck in ("Internal/b1", "Internal/b2"):
+            made(deck, fp0)
+        for deck in ("Internal/b1", "Internal/b2"):
+            said(deck, "slides-visual-911")  # 同じ: 前 2/2
+            said(deck, "slides-visual-912")  # よくなった: 前 2/2
+        for name in ("w", "s", "b"):
+            (plug / name / "a.md").write_text((plug / name / "a.md").read_text().replace("前の文", "後の文"))
+        fp1 = fingerprint(ws, plug)
+        for deck in ("Internal/a1", "Internal/a2"):
+            made(deck, fp1)
+            said(deck, "slides-visual-910")  # 悪くなった: 前 0/2 → 後 2/2
+            said(deck, "slides-visual-911")  # 同じ: 後 2/2
+        with quiet():
+            got = {rid: (b, a, verdict) for rid, _, b, a, verdict in effects(ws, plug)}
+        assert got["slides-visual-910"] == ((2, 0, 0), (2, 2, 0), "害が出た（指摘が増えた）"), got
+        assert got["slides-visual-911"][2] == "変わらない" and got["slides-visual-912"][2] == "効いた", got
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as root:  # 決まりをきっかけの指摘と同じ会話で書いても、同じときに変わったほかの決まりを「混ざっている」に出す
+        ws, plug = Path(d).resolve(), Path(root) / "skills"
+        (ws / "desk.toml").write_text("")
+        (plug / "x").mkdir(parents=True)
+        (plug / "x" / "a.md").write_text("- [slides-visual-900] 線は細く。\n")
+        v = ws / "rules" / "v.md"
+        v.parent.mkdir()
+        v.write_text("- [ws-a-001] 表は分ける。\n")
+        made = lambda deck, fp: write(ws, {"kind": "harness", "deck": deck, "fp": fp})
+        made("Internal/e1", fingerprint(ws, plug))
+        v.write_text("- [ws-a-001] 表は 2 枚に分ける。\n- [ws-a-002] 図は左から右。\n")  # 1 つの会話で、001 を書き換え、002 を足してから指摘を書いた
+        fp = fingerprint(ws, plug)
+        write(ws, {"kind": "correction", "deck": "Internal/e2", "quote": "x", "fix": "", "to": "ws-a-002", "check": "なし", "session": "", "decided": False, "by": "session", "fp": fp}, ("correction", "c-", 4))
+        for deck in ("Internal/e3", "Internal/e4"):
+            made(deck, fp)
+        with quiet():
+            got = {rid: verdict for rid, _, _, _, verdict in effects(ws, plug)}
+        assert "混ざっている（同じファイルの ws-a-001" in got["ws-a-002"] and "混ざっている（同じファイルの ws-a-002" in got["ws-a-001"], got
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as root:
+        ws, plug = Path(d).resolve(), Path(root) / "skills"
+        (ws / "desk.toml").write_text("")
+        (ws / "rules" / "slides-build").mkdir(parents=True)
+        v = ws / "rules" / "slides-build" / "visual.md"
+        v.write_text("- [ws-slides-visual-001] 表は分ける。\n- [ws-slides-visual-002] 図は左から右。\n")
+        (plug / "slides-build").mkdir(parents=True)
+        # 当てる前の検査: AGENTS.md を上限より大きくしない（小さくするのは通す）。新しい [ID] は、ほかのファイルにまだないもの
+        big = "x" * (AGENTS_MAX + 1)
+        assert gate(ws, ws / "AGENTS.md", "", big) and not gate(ws, ws / "AGENTS.md", big + "x", big)
+        x = ws / "rules" / "x.md"
+        assert any("もう rules/slides-build/visual.md:1" in b for b in gate(ws, x, "", "- [ws-slides-visual-001] 写し\n"))
+        assert gate(ws, v, v.read_text(), v.read_text() + "- [ws-slides-visual-003] 足す\n") == []
+        r = ws / "rules" / "renamed.md"  # ID だけを変えた決まりは、控えのハッシュが変わらない（desk-migrate rename-id のあとも「前と同じ文」）
+        r.write_text("- [ws-slides-visual-020] 図は左から右。\n")
+        h1 = json.loads((ws / ".desk" / "harness" / f"{fingerprint(ws, plug)}.json").read_text())["rules"]["ws-slides-visual-020"][1]
+        r.write_text("- [ws-slides-visual-021] 図は左から右。\n")
+        assert json.loads((ws / ".desk" / "harness" / f"{fingerprint(ws, plug)}.json").read_text())["rules"]["ws-slides-visual-021"][1] == h1
+        r.unlink()
+        (ws / "Customers" / "アクメ・ジャパン").mkdir(parents=True)  # 実際にあるフォルダなら、名前に・があってもファイルの戻し先にできる
+        assert linked("Customers/アクメ・ジャパン/memory.md", ws) and not linked("Customers/アクメ・ジャパン/memory.md") and not linked("Customers/アクメ・ジャパン/memory.md（ws-memory-001）", ws)
+        assert not linked("SKILL.md の 3・feedback.md", ws) and linked("rules/slides-build/visual.md", ws)  # 根元のフォルダに当たるだけの文は、ファイルとみなさない
+        moving = {x.resolve(): "- [ws-slides-visual-001] 移す\n", v.resolve(): v.read_text().replace("- [ws-slides-visual-001] 表は分ける。\n", "")}
+        assert gate(ws, x, "", moving[x.resolve()], moving) == []  # 同じ組の提案が前のファイルから消す
+        assert gate(ws, x, "", "- [ws-slides-visual-009] 足す\n", {x.resolve(): "- [ws-slides-visual-009] 足す\n", (ws / "rules" / "y.md").resolve(): "- [ws-slides-visual-009] 足す\n"})  # 2 つのファイルに同じ ID を足す組
+        cwd = os.getcwd()
+        os.chdir(ws)
+        try:
+            with quiet():  # 決まりを別のファイルへ移す組は、足す提案が先でも当たる
+                main(["propose", "--file", "rules/moved.md", "--new", "- [ws-slides-visual-002] 図は左から右。", "--why", "移す"])
+                main(["propose", "--file", "rules/slides-build/visual.md", "--old", "- [ws-slides-visual-001] 表は分ける。\n- [ws-slides-visual-002] 図は左から右。", "--new", "- [ws-slides-visual-001] 表は分ける。", "--why", "移す"])
+                main(["apply", "all"])
+            assert "[ws-slides-visual-002]" in (ws / "rules" / "moved.md").read_text() and "[ws-slides-visual-002]" not in v.read_text()
+            moved = sorted(p["id"] for p in state(ws)[1].values() if p["status"] == "適用済み" and p["file"] in ("rules/moved.md", "rules/slides-build/visual.md"))[-2:]
+            try:  # 移した組の消す側だけを戻すと、ID が 2 か所に残るので止める
+                with quiet():
+                    main(["undo", moved[1]])
+                raise AssertionError("移した組の消す側だけを戻した")
+            except SystemExit as e:
+                assert "足した側の提案を先に戻す" in str(e)
+            with quiet():  # 足した側を先に戻せば、消した側も戻せる
+                main(["undo", moved[0]])
+                main(["undo", moved[1]])
+                main(["propose", "--file", "rules/moved.md", "--new", "- [ws-slides-visual-002] 図は左から右。", "--why", "移す"])
+                main(["propose", "--file", "rules/slides-build/visual.md", "--old", "- [ws-slides-visual-001] 表は分ける。\n- [ws-slides-visual-002] 図は左から右。", "--new", "- [ws-slides-visual-001] 表は分ける。", "--why", "移す"])
+                main(["apply", "all"])
+            with quiet():  # 消す提案が当たらない（今の文が変わった）なら、組のどれも当てない（当てる途中で止まって、ID が 2 か所に残らないように）
+                main(["propose", "--file", "rules/moved2.md", "--new", "- [ws-slides-visual-001] 移す", "--why", "移す"])
+                main(["propose", "--file", "rules/slides-build/visual.md", "--old", "- [ws-slides-visual-001] 変わる前の文。", "--new", "", "--why", "移す"])
+            try:
+                with quiet():
+                    main(["apply", "all"])
+                raise AssertionError("当たらない消す提案を当てにして、足す提案を当てた")
+            except SystemExit as e:
+                assert "0 か所" in str(e) and "どの提案もまだ当てていない" in str(e) and not (ws / "rules" / "moved2.md").exists()
+            with quiet():
+                for q in [p for p in state(ws)[1].values() if p["status"] == "未適用"]:
+                    main(["withdraw", q["id"], "--reason", "試し"])
+            keep = v.read_text()
+            with quiet():  # 足す・書き換える・（書き換えた行に掛けた）消す の組: 消す提案が止まるので、足す提案も書き換える提案も当てない
+                main(["propose", "--file", "rules/moved3.md", "--new", "- [ws-slides-visual-001] 移す", "--why", "移す"])
+                main(["propose", "--file", "rules/slides-build/visual.md", "--old", "- [ws-slides-visual-001] 表は分ける。", "--new", "- [ws-slides-visual-001] 表は 2 枚に分ける。", "--why", "書き換え"])
+                main(["propose", "--file", "rules/slides-build/visual.md", "--old", "- [ws-slides-visual-001] 表は分ける。", "--new", "", "--why", "移す"])
+            try:
+                with quiet():
+                    main(["apply", "all"])
+                raise AssertionError("途中で止まる組の前半を当てた")
+            except SystemExit as e:
+                assert "どの提案もまだ当てていない" in str(e) and v.read_text() == keep and not (ws / "rules" / "moved3.md").exists()
+            with quiet():
+                for q in [p for p in state(ws)[1].values() if p["status"] == "未適用"]:
+                    main(["withdraw", q["id"], "--reason", "試し"])
+            locked = ws / "rules" / "locked.md"  # 書く途中で止まったら（書けないファイル）、先に書いたファイルを戻す
+            locked.write_text("- [ws-slides-visual-030] 古い。\n")
+            with quiet():
+                main(["propose", "--file", "rules/first.md", "--new", "- [ws-slides-visual-031] 先に書く。", "--why", "試し"])
+                main(["propose", "--file", "rules/locked.md", "--old", "古い。", "--new", "新しい。", "--why", "試し"])
+            locked.chmod(0o444)
+            try:
+                with quiet():
+                    main(["apply", "all"])
+                raise AssertionError("書けないファイルを当てた")
+            except PermissionError:
+                assert not (ws / "rules" / "first.md").exists() and locked.read_text() == "- [ws-slides-visual-030] 古い。\n"
+            finally:
+                locked.chmod(0o644)
+            with quiet():
+                for q in [p for p in state(ws)[1].values() if p["status"] == "未適用"]:
+                    main(["withdraw", q["id"], "--reason", "試し"])
+            locked.unlink()
+            big = ws / "AGENTS.md"  # 上限を超えた AGENTS.md を縮めた提案も、戻せる（戻すときは大きさを見ない）
+            big.write_text("- [ws-agents-001] 残す。\n" + "あ" * 8000 + "\n- [ws-agents-002] 移す。\n", encoding="utf-8")
+            with quiet():
+                main(["propose", "--file", "AGENTS.md", "--old", "あ\n- [ws-agents-002] 移す。\n", "--new", "あ\n", "--why", "縮める"])
+                main(["apply", "all"])
+                main(["undo", max(p["id"] for p in state(ws)[1].values() if p["file"] == "AGENTS.md")])
+            assert "[ws-agents-002]" in big.read_text()
+            big.unlink()
+            with quiet():
+                main(["propose", "--file", "rules/x.md", "--new", "- [ws-slides-visual-001] 写し", "--why", "重なる ID"])
+            try:
+                with quiet():
+                    main(["apply", "all"])
+                raise AssertionError("ほかのファイルにある ID を当てた")
+            except SystemExit as e:
+                assert "当てない" in str(e) and not x.exists()
+        finally:
+            os.chdir(cwd)
 
 
 def selftest_candidates(quiet):
