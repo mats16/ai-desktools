@@ -17,7 +17,7 @@ from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_L
                       load_facts, lum, not_in_facts, workspace_checks)  # load_facts・lum・JA は slides.py・template.py が lint から引く
 from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_LEAD, deck_card, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
 
-MIN_PT = 11  # [slides-lint-001] スライドの文字の下限。社内資料の差し替え用（名前に「差し替え用」）は元の大きさのままなので見ない
+MIN_PT = 11  # [slides-lint-001] スライドの文字の下限。下回ると要確認（詰まった図の説明など、ページによっては小さくてよい）。社内資料の差し替え用（名前に「差し替え用」）は元の大きさのままなので見ない
 FIG_MIN_PT = MIN_PT - 2  # [slides-lint-022] 塗りのある図形の中の文字（ガントのバー、図のラベル）は本文から 2pt 下まで（slides-visual-037）。表のセル、塗りのない文字、別の図形の塗りに重ねた文字（カードの本文、背景の四角の上の出典）は MIN_PT のまま
 COPYRIGHT_NG = f"{COPYRIGHT_PT}pt 未満の著作権フッター"
 
@@ -65,7 +65,7 @@ MONO = MONO_DEFAULT  # 見ている資料の等幅の書体。lint_slides がデ
 DECK_WIDE = {NO_COVER, NO_DIVIDER, SHORT_CH, MANY_BANDS, HEAD_CLAIMS}  # デッキ全体を見て出す規則。lint_slides の only で絞らない（ページの番号が付いていても、ほかのページで決まる）
 PAGE_ONLY = {NO_SOURCE, NOT_IN_FACTS, NO_LINK, TALK, TWO_LINES, HEAD_PERIOD, HEAD_POLITE, EMPTY_BELOW, EMPTY_HOLE}  # ページを見て出す規則。部品だけを見るときは出さない
 ESTIMATE = {TWO_LINES, BODY_LINES, PHRASE_BREAK, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, TEXT_OVER}  # 字幅と行の高さの見積もりから出す指摘。Google が描いた画像で確定する（ほかは JSON で決まる）
-HARD_NAMES = textlint.HARD_NAMES | {f"{MIN_PT}pt 未満の文字", COPYRIGHT_NG}
+HARD_NAMES = textlint.HARD_NAMES | {COPYRIGHT_NG}
 INS = INSET * 72  # 文字の枠の内側の余白（pt）。Slides API の既定は 0.1 in で、変えられない
 BODY_TOP, BODY_BOTTOM = Y_BODY_NOLEAD * EMU, BAND_BOTTOM * EMU  # 本文の領域（visual.md の 1 の配置）
 FOOT_TOP = (Y_FOOT - 0.13) * EMU  # これより下はフッター（出典の行 6.68 in とフッター 7.08 in の間）
@@ -698,8 +698,8 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
     print("\n".join(titles))
     print(f"\n== 本文の字数（見出し・リード・出典・フッターを除く。話す資料は {TALK_MAX} 字まで） ==")
     print(" / ".join(chars))
-    hard = r.show(list(HARD) + [f"{MIN_PT}pt 未満の文字", COPYRIGHT_NG, FONT_NG, MONO_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
-    r.show(list(WARN) + list(SLIDE_ONLY) + [NO_SOURCE, NOT_IN_FACTS, NO_LINK, BODY_LINES, TWO_LINES, HEAD_CLAIMS, BULLET_PERIOD, TALK, ARROW_MID, TEXT_OVER, LINE_GRID, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, PAD_NG, NUM_NO_UNIT, OPEN_HEAD, PHRASE_BREAK, COL_SHIFT, DASH_ROUND, STAGE_NG, CODE_NOT_MONO, BLOCK_ON_NAVY, MANY_BANDS, NO_COVER, NO_DIVIDER, SHORT_CH], "要確認")
+    hard = r.show(list(HARD) + [COPYRIGHT_NG, FONT_NG, MONO_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
+    r.show(list(WARN) + list(SLIDE_ONLY) + [f"{MIN_PT}pt 未満の文字", NO_SOURCE, NOT_IN_FACTS, NO_LINK, BODY_LINES, TWO_LINES, HEAD_CLAIMS, BULLET_PERIOD, TALK, ARROW_MID, TEXT_OVER, LINE_GRID, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, PAD_NG, NUM_NO_UNIT, OPEN_HEAD, PHRASE_BREAK, COL_SHIFT, DASH_ROUND, STAGE_NG, CODE_NOT_MONO, BLOCK_ON_NAVY, MANY_BANDS, NO_COVER, NO_DIVIDER, SHORT_CH], "要確認")
     hard += workspace_checks("slides", p, r)
     print("\n== 文字サイズ（pt: run の数） ==")
     print(", ".join(f"{k:g}: {v}" for k, v in sorted(sizes.items())))
@@ -778,11 +778,11 @@ def selftest():
     assert res.hits[NOT_IN_FACTS] == ["p1: 「99%」。先に出典の表へ足すか、表の値にする"], res.hits[NOT_IN_FACTS]  # 「出典:」で始まる行だけを外す（本文の「出典の表の…」は見る）
     assert not_in_facts(["89%、$12M、１,２００ 万円、30〜40%"], "| F15 | 88.7% | $12 million | 1200 万 | 40% |") == ["89%"]  # 丸めた値は表に書く。$ の数は終わりまで読む。範囲の下の値は見ない
     assert not_in_facts(["3 倍、B2B の 3 M社"], "| F3 | 3.5 倍 |") == ["3 倍"]  # ID の F3 と小数の続きは表の数でない。語の中の数と名前（M社）は NUM が数えない
-    # 文字の下限: 塗りのない文字は 11pt 未満で止め、塗りのある図形の中の文字は 9pt まで通す（8pt は止める）
+    # 文字の下限: 塗りのない文字は 11pt 未満、塗りのある図形の中の文字は 9pt 未満を要確認に出す（8pt は出す）。ページによっては小さくてよいので、止めない
     for size, fill, n in ((9, None, 1), (9, NAVY, 0), (8, NAVY, 1)):
-        res, _, _ = run(deck([(NAVY, [title(), shape(1, y=3, size=size, fill=fill)])]))
-        assert len(res.hits[f"{MIN_PT}pt 未満の文字"]) == n, (size, fill)
-    # 角丸の札（背景と文字の枠が 1 グループ）は 9pt まで通す。カードの本文・背景の四角の上の出典・中心だけに塗りがある枠は、下に塗りがあっても 11pt で止める
+        res, _, hard = run(deck([(NAVY, [title(), shape(1, y=3, size=size, fill=fill)])]))
+        assert len(res.hits[f"{MIN_PT}pt 未満の文字"]) == n and hard == 0, (size, fill)
+    # 角丸の札（背景と文字の枠が 1 グループ）は 9pt まで出さない。カードの本文・背景の四角の上の出典・中心だけに塗りがある枠は、下に塗りがあっても 11pt で出す
     under = lambda oid, x, y, w, h: {"objectId": oid, **box(x, y, w, h), "shape": {"shapeType": "RECTANGLE", "shapeProperties": {"shapeBackgroundFill": {"solidFill": {"color": OAT}}}}}
     group = lambda oid, *ch: {"objectId": oid, "elementGroup": {"children": list(ch)}}
     for els, n in (([group("g", group("bgs", under("bg", 0, 3, 2, 4)), shape(1, y=3, size=9) | {"objectId": "lb"})], 0),
@@ -852,9 +852,10 @@ def selftest():
     run(deck([(NAVY, [title()])]))
     assert slides.TEXT_EM is slides.ASCII_EM  # 次のデッキは、その書体の字幅に戻す
     copyright_text = "© 2026 Databricks, Inc. All rights reserved.｜Internal Only"
-    for y, size, text, expected in ((7.08, 9, copyright_text, 0), (7.08, 8, copyright_text, 1),
-                                    (2, 9, copyright_text, 1), (7.08, 9, "資料名", 1)):
-        assert run(deck([(NAVY, [title(), shape(1, y=y, size=size, text=[text])])]))[2] == expected  # 9pt の例外は著作権フッターだけ
+    for y, size, text, want in ((7.08, 9, copyright_text, (0, 0)), (7.08, 8, copyright_text, (1, 0)),
+                                (2, 9, copyright_text, (0, 1)), (7.08, 9, "資料名", (0, 1))):  # want は（要修正の数, 11pt 未満の文字の数）
+        res, _, hard = run(deck([(NAVY, [title(), shape(1, y=y, size=size, text=[text])])]))
+        assert (hard, len(res.hits[f"{MIN_PT}pt 未満の文字"])) == want, (y, size, text)  # 9pt の例外は著作権フッターだけ。9pt 未満の著作権フッターは止め、ほかの小さい字は要確認
     oat = rgb("F9F7F4")
     assert len(run(deck([(NAVY, [title()]), (oat, [title(), shape(1, size=36, text=["55"])])]))[0].hits[NUM_NO_UNIT]) == 1
     assert not run(deck([(NAVY, [title()]), (oat, [title(), shape(1, size=36, text=["55 モデル"])])]))[0].hits[NUM_NO_UNIT]
