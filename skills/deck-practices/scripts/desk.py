@@ -6,6 +6,7 @@
 3. どちらもなければ None（呼ぶ側が止めて desk-init を案内する）。
 2 つを混ぜない（sandbox の desk.toml に書き忘れた [drive] が ~/.desk.toml から入ると、本番の Drive に書くため）。
 DESK_CONFIG を空にすると 2 を飛ばす（selftest と開発の worktree。~/.desk.toml の本番のワークスペースに戻らない）。
+ワークスペースの決まりのファイル（rules/ の下の、frontmatter に description のある .md）の探し方も、ここに置く（rules・front）。
 usage: desk.py              ワークスペースのパスを出す（なければ exit 1）
        desk.py --selftest"""
 import json, os, sys, tempfile
@@ -17,6 +18,8 @@ except ImportError:  # hook と snapshot.sh は素の python3 で回る。上へ
     tomllib = None
 
 NAME, OLD = "desk.toml", "factory.toml"  # OLD は 2026-10-25 より前の設定の名前（desk-migrate で移す）
+RULE_MAX = 3800  # 決まりの 1 ファイルの字数の上限。hook が memory と並べて出すとき、決まりに回す半分（4,499 字）から、入りきらないものを挙げる添え書き（NOTE の 500 字）と見出し（パスが 79 字までなら 199 字まで）を引いても、最初のファイルが丸ごと入る（deck-practices/rules.md の「Workspace rules」）
+TARGETS, AUDIENCES = ("slides", "docs", "vids"), ("顧客向け", "社内向け", "コミュニティ向け")  # frontmatter の targets・audience の値（audience は deck-content-039 の資料の種類）
 
 
 def loads(text, where):
@@ -92,6 +95,57 @@ def missing(start="."):
     return f"desk.toml が見つからない（今いるフォルダから上へ探した。{looked}）。desk-init で作る（ワークスペースの直下の desk.toml か、~/.desk.toml）"
 
 
+def front(text):
+    """md の頭の frontmatter（--- の行の間の「key: value」）。値は 1 行の文字、[a, b] の並び、続く「  - a」の行の並び。閉じていない・ないときは {}。"""
+    lines = text.lstrip("﻿").split("\n")
+    if lines[0].strip() != "---":
+        return {}
+    out, key = {}, None
+    for x in lines[1:]:
+        if x.strip() == "---":
+            return out
+        if key and x.lstrip().startswith("- ") and (out[key] == "" or isinstance(out[key], list)):  # 値を書かなかった key の並び（paths:\n  - a.md）
+            out[key] = [*out[key], x.strip()[2:].strip().strip("'\"")]
+            continue
+        k, sep, v = x.partition(":")
+        key = None
+        if sep and k.strip() and not x.startswith((" ", "\t", "#")):
+            key, v = k.strip(), v.strip()
+            v = v[:v.find(v[0], 1) + 1] if v[:1] in ("'", '"') and v.find(v[0], 1) > 0 else v.split(" #")[0].strip()  # 引用符の中の # はコメントでない
+            v = "" if v[:1] in ("|", ">", "#") else v  # 複数行の値（description: >）は読まない（値のないものとして、desk-doctor・gate が知らせる）。# から後ろはコメント
+            out[key] = [s.strip().strip("'\"") for s in v[1:-1].split(",") if s.strip()] if v.startswith("[") and v.endswith("]") else v.strip("'\"")
+    return {}
+
+
+def described(meta):
+    """frontmatter の description（1 行の文字）。ないか、文字でなければ ""。"""
+    d = meta.get("description")
+    return d if isinstance(d, str) else ""
+
+
+def listed(meta, key):
+    """frontmatter の key を並びにする（1 つだけ書いたものも）。"""
+    v = meta.get(key) or []
+    return [v] if isinstance(v, str) else v
+
+
+def rules(ws):
+    """ワークスペースの決まりのファイル [(パス, frontmatter)]。rules/ の下の .md で、frontmatter に description のあるもの。
+    frontmatter のない README.md と、docs-build のテンプレート（rules/docs-build/templates/<名前>/doc.md。templates/ の下）は入れない。"""
+    root = Path(ws) / "rules"
+    out = []
+    for p in sorted(root.rglob("*.md")) if root.is_dir() else []:
+        if "templates" in p.relative_to(root).parts[:-1] or not p.is_file():
+            continue
+        try:
+            meta = front(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):  # 読めない、UTF-8 でない
+            continue
+        if described(meta):
+            out.append((p, meta))
+    return out
+
+
 def with_workspace(text, ws):
     """設定の文字列の頭（頭のコメントのあと、最初の値か表の前）に workspace を足す（desk-init と desk-migrate が ~/.desk.toml を書くとき）。ホームの下は ~/ で書く。
     書けないときは止める（何も書かない）。"""
@@ -164,6 +218,18 @@ def selftest():
         (other / OLD).unlink()
         (ws / NAME).write_text("")
         assert local(ws / "Customers") == (ws / NAME, ws) and locate(other) == (conf, ws)  # 既定のワークスペースにも desk.toml があると、中と外で読む設定が変わる（desk-doctor が出す）
+        assert front("---\ndescription: 顧客向けの資料: 共通\ntargets: [slides, 'docs']  # 省くと全部\npaths:\n  - a/b.md\n- a/c.md\naudience: 顧客向け\n---\n本文") == {
+            "description": "顧客向けの資料: 共通", "targets": ["slides", "docs"], "paths": ["a/b.md", "a/c.md"], "audience": "顧客向け"}
+        assert front('---\ndescription: "Issue #12 の件"  # c\n---\n')["description"] == "Issue #12 の件"
+        assert [described(front(f"---\ndescription: {v}\n  長い説明\n---\n")) for v in (">", "|-", "[a, b]", " # TODO", "x")] == ["", "", "", "", "x"]  # 複数行と並びは、description がないとみなす
+        assert front("---\npaths: a.md\n  - b.md\n---\n")["paths"] == "a.md"  # 値のある key の下の「- 」は並びにしない（字に切らない）
+        assert front("# 見出し\n---\n") == front("---\ndescription: x\n") == {} and listed({"audience": "顧客向け"}, "audience") == ["顧客向け"] and listed({}, "paths") == []  # 閉じていない
+        r = ws / "rules"
+        for f, t in (("a.md", "---\ndescription: x\n---\n"), ("README.md", "# rules/\n"), ("s/b.md", "---\ndescription:\n---\n"),
+                     ("docs-build/templates/p/doc.md", "---\ndescription: テンプレート\n---\n"), ("s/c.md", "---\ndescription: y\n---\n")):
+            (r / f).parent.mkdir(parents=True, exist_ok=True)
+            (r / f).write_text(t)
+        assert [str(p.relative_to(r)) for p, _ in rules(ws)] == ["a.md", "s/c.md"] and rules(other) == []  # description のないもの・テンプレートは入れない
     print("selftest ok")
 
 

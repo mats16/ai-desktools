@@ -127,7 +127,7 @@ CHECKS = {"slides": "slides-build", "doc": "docs-build"}  # 点検の関数の�
 
 def workspace_checks(kind, data, r):
     """ワークスペースの点検。スライドは rules/slides-build/checks.py の slides(p, r)、ドキュメントは rules/docs-build/checks.py の doc(doc, r) を呼ぶ
-    （修正の指示から育てる、そのワークスペースだけの点検。deck-practices/rules.md の「Rule layers」）。足された指摘のうち、checks.py の HARD にある名前は要修正、ほかは要確認。"""
+    （修正の指示から育てる、そのワークスペースだけの点検。deck-practices/rules.md の「Workspace rules」）。足された指摘のうち、checks.py の HARD にある名前は要修正、ほかは要確認。"""
     import importlib.util
     try:
         path = gapi.workspace() / "rules" / CHECKS[kind] / "checks.py"

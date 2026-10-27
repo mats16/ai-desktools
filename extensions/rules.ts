@@ -1,10 +1,10 @@
-// pi の側のつなぎ: read・bash の結果に、ワークスペースの rules/ の同じパスのファイルと、顧客の memory.md を足す。/skill:<名前> で呼んだスキルには rules/<スキル>/SKILL.md を足す（今の文脈に残るものは足さない）。中身は hooks/rules_overlay.py（Claude Code・Codex と共有）
+// pi の側のつなぎ: read・bash の結果に、frontmatter の paths が当たるワークスペースの決まりと、顧客の memory.md・構成案の「使う決まり」を足す。/skill:<名前> で呼んだスキルには、その SKILL.md に当たる決まりを足す（今の文脈に残るものは足さない）。中身は hooks/rules_overlay.py（Claude Code・Codex と共有）
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "..", "hooks", "rules_overlay.py");
-const PART = /(?:^|\n)## (?:ワークスペースの決まり|顧客の memory): /;  // 足したものの頭（rules_overlay.py の見出しの形）
+const PART = /(?:^|\n)## (?:ワークスペースの決まり(?:の一覧)?|顧客の memory): /;  // 足したものの頭（rules_overlay.py の見出しの形）
 const TYPE = "desk-tools-rules";  // /skill:<名前> のときに足すメッセージ
 
 export default function (pi: any) {

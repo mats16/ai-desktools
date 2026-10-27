@@ -5,7 +5,7 @@ description: Read first when making or editing materials (decks and documents). 
 
 # Practices for making materials
 
-Open this first when making or editing materials. It builds on 「いい資料の考え方」 in the root `AGENTS.md` (the user's iron rules and the six things that hold for every material), and holds the workflow and the files to read in each situation. [deck-flow-001] Workspace rules (`AGENTS.md` and the `rules/<skill>/<file>` it points to) take precedence over the plugin's skills. When they conflict, follow the workspace. Points the user has not decided yet are marked 「要判断」 in each file.
+Open this first when making or editing materials. It builds on 「いい資料の考え方」 in the root `AGENTS.md` (the user's iron rules and the six things that hold for every material), and holds the workflow and the files to read in each situation. [deck-flow-001] Workspace rules (`AGENTS.md`, the rule files in `rules/` that the hook shows, and the customer's `memory.md`) take precedence over the plugin's skills. When they conflict, follow the workspace. Points the user has not decided yet are marked 「要判断」 in each file.
 
 ## Overall flow
 
@@ -60,7 +60,7 @@ Evidence:
 
 ## What to read when
 
-Do not wait for skills to be called automatically; open the following file when the situation comes up. Paths are `<skill>/<file>` (under the plugin's `skills/`). When you open one, the plugin hook then shows the workspace's `rules/<skill>/<file>` at the same path (e.g. `rules/slides-build/visual.md`). It holds workspace-only additions and overrides, and they take precedence (in environments where it does not appear, open it yourself; "Rule layers" in [rules.md](rules.md)).
+Do not wait for skills to be called automatically; open the following file when the situation comes up. Paths are `<skill>/<file>` (under the plugin's `skills/`). When you open one, the plugin hook then shows the workspace's rule files whose `paths` match it (workspace-only additions and overrides, which take precedence; the rule files chosen per material come with the outline). In environments where they do not appear, open them yourself ("Workspace rules" in [rules.md](rules.md)).
 
 | Situation | File to open |
 |---|---|
@@ -78,7 +78,7 @@ Do not wait for skills to be called automatically; open the following file when 
 | Writing or rewriting the voiceover script of a video (the speaker notes of a built deck), only when the user asks (content.md §5; asked while building a deck: deck-flow-022) | `vids-voice/SKILL.md` (story across scenes, writing for speech, audio tags, replacing only the notes) |
 | Making a Google Vids video from a deck (only when the user explicitly asks, also when building or fixing a deck), or, after the notes of a deck change, updating the video made from it (without asking) | `vids-build/SKILL.md` (beta; when to make or update, setup, `create`, `update`, voices) |
 | Creating or adjusting a template (from a company template) | `slides-template/SKILL.md` (a table of which file to open: `create.md` for the three cases, mapping colors to roles, and fixing contrast; `fonts.md`; `dark.md`; switching the default theme) |
-| Received a correction, adding a rule | `deck-practices/rules.md` (rule layers, routing corrections, verifying rules) |
+| Received a correction, adding a rule | `deck-practices/rules.md` (workspace rules, routing corrections, verifying rules) |
 | Editing the plugin | `desk-kaizen/SKILL.md` (verifying on past materials, and the Issue) |
 | desk-doctor reports 「前の版のワークスペース」 | `desk-migrate/SKILL.md` (moving `rules/`, rule IDs, and the ledger to the current version) |
 

@@ -1,12 +1,27 @@
 # rules/
 
-このワークスペースだけの決まりと点検。プラグインより優先する（`deck-practices/rules.md` の「Rule layers」）。
+このワークスペースだけの決まりと点検。プラグインより優先する（`deck-practices/rules.md` の「Workspace rules」）。
 
-## 決まり: `rules/<スキル>/<ファイル>`
+## 決まり: `rules/<名前>.md`
 
-プラグインのスキルのファイルと同じパスに置く（例: `rules/slides-build/visual.md` は `slides-build/visual.md` への足しと上書き）。プラグインのファイルを開くと、hook がこちらを続けて出す。
+1 つの場面か話題ごとに 1 ファイル（名前は英小文字。例: `rules/product_update.md`）。頭の frontmatter に、いつ使うかを書く。frontmatter のないファイル（この README.md など）は、決まりとして出さない。
 
-- 各ファイルの冒頭に、どのファイルへの足しかを書く。プラグインの決まりを上書きするときは、その ID を `- [ws-slides-visual-<番号>] 〜は〜にする（slides-visual-012 より優先。<短い理由>）。` の形で書く（ID のない節なら「プラグインの〇〇の節より優先」）。
+```markdown
+---
+description: 製品のアップデートをまとめる資料で、顧客に効くものを選んで説明するとき
+targets: [slides, docs]
+audience: [顧客向け]
+---
+
+- 〜のときは〜する（<短い理由>）。
+```
+
+- `description`（要る）: いつ使うか。この 1 行だけで選べるように書く。
+- `targets`: `slides`・`docs`・`vids`。`audience`: `顧客向け`・`社内向け`・`コミュニティ向け`。書かなければ全部。
+- `paths`: どの資料でも、ある手順のときに要る足し（見た目の足し、レビューの依頼、材料の集め方、API の落とし穴など）に書く。プラグインのそのファイル（`slides-build/visual.md`。`slides-build/*` のように `*` も使える）を開くと、hook が続けて出す。
+- `paths` のないファイルは、資料ごとに選ぶ。作る会話が構成案の頭に `- **使う決まり:** rules/a.md、rules/b.md` と書き、構成案を開くたびに hook が出す。
+- 1 ファイルは 3,800 字まで（顧客の memory と並べても、最初のファイルは途中で切れない。入りきらないものは、hook がパスを挙げる）。超えそうなら場面で分ける。
+- プラグインの決まりを上書きするときは、その ID を `- [ws-slides-visual-<番号>] 〜は〜にする（slides-visual-012 より優先。<短い理由>）。` の形で書く（ID のない節なら「プラグインの〇〇の節より優先」）。
 - 決まりは 1 項目ごとに ID を付ける（`- [ws-slides-visual-<番号>] 〜のときは〜する（<短い理由>）。`。ID は `ledger.py next ws-slides-visual`）。日付とユーザーの言葉（原文）は本文に書かず、決まりの台帳（`.desk/ledger.jsonl`）に ID でつなぐ（`deck-practices/rules.md` の「Routing corrections」）。
 
 ## 点検: `rules/slides-build/checks.py`・`rules/docs-build/checks.py`
@@ -38,6 +53,10 @@ def doc(doc, r):
         if "旧社名" in (text := doc_lint.gdoc_text(p).strip()):
             r.hits["社名の旧表記"].append(f"段落 {n}: 「{text[:20]}」")
 ```
+
+## ドキュメントのテンプレート: `rules/docs-build/templates/<名前>/doc.md`
+
+会社の文書の型（`docs.py init <名前>` が写す）。決まりではないので、frontmatter の description は要らない。
 
 ## 大元に上げる
 

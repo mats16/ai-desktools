@@ -77,10 +77,10 @@ The last command prints the 16 skills loaded from the worktree.
 
 ## Check that `rules/` is appended
 
-In `sandbox/`, write a one-line marker in `rules/slides-build/visual.md`, and have the conversation open `../skills/slides-build/visual.md`. If the marker is appended after it, the hook (Claude Code, Codex) and the extension (pi) work. When a skill is invoked as `/desk-tools:<skill>` (Claude Code) or `$desk-tools:<skill>` (Codex), `rules/<skill>/SKILL.md` is appended (UserPromptSubmit); in pi, `/skill:<name>` appends it (`before_agent_start`). In Claude Code, `/compact` after such a call shows it again (SessionStart). Reading two customer files in parallel in one message shows the customer's `memory.md` once. The hook alone can be checked without opening a conversation:
+In `sandbox/`, write a rule file with a one-line marker and `paths: [slides-build/visual.md]`, and have the conversation open `../skills/slides-build/visual.md`. If the marker is appended after it, the hook (Claude Code, Codex) and the extension (pi) work. When a skill is invoked as `/desk-tools:<skill>` (Claude Code) or `$desk-tools:<skill>` (Codex), the rule files whose `paths` match its `SKILL.md` are appended (UserPromptSubmit); in pi, `/skill:<name>` appends them (`before_agent_start`). In Claude Code, `/compact` after such a call shows them again (SessionStart). For rule files without `paths`, open `../skills/deck-practices/start.md` (the list of them is appended), then an outline whose 「使う決まり」 names one (the file is appended). Reading two customer files in parallel in one message shows the customer's `memory.md` once. Claude Code gives the hook the folder the conversation last `cd`'d into as `cwd`, so the hook also looks for the workspace from `CLAUDE_PROJECT_DIR` (the folder the conversation was opened in); to check this, have the conversation run `cd ../skills` before opening the file. The hook alone can be checked without opening a conversation:
 
 ```sh
-mkdir -p rules/slides-build && echo "目印" > rules/slides-build/visual.md
+printf -- '---\ndescription: 試し\npaths: [slides-build/visual.md]\n---\n目印\n' > rules/marker.md
 echo "{\"cwd\":\"$PWD\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$PWD/../skills/slides-build/visual.md\"}}" \
   | python3 ../hooks/rules_overlay.py claude
 ```

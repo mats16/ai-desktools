@@ -41,7 +41,7 @@ mkdir -p .codex && { grep -qs 'desk-tools@desk-tools' .codex/config.toml || prin
 
 - 信頼は hook の中身のハッシュに付く。`hooks/hooks.json` が変わった版を取ると、信頼し直すまで止まる（起動のときに `/hooks` を開くよう知らせが出る）。
 - `codex exec`（desk-dreaming の `run.sh codex`、レビューの子）は聞けない。先に対話の Codex で信頼しておく。
-- Codex はファイルをシェル（`cat`・`sed` など）で読むので、PostToolUse は `Bash` で効く。`$desk-tools:slides-build` のように呼んだスキルは、道具を使わずに SKILL.md が入るので、UserPromptSubmit がプロンプトから拾って `rules/<スキル>/SKILL.md` を出す。
+- Codex はファイルをシェル（`cat`・`sed` など）で読むので、PostToolUse は `Bash` で効く。`$desk-tools:slides-build` のように呼んだスキルは、道具を使わずに SKILL.md が入るので、UserPromptSubmit がプロンプトから拾って、その SKILL.md に frontmatter の `paths` が当たる `rules/` の決まりを出す（2026-10-27 に、`sed` で開いた `paths`・一覧・構成案の「使う決まり」と、`$desk-tools:deck-review` を、会話の記録の developer のメッセージで確かめた）。
 - Codex は `hooks.json` の `if`（Claude Code が `.md` に触れない Read・Bash で hook を起こさないための条件）を読まないので、Bash のたびに hook が起き、出すものがなければすぐ終わる。Codex は hook の差し込みが約 2,500 トークン（和文で約 3,300 字）を超えるとファイルに逃がして頭と末尾だけを見せるので、`additionalContextLimit` を 0 にして逃がさない。量は hook が 9,000 字までに抑える（README の「決めたこと」の 2026-10-25）。
 
 ## そのフォルダだけで効いているかを確かめる
