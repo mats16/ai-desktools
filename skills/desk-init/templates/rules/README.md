@@ -21,8 +21,8 @@ audience: [顧客向け]
 - `paths`: どの資料でも、ある手順のときに要る足し（見た目の足し、レビューの依頼、材料の集め方、API の落とし穴など）に書く。プラグインのそのファイル（`slides-build/visual.md`。`slides-build/*` のように `*` も使える）を開くと、hook が続けて出す。
 - `paths` のないファイルは、資料ごとに選ぶ。作る会話が構成案の頭に `- **使う決まり:** rules/a.md、rules/b.md` と書き、構成案を開くたびに hook が出す。
 - 1 ファイルは 3,800 字まで（顧客の memory と並べても、最初のファイルは途中で切れない。入りきらないものは、hook がパスを挙げる）。超えそうなら場面で分ける。
-- プラグインの決まりを上書きするときは、その ID を `- [ws-slides-visual-<番号>] 〜は〜にする（slides-visual-012 より優先。<短い理由>）。` の形で書く（ID のない節なら「プラグインの〇〇の節より優先」）。
-- 決まりは 1 項目ごとに ID を付ける（`- [ws-slides-visual-<番号>] 〜のときは〜する（<短い理由>）。`。ID は `ledger.py next ws-slides-visual`）。日付とユーザーの言葉（原文）は本文に書かず、決まりの台帳（`.desk/ledger.jsonl`）に ID でつなぐ（`deck-practices/rules.md` の「Routing corrections」）。
+- プラグインの決まりを上書きするときは、上書きする決まりの ID を角括弧なしで `- 〜は〜にする（slides-visual-012 より優先。<短い理由>）。` の形で書く（ID のない節なら「プラグインの〇〇の節より優先」）。
+- 決まりは 1 項目ずつ箇条書きにし、ID は付けない（`- 〜のときは〜する（<短い理由>）。`）。日付とユーザーの言葉（原文）は本文に書かず、決まりの台帳（`.desk/ledger.jsonl`）に、このファイルへの指摘として残す。直してから戻し先にこのファイルを書く（`ledger.py route <c-ID> rules/<名前>.md`）と、台帳が直す前と後の全文を版として残す（`ledger.py why rules/<名前>.md` で見る。`deck-practices/rules.md` の「Routing corrections」）。
 
 ## 点検: `rules/slides-build/checks.py`・`rules/docs-build/checks.py`
 
@@ -60,7 +60,7 @@ def doc(doc, r):
 
 ## 大元に上げる
 
-ほかの人にも効くと分かったものは、desk-dreaming が「プラグインに上げる」提案にし、`desk-kaizen` で Issue を出す。上げた決まりが入っているプラグインに届いたら、ここの写しを消す提案を desk-dreaming が出す（`ledger.py candidates` の「写しを消す」）。
+ほかの人にも効くと分かったものは、desk-dreaming が「プラグインに上げる」提案にし、`desk-kaizen` で Issue を出す。上げた決まりが入っているプラグインに届き、同じ文がここに残っていれば、ここの写しを desk-dreaming が消す（`ledger.py candidates` の「写しを消す」）。
 
 ## 顧客の memory: `Customers/<顧客>/memory.md`
 
