@@ -65,8 +65,15 @@ def check(ws, local=False):
         warn("AGENTS.md の返したあとの直し", "前の雛形の「ユーザーに返す前に、スキル deck-review で全体をレビューする」が残っている。ワークスペースの決まりが優先するので、返したあとの小さな直しや問いでも全体のレビューを回す。desk-init の雛形の今の文（新しく作った資料は deck-review、返したあとは deck-practices/revise.md）に替える")
     if "- **日本語で作る。**" in agents:  # 2026-10-25 までの雛形
         warn("AGENTS.md の資料の言語", "前の雛形の「日本語で作る」が残っている。ワークスペースの決まりが優先するので、desk.toml の [desk] default_language が効かない。desk-init の雛形の今の文（[desk] default_language の言語で作る）に替える")
+    for needles, name, what in (  # 2026-10-27 までの雛形の文。どれも、移行では本文を書き換えない（desk-migrate は決まりのファイルだけを移す）
+            (("同じパスのファイルへの足しと上書き",), "AGENTS.md の決まりの置き場所", "前の雛形の「rules/<スキル>/<ファイル>（プラグインの同じパスのファイルへの足しと上書き）」が残っている。今は rules/ の決まりのファイルを frontmatter（description・paths）で出す。desk-init の雛形の今の文（「決まりの優先」の 1 つ目）に替える"),
+            (("同じファイルへの足しと上書き",), "AGENTS.md のフォルダの表", "前の雛形の「rules/<スキル>/<ファイル> … プラグインの同じファイルへの足しと上書き」が残っている。desk-init の雛形の今の行（rules/<名前>.md … 頭の frontmatter に、いつ使うかと、出す場面を書く）に替える"),
+            (("`rules.md` の「決まりの層」", "（決まりの層、"), "AGENTS.md の決まりの層", "前の雛形の「決まりの層」（deck-practices/rules.md の前の節の名前）が残っている。層はなくした（ワークスペースの決まりが優先し、ワークスペースどうしは条件が狭いほう）。節の名前は「Workspace rules」。desk-init の雛形の今の文に替える"),
+            (("決まりには ID と短い理由だけを書き",), "AGENTS.md の決まりの ID", "前の雛形の「決まりには ID と短い理由だけを書き」が残っている。ワークスペースの決まりには ID を付けない（戻し先はファイル。台帳が版を残す）。desk-init の雛形の今の文（「修正の指示」の「直したら、その場で戻す」）に替える")):
+        if any(x in agents for x in needles):
+            warn(name, what)
     if old := migrate.needs(root):  # 前の名前の rules/ は読まれず、前の ID は台帳とつながらない
-        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの頭に frontmatter を置いた）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
+        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの頭に frontmatter を置き、ワークスペースの決まりの ID を外した）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
     plugin, odd = [str(p.relative_to(SKILLS)) for p in SKILLS.glob("*/**/*.md")], []  # 決まりの frontmatter（deck-practices/rules.md の「Workspace rules」）
     for p, m in (rules := desk.rules(root)):
         rel = p.relative_to(root)
@@ -267,6 +274,11 @@ def selftest():
         assert "AGENTS.md の資料の言語" not in kinds()  # 今の雛形
         agents.write_text(agents.read_text() + "\n- **日本語で作る。** 英語でと言われたときだけ英語にする。\n")
         assert kinds()["AGENTS.md の資料の言語"] == "要確認"
+        assert not any(n in kinds() for n in ("AGENTS.md の決まりの置き場所", "AGENTS.md の決まりの層", "AGENTS.md の決まりの ID"))  # 今の雛形
+        agents.write_text(agents.read_text() + "\n- 前は「決まりの層」があった（自分で書いたメモ）。\n")
+        assert "AGENTS.md の決まりの層" not in kinds()  # 自分で書いた文の語には当てない
+        agents.write_text(agents.read_text() + "\n- 決まりは、このファイルと `rules/<スキル>/<ファイル>`（プラグインの同じパスのファイルへの足しと上書き）。`rules.md` の「決まりの層」。決まりには ID と短い理由だけを書き、日付は台帳に。\n")
+        assert all(kinds()[n] == "要確認" for n in ("AGENTS.md の決まりの置き場所", "AGENTS.md の決まりの層", "AGENTS.md の決まりの ID"))
         toml = Path(tmp) / "desk.toml"
         assert kinds()["brand.copyright"] == "要修正" and kinds()["brand.company"] == "要確認"
         toml.write_text(toml.read_text().replace("[brand]", '[brand]\ncopyright = "© Acme 2026"', 1))

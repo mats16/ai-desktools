@@ -36,7 +36,7 @@ Draft these for your territory only (d is INV only).
 - c. **Repetition:** If an instruction with the same intent appears in two or more conversations or materials, or a rule shows 「下ろす」 in `candidates` (recurrences or 「直した」 in two or more materials; details in the 「（再発）」 part of `ledger.py why <ID>`), the written rule is not stopping it. INV: if a machine can check it, add it to the workspace check (`rules/slides-build/checks.py`; how to write it is in `rules/README.md`); if it is about the making procedure (read, check before uploading), move it into the step files of `deck-practices` (`start.md`, `deliver.md`) or to the top of the files in the table. DOM: if it can be judged from the material's images and text but not counted, add it as a question to the deck-review request's checkpoints (do not force it into lint); if the `memory.md` of two or more customers has a preference with the same intent, move it into `rules/` as a customer-independent rule (delete the memory lines and link the source findings to the new rule).
 - d. **Environment pitfalls (INV):** If the same error appears in two or more conversations and the fix appears in the conversation, add it to the pitfall sections such as `slides-build/api.md` and `docs-build/api.md`.
 
-Keep these from "Rules for running" in `run.md`: no personal names, customers' internal circumstances, spending amounts, or contents of internal materials in the candidate text; no candidate with the same intent as a rejected proposal unless there is a new source; and a message that conflicts with a rule the user decided (「ユーザーが決めた: あり」 in `ledger.py why <ID>`, or a rule the user edited after it was applied, `drift`) becomes a pending question, not a change. Copy user quotes and rule text in their original language.
+Keep these from "Rules for running" in `run.md`: no personal names, customers' internal circumstances, spending amounts, or contents of internal materials in the candidate text; no candidate with the same intent as a rejected proposal unless there is a new source; and a message that conflicts with a rule the user decided (「ユーザーが決めた: あり」 in `ledger.py why <ID or file>`, or a 「手で直した」 version at the end of `why <file>`) becomes a pending question, not a change. Copy user quotes and rule text in their original language.
 
 ## Output
 
@@ -47,10 +47,12 @@ Write to `{out}` and return its path. One block per candidate, in the parent's r
 - 種類: 戻し忘れた指示 / くり返し / 落とし穴
 - 根拠の種類: 食い違い / くり返し / 危険
 - 出典: <c-ID,…>、または新しい指摘: ユーザー「<発言の原文>」（<claude・codex・pi> <会話 ID>、<発言の時刻（UTC）>、<資料のフォルダ>、ユーザーが決めた: あり・なし、構成の見逃し: AI・人・なし）
-- 変更先: <ワークスペースのファイル>（<決まりの ID か「新しい決まり」>）
+- 変更先: <ワークスペースのファイル>（新しく作るなら「新しいファイル」）
 - 変更: <足す文、または「<今の文>」→「<新しい文>」>
 - 確かめ方: lint <規則名> / レビュー（観点 <N>）/ なし（<理由>）
 - 推奨: 適用 / 様子見 / 却下（<理由>）
 ```
+
+Workspace rules have no IDs. Do not write `[ID]` into a change; point at a plugin rule without brackets (「slides-visual-012 より優先」). The parent folds candidates for a file that new findings reached into its whole-file rewrite (4j of `run.md`).
 
 Then a 「判断待ち」 list (questions for the user, with the recommended answer) and a 「戻さない」 list (`<c-ID か発言>: <理由>`). Write 「なし」 for an empty list.

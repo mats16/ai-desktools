@@ -18,6 +18,7 @@ Corrections are written back into rules on the spot, in the conversation that ma
 |---|---|
 | A scheduled run (the one line in `prompt.txt`), or the user says 「整理して」「desk-dreaming して」 | [run.md](run.md) (rules for running, the steps, the report format) |
 | Step 4 of a run: the request for the two child agents that draft proposal candidates (INV and DOM; desk-dreaming-002) | [prompt_propose.md](prompt_propose.md) |
+| Step 4j of a run: the request for the child agent that checks a rewritten rule file against the user's decisions (desk-dreaming-004) | [prompt_decided.md](prompt_decided.md) |
 | The user replies to a report (「適用」「推奨どおり」「推奨どおり、P0002 は却下」, answers to pending questions, or choices) | [apply.md](apply.md) |
 | Registering the run with a scheduler | [schedule.md](schedule.md) |
 
@@ -27,11 +28,12 @@ Corrections are written back into rules on the spot, in the conversation that ma
 |---|---|
 | `prompt.txt` | The one line to give the scheduler |
 | [prompt_propose.md](prompt_propose.md) | The request for the child agents of step 4 (territories, the order of evidence desk-dreaming-003, the candidate format) |
+| [prompt_decided.md](prompt_decided.md) | The request for the child agent of step 4j (whether a rewrite kept each decision of the user) |
 | [schedule.md](schedule.md) | How to register with each scheduler |
 | `scripts/sessions.py` | Extracts user messages, opened rule files, and tool errors from conversations since the last run (has `--selftest`) |
 | `scripts/snapshot.sh` | Freezes a copy before changes (`save`), shows the diff since then (`diff`), restores it (`restore`) |
 | `scripts/run.sh` | Runs with `claude` or `codex` from launchd or cron |
-| `../deck-practices/scripts/ledger.py` | The rule ledger (`$R/.desk/ledger.jsonl`). Findings, sources per rule ID, and records of proposals, applies, rejections, and undos (has `--selftest`) |
+| `../deck-practices/scripts/ledger.py` | The rule ledger (`$R/.desk/ledger.jsonl`). Findings, sources per plugin rule ID and workspace rule file, the versions of each workspace rule file, and records of proposals, applies, rejections, and undos (has `--selftest`) |
 | `$R/.desk/dreaming/last_run` | When the last cleanup finished (UTC). Everything from here down lives in the workspace (anything inside the plugin is lost on reinstall) |
 | `$R/.desk/dreaming/log/<YYYYMMDD>.md` | The report (only for runs that found something). Proposal contents and status are in the rule ledger |
 | `$R/.desk/dreaming/backup/` | Copies taken before changes (`snapshot.sh` keeps only the newest 8) |
