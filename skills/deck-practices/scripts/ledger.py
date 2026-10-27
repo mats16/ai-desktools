@@ -42,7 +42,7 @@ usage:
 台帳の原文には顧客のことが入る。.desk/ から外（Issue・チャット）に写さない。
 add と review は、そのときのハーネス（プラグインと、ワークスペースの AGENTS.md・rules/）の指紋も残す。指紋ごとの決まりの文の控えは .desk/harness/<指紋>.json（effects が読む）。
 desk-migrate がワークスペースの決まりの ID を外したときの、ID → ファイルの対応は migrated の記録に残し、前の記録の ID はそのファイルとして読む（台帳の前の行は書き換えない）。"""
-import argparse, difflib, hashlib, json, os, re, sys, tempfile, time
+import argparse, difflib, fnmatch, hashlib, json, os, re, sys, tempfile, time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -598,9 +598,33 @@ def propose(ws, a):
 ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)])\s")  # 箇条書きの項目の頭の行
 
 
+def item_spans(lines):
+    """項目の頭の行 → その項目の行（字下げした続きの行と、中の箇条書き）。"""
+    depth = lambda x: len(x) - len(x.lstrip())
+    spans = {}
+    for h, x in enumerate(lines):
+        if ITEM.match(x):
+            k = h + 1
+            while k < len(lines) and lines[k].strip() and depth(lines[k]) > depth(x):
+                k += 1
+            spans[h] = set(range(h, k))
+    return spans
+
+
+def items(text):
+    """文の中の箇条書きの項目を、1 つずつ丸ごと plain にしたもの（コードの囲みの中の例は除く）。"""
+    lines, fence = [], False
+    for x in text.split("\n"):
+        if x.lstrip().startswith("```"):
+            fence = not fence
+        lines.append("" if fence or x.lstrip().startswith("```") else x)
+    return {plain("\n".join(lines[k] for k in sorted(span))) for span in item_spans(lines).values()}
+
+
 def auto_ok(ws, a):
     """--auto で当ててよいか。会話の指摘を出典にせず、AGENTS.md・rules/ の .md で、箇条書きの項目を丸ごと（字下げした続きの行も）消すだけで
-    （見出し・前置き・空行・ほかの項目の一部は 1 行も消さない）、消す項目の文がプラグインか AGENTS.md にもあるもの（ほかの rules/ のファイルは出る場面が違うので数えない）。
+    （見出し・前置き・空行・ほかの項目の一部は 1 行も消さない）、消す項目と丸ごと同じ項目が、同じ場面で出るところにもあるもの。同じ場面は、そのファイルの paths が当たる
+    プラグインの md と AGENTS.md（AGENTS.md から消すときは、どこも同じ場面でない）。文の中の引用（「次は使わない：『…』」）、コードの囲みの中の例、出る場面の違うファイルは数えない。
     ユーザーが決めた指摘・答えた判断待ち・「手で直した」版・まだ版にしていない直しのあるファイルは止める（ID がないので、どの項目かを見分けられない）。
     ユーザーが戻した・却下した提案が消そうとした項目も止める。人を通さずに新しい文が決まりに入らないようにする（desk-dreaming-001）。
     --new には前か後ろの行を残す（undo の目印。空の --new は戻せない）。よければ (ファイル, 前の文, 当てたあとの文) を返す。"""
@@ -629,28 +653,23 @@ def auto_ok(ws, a):
             kept.add(j)
             i += 1
     gone = set(range(len(src))) - kept
-    depth = lambda x: len(x) - len(x.lstrip())
-    spans = {}  # 項目の頭の行 → その項目の行（字下げした続きの行と、中の箇条書き）
-    for h, x in enumerate(src):
-        if ITEM.match(x):
-            k = h + 1
-            while k < len(src) and src[k].strip() and depth(src[k]) > depth(x):
-                k += 1
-            spans[h] = set(range(h, k))
+    spans = item_spans(src)
     heads = [h for h in spans if h in gone and not any(p != h and h in s and p not in gone for p, s in spans.items())]  # 消す項目（中の項目だけを消すのは、上の項目の書き換え）
     whole = set().union(*(spans[h] for h in heads)) if heads else set()
     gone and whole == gone or no("箇条書きの項目を丸ごと消すだけでない（見出し・前置き・空行・項目の一部だけを消す）。下の決まりの効く範囲や項目の中身が変わるので人が見る")
-    items = [plain("\n".join(src[k] for k in sorted(spans[h]))) for h in heads]
-    elsewhere = plain("\n".join(texts([PLUGIN], {Path(__file__).resolve()}))) + "\n" + ("" if name == "AGENTS.md" else plain(read(ws, "AGENTS.md")))
-    lone = [x for x in items if not x or x not in elsewhere]
-    lone and no("消す項目の文が、プラグインにも AGENTS.md にもない（ほかの rules/ のファイルに残るだけでは、出る場面が変わる）")
+    gone_items = [plain("\n".join(src[k] for k in sorted(spans[h]))) for h in heads]
+    globs = [] if name == "AGENTS.md" else desk.listed(desk.front(text), "paths")
+    same = [f for f in sorted(PLUGIN.rglob("*.md")) if any(fnmatch.fnmatchcase(f.relative_to(PLUGIN).as_posix(), g) for g in globs)]
+    elsewhere = set().union(set(), *(items(f.read_text(encoding="utf-8", errors="ignore")) for f in same), items(read(ws, "AGENTS.md")) if name != "AGENTS.md" else set())
+    lone = [x for x in gone_items if not x or x not in elsewhere]
+    lone and no("消す項目と丸ごと同じ項目が、同じ場面で出るところ（paths が当たるプラグインの md か AGENTS.md）にない。文の中の引用・例・出る場面の違うファイルは数えない")
     cs, ps, qs, _ = state(ws)
     any(c.get("decided") and c["to"] == name for c in cs.values()) and no(f"ユーザーが決めた指摘が {name} につながっている")
     any(q["status"] == "回答済み" and q["rule"] == name for q in qs.values()) and no(f"答えた判断待ちが {name} のこと")
     any(kind == "手で直した" for _, kind, _, _ in versions(ws).get(name, [])) and no(f"{name} には手で直した版がある")
     name in drift(ws, quiet=True) and no(f"{name} に、まだ版にしていない直しがある（ledger.py drift --record で版にする）")
     for q in ps.values():  # ユーザーが戻した・却下した提案が消そうとした項目は、残すと決めたものとみなす
-        if q["status"] in ("戻した", "却下") and q["file"] == name and any(x in plain(q["old"]) and x not in plain(q["new"]) for x in items):
+        if q["status"] in ("戻した", "却下") and q["file"] == name and any(x in plain(q["old"]) and x not in plain(q["new"]) for x in gone_items):
             no(f"ユーザーが戻した・却下した {q['id']} が消そうとした項目")
     return f, text, out
 
@@ -1505,6 +1524,20 @@ def selftest_auto(ws, quiet):
     with quiet():
         main(["add", "--deck", ".", "--quote", "ファイルで決めた", "--decided", "--to", "./rules/a.md（見出しの下）"])
     assert "ユーザーが決めた指摘" in fails(["propose", "--auto", "--file", "./rules/a.md", "--why", "片付け", "--kind", "重なり"] + moved)  # パスの書き方を変えても同じファイル
+    # 丸ごと同じ項目だけを数える。否定の文の中の引用、コードの囲みの中の例、出る場面の違うプラグインのファイルは数えない
+    (ws / "AGENTS.md").write_text("- 次の指示は使わない：「表は左から読む。」\n```\n- 図は右から読む。\n```\n", encoding="utf-8")
+    with quiet():
+        main(["propose", "--file", "rules/q2.md", "--new", "---\ndescription: 試し\npaths: [slides-build/visual.md]\n---\n## 表\n- 表は左から読む。\n- 図は右から読む。\n- Neon colors on dark backgrounds, gradients\n- 会社名や製品名を替えてもそのまま使える文\n- 残す。", "--why", "試しを作る"])
+        main(["apply", list(state(ws)[1])[-1]])
+        main(["propose", "--file", "rules/q3.md", "--new", "---\ndescription: 試し\npaths: [deck-review/*]\n---\n- Neon colors on dark backgrounds, gradients\n- 残す。", "--why", "試しを作る"])
+        main(["apply", list(state(ws)[1])[-1]])
+    q2 = ["propose", "--auto", "--file", "rules/q2.md", "--why", "片付け", "--kind", "重なり"]
+    assert "丸ごと同じ項目" in fails(q2 + ["--old", "## 表\n- 表は左から読む。\n", "--new", "## 表\n"])  # 否定の文で引用しただけ
+    assert "丸ごと同じ項目" in fails(q2 + ["--old", "- 図は右から読む。\n- Neon", "--new", "- Neon"])  # コードの囲みの中の例
+    assert "丸ごと同じ項目" in fails(["propose", "--auto", "--file", "rules/q3.md", "--why", "片付け", "--kind", "重なり", "--old", "paths: [deck-review/*]\n---\n- Neon colors on dark backgrounds, gradients\n", "--new", "paths: [deck-review/*]\n---\n"])  # プラグインの別の場面のファイル
+    with quiet():  # paths が当たるプラグインの md に、丸ごと同じ項目がある
+        main(q2 + ["--old", "gradients\n- 会社名や製品名を替えてもそのまま使える文\n", "--new", "gradients\n"])
+    assert "- 会社名や製品名を替えてもそのまま使える文" not in (ws / "rules" / "q2.md").read_text(encoding="utf-8")
     (ws / "AGENTS.md").unlink()
 
 
