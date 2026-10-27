@@ -104,7 +104,7 @@ def check(ws, local=False):
         elif c == slides.PLACEHOLDER_COPYRIGHT:
             ng(key, f"「{c}」は書いていないときの仮の値。スライドもドキュメントも組めない。自分の会社の著作権表示を書く")
         elif not COPYRIGHT_FOOTER.fullmatch(c):
-            ng(key, f"「{c}」は「© <年> <社名> All rights reserved.」の形でない。lint が全ページの著作権表示を 11pt 未満として止める")
+            ng(key, f"「{c}」は「© <年> <社名> All rights reserved.」の形でない。lint が全ページの著作権表示を「11pt 未満の文字」の要確認に出す")
     if not brand.get("company"):
         warn("brand.company", "空。表紙の左下に社名を置かない")
     docs = cfg.get("docs", {})

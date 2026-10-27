@@ -15,7 +15,7 @@ from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_L
                       not_in_facts, workspace_checks)  # load_facts は docs.py が doc_lint から引く
 
 FIG_HEAD, TAB_HEAD = r"図 ?\d+|Figure \d+\.", r"表 ?\d+|Table \d+\."  # 図表の題の頭（docs.py が付ける）。英語は「Table 3 shows …」の文と分けるため「.」まで見る
-DOC_MIN_PT = 9  # ドキュメントの文字の下限。図表の題・出典・表の中・フッターが 9pt（docs-build/visual.md の 1）
+DOC_MIN_PT = 9  # ドキュメントの文字の下限（下回ると要確認）。図表の題・出典・表の中・フッターが 9pt（docs-build/visual.md の 1）
 SENTENCE_MAX, PARA_SENT_MAX, LINE_MAX = 100, 8, 40  # 一文の字数（textlint の sentence-length の既定）、1 段落の文の数（3〜8 文。木下・倉島・サイボウズ）、
 # 1 行の字数（jlreq・デジタル庁）。docs-build/visual.md の 1・3
 BOLD_PER_1000 = 3  # 本文 1,000 字あたりの太字の数（Qiita の 2019〜22 年の平均は 1.26、2026 年は 3.83。docs-build/visual.md の 3）
@@ -223,11 +223,11 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
     print("== 見出しと段落の 1 文目。見出しだけで話が通るか、1 文目を順に読んで要約になるか ==")
     print("\n".join(firsts) or "（見出しも本文もない）")
     print(f"\n== 本文の字数: {body} 字（見出し・表・図表の題・出典・引用を除く）、1 行 約 {per_line:.0f} 字 ==")
-    hard = r.show(list(HARD) + [f"{DOC_MIN_PT}pt 未満の文字", FONT_NG, MONO_NG, A4_NG, UTM_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
-    r.show(list(WARN) + [NOT_IN_FACTS, NO_LINK] + list(DOC_ONLY), "要確認")
+    hard = r.show(list(HARD) + [FONT_NG, MONO_NG, A4_NG, UTM_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
+    r.show(list(WARN) + [f"{DOC_MIN_PT}pt 未満の文字", NOT_IN_FACTS, NO_LINK] + list(DOC_ONLY), "要確認")
     hard += workspace_checks("doc", doc, r)
     return hard
-HARD_NAMES = textlint.HARD_NAMES | {f"{DOC_MIN_PT}pt 未満の文字", A4_NG, UTM_NG}
+HARD_NAMES = textlint.HARD_NAMES | {A4_NG, UTM_NG}
 
 
 class Report(textlint.Report):
@@ -267,6 +267,11 @@ def selftest():
               "太字とコロンで始まる箇条書き", "追跡の印の付いたリンク"):
         assert g.hits[k], k
     assert len(g.hits["文体の混在"]) == 1 and not g.hits["用紙が A4 でない"] and not g.hits["1 行の字数が多い"]
+    assert "9pt 未満の文字" not in g.hard  # 小さい字は要確認（記録に残る）。表の中・注などで小さくてよいことがあるので止めない
+    small = {**gdoc, "body": {"content": [gp("要旨", "HEADING_1"), gp("小さい字です。", fontSize={"magnitude": 8})]}}
+    with contextlib.redirect_stdout(io.StringIO()):
+        hard = lint_gdoc(small, g := Report())
+    assert g.hits["9pt 未満の文字"] and hard == 0  # 要修正の数（docs.py check の exit 1）にも入れない
     with contextlib.redirect_stdout(io.StringIO()):
         lint_gdoc({**gdoc, "body": {"content": [gp("要旨", "HEADING_1"), gp("本文です。"), gp("移行の順をご確認ください", "HEADING_1"), gp("本文です。"),
                                                 gp("移行は夜間にする。", "HEADING_1"), gp("本文です。")]}}, g := Report())
