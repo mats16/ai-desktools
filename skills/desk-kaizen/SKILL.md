@@ -5,7 +5,7 @@ description: Improve the plugin (upstream). Takes the rules, checks, and script 
 
 # Improve the plugin (file an Issue upstream)
 
-Treat the workspace as one product whose rules (AGENTS.md, `rules/`) and checks (`rules/slides-build/checks.py`, `rules/docs-build/checks.py`) grow from accumulated corrections and exchanges. Of these, file only the ones that help other people too (not one person's taste or one customer's circumstances) as an Issue upstream (the plugin). What goes where is in "Rule layers" of `../deck-practices/rules.md`.
+Treat the workspace as one product whose rules (AGENTS.md, `rules/`) and checks (`rules/slides-build/checks.py`, `rules/docs-build/checks.py`) grow from accumulated corrections and exchanges. Of these, file only the ones that help other people too (not one person's taste or one customer's circumstances) as an Issue upstream (the plugin). What goes where is in "Workspace rules" of `../deck-practices/rules.md`.
 
 The plugin owner reads the Issue, decides whether to take it, and rewrites it to fit the rest of the code as a PR. So the Issue must contain enough material for the owner to decide without seeing the workspace (what happened, counts, verification results, images, the diff of the proposed change, open questions). The proposed change only needs to work in a verifiable form. Cleaning up, shrinking, and running reviews (simplify, review-loop, etc.) are the owner's job, so do not do them here.
 

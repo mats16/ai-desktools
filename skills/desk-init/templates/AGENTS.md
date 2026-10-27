@@ -6,9 +6,9 @@ AI Desk Tools（プラグイン）で、スライドとドキュメントを作�
 
 ## 決まりの優先
 
-- **このワークスペースの決まりが、プラグインのスキルより優先する。** ワークスペースの決まりは、このファイルと `rules/<スキル>/<ファイル>`（プラグインの同じパスのファイルへの足しと上書き）。食い違うときは、こちらに従う。
+- **このワークスペースの決まりが、プラグインのスキルより優先する。** ワークスペースの決まりは、このファイルと、`rules/` の決まりのファイル（頭の frontmatter に、いつ使うかを書く。hook が要る場面で出す）と、顧客の `memory.md`。食い違うときは、こちらに従う。ワークスペースの決まりどうしが食い違うときは、条件が狭いほうに従い（顧客の memory、場面や資料の種類を絞ったファイル、どの資料にも効くファイルの順）、同じ狭さなら聞く。
 - **このワークスペースは、やり取りで育てる 1 つのプロダクト。** 修正の指示は、決まり（このファイルと `rules/`）と点検（`rules/slides-build/checks.py`・`rules/docs-build/checks.py`）に戻す。プラグインの入った場所は書き換えない（入れ直すと消える）。
-- **大元を直すべきものは Issue にする。** ほかの人にも効くものは、desk-dreaming が「プラグインに上げる」提案にし、スキル `desk-kaizen` で過去の資料で確かめてから Issue を出す（スキル `deck-practices` の `rules.md` の「Rule layers」）。
+- **大元を直すべきものは Issue にする。** ほかの人にも効くものは、desk-dreaming が「プラグインに上げる」提案にし、スキル `desk-kaizen` で過去の資料で確かめてから Issue を出す（スキル `deck-practices` の `rules.md` の「Workspace rules」）。
 
 ## 基本方針
 
@@ -79,7 +79,7 @@ Customers/<顧客>/profile.md                       … その顧客の事業・
 Internal/<内容>_<YYYYMM か YYYYMMDD>/           … 社内向けの資料（中の形は顧客向けと同じ）
 Research/<内容>_<YYYYMMDD>.md                    … 調べもの
 Research/deck_research/                           … deck-research の調べ直しの記録（state.md・log/）
-rules/<スキル>/<ファイル>                         … このワークスペースの決まり（プラグインの同じファイルへの足しと上書き）
+rules/<名前>.md                                  … このワークスペースの決まり（頭の frontmatter に、いつ使うかと、出す場面を書く。rules/README.md）
 rules/slides-build/checks.py・rules/docs-build/checks.py … このワークスペースの点検（スライドとドキュメントの lint が読み込む）
 themes/slides/<名前>.json                         … スライドのテーマ（色・書体・表紙と扉のレイアウト。テンプレートの URL は desk.toml の [slides.templates]）
 assets/                                           … 自分だけの画像（ページの JSON の "src": "asset:<名前>" が先に探す）

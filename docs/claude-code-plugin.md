@@ -70,7 +70,7 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 /desk-tools:desk-doctor
 ```
 
-doctor の要修正が 0 になれば使える。ワークスペースの `rules/<スキル>/<ファイル>` は、プラグインの同じファイルを Read で開くと hook が続けて出す（2026-10-12 に、そのときの `rules/deck-practices/visual.md` で確かめた。サブフォルダで開いた会話では出ない）。`/desk-tools:<スキル>` で呼んだときは、道具を通らずに SKILL.md が入るので、UserPromptSubmit の hook が `rules/<スキル>/SKILL.md` を出す（2026-10-20 に確かめた）。自動のコンパクションのあと、Claude Code は呼んだスキルの SKILL.md を付け直すので、SessionStart（`compact`）の hook がその `rules/<スキル>/SKILL.md` を出し直す（2026-10-25 に `/compact` で確かめた）。スキルは `desk-tools:` を付けた名前で呼ぶ（`/desk-tools:slides-build` など）。
+doctor の要修正が 0 になれば使える。ワークスペースの決まり（`rules/` の下の、frontmatter に `description` のある .md）は、frontmatter の `paths` に当たるプラグインのファイルを Read で開くと hook が続けて出す（2026-10-12 に、そのときの同じパスの `rules/deck-practices/visual.md` で確かめた。サブフォルダで開いた会話では出ない）。`paths` のない決まりは、構成案の頭の「使う決まり」に書いたものを、構成案を開くと出す。`/desk-tools:<スキル>` で呼んだときは、道具を通らずに SKILL.md が入るので、UserPromptSubmit の hook が、その SKILL.md に `paths` が当たる決まりを出す（2026-10-20 に確かめた）。自動のコンパクションのあと、Claude Code は呼んだスキルの SKILL.md を付け直すので、SessionStart（`compact`）の hook がその決まりを出し直す（2026-10-25 に `/compact` で確かめた）。frontmatter の `paths`、`deck-practices/start.md` を開いたときの一覧、構成案の「使う決まり」は、2026-10-27 に sandbox の会話の記録で確かめた（Read と `/desk-tools:deck-review`）。スキルは `desk-tools:` を付けた名前で呼ぶ（`/desk-tools:slides-build` など）。
 
 ## 注意
 

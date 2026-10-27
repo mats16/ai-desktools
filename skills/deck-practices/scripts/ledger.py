@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """決まりの台帳。修正の指示（指摘）、決まりの変更の提案・適用・却下、判断待ち、レビューの結果を、ワークスペースの .desk/ledger.jsonl に 1 件 1 行で足していく。
 決まりの本文には ID（slides-visual-<番号>・ws-slides-visual-<番号> を角括弧で囲む。接頭辞は何についての決まりか〔TOPICS〕で、置き場所が変わっても変えない）と短い理由だけを書き、日付・原文・どの資料か・ユーザーが決めたかは、ここに ID でつなぐ。
-決まりの層と戻し方は ../rules.md。ワークスペース（探し方は desk.py）で回す。標準ライブラリだけ。
+決まりの置き場所と戻し方は ../rules.md。ワークスペース（探し方は desk.py）で回す。標準ライブラリだけ。
 usage:
   ledger.py add --deck <資料のフォルダ> --quote <ユーザーの言葉> [--fix <直した箇所>] [--to <決まりの ID・ファイル・未・戻さない>] [--check lint|レビュー|なし] [--session <会話 ID>] [--at <言われた時刻（UTC）>] [--decided] [--plan AI|人] [--once]
                                                    --plan は構成の見逃し（方針のレビューのあとに、聞き手・問い・主張・順序を変えた指摘。値はその資料の方針のレビュー）
@@ -60,7 +60,7 @@ AUTO = ("重なり", "古い記述")  # 会話を出典にしない片付け。-
 RECS = ("適用", "様子見", "却下")
 TOPICS = {  # 決まりの ID の主題（何についての決まりか）。ID は一度付けたら、ファイルを分けても移しても変えない（../rules.md の "Rule IDs"）
     "deck-flow": "1〜11 の工程と、どの工程でも守ること", "deck-agents": "子の起こし方と待ち方", "deck-content": "構成案と言葉",
-    "deck-sources": "材料の集め方と出典の台帳", "deck-drive": "Drive への置き方", "deck-rules": "決まりの層と、修正の指示の戻し方",
+    "deck-sources": "材料の集め方と出典の台帳", "deck-drive": "Drive への置き方", "deck-rules": "ワークスペースの決まりと、修正の指示の戻し方",
     "deck-review": "返す前のレビューと、その観点", "deck-comments": "コメントから直す", "deck-profile": "顧客の profile", "deck-research": "調べ直し",
     "deck-lint": "スライドとドキュメントで共通の lint", "deck-google": "Google の API・認証・上限", "deck-brand": "書体・字幅・著作権表示",
     "slides-flow": "6〜8 の工程と、確かめの 3 層", "slides-command": "組むコマンドと、組むときのふるまい", "slides-pages": "ページの JSON の書き方",
@@ -571,12 +571,19 @@ def apply(ws, ids):
 
 def gate(ws, f, before, after, batch=None, size=True):
     """当てたあとの文の検査。止める理由の一覧（Harness² が、直した候補のハーネスを検査し、通らなければ理由を添えて 1 回だけ出し直させるのにならう）。
-    AGENTS.md を上限より大きくしない（小さくする提案は通す。戻すとき〔size=False〕は見ない）。新しく書き入れる [ID] は、ほかのファイルにないもの（接頭辞は ledger.py next が見る）。
+    AGENTS.md と rules/ の決まりのファイルを上限より大きくしない（小さくする提案は通す。戻すとき〔size=False〕は見ない）。新しく書き入れる [ID] は、ほかのファイルにないもの（接頭辞は ledger.py next が見る）。
+    rules/ の決まりのファイルは、frontmatter の description をなくさない（新しいファイルにも書く。ないと hook が出さない。前の版の frontmatter のないファイルを直すときは見ない）。
     batch は一緒に当てるファイル → 当てたあとの文。そのファイルは、ディスクの今の文でなく当てたあとの文で見る（決まりを別のファイルへ移す組〔desk-dreaming/run.md の 4e・4h〕は通し、2 つのファイルに同じ ID を足す組は止める）。"""
     bad, n, batch = [], len(after.encode()), batch or {}
     if size and f == ws / "AGENTS.md" and n > AGENTS_MAX and n > len(before.encode()):
-        bad.append(f"AGENTS.md が {n:,} バイトになる（{AGENTS_MAX:,} まで。作るときだけ要るものは rules/ の同じパスのファイルへ）")
-    here = f"{f.relative_to(ws)}:"
+        bad.append(f"AGENTS.md が {n:,} バイトになる（{AGENTS_MAX:,} まで。作るときだけ要るものは rules/ の決まりのファイルへ）")
+    rel = f.relative_to(ws)
+    if rel.parts[0] == "rules" and f.suffix == ".md" and rel != Path("rules/README.md") and "templates" not in rel.parts[1:-1]:
+        if after.strip() and not desk.described(desk.front(after)) and (desk.described(desk.front(before)) or not before.strip()):
+            bad.append(f"{rel} の頭に frontmatter の description がない（ないと hook が出さない。deck-practices/rules.md の「Workspace rules」）")
+        if size and len(after) > desk.RULE_MAX and len(after) > len(before):
+            bad.append(f"{rel} が {len(after):,} 字になる（{desk.RULE_MAX:,} 字まで。場面ごとのファイルに分ける）")
+    here = f"{rel}:"
     for rid in sorted(set(RULE_ID.findall(after)) - set(RULE_ID.findall(before))):
         on_disk = [x for x in where(ws, rid, plugin=not rid.startswith("ws-")) if not x.startswith(here) and (ws / x.rsplit(":", 1)[0]).resolve() not in batch]  # プラグインにある ws- の ID は試しの例
         in_batch = [str(g.relative_to(ws)) for g, text in batch.items() if g != f and f"[{rid}]" in text]
@@ -961,6 +968,7 @@ def selftest():
     import contextlib, io, os
     selftest_topics()
     quiet = lambda *a: contextlib.redirect_stdout(io.StringIO())
+    fm = "---\ndescription: 試し\n---\n"  # 新しい決まりのファイルの頭（ないと gate が止める）
     with tempfile.TemporaryDirectory() as d:
         ws = Path(d).resolve()
         (ws / "desk.toml").write_text("")
@@ -1017,19 +1025,20 @@ def selftest():
             with quiet():
                 assert drift(ws) == ["P0001"]
             # 足した文をあとの提案で置き換えても、手の直しに数えない。置き換えたほうを手で直せば出る
+            (ws / "rules" / "x.md").write_text(fm)  # 頭だけのファイルに足す（足した文が A だけになる）
             with quiet():
                 main(["propose", "--file", "rules/x.md", "--new", "A です", "--why", "足す"])
                 main(["propose", "--file", "rules/x.md", "--old", "A です", "--new", "B です", "--why", "替える"])
                 main(["apply", "P0005", "P0006"])
                 assert drift(ws) == ["P0001"]
             x = ws / "rules" / "x.md"
-            x.write_text("C です\n")
+            x.write_text(fm + "C です\n")
             with quiet():
                 assert drift(ws) == ["P0001", "P0006"]  # A をまるごと置き換えた P0006 で見る
-            x.write_text("B です\n")
+            x.write_text(fm + "B です\n")
             # 一部だけを置き換えたあと、残りの部分を手で直しても出る
             with quiet():
-                main(["propose", "--file", "rules/z.md", "--new", "16pt にする。出典はリンクする。", "--why", "足す"])
+                main(["propose", "--file", "rules/z.md", "--new", fm + "16pt にする。出典はリンクする。", "--why", "足す"])
                 main(["apply", "P0007"])
                 main(["propose", "--file", "rules/z.md", "--old", "16pt", "--new", "18pt", "--why", "大きく"])
                 main(["apply", "P0008"])
@@ -1040,7 +1049,7 @@ def selftest():
             # 戻すと、出典の指摘の戻し先も前に戻る
             with quiet():
                 main(["add", "--deck", ".", "--quote", "見出しは短く"])
-                main(["propose", "--file", "rules/y.md", "--new", "- [ws-y-001] 見出しは短く。", "--rule", "ws-y-001", "--why", "短く", "--src", "c-0003"])
+                main(["propose", "--file", "rules/y.md", "--new", fm + "- [ws-y-001] 見出しは短く。", "--rule", "ws-y-001", "--why", "短く", "--src", "c-0003"])
                 main(["apply", "P0009"])
             assert state(ws)[0]["c-0003"]["to"] == "ws-y-001"
             with quiet():
@@ -1075,7 +1084,7 @@ def selftest():
             with quiet():
                 main(["propose", "--plugin", "--file", "slides-build/visual.md", "--new", "- [slides-visual-099] 表は分ける。", "--rule", "slides-visual-099", "--why", "上げる", "--kind", "プラグインに上げる", "--src", "c-0009"])
                 main(["propose", "--plugin", "--file", "deck-practices/content.md", "--new", "x", "--why", "上げる"])
-                main(["propose", "--file", "rules/w.md", "--new", "- [ws-w-001] 1 つ", "--rule", "ws-w-001", "--why", "足す"])
+                main(["propose", "--file", "rules/w.md", "--new", fm + "- [ws-w-001] 1 つ", "--rule", "ws-w-001", "--why", "足す"])
                 main(["apply", "P0010", "P0012"])  # 並びにプラグインへの提案があっても、残りは当てる
                 main(["apply", "all"])
             ps = state(ws)[1]
@@ -1482,14 +1491,22 @@ def selftest_effects(quiet):
         (ws / "Customers" / "アクメ・ジャパン").mkdir(parents=True)  # 実際にあるフォルダなら、名前に・があってもファイルの戻し先にできる
         assert linked("Customers/アクメ・ジャパン/memory.md", ws) and not linked("Customers/アクメ・ジャパン/memory.md") and not linked("Customers/アクメ・ジャパン/memory.md（ws-memory-001）", ws)
         assert not linked("SKILL.md の 3・feedback.md", ws) and linked("rules/slides-build/visual.md", ws)  # 根元のフォルダに当たるだけの文は、ファイルとみなさない
-        moving = {x.resolve(): "- [ws-slides-visual-001] 移す\n", v.resolve(): v.read_text().replace("- [ws-slides-visual-001] 表は分ける。\n", "")}
+        fm = "---\ndescription: 試し\n---\n"  # 新しい決まりのファイルの頭（ないと gate が止める）
+        moving = {x.resolve(): fm + "- [ws-slides-visual-001] 移す\n", v.resolve(): v.read_text().replace("- [ws-slides-visual-001] 表は分ける。\n", "")}
         assert gate(ws, x, "", moving[x.resolve()], moving) == []  # 同じ組の提案が前のファイルから消す
+        assert not desk.rules(ws) and any("description がない" in b for b in gate(ws, x, "", "- 足す\n")) and gate(ws, x, "", fm + "- 足す\n") == []  # 新しいファイルにも frontmatter（決まりのファイルがまだないワークスペースでも）
+        assert any("description がない" in b for b in gate(ws, x, "", "---\ndescription: >\n  長い\n---\n- 足す\n"))  # 1 行の文字でない description は、ないとみなす（desk.described）
+        (ws / "rules" / "fm.md").write_text(fm + "- 本文は 16pt\n")
+        assert any("description がない" in b for b in gate(ws, ws / "rules" / "fm.md", fm + "- 本文は 16pt\n", "- 本文は 16pt\n"))  # 消す提案も止める
+        assert gate(ws, ws / "rules" / "slides-build" / "visual.md", v.read_text(), v.read_text() + "- 足す\n") == []  # 前の版のまま（frontmatter のない）ファイルへの足しは止めない
+        assert any("字になる" in b for b in gate(ws, ws / "rules" / "fm.md", fm, fm + "あ" * desk.RULE_MAX)) and not gate(ws, ws / "rules" / "fm.md", fm + "あ" * (desk.RULE_MAX + 9), fm + "あ" * desk.RULE_MAX)  # 大きくするものだけ止める
+        (ws / "rules" / "fm.md").unlink()
         assert gate(ws, x, "", "- [ws-slides-visual-009] 足す\n", {x.resolve(): "- [ws-slides-visual-009] 足す\n", (ws / "rules" / "y.md").resolve(): "- [ws-slides-visual-009] 足す\n"})  # 2 つのファイルに同じ ID を足す組
         cwd = os.getcwd()
         os.chdir(ws)
         try:
             with quiet():  # 決まりを別のファイルへ移す組は、足す提案が先でも当たる
-                main(["propose", "--file", "rules/moved.md", "--new", "- [ws-slides-visual-002] 図は左から右。", "--why", "移す"])
+                main(["propose", "--file", "rules/moved.md", "--new", fm + "- [ws-slides-visual-002] 図は左から右。", "--why", "移す"])
                 main(["propose", "--file", "rules/slides-build/visual.md", "--old", "- [ws-slides-visual-001] 表は分ける。\n- [ws-slides-visual-002] 図は左から右。", "--new", "- [ws-slides-visual-001] 表は分ける。", "--why", "移す"])
                 main(["apply", "all"])
             assert "[ws-slides-visual-002]" in (ws / "rules" / "moved.md").read_text() and "[ws-slides-visual-002]" not in v.read_text()
@@ -1503,11 +1520,11 @@ def selftest_effects(quiet):
             with quiet():  # 足した側を先に戻せば、消した側も戻せる
                 main(["undo", moved[0]])
                 main(["undo", moved[1]])
-                main(["propose", "--file", "rules/moved.md", "--new", "- [ws-slides-visual-002] 図は左から右。", "--why", "移す"])
+                main(["propose", "--file", "rules/moved.md", "--new", fm + "- [ws-slides-visual-002] 図は左から右。", "--why", "移す"])
                 main(["propose", "--file", "rules/slides-build/visual.md", "--old", "- [ws-slides-visual-001] 表は分ける。\n- [ws-slides-visual-002] 図は左から右。", "--new", "- [ws-slides-visual-001] 表は分ける。", "--why", "移す"])
                 main(["apply", "all"])
             with quiet():  # 消す提案が当たらない（今の文が変わった）なら、組のどれも当てない（当てる途中で止まって、ID が 2 か所に残らないように）
-                main(["propose", "--file", "rules/moved2.md", "--new", "- [ws-slides-visual-001] 移す", "--why", "移す"])
+                main(["propose", "--file", "rules/moved2.md", "--new", fm + "- [ws-slides-visual-001] 移す", "--why", "移す"])
                 main(["propose", "--file", "rules/slides-build/visual.md", "--old", "- [ws-slides-visual-001] 変わる前の文。", "--new", "", "--why", "移す"])
             try:
                 with quiet():
@@ -1520,7 +1537,7 @@ def selftest_effects(quiet):
                     main(["withdraw", q["id"], "--reason", "試し"])
             keep = v.read_text()
             with quiet():  # 足す・書き換える・（書き換えた行に掛けた）消す の組: 消す提案が止まるので、足す提案も書き換える提案も当てない
-                main(["propose", "--file", "rules/moved3.md", "--new", "- [ws-slides-visual-001] 移す", "--why", "移す"])
+                main(["propose", "--file", "rules/moved3.md", "--new", fm + "- [ws-slides-visual-001] 移す", "--why", "移す"])
                 main(["propose", "--file", "rules/slides-build/visual.md", "--old", "- [ws-slides-visual-001] 表は分ける。", "--new", "- [ws-slides-visual-001] 表は 2 枚に分ける。", "--why", "書き換え"])
                 main(["propose", "--file", "rules/slides-build/visual.md", "--old", "- [ws-slides-visual-001] 表は分ける。", "--new", "", "--why", "移す"])
             try:
@@ -1535,7 +1552,7 @@ def selftest_effects(quiet):
             locked = ws / "rules" / "locked.md"  # 書く途中で止まったら（書けないファイル）、先に書いたファイルを戻す
             locked.write_text("- [ws-slides-visual-030] 古い。\n")
             with quiet():
-                main(["propose", "--file", "rules/first.md", "--new", "- [ws-slides-visual-031] 先に書く。", "--why", "試し"])
+                main(["propose", "--file", "rules/first.md", "--new", fm + "- [ws-slides-visual-031] 先に書く。", "--why", "試し"])
                 main(["propose", "--file", "rules/locked.md", "--old", "古い。", "--new", "新しい。", "--why", "試し"])
             locked.chmod(0o444)
             try:
@@ -1559,7 +1576,7 @@ def selftest_effects(quiet):
             assert "[ws-agents-002]" in big.read_text()
             big.unlink()
             with quiet():
-                main(["propose", "--file", "rules/x.md", "--new", "- [ws-slides-visual-001] 写し", "--why", "重なる ID"])
+                main(["propose", "--file", "rules/x.md", "--new", fm + "- [ws-slides-visual-001] 写し", "--why", "重なる ID"])
             try:
                 with quiet():
                     main(["apply", "all"])

@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""プラグインのスキルのファイルが読まれたら、ワークスペースの同じパスの rules/<スキル>/<ファイル> を続けて出す（開き忘れを防ぐ）。
-顧客の資料の 構成案*.md・社内メモ_*.md・references.md が読まれたら、その顧客の Customers/<顧客>/memory.md（資料への好み。どう作るか）を続けて出す。
-/desk-tools:<スキル>（Claude Code）・$desk-tools:<スキル>（Codex）で呼んだスキルは、道具を使わずに SKILL.md が入るので、プロンプトから拾って rules/<スキル>/SKILL.md を出す。
-Claude Code は自動のコンパクションのあと、呼んだスキルの SKILL.md を付け直すので、SessionStart（compact）でその rules/<スキル>/SKILL.md を出し直す（Codex はスキルも差し込みも消すので、出し直さない）。
+"""ワークスペースの決まり（rules/ の下の、frontmatter に description のある .md。探し方は skills/deck-practices/scripts/desk.py の rules）を、要る場面で続けて出す（開き忘れを防ぐ）。
+- frontmatter の paths に当たるプラグインのスキルのファイル（slides-build/visual.md。* も使える）が読まれたら、そのファイルを出す（手順に付く足しと上書き）。
+- 顧客の資料（Customers/ と Internal/ の下）の 構成案*.md・社内メモ_*.md・references.md が読まれたら、その顧客の Customers/<顧客>/memory.md（資料への好み。どう作るか）と、
+  構成案の頭の「使う決まり」に書いた rules/ のファイル（paths のない、資料ごとに選ぶ決まり）を出す。構成案に「使う決まり」の行がなければ、選ぶ一覧（パスと description）を出す。
+  資料を作り始めるとき（deck-practices/start.md が読まれたとき）にも、一覧を出す。
+/desk-tools:<スキル>（Claude Code）・$desk-tools:<スキル>（Codex）で呼んだスキルは、道具を使わずに SKILL.md が入るので、プロンプトから拾って、paths が <スキル>/SKILL.md に当たるものを出す。
+Claude Code は自動のコンパクションのあと、呼んだスキルの SKILL.md を付け直すので、SessionStart（compact）でそれに当たるものを出し直す（Codex はスキルも差し込みも消すので、出し直さない）。
 並べて呼んだ道具の hook は同時に走り、会話の記録にまだ互いの差し込みがないので、同じターンで出したものは印のファイルで知らせ合う（pi は拡張がそのターンに足したものを覚える）。
 同じ会話で出したもののうち、まだモデルに見えている（コンパクションで消えていない）ものは出し直さない。Claude Code と Codex は hook に渡る会話の記録（transcript_path）の、最後のコンパクションのあとを見る。pi は拡張が、モデルに見えている道具の結果を渡す。Codex は差し込みを記録に developer のメッセージで残し、コンパクションで消す（2026-10-25 に確かめた）。
-決まりの層は skills/deck-practices/rules.md。Claude Code と Codex は hooks.json の PostToolUse（Read・Bash・Skill。Claude Code は if で、.md に触れる Read・Bash だけ）・UserPromptSubmit・SessionStart（compact）、pi は extensions/rules.ts から呼ぶ。
+決まりの形と出し方は skills/deck-practices/rules.md の「Workspace rules」。Claude Code と Codex は hooks.json の PostToolUse（Read・Bash・Skill。Claude Code は if で、.md に触れる Read・Bash だけ）・UserPromptSubmit・SessionStart（compact）、pi は extensions/rules.ts から呼ぶ。
 usage: rules_overlay.py claude   （標準入力に Claude Code か Codex の hook の JSON）
        rules_overlay.py pi       （標準入力に {"cwd", "text", "isPath", "seen"}。isPath は text が読んだファイルのパスのとき。seen は今の文脈に残る、前に出したもの。出力は {"context": …}）
        rules_overlay.py --selftest
-標準ライブラリだけ。ワークスペースが見つからない（探し方は skills/deck-practices/scripts/desk.py）か、rules/ と memory.md がないときは何も出さない。"""
-import functools, hashlib, json, os, re, shlex, shutil, stat, sys, tempfile
+標準ライブラリだけ。ワークスペースが見つからない（探し方は skills/deck-practices/scripts/desk.py）か、決まりと memory.md がないときは何も出さない。"""
+import fnmatch, functools, hashlib, json, os, re, shlex, shutil, stat, sys, tempfile
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # プラグインの scripts/ に __pycache__ を残さない
@@ -21,10 +24,13 @@ SKILLS = {p.parent.name for p in (Path(__file__).resolve().parent.parent / "skil
 NAMES = "|".join(map(re.escape, SKILLS))  # スキルの名前のどれか（REF・COMMAND・CALL）
 REF = re.compile(rf"(?<![\w-])({NAMES})/([\w./-]+\.md)")  # スキルの名前で始まるパス（前のフォルダは問わない）
 MEMORY_FROM = re.compile(r"(?:^|/)(?:構成案[^/]*|社内メモ_[^/]*|references)\.md$")  # 資料を始めるときとコンパクションのあとに読むもの（組む途中に何度も開く build/ は入れない）
+RULE_PATH = r"rules/[\w./-]+?\.md"  # 「使う決まり」に書く決まりのファイルのパス
+USE = re.compile(r"(?m)^[ \t]*(?:[-*][ \t]*)?\**使う決まり\**[ \t]*[:：]\**(.*)$")  # 構成案の頭の「使う決まり」の行（- **使う決まり:** rules/a.md、rules/b.md）
+INDEX, START, STALE = "rules/*.md", "deck-practices/start.md", "rules/（使う決まりの確かめ）"  # 選ぶ一覧の見出しのパス（ファイルではない）、資料を作り始めるときに開くファイル（ここで一覧を出す）、「使う決まり」の名前の知らせ（ファイルではない）
 COMMAND = re.compile(rf"<command-name>/desk-tools:({NAMES})</command-name>")  # Claude Code の記録で、ユーザーが打った /desk-tools:<スキル>
 CALL = re.compile(rf"(?:^\s*/|(?<![\w$/.-])\$)desk-tools:({NAMES})(?![\w-])", re.ASCII)  # プロンプトで呼んだスキル（Claude Code の / は頭だけ、Codex の $ はどこでも。和文は続けて書いても呼んだことになる）
 PUNCT = "();<>|&`"  # コマンドの区切り
-HEAD = re.compile(r'## (?:ワークスペースの決まり|顧客の memory): ([^`"\\\n]+?\.md)(?=\\|\n|$)')  # 出したものの見出し。会話の記録では改行が \n（hook の出力の写しでは \\n）になる
+HEAD = re.compile(r'## (?:ワークスペースの決まり(?:の一覧)?|顧客の memory): ([^`"\\\n]+?\.md)(?=\\|\n|$)')  # 出したものの見出し。会話の記録では改行が \n（hook の出力の写しでは \\n）になる
 CUT_BY_HOST = ("<persisted-output>", "<truncated-output>", "persist-to-disk failed", "writing it to disk failed")  # Claude Code が 1 万字を超える差し込みを、頭だけにして渡した印（ファイルに逃がした・書けずに切った）
 COMPACTED = (b'"subtype":"compact_boundary"', b'"type":"compacted"')  # コンパクションの印（Claude Code・Codex の会話の記録）
 LIMIT = 9000  # 1 回に差し込む字数の上限（決まりと memory の合計。切ったときの添え書きも含む）。Claude Code は 1 万字を超える差し込みをファイルに逃がし、頭の 2,000 字だけを見せる（Codex は hooks.json の additionalContextLimit で逃がさない）
@@ -32,11 +38,18 @@ NOTE = 500  # 切ったときの添え書きの字数の上限（切ったほう
 
 
 def workspace(cwd):
-    """cwd から上へたどった desk.toml のフォルダ、なければ ~/.desk.toml の workspace。個人の設定が読めなくても止めない（スクリプトが止めて知らせる）。"""
-    try:
-        return f[1] if (f := desk.locate(cwd)) else None
-    except SystemExit:
-        return None
+    """スクリプトが cwd で使うワークスペース（desk.locate）。cwd がその中になければ（プラグインのフォルダなど）、会話を開いたフォルダ（Claude Code の CLAUDE_PROJECT_DIR）から探したもの。
+    Claude Code は会話の中で cd した先を cwd に渡すので、プラグインのフォルダへ cd したあとも、開いたワークスペースを見つける（2026-10-27 に資料を作る会話で見つけた）。
+    前の版のワークスペース（factory.toml）の中では、どこへも進まない（desk.locate と同じ）。個人の設定が読めなくても止めない（スクリプトが止めて知らせる）。"""
+    def find(d):
+        try:
+            return desk.locate(d)
+        except SystemExit:
+            return None
+    f = find(cwd)
+    if not (f and Path(cwd).resolve().is_relative_to(f[1])) and not desk.old(cwd) and (p := os.environ.get("CLAUDE_PROJECT_DIR")):
+        f = find(p) or f
+    return f[1] if f else None
 
 
 def words(command):
@@ -49,9 +62,10 @@ def words(command):
         return command.split()
 
 
-def memories(ws, cwd, text, is_path=False):
-    """text（読んだファイルのパスか、コマンド）に出てくる顧客の資料のファイル（絶対パスか、cwd からのパス。コマンドの中の cd もたどる）の、顧客の memory.md。"""
-    top = str(ws / "Customers").lower() + "/"  # macOS は大文字と小文字を区別しない
+def decks(ws, cwd, text, is_path=False):
+    """text（読んだファイルのパスか、コマンド）に出てくる資料のファイル（Customers/ と Internal/ の下の 構成案*.md・社内メモ_*.md・references.md。
+    絶対パスか、cwd からのパス。コマンドの中の cd もたどる）の実のパス。"""
+    tops = [str(ws / d).lower() + "/" for d in ("Customers", "Internal")]  # macOS は大文字と小文字を区別しない
     toks, base, outer, out = [text] if is_path else words(text), str(cwd), [], []  # パスは切らない（空白のあるフォルダ）
     for i, tok in enumerate(toks):
         if all(c in PUNCT for c in tok):  # 区切り（続いたものは 1 語になる。「);」など）。サブシェルの中の cd は、閉じたら戻す
@@ -64,9 +78,42 @@ def memories(ws, cwd, text, is_path=False):
             base = os.path.join(base, os.path.expanduser(tok))
         elif MEMORY_FROM.search(tok):
             p = os.path.realpath(os.path.join(base, os.path.expanduser(tok)))  # Path.expanduser は ~user で例外を出す
-            if p.lower().startswith(top) and "/" in p[len(top):]:
-                out.append(ws / "Customers" / p[len(top):].split("/")[0] / "memory.md")
+            if any(p.lower().startswith(t) and "/" in p[len(t):] for t in tops):
+                out.append(p)
     return out
+
+
+def memory(ws, p):
+    """資料のファイル p（decks の実のパス）の顧客の memory.md。Customers/ の下でなければ None。"""
+    top = str(ws / "Customers").lower() + "/"
+    return ws / "Customers" / p[len(top):].split("/")[0] / "memory.md" if p.lower().startswith(top) else None
+
+
+def chosen(p):
+    """資料のファイル p の構成案（p が構成案ならそれ、ほかは同じフォルダのいちばん新しい 構成案*.md）の「使う決まり」に書いた rules/ のパス。
+    構成案に行がなければ None（選ぶ一覧を出す）。構成案がないか、「なし」なら []。rules/ のパスのない行は、その値（空なら「（空）」）。"""
+    p = Path(p)
+    try:
+        outline = p if p.name.startswith("構成案") else max(p.parent.glob("構成案*.md"), key=lambda x: x.stat().st_mtime, default=None)
+        text = outline.read_text(encoding="utf-8") if outline else ""
+    except (OSError, ValueError):  # ない（コマンドに書いただけ）、読めない、UTF-8 でない
+        return []
+    if not (lines := USE.findall(text)):
+        return None if text else []
+    line = " ".join(lines)
+    names = re.findall(RULE_PATH, line)
+    extra = [v for v in (x.strip("`*") for x in re.split(r"[\s、,，]+", re.sub(RULE_PATH, " ", line))) if ".md" in v or re.match(r"rules?/", v)]  # パスに読めない値（b.md、rule/b.md、rules/b）
+    if names or extra:
+        return names + extra
+    return [] if "なし" in line else [line.strip(" \t*") or "（空）"]  # rules/ のパスのない行は、書いた値をそのまま返す（決まりのファイルにないと知らせる）
+
+
+def index(ws, files):
+    """資料ごとに選ぶ決まり（paths のないもの）の一覧。"""
+    rows = [f"- {p.relative_to(ws)}（{'・'.join(desk.listed(m, 'targets')) or '全部'}、{'・'.join(desk.listed(m, 'audience')) or '全部'}）: {m['description']}" for p, m in files]
+    return (f"## ワークスペースの決まりの一覧: {INDEX}\n\n資料ごとに選ぶ決まり（frontmatter に paths のないもの。行は「パス（作るもの、資料の種類）: いつ使うか」）。"
+            "この資料に合うものを選び、構成案の頭に「- **使う決まり:** rules/a.md、rules/b.md」（合うものがなければ「なし」）と書いて、構成案を開き直す。"
+            "構成案を開くたびに hook が中身を出す（deck-practices/rules.md の「Workspace rules」）。\n\n" + "\n".join(rows))
 
 
 def transcript(ev):
@@ -115,23 +162,37 @@ def shown(raw):
 
 
 def overlays(cwd, text, is_path=False, seen=(), key=None):
-    """text（読んだパスかコマンド）に出てくるプラグインのファイルに当たる rules/ のファイルと、顧客の資料に当たる memory.md の中身。
+    """text（読んだパスかコマンド）に出てくるプラグインのファイルに paths が当たる決まり、資料のファイルに当たる顧客の memory.md と「使う決まり」の決まり（行がなければ選ぶ一覧）の中身。
     seen（まだ見えているもの）は出さない。key（会話の記録、ターン）があれば、同じターンにほかの hook が出したものも出さない。
     seen と key は会話の記録を読む関数でもよく、出すものがあるときだけ呼ぶ。"""
     ws = workspace(cwd)
     if not ws:
         return ""
-    refs = [(m[1], m[2]) for m in REF.finditer(text)
-            if "rules/" + m[1] not in text[max(0, m.start() - 6):m.end()]  # rules/ そのものを読んだときは出さない
-            and (ws / "rules" / m[1] / m[2]).is_file()]
-    mems = [p for p in memories(ws, cwd, text, is_path) if p.is_file()]
-    if not (refs or mems):  # ワークスペースの中でも、たいていの道具の呼び出しはここで終わる（会話の記録を読まない）
+    refs = [f"{m[1]}/{m[2]}" for m in REF.finditer(text) if "rules/" + m[1] not in text[max(0, m.start() - 6):m.end()]]  # rules/ そのものを読んだときは出さない
+    docs = decks(ws, cwd, text, is_path)
+    files = desk.rules(ws) if refs or docs else []  # ワークスペースの中でも、たいていの道具の呼び出しはここで終わる（rules/ も会話の記録も読まない）
+    mems = list(dict.fromkeys(m for p in docs if (m := memory(ws, p)) and m.is_file()))
+    picks = [chosen(p) for p in docs]
+    free = [(p, m) for p, m in files if not desk.listed(m, "paths")]  # 資料ごとに選ぶ決まり
+    written = {x for c in picks if c for x in c}  # 構成案の「使う決まり」に書いたもの。文字で比べる（絶対パスを書かれても落ちない）
+    stale = sorted(written - {str(p.relative_to(ws)) for p, _ in files})
+    hits = [p for r in refs for p, m in files if any(fnmatch.fnmatchcase(r, g) for g in desk.listed(m, "paths"))] + [p for p, _ in files if str(p.relative_to(ws)) in written]
+    old = [p for r in refs if (p := ws / "rules" / r).is_file() and p not in dict(files)]  # プラグインの同じパスの、description のないファイル（前の版の上書き）。desk-migrate を回すまでも、黙って出さなくならないように
+    want = {}  # 出す順: 開いたファイルに当たるもの、構成案で選んだもの、一覧（RULE_MAX のファイルが先頭なら、memory と並んでも丸ごと入る）
+    for p in hits + old:
+        why = "このワークスペースの決まり。description の場面で当てる" if p not in old else "frontmatter の description がない（前の版の形なら desk-migrate の apply で足す。ほかは 1 行で書く）"
+        want.setdefault(p, f"## ワークスペースの決まり: {p.relative_to(ws)}\n\n{why}。プラグインと食い違うところは、こちらに従う（deck-practices/rules.md の「Workspace rules」）。\n\n{p.read_text(encoding='utf-8')}")
+    if stale:  # 見出しが HEAD に合わないので、見えているものとして外さない（直すまで、構成案を開くたびに出す）
+        want[ws / STALE] = (f"## 構成案の「使う決まり」の確かめ\n\n「使う決まり」の {'・'.join(stale)} は、決まりのファイルにない（名前が変わったか、消えたか、frontmatter の description がない。"
+                            f"書き方は「- **使う決まり:** rules/a.md、rules/b.md」）。ワークスペースの決まりの一覧（{INDEX}）から選び直して、構成案を直す。")
+    if free and (START in refs or None in picks or stale):
+        want[ws / INDEX] = index(ws, free)
+    if not (want or mems):
         return ""
     seen = {ws / x for x in (seen() if callable(seen) else seen)}
     mem = {p: f"## 顧客の memory: {p.relative_to(ws)}\n\nこの顧客の資料への好み（どう作るか。相手の事業や構成は profile.md）。ワークスペースの決まりとプラグインより優先する。新しいユーザーの言葉と食い違えば、そちらに従って memory を直す（deck-practices/rules.md の「Customer memory」）。\n\n{p.read_text()}"
            for p in mems if p not in seen}
-    out = {p: f"## ワークスペースの決まり: rules/{name}/{f}\n\nプラグインの {name}/{f} への足しと上書き。食い違うところは、こちらに従う（deck-practices/rules.md の「Rule layers」）。\n\n{p.read_text()}"
-           for name, f in refs if (p := ws / "rules" / name / f) not in seen}
+    out = {p: x for p, x in want.items() if p not in seen}
     if not (mem or out):  # みな見えている（印を調べない）
         return ""
     key, mine = key() if callable(key) else key, set()
@@ -158,7 +219,7 @@ def skill_md(names):
 
 
 def called(cwd, prompt, seen=(), key=None):
-    """プロンプトで呼んだスキル（/desk-tools:<スキル>・$desk-tools:<スキル>）に当たる rules/<スキル>/SKILL.md の中身。"""
+    """プロンプトで呼んだスキル（/desk-tools:<スキル>・$desk-tools:<スキル>）の SKILL.md に paths が当たる決まりの中身。"""
     return overlays(cwd, skill_md(CALL.findall(prompt)), seen=seen, key=key)
 
 
@@ -265,9 +326,9 @@ def main(mode):
     seen = lambda: shown(raw())
     turn = ev.get("turn_id") or ev.get("prompt_id")  # 同じターン（Codex は turn_id、Claude Code は 1 回の頼みごとの prompt_id）
     key = (lambda: (log, f"{turn}@{compacted(raw())}")) if log and turn else None  # コンパクションのあとは別の印にする（SessionStart の起きない子の会話でも）
-    if event == "SessionStart":  # コンパクションのあと（hooks.json の matcher が compact）。上書きのある SKILL.md がなければ、会話の記録を読まない
+    if event == "SessionStart":  # コンパクションのあと（hooks.json の matcher が compact）。paths のある決まりも前の版の SKILL.md の上書きもなければ、会話の記録を読まない
         ws = workspace(cwd)
-        ctx = overlays(cwd, skill_md(invoked(raw()))) if ws and any((ws / "rules").glob("*/SKILL.md")) else ""  # 記録にはまだ今のコンパクションの印がない（前の部分が見える）ので、seen では外さない
+        ctx = overlays(cwd, skill_md(invoked(raw()))) if ws and (any(desk.listed(m, "paths") for _, m in desk.rules(ws)) or any((ws / "rules").glob("*/SKILL.md"))) else ""  # 記録にはまだ今のコンパクションの印がない（前の部分が見える）ので、seen では外さない
     elif event == "UserPromptSubmit":
         ctx = called(cwd, ev.get("prompt", ""), seen, key)
     elif ev.get("tool_name") == "Skill":
@@ -280,15 +341,25 @@ def main(mode):
 
 def selftest():
     os.environ["DESK_CONFIG"] = ""  # 手元の ~/.desk.toml に左右されない
+    os.environ.pop("CLAUDE_PROJECT_DIR", None)
     with tempfile.TemporaryDirectory() as ws:
         (Path(ws) / "desk.toml").write_text("")
         (Path(ws) / "rules" / "deck-practices").mkdir(parents=True)
         (Path(ws) / "rules" / "slides-build").mkdir()
-        (Path(ws) / "rules" / "slides-build" / "visual.md").write_text("本文は 16pt")
-        (Path(ws) / "rules" / "deck-practices" / "SKILL.md").write_text("最初に聞くこと")
+        fm = lambda *paths: f"---\ndescription: 試し\npaths: [{', '.join(paths)}]\n---\n"
+        vis = lambda t: (Path(ws) / "rules" / "slides-build" / "visual.md").write_text(fm("slides-build/visual.md") + t)
+        vis("本文は 16pt")
+        (Path(ws) / "rules" / "deck-practices" / "SKILL.md").write_text(fm("deck-practices/SKILL.md") + "最初に聞くこと")
         sub = Path(ws) / "Customers" / "x"
         sub.mkdir(parents=True)
         assert "16pt" in overlays(sub, "/plug/skills/slides-build/visual.md")
+        os.environ["CLAUDE_PROJECT_DIR"] = ws
+        assert "16pt" in overlays("/", "/plug/skills/slides-build/visual.md")  # 会話の中でワークスペースの外（プラグインのフォルダ）へ cd したあと
+        with tempfile.TemporaryDirectory() as old:
+            (Path(old) / "factory.toml").write_text("")
+            assert overlays(old, "/plug/skills/slides-build/visual.md") == ""  # 前の版のワークスペースの中へ cd したときは、開いたフォルダのワークスペースへも進まない
+        del os.environ["CLAUDE_PROJECT_DIR"]
+        assert overlays("/", "/plug/skills/slides-build/visual.md") == ""
         assert "16pt" in overlays(ws, "sed -n 1,40p slides-build/visual.md")  # Bash で読んだとき
         assert overlays(ws, f"{ws}/rules/slides-build/visual.md") == ""  # rules/ そのものを読んだときは出さない
         assert overlays(ws, "/plug/skills/deck-practices/content.md") == ""  # rules/ に同じファイルがない
@@ -302,12 +373,19 @@ def selftest():
         assert overlays("/", "/plug/skills/slides-build/visual.md") == ""  # ワークスペースの外
         with tempfile.TemporaryDirectory() as home:  # 上に desk.toml がなければ、~/.desk.toml の workspace の rules/ を出す
             (Path(home) / "Documents" / "rules" / "slides-build").mkdir(parents=True)
-            (Path(home) / "Documents" / "rules" / "slides-build" / "visual.md").write_text("既定のワークスペースは 18pt")
+            (Path(home) / "Documents" / "rules" / "slides-build" / "visual.md").write_text(fm("slides-build/visual.md") + "既定のワークスペースは 18pt")
             (Path(home) / ".desk.toml").write_text('workspace = "Documents"\n')
             os.environ["DESK_CONFIG"] = str(Path(home) / ".desk.toml")
             assert "18pt" in overlays("/", "/plug/skills/slides-build/visual.md") and "16pt" in overlays(sub, "slides-build/visual.md")  # 中で開けば、そのフォルダの desk.toml
+            os.environ["CLAUDE_PROJECT_DIR"] = ws
+            (Path(home) / "Documents" / "Customers").mkdir()
+            assert "18pt" in overlays(Path(home) / "Documents" / "Customers", "slides-build/visual.md") and "16pt" in overlays("/", "slides-build/visual.md")  # ~/.desk.toml のワークスペースの中ならスクリプトと同じそこ、外なら開いたフォルダのもの
+            del os.environ["CLAUDE_PROJECT_DIR"]
             (Path(home) / ".desk.toml").write_text("workspace = \n")
             assert overlays("/", "/plug/skills/slides-build/visual.md") == ""  # 読めない設定でも止まらない
+            os.environ["CLAUDE_PROJECT_DIR"] = ws
+            assert "16pt" in overlays("/", "/plug/skills/slides-build/visual.md")  # 読めない ~/.desk.toml で止まらず、開いたフォルダのワークスペースへ
+            del os.environ["CLAUDE_PROJECT_DIR"]
             os.environ["DESK_CONFIG"] = ""
         deck = Path(ws) / "Customers" / "acme" / "deck_202610"
         deck.mkdir(parents=True)
@@ -355,12 +433,12 @@ def selftest():
         both = overlays(ws, f"cat '{spaced}/d 1/構成案.md' slides-build/visual.md")
         assert "本文は 16pt" in both and "Customers/Acme Corp/memory.md を自分で開いて読む" in both  # 長い memory が決まりを押し出さない。開くファイルを示す
         assert HEAD.findall(both) == ["rules/slides-build/visual.md"] and "顧客の memory（途中まで）: Customers/Acme Corp/memory.md" in both  # 途中で切ったものは出したと数えない
-        (Path(ws) / "rules" / "slides-build" / "visual.md").write_text("あ" * (LIMIT + 10))
+        vis("あ" * (LIMIT + 10))
         both = overlays(ws, f"cat '{spaced}/d 1/構成案.md' slides-build/visual.md deck-practices/SKILL.md")
         assert len(both) <= LIMIT and both.count("ここで切った") == 2  # 両方が長ければ半分ずつ。Claude Code の 1 万字に収める（超えると頭の 2,000 字しか見えない）
         assert len(overlays(ws, "slides-build/visual.md")) <= LIMIT  # 決まりだけでも
         assert "rules/slides-build/visual.md・" in both and "rules/deck-practices/SKILL.md を自分で開いて読む" in both  # 切れたものと、そのあとで出せなかったもの
-        (Path(ws) / "rules" / "slides-build" / "visual.md").write_text("本文は 16pt")
+        vis("本文は 16pt")
         tempfile.tempdir = ws  # 印は selftest の中に置く
         k1, k2 = (str(log), "p1"), (str(log), "p2")
         assert "敬称は様" in overlays(deck, "構成案.md", key=k1) and overlays(deck, "references.md", key=k1) == ""  # 同じターンに並べて読んだら 1 回
@@ -369,9 +447,9 @@ def selftest():
         at = compacted(read(log))
         log.write_text(log.read_text() + '{"type":"system","subtype":"compact_boundary"}\n')
         assert compacted(read(log)) > at and "敬称は様" in overlays(deck, "references.md", key=(str(log), f"p2@{compacted(read(log))}"))  # コンパクションのあとは別の印（同じターンでも出し直す）
-        (Path(ws) / "rules" / "slides-build" / "visual.md").write_text("あ" * (LIMIT + 10))
+        vis("あ" * (LIMIT + 10))
         assert "ここで切った" in overlays(ws, "slides-build/visual.md", key=k2) and "ここで切った" in overlays(ws, "slides-build/visual.md", key=k2)  # 切ったものには印を置かない
-        (Path(ws) / "rules" / "slides-build" / "visual.md").write_text("う" * 5000)
+        vis("う" * 5000)
         (deck.parent / "memory.md").write_text("え" * 6000)
         k4 = (str(log), "p4")
         assert "ここで切った" in overlays(deck, "cat 構成案.md slides-build/visual.md", key=k4) and "う" * 5000 in overlays(ws, "slides-build/visual.md", key=k4)  # 同じターンでほかの hook が途中までしか出さなかったものは、丸ごと出す
@@ -379,7 +457,7 @@ def selftest():
         assert "え" * 6000 in overlays(deck, "構成案.md", key=k7)
         b = overlays(deck, "cat references.md slides-build/visual.md", key=k7)
         assert "う" * 5000 in b and "え" not in b  # ほかの hook が丸ごと出したものは、ここで途中までになるものでも外す（空いた字数で決まりを丸ごと出す）
-        (Path(ws) / "rules" / "slides-build" / "visual.md").write_text("本文は 16pt")
+        vis("本文は 16pt")
         (deck.parent / "memory.md").write_text("- [ws-memory-001] 敬称は様")
         k5 = (str(log), "p5")
         assert "敬称は様" in overlays(deck, "構成案.md", key=k5)
@@ -403,7 +481,7 @@ def selftest():
         shutil.rmtree(odd)
         many = [f"slides-build/x{i:02d}.md" for i in range(40)]
         for x in many:
-            (Path(ws) / "rules" / x).write_text("お" * 300)
+            (Path(ws) / "rules" / x).write_text(fm(x) + "お" * 300)
         cut40 = overlays(ws, " ".join(many))
         assert len(cut40) <= LIMIT and "ほか" in cut40 and "ここで切った" in cut40  # 添え書きも上限に入れる（長ければ数にする）
         for x in many:
@@ -435,6 +513,62 @@ def selftest():
         assert invoked(read(log)) == ["deck-practices", "slides-build"] and invoked(b"") == []  # 新しい順。ほかのプラグイン、文字列の中の写し、道具の結果、要約、断られた Skill は数えない
         again = overlays(ws, skill_md(invoked(read(log))))
         assert "最初に聞くこと" in again and "16pt" not in again  # 付け直される SKILL.md の上書きだけ（slides-build は rules/ に SKILL.md がない）
+        r = Path(ws) / "rules"
+        (r / "diagram_extra.md").write_text(fm("slides-build/pages.md", "slides-build/diagrams.md") + "矢印は太く")
+        (r / "all_slides.md").write_text(fm("slides-build/*") + "スライド全部")
+        (r / "slides-build" / "api.md").write_text("前の形（frontmatter がない）")
+        assert "矢印は太く" in overlays(ws, "/plug/skills/slides-build/diagrams.md") and "矢印は太く" in overlays(ws, "slides-build/pages.md")  # 1 つのファイルから、分けた両方を指す
+        assert "スライド全部" in called(ws, "/desk-tools:slides-build") and "スライド全部" not in called(ws, "/desk-tools:docs-build")  # * で、そのスキルのどのファイルにも
+        legacy = overlays(ws, "slides-build/api.md")
+        assert "前の形" in legacy and "desk-migrate" in legacy  # 前の版の同じパスの上書き（frontmatter がない）は、desk-migrate を回すまで前と同じに出す
+        assert "前の形" not in overlays(ws, "slides-build/pages.md")  # ほかのパスには出さない
+        (r / "customer.md").write_text("---\ndescription: 顧客向けの資料\naudience: [顧客向け]\n---\n- 顧客の言葉で書く")
+        (r / "update.md").write_text("---\ndescription: 製品のアップデートをまとめるとき\ntargets: [slides]\n---\n- 効くものだけ選ぶ")
+        start = overlays(ws, "/plug/skills/deck-practices/start.md")
+        assert "の一覧: rules/*.md" in start and "rules/customer.md（全部、顧客向け）: 顧客向けの資料" in start and "rules/update.md（slides、全部）" in start
+        assert "diagram_extra" not in start and "顧客の言葉で書く" not in start and HEAD.findall(start) == [INDEX]  # paths のあるものは一覧に入れず、中身も出さない
+        assert overlays(ws, "/plug/skills/deck-practices/start.md", seen={INDEX}) == ""  # 見えている一覧は出し直さない
+        outline = deck / "構成案.md"
+        outline.write_text("# 構成案\n\n- **資料の種類:** 顧客向け\n")
+        first = overlays(ws, str(outline), is_path=True)
+        assert "の一覧: rules/*.md" in first and "敬称は様" in first  # 「使う決まり」がまだない構成案は、memory と一覧
+        outline.write_text("# 構成案\n\n- **使う決まり:** rules/customer.md、rules/update.md\n")
+        picked = overlays(ws, str(outline), is_path=True)
+        assert "顧客の言葉で書く" in picked and "効くものだけ選ぶ" in picked and "の一覧" not in picked and "敬称は様" in picked
+        assert HEAD.findall(picked) == ["rules/customer.md", "rules/update.md", "Customers/acme/memory.md"]
+        assert "効くものだけ選ぶ" in overlays(deck, "cat references.md") and overlays(ws, str(outline), is_path=True, seen=set(HEAD.findall(picked))) == ""  # 同じフォルダの構成案から
+        outline.write_text("- 使う決まり：なし\n")
+        assert "の一覧" not in (none := overlays(ws, str(outline), is_path=True)) and "顧客の言葉" not in none and "敬称は様" in none
+        mem_file, big = Path(ws) / "Customers" / "acme" / "memory.md", "---\ndescription: 大きい\n---\n"
+        keep_mem = mem_file.read_text()
+        mem_file.write_text("め" * 6000)
+        (r / "big.md").write_text(big + "き" * (desk.RULE_MAX - len(big)))
+        (r / "mid.md").write_text(big + "ま" * 1000)
+        outline.write_text("- **使う決まり:** rules/big.md、rules/mid.md\n")
+        full = overlays(ws, str(outline), is_path=True)
+        assert "き" * (desk.RULE_MAX - len(big)) in full and HEAD.findall(full)[0] == "rules/big.md" and "rules/mid.md" in full and len(full) <= LIMIT  # 上限の大きさのファイルは、ほかのファイルと長い memory が並んでも丸ごと出す（入りきらないものは添え書きで挙げる）
+        for i in range(30):
+            (r / f"free{i:02}.md").write_text(f"---\ndescription: {'い' * 60}\n---\n- x")
+        head = fm("deck-review/prompt_slides.md")
+        (r / "bigp.md").write_text(head + "ぱ" * (desk.RULE_MAX - len(head)))
+        outline.write_text("# 構成案\n")
+        both = overlays(ws, f"cat {shlex.quote(str(outline))} /plug/skills/deck-review/prompt_slides.md")
+        assert HEAD.findall(both)[0] == "rules/bigp.md" and "ぱ" * (desk.RULE_MAX - len(head)) in both and len(both) <= LIMIT  # 一覧が長くても、開いたファイルに当たる決まりを先に丸ごと出す
+        mem_file.write_text(keep_mem)
+        outline.write_text("- **使う決まり:** rules/mid.md、rules/nope.md\n")
+        gone = overlays(ws, str(outline), is_path=True)
+        assert "rules/nope.md は、決まりのファイルにない" in gone and "ま" * 1000 in gone and HEAD.findall(gone)[:2] == ["rules/mid.md", INDEX]  # 書いた名前の決まりがなければ、選び直す一覧を出す
+        again = overlays(ws, str(outline), is_path=True, seen=set(HEAD.findall(gone)))
+        assert "rules/nope.md は、決まりのファイルにない" in again and "の一覧:" not in again  # 一覧が見えていても、直すまで知らせは出す
+        for line, word in (("- **使う決まり:** customer.md", "customer.md は"), ("- **使う決まり:**", "（空） は"), ("- **使う決まり:** rules/mid.md、b.md、rule/c.md", "b.md・rule/c.md は"), ("- 使う決まり: /Users/x/決まり.md", "/Users/x/決まり.md は")):
+            outline.write_text(line + "\n")
+            assert word in overlays(ws, str(outline), is_path=True), line  # rules/ のパスのない行は、「なし」と同じにしない
+        for x in [*r.glob("free*.md"), r / "bigp.md", r / "big.md", r / "mid.md"]:
+            x.unlink()
+        internal = Path(ws) / "Internal" / "lt_202610"
+        internal.mkdir(parents=True)
+        (internal / "構成案.md").write_text("- 使う決まり: rules/update.md\n")
+        assert "効くものだけ選ぶ" in (inside := overlays(internal, "sed -n 1,20p 構成案.md")) and "memory" not in inside  # 社内向けの資料にも。memory はない
     print("selftest ok")
 
 

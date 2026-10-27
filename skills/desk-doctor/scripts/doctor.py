@@ -2,7 +2,7 @@
 """usage: doctor.py [<ワークスペース>] [--local]   （--selftest で自己確認）
 AI Desk Tools を動かす前提を確かめる。--local は手元だけ見て、Google の API を呼ばない。
 1 行 1 項目で「OK」「要修正」「要確認」を出す。要修正が 1 つでもあれば exit 1。標準ライブラリだけ。"""
-import io, contextlib, json, math, os, re, shutil, subprocess, sys, tempfile, tomllib
+import io, contextlib, fnmatch, json, math, os, re, shutil, subprocess, sys, tempfile, tomllib
 from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parents[2]  # プラグインの skills/
@@ -66,7 +66,17 @@ def check(ws, local=False):
     if "- **日本語で作る。**" in agents:  # 2026-10-25 までの雛形
         warn("AGENTS.md の資料の言語", "前の雛形の「日本語で作る」が残っている。ワークスペースの決まりが優先するので、desk.toml の [desk] default_language が効かない。desk-init の雛形の今の文（[desk] default_language の言語で作る）に替える")
     if old := migrate.needs(root):  # 前の名前の rules/ は読まれず、前の ID は台帳とつながらない
-        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変えた）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
+        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの頭に frontmatter を置いた）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
+    plugin, odd = [str(p.relative_to(SKILLS)) for p in SKILLS.glob("*/**/*.md")], []  # 決まりの frontmatter（deck-practices/rules.md の「Workspace rules」）
+    for p, m in (rules := desk.rules(root)):
+        rel = p.relative_to(root)
+        odd += [f"{rel} の paths の {g}（当たるプラグインのファイルがない。プラグインが分けたか名前を変えたら、今のファイルに直す）" for g in desk.listed(m, "paths") if not fnmatch.filter(plugin, g)]
+        if not desk.listed(m, "paths") and (same := p.relative_to(root / "rules").as_posix()) in plugin:  # 前の版の同じパスの置き場所で、paths がない。そのファイルを開いても出ず、資料ごとに選ぶ決まりになる
+            odd.append(f"{rel} に paths がない（プラグインの {same} を開いたときに出すなら paths: [{same}] を書く。資料ごとに選ぶ決まりなら rules/ の直下へ移す）")
+        odd += [f"{rel} の {k} の {v}（{'・'.join(vals)} のどれか）" for k, vals in (("targets", desk.TARGETS), ("audience", desk.AUDIENCES)) for v in desk.listed(m, k) if v not in vals]
+        if (n := len(p.read_text(encoding="utf-8"))) > desk.RULE_MAX:
+            odd.append(f"{rel} が {n:,} 字（{desk.RULE_MAX:,} 字まで。memory と並ぶと hook が途中で切るので、場面ごとに分ける）")
+    (warn if odd else ok)("ワークスペースの決まり", "、".join(odd) if odd else f"{len(rules)} ファイル")
     if cfg.get("desk", {}).get("source"):  # 2026-10-14 まで、desk-kaizen が worktree を作る checkout（前の [factory] source。desk-migrate が [desk] にする）
         warn("desk.source", "使わなくなった（desk-kaizen は .desk/kaizen/ に自分で clone する）。desk.toml から消す")
     names = sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md"))
@@ -239,6 +249,16 @@ def selftest():
         (Path(tmp) / "rules" / "deck-build" / "checks.py").write_text("x")
         assert kinds()["前の版のワークスペース"] == "要修正"
         shutil.rmtree(Path(tmp) / "rules" / "deck-build")
+        assert kinds()["ワークスペースの決まり"] == "OK"
+        (Path(tmp) / "rules" / "x.md").write_text("---\ndescription: x\npaths: [slides-build/visual.md, slides-build/*, nope/a.md]\ntargets: [video]\n---\n" + "あ" * desk.RULE_MAX)
+        d = next(d for k, n, d in check(Path(tmp), local=True) if n == "ワークスペースの決まり")
+        assert kinds()["ワークスペースの決まり"] == "要確認" and "nope/a.md" in d and "slides-build/" not in d and "targets の video" in d and f"字（{desk.RULE_MAX:,} 字まで" in d, d
+        (Path(tmp) / "rules" / "x.md").unlink()
+        (Path(tmp) / "rules" / "slides-build").mkdir(exist_ok=True)
+        (Path(tmp) / "rules" / "slides-build" / "visual.md").write_text("---\ndescription: 見た目の足し\n---\n- 16pt\n")
+        d = next(d for k, n, d in check(Path(tmp), local=True) if n == "ワークスペースの決まり")
+        assert "paths がない" in d and "paths: [slides-build/visual.md]" in d, d  # 前の版の同じパスの置き場所で paths がないと、そのファイルを開いても出ない
+        (Path(tmp) / "rules" / "slides-build" / "visual.md").unlink()
         agents.write_text(agents.read_text() + "\n同じ問いで、方針を決めたあとを AI のレビューでそのまま作るか、人がレビューするかも選んでもらう。\n")
         assert kinds()["AGENTS.md の方針のレビュー"] == "要確認"
         assert "AGENTS.md の返したあとの直し" not in kinds()  # 今の雛形
