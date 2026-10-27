@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ワークスペースの決まり（rules/ の下の、frontmatter に description のある .md。探し方は skills/deck-practices/scripts/desk.py の rules）を、要る場面で続けて出す（開き忘れを防ぐ）。
 - frontmatter の paths に当たるプラグインのスキルのファイル（slides-build/visual.md。* も使える）が読まれたら、そのファイルを出す（手順に付く足しと上書き）。
+  読んだかは、読んだパスとコマンドに書いた <スキル>/<ファイル> の文字と、道具の出力に出たそのファイルの行で見る（スキルのフォルダへ cd して名前だけで開いても）。
 - 顧客の資料（Customers/ と Internal/ の下）の 構成案*.md・社内メモ_*.md・references.md が読まれたら、その顧客の Customers/<顧客>/memory.md（資料への好み。どう作るか）と、
   構成案の頭の「使う決まり」に書いた rules/ のファイル（paths のない、資料ごとに選ぶ決まり）を出す。構成案に「使う決まり」の行がなければ、選ぶ一覧（パスと description）を出す。
   資料を作り始めるとき（deck-practices/start.md が読まれたとき）にも、一覧を出す。
@@ -10,7 +11,7 @@ Claude Code は自動のコンパクションのあと、呼んだスキルの S
 同じ会話で出したもののうち、まだモデルに見えている（コンパクションで消えていない）ものは出し直さない。Claude Code と Codex は hook に渡る会話の記録（transcript_path）の、最後のコンパクションのあとを見る。pi は拡張が、モデルに見えている道具の結果を渡す。Codex は差し込みを記録に developer のメッセージで残し、コンパクションで消す（2026-10-25 に確かめた）。
 決まりの形と出し方は skills/deck-practices/rules.md の「Workspace rules」。Claude Code と Codex は hooks.json の PostToolUse（Read・Bash・Skill。Claude Code は if で、.md に触れる Read・Bash だけ）・UserPromptSubmit・SessionStart（compact）、pi は extensions/rules.ts から呼ぶ。
 usage: rules_overlay.py claude   （標準入力に Claude Code か Codex の hook の JSON）
-       rules_overlay.py pi       （標準入力に {"cwd", "text", "isPath", "seen"}。isPath は text が読んだファイルのパスのとき。seen は今の文脈に残る、前に出したもの。出力は {"context": …}）
+       rules_overlay.py pi       （標準入力に {"cwd", "text", "isPath", "seen", "output"}。isPath は text が読んだファイルのパスのとき。seen は今の文脈に残る、前に出したもの。output は道具の出力。出力は {"context": …}）
        rules_overlay.py --selftest
 標準ライブラリだけ。ワークスペースが見つからない（探し方は skills/deck-practices/scripts/desk.py）か、決まりと memory.md がないときは何も出さない。"""
 import fnmatch, functools, hashlib, json, os, re, shlex, shutil, stat, sys, tempfile
@@ -20,7 +21,8 @@ sys.dont_write_bytecode = True  # プラグインの scripts/ に __pycache__ �
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "deck-practices" / "scripts"))
 import desk  # noqa: E402  ワークスペースの探し方（スキルのスクリプトと同じ）
 
-SKILLS = {p.parent.name for p in (Path(__file__).resolve().parent.parent / "skills").glob("*/SKILL.md")}
+PLUGIN = Path(__file__).resolve().parent.parent / "skills"
+SKILLS = {p.parent.name for p in PLUGIN.glob("*/SKILL.md")}
 NAMES = "|".join(map(re.escape, SKILLS))  # スキルの名前のどれか（REF・COMMAND・CALL）
 REF = re.compile(rf"(?<![\w-])({NAMES})/([\w./-]+\.md)")  # スキルの名前で始まるパス（前のフォルダは問わない）
 MEMORY_FROM = re.compile(r"(?:^|/)(?:構成案[^/]*|社内メモ_[^/]*|references)\.md$")  # 資料を始めるときとコンパクションのあとに読むもの（組む途中に何度も開く build/ は入れない）
@@ -35,6 +37,9 @@ CUT_BY_HOST = ("<persisted-output>", "<truncated-output>", "persist-to-disk fail
 COMPACTED = (b'"subtype":"compact_boundary"', b'"type":"compacted"')  # コンパクションの印（Claude Code・Codex の会話の記録）
 LIMIT = 9000  # 1 回に差し込む字数の上限（決まりと memory の合計。切ったときの添え書きも含む）。Claude Code は 1 万字を超える差し込みをファイルに逃がし、頭の 2,000 字だけを見せる（Codex は hooks.json の additionalContextLimit で逃がさない）
 NOTE = 500  # 切ったときの添え書きの字数の上限（切ったほうの字数に含める）
+LINE, KEY = 24, 48  # 出力でプラグインのファイルを見分ける行の字数の下限と、比べる頭の字数（cut -c で切った行も合う）
+COPIED = "desk-init/templates/"  # ワークスペースへ写す雛形（写しを読んでも、プラグインのファイルを読んだことにしない）
+NUMBERED = re.compile(r"^(?:[^\s:]*\.md[:-])?\s*\d+(?:[:\t-]|→)\s?|^[^\s:]*\.md[:-]")  # 出力の行の頭の、grep -n・cat -n・Read の行番号と grep のファイルの名前
 
 
 def workspace(cwd):
@@ -161,14 +166,67 @@ def shown(raw):
     return set(HEAD.findall("\n".join(lines.values())))
 
 
-def overlays(cwd, text, is_path=False, seen=(), key=None):
+def keys(text):
+    """text の、見分けに使う行（LINE 字以上）の頭 KEY 字。コードの囲みの中は外す（見本の JSON や、それをまねた資料にも同じ行がある。囲みは、開いた ``` の長さ以上の ``` だけの行で閉じる）。"""
+    fence = ""
+    for line in text.splitlines():
+        s = line.strip()
+        if m := re.match(r"`{3,}", s):
+            if not fence:
+                fence = m[0]
+            elif s == m[0] and len(s) >= len(fence):
+                fence = ""
+        elif not fence and len(s) >= LINE:
+            yield s[:KEY]
+
+
+@functools.cache
+def plugin_lines(root=PLUGIN):
+    """プラグインの md の、そのファイルにしかない行（頭 KEY 字 → <スキル>/<ファイル>）。読めないもの（エディタの .#visual.md、macOS の ._visual.md）は飛ばす。"""
+    owners = {}
+    for f in root.rglob("*.md"):
+        try:
+            text = f.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        for k in keys(text):
+            owners.setdefault(k, set()).add(f.relative_to(root).as_posix())
+    return {k: f for k, (f, *more) in owners.items() if not more and not f.startswith(COPIED)}
+
+
+def printed(output, own=()):
+    """道具の出力に中身が出たプラグインのファイル（<スキル>/<ファイル>）。そのファイルにしかない行が 2 行あれば出たとする。own（ワークスペースの決まりのファイルの行）は数えない。
+    1 行だけ合うのは、構成案に写す表の見出しや、顧客の profile.md に写った雛形の 1 文のことが多い（2026-10-27 に持ち主の記録とレビューで見つけた）。"""
+    known, hits = plugin_lines(), {}  # ファイル → 合った行（同じ行が何度出ても 1 つ。構成案を 2 つ cat すると、写した見出しが 2 回出る）
+    for line in output.splitlines():
+        ks = [s[:KEY] for s in (line.strip(), NUMBERED.sub("", line.strip(), 1).strip()) if len(s) >= LINE]
+        if k := next((k for k in ks if k in known and k not in own), None):
+            hits.setdefault(known[k], set()).add(k)
+    return [f for f, got in hits.items() if len(got) >= 2]
+
+
+def rule_lines(ws):
+    """ワークスペースの rules/ の下の .md の、比べる行の頭 KEY 字（コードの囲みの中も。写したプラグインの文がどこにあっても数えないため）。読めないものは飛ばす（desk.rules と同じ）。"""
+    own = set()
+    for f in (ws / "rules").rglob("*.md"):
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:  # 切れたリンク、フォルダ、読めないファイル
+            continue
+        own.update(x[:KEY] for x in map(str.strip, text.splitlines()) if len(x) >= LINE)
+    return own
+
+
+def overlays(cwd, text, is_path=False, seen=(), key=None, output=""):
     """text（読んだパスかコマンド）に出てくるプラグインのファイルに paths が当たる決まり、資料のファイルに当たる顧客の memory.md と「使う決まり」の決まり（行がなければ選ぶ一覧）の中身。
     seen（まだ見えているもの）は出さない。key（会話の記録、ターン）があれば、同じターンにほかの hook が出したものも出さない。
-    seen と key は会話の記録を読む関数でもよく、出すものがあるときだけ呼ぶ。"""
+    seen と key は会話の記録を読む関数でもよく、出すものがあるときだけ呼ぶ。output は道具の出力（中身が出たプラグインのファイルも、読んだものとする）。"""
     ws = workspace(cwd)
     if not ws:
         return ""
     refs = [f"{m[1]}/{m[2]}" for m in REF.finditer(text) if "rules/" + m[1] not in text[max(0, m.start() - 6):m.end()]]  # rules/ そのものを読んだときは出さない
+    if output and ".md" in text and printed(output):  # 名前だけで開いたとき（cd …/skills/deck-practices && sed -n 1,40p content.md）や glob・workdir でも。.md の文字のないコマンドは見ない（Claude Code と pi は hook を起こさない。Codex は hooks.json の if を読まない）
+        refs += [r for r in printed(output, rule_lines(ws)) if r not in refs]  # 決まりのファイルにプラグインの文を写していても、rules/ を読んだのを出し直さない
     docs = decks(ws, cwd, text, is_path)
     files = desk.rules(ws) if refs or docs else []  # ワークスペースの中でも、たいていの道具の呼び出しはここで終わる（rules/ も会話の記録も読まない）
     mems = list(dict.fromkeys(m for p in docs if (m := memory(ws, p)) and m.is_file()))
@@ -319,7 +377,7 @@ def cut(parts, limit, ws):
 def main(mode):
     ev = json.load(sys.stdin)
     if mode == "pi":
-        print(json.dumps({"context": overlays(ev.get("cwd", "."), ev.get("text", ""), is_path=bool(ev.get("isPath")), seen=set(HEAD.findall(ev.get("seen", ""))))}, ensure_ascii=False))
+        print(json.dumps({"context": overlays(ev.get("cwd", "."), ev.get("text", ""), is_path=bool(ev.get("isPath")), seen=set(HEAD.findall(ev.get("seen", ""))), output=ev.get("output", ""))}, ensure_ascii=False))
         return
     cwd, ti, event, log = ev.get("cwd", "."), ev.get("tool_input", {}), ev.get("hook_event_name", "PostToolUse"), transcript(ev)
     raw = functools.cache(lambda: read(log))  # 会話の記録は大きい（数十 MB）ので、出すものがあるときだけ、1 回だけ読む
@@ -334,7 +392,10 @@ def main(mode):
     elif ev.get("tool_name") == "Skill":
         ctx = overlays(cwd, skill_md([str(ti.get("skill", ""))]), seen=seen, key=key)
     else:
-        ctx = overlays(cwd, ti.get("file_path") or ti.get("command") or "", is_path=bool(ti.get("file_path")), seen=seen, key=key)
+        r = ev.get("tool_response")  # Claude Code の Bash は {"stdout", "stderr", …}（Codex と pi は両方を 1 つにした文字なので、そろえる）、Codex は出力の文字。Read はパスで見るので要らない
+        if isinstance(r, dict):
+            r = "\n".join(str(x) for x in (r.get("stdout"), r.get("stderr")) if x)
+        ctx = overlays(cwd, ti.get("file_path") or ti.get("command") or "", is_path=bool(ti.get("file_path")), seen=seen, key=key, output=r if isinstance(r, str) else "")
     if ctx:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": ctx}}, ensure_ascii=False))
 
@@ -361,6 +422,28 @@ def selftest():
         del os.environ["CLAUDE_PROJECT_DIR"]
         assert overlays("/", "/plug/skills/slides-build/visual.md") == ""
         assert "16pt" in overlays(ws, "sed -n 1,40p slides-build/visual.md")  # Bash で読んだとき
+        lines = (PLUGIN / "slides-build" / "visual.md").read_text(encoding="utf-8").splitlines()  # 出力で見分ける試しは、このプラグインの実のファイルで
+        head = "\n".join(lines[:40])
+        assert "16pt" in overlays(ws, "cd /x/skills/slides-build && sed -n 1,40p visual.md", output=head)  # スキルのフォルダへ cd して名前だけで開いた（書いた文字にはない）
+        assert printed("\n".join(f"{i}:{x}" for i, x in enumerate(lines[:40], 1))) == printed(head) == ["slides-build/visual.md"]  # 行番号つき（grep -n）でも
+        unique = [x for x in lines if plugin_lines().get(x.strip()[:KEY]) == "slides-build/visual.md"]
+        assert printed(unique[0]) == printed(f"{unique[0]}\n{unique[0]}") == [] and printed("\n".join(unique[:2])) == ["slides-build/visual.md"]  # 違う 2 行で。1 行だけ（構成案に写す表の見出し、写した 1 文）は、何度出ても出ない
+        assert overlays(ws, "wc -c visual.md", output="5319 visual.md") == "" and overlays(ws, 'cat "$F"', output=head) == ""  # 中身を出さないとき、.md の文字のないコマンド（Codex も、ほかと同じく見ない）
+        for copied in (head, f"```\n{head}\n```"):  # 前の版の上書き（プラグインの文を写した、description のないファイル）。囲みの中に写しても
+            (Path(ws) / "rules" / "slides-build" / "copied.md").write_text(copied)
+            assert overlays(Path(ws) / "rules" / "slides-build", "cat copied.md", output=head) == ""  # rules/ の中で名前だけで読んでも、出し直さない
+        (Path(ws) / "rules" / "slides-build" / "copied.md").unlink()
+        (Path(ws) / "rules" / "gone.md").symlink_to(Path(ws) / "nowhere.md")
+        assert "16pt" in overlays(ws, "cd /x/skills/slides-build && sed -n 1,40p visual.md", output=head)  # 読めないもの（切れたリンク）が rules/ にあっても止まらない
+        (Path(ws) / "rules" / "gone.md").unlink()
+        assert list(keys("```` md\n```mermaid\nA[(基幹の DB)] -->|数秒| B[Lakebase] --> C[分析]\n```\n````\n本文の長い行は、閉じた囲みのあとから、見分けに使う行として数える。")) == ["本文の長い行は、閉じた囲みのあとから、見分けに使う行として数える。"]  # 入れ子の囲みは、外の長さで閉じる
+        with tempfile.TemporaryDirectory() as t:  # 読めない md（切れたリンク、UTF-8 でないファイル）がプラグインのフォルダにあっても止まらない
+            (Path(t) / "x").mkdir()
+            (Path(t) / "x" / "a.md").write_text("ひとつめの、ほかのファイルにない長い行がここにある。\nふたつめの、ほかのファイルにない長い行がここにある。")
+            (Path(t) / "x" / ".#a.md").symlink_to(Path(t) / "nowhere"), (Path(t) / "x" / "._a.md").write_bytes(b"\x00\x05\x16\x07\xff\xfe" * 20)
+            assert sorted(set(plugin_lines(Path(t)).values())) == ["x/a.md"]
+        assert printed((PLUGIN / "desk-init" / "templates" / "AGENTS.md").read_text(encoding="utf-8")) == []  # ワークスペースの AGENTS.md（雛形の写し）を読んでも、雛形を読んだことにしない
+        assert printed("\n".join(f.read_text(encoding="utf-8") for f in (PLUGIN / "slides-build" / "samples" / "json").glob("*.json"))) == []  # 見本の JSON は、pages.md のコードの囲みの例と同じ行でも数えない
         assert overlays(ws, f"{ws}/rules/slides-build/visual.md") == ""  # rules/ そのものを読んだときは出さない
         assert overlays(ws, "/plug/skills/deck-practices/content.md") == ""  # rules/ に同じファイルがない
         assert overlays(ws, "ls", seen=lambda: 1 / 0) == "" and "16pt" in overlays(ws, "slides-build/visual.md", seen=set)  # 出すものがなければ、会話の記録を読まない
