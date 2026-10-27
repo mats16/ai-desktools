@@ -623,8 +623,9 @@ def items(text):
 
 def auto_ok(ws, a):
     """--auto で当ててよいか。会話の指摘を出典にせず、AGENTS.md・rules/ の .md で、箇条書きの項目を丸ごと（字下げした続きの行も）消すだけで
-    （見出し・前置き・空行・ほかの項目の一部は 1 行も消さない）、消す項目と丸ごと同じ項目が、同じ場面で出るところにもあるもの。同じ場面は、そのファイルの paths が当たる
-    プラグインの md と AGENTS.md（AGENTS.md から消すときは、どこも同じ場面でない）。文の中の引用（「次は使わない：『…』」）、コードの囲みの中の例、出る場面の違うファイルは数えない。
+    （見出し・前置き・空行・ほかの項目の一部は 1 行も消さない）、消す項目と丸ごと同じ項目が、そのファイルが出るどの場面にも残るもの。残るのは、AGENTS.md（どの会話にも出る）にあるか、
+    そのファイルの paths が当たるプラグインの md の、どれにもあるとき（paths のどれかが当たるたびに出るので、1 つにあるだけでは、ほかの場面で失われる。AGENTS.md から消すときは残る先がない）。
+    文の中の引用（「次は使わない：『…』」）、コードの囲みの中の例、出る場面の違うファイルは数えない。
     ユーザーが決めた指摘・答えた判断待ち・「手で直した」版・まだ版にしていない直しのあるファイルは止める（ID がないので、どの項目かを見分けられない）。
     ユーザーが戻した・却下した提案が消そうとした項目も止める。人を通さずに新しい文が決まりに入らないようにする（desk-dreaming-001）。
     --new には前か後ろの行を残す（undo の目印。空の --new は戻せない）。よければ (ファイル, 前の文, 当てたあとの文) を返す。"""
@@ -660,9 +661,11 @@ def auto_ok(ws, a):
     gone_items = [plain("\n".join(src[k] for k in sorted(spans[h]))) for h in heads]
     globs = [] if name == "AGENTS.md" else desk.listed(desk.front(text), "paths")
     same = [f for f in sorted(PLUGIN.rglob("*.md")) if any(fnmatch.fnmatchcase(f.relative_to(PLUGIN).as_posix(), g) for g in globs)]
-    elsewhere = set().union(set(), *(items(f.read_text(encoding="utf-8", errors="ignore")) for f in same), items(read(ws, "AGENTS.md")) if name != "AGENTS.md" else set())
-    lone = [x for x in gone_items if not x or x not in elsewhere]
-    lone and no("消す項目と丸ごと同じ項目が、同じ場面で出るところ（paths が当たるプラグインの md か AGENTS.md）にない。文の中の引用・例・出る場面の違うファイルは数えない")
+    scenes = [items(f.read_text(encoding="utf-8", errors="ignore")) for f in same]  # このファイルが出る場面ごとの、プラグインの項目
+    agents = items(read(ws, "AGENTS.md")) if name != "AGENTS.md" else set()
+    lone = [x for x in gone_items if not x or not (x in agents or scenes and all(x in sc for sc in scenes))]
+    lone and no("消す項目と丸ごと同じ項目が、このファイルが出るどの場面にも残るとは言えない（AGENTS.md にあるか、paths が当たるプラグインの md のどれにもあるときだけ通す）。"
+                "文の中の引用・例・出る場面の違うファイルは数えない")
     cs, ps, qs, _ = state(ws)
     any(c.get("decided") and c["to"] == name for c in cs.values()) and no(f"ユーザーが決めた指摘が {name} につながっている")
     any(q["status"] == "回答済み" and q["rule"] == name for q in qs.values()) and no(f"答えた判断待ちが {name} のこと")
@@ -1531,10 +1534,15 @@ def selftest_auto(ws, quiet):
         main(["apply", list(state(ws)[1])[-1]])
         main(["propose", "--file", "rules/q3.md", "--new", "---\ndescription: 試し\npaths: [deck-review/*]\n---\n- Neon colors on dark backgrounds, gradients\n- 残す。", "--why", "試しを作る"])
         main(["apply", list(state(ws)[1])[-1]])
+        for f, ps_ in (("rules/q4.md", "[slides-build/visual.md, docs-build/visual.md]"), ("rules/q5.md", "[slides-build/*]")):  # 場面が 2 つ以上
+            main(["propose", "--file", f, "--new", f"---\ndescription: 試し\npaths: {ps_}\n---\n- Neon colors on dark backgrounds, gradients\n- 残す。", "--why", "試しを作る"])
+            main(["apply", list(state(ws)[1])[-1]])
     q2 = ["propose", "--auto", "--file", "rules/q2.md", "--why", "片付け", "--kind", "重なり"]
-    assert "丸ごと同じ項目" in fails(q2 + ["--old", "## 表\n- 表は左から読む。\n", "--new", "## 表\n"])  # 否定の文で引用しただけ
-    assert "丸ごと同じ項目" in fails(q2 + ["--old", "- 図は右から読む。\n- Neon", "--new", "- Neon"])  # コードの囲みの中の例
-    assert "丸ごと同じ項目" in fails(["propose", "--auto", "--file", "rules/q3.md", "--why", "片付け", "--kind", "重なり", "--old", "paths: [deck-review/*]\n---\n- Neon colors on dark backgrounds, gradients\n", "--new", "paths: [deck-review/*]\n---\n"])  # プラグインの別の場面のファイル
+    assert "どの場面にも残る" in fails(q2 + ["--old", "## 表\n- 表は左から読む。\n", "--new", "## 表\n"])  # 否定の文で引用しただけ
+    assert "どの場面にも残る" in fails(q2 + ["--old", "- 図は右から読む。\n- Neon", "--new", "- Neon"])  # コードの囲みの中の例
+    assert "どの場面にも残る" in fails(["propose", "--auto", "--file", "rules/q3.md", "--why", "片付け", "--kind", "重なり", "--old", "paths: [deck-review/*]\n---\n- Neon colors on dark backgrounds, gradients\n", "--new", "paths: [deck-review/*]\n---\n"])  # プラグインの別の場面のファイル
+    for f, ps_ in (("rules/q4.md", "[slides-build/visual.md, docs-build/visual.md]"), ("rules/q5.md", "[slides-build/*]")):  # 一部の場面にしかない（ドキュメントの visual.md、slides-build のほかのファイルにない）
+        assert "どの場面にも残るとは言えない" in fails(["propose", "--auto", "--file", f, "--why", "片付け", "--kind", "重なり", "--old", f"paths: {ps_}\n---\n- Neon colors on dark backgrounds, gradients\n", "--new", f"paths: {ps_}\n---\n"])
     with quiet():  # paths が当たるプラグインの md に、丸ごと同じ項目がある
         main(q2 + ["--old", "gradients\n- 会社名や製品名を替えてもそのまま使える文\n", "--new", "gradients\n"])
     assert "- 会社名や製品名を替えてもそのまま使える文" not in (ws / "rules" / "q2.md").read_text(encoding="utf-8")
