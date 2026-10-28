@@ -5,5 +5,7 @@
     {"type": "table", "rows": [["段", "置くもの", "コマンド"], ["Bronze", "届いたまま", "load"], ["Silver", "型と重複を整えたもの", "clean"], ["Gold", "集計", "aggregate"]],
      "widths": [1, 2, 1.2], "align": ["left", "left", "center"], "mono_cols": [3], "header": true, "first_col": true, "zebra": true, "size": 11,
      "row_h": [0.42, 0.4, 0.4, 0.4], "fills": [[3, "all", "RED_SOFT"]]},
-    {"type": "code", "text": "cd build\npython3 slides.py lint --all\npython3 slides.py build <URL>", "hot": [2], "size": 11}]}],
+    {"type": "stack", "items": [
+      {"type": "code", "text": "cd build\npython3 slides.py lint --all\npython3 slides.py build <URL>", "hot": [2], "size": 11},
+      {"type": "code", "title": "ターミナル", "text": "$ databricks auth login\nProfile DEFAULT was saved\n$ databricks clusters list\nID          NAME   STATE\n0123-abcd   etl    RUNNING"}]}]}],
  "authorNotes": ["fills の [3, \"all\"] は、見出しの行から数えて 3 行目（Silver）の全部。"]}
