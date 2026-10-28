@@ -180,9 +180,10 @@ def check_closed(browser, vid):
 
 
 def build(browser, vid, slides_id, scenes, music):
-    """Vids に、Slides のページ（scenes の pageId）をシーンにして、台本（script）・画像・BGM（music が真なら）を保存する。音声と avatar は作らない。
+    """Vids に、Slides のページ（scenes の pageId）をシーンにして、台本（script）・画像・BGM（music が真なら。最初のシーンの終わりで止める）を保存する。音声と avatar は作らない。
+    オブジェクトは、シーンの声の読み始め（入りにトランジションのあるシーンは、その長さのあと）から出す。
     前からあるシーン（空の Vids の空シーン。create --vids なら前の中身のすべて）は、音声・BGM・avatar と一緒に、組んだあとに消える。1 回だけ回す（途中でつながりがなくなれば Lost。作りかけの Vids の始末は呼んだ側）。
-    戻り: {"scenes", "musicMs", "waited", …}"""
+    戻り: {"scenes", "musicMs"（BGM が鳴り終わる位置。音声を作ると最初のシーンの長さに合わせ直す。なければ 0）, "waited", …}"""
     r, = in_tab(browser, ("createFromSlides", {"vidsId": vid, "slidesId": slides_id, "music": music,
                                               "scenes": [{"pageId": s["pageId"], "script": s["script"]} for s in scenes]}))
     return r
@@ -190,7 +191,7 @@ def build(browser, vid, slides_id, scenes, music):
 
 def fill_and_inspect(browser, vid, scripts, voice, label, avatar=None, places=None):
     """台本・音声・avatar が scripts と声に合わないシーンだけ作り直し、そのあと読み直す。何度回しても、まだのシーンだけ作るので、
-    つながりがなくなれば新しいタブで続きから回し直す（3 回まで）。voice は TTS の声の名前、label は音声に付ける声の表示名、
+    つながりがなくなれば新しいタブで続きから回し直す（3 回まで）。シーンの長さは読む要素とトランジションに合わせ、最初のシーンを作ったら BGM の終わりも合わせる。voice は TTS の声の名前、label は音声に付ける声の表示名、
     avatar は {"id", "voice"}（None なら音声だけ）、places はシーンごとの avatar の変換（None のシーンは音声。places が None なら今の場所のまま）。
     戻り: (更新の結果 {"updated", "moved", "sceneCount", "waited", "quota"}, 読み直した結果。inspect と同じ形)"""
     r, c = again(browser, ("updateScenes", {"vidsId": vid, "scripts": scripts, "voice": voice, "label": label, "avatar": avatar, "places": places}),
@@ -200,7 +201,7 @@ def fill_and_inspect(browser, vid, scripts, voice, label, avatar=None, places=No
 
 def inspect(browser, vid, scripts):
     """Vids を読み直し、シーンごとに台本・音声（avatar）が scripts と合うかと、読むのが誰かを返す。
-    戻り: {"scenes", "textMatch", "voiceMatch", "who", "both", "ms"}（who は音声の声の表示名か avatar の ID、なければ None）"""
+    戻り: {"scenes", "textMatch", "voiceMatch", "who", "both", "ms", "musicMs"}（who は音声の声の表示名か avatar の ID、なければ None）"""
     return in_tab(browser, ("inspect", {"vidsId": vid, "scripts": scripts}))[0]
 
 
@@ -267,6 +268,15 @@ const ed = t.state([...am, [19, ["a_av_actor50_s"], 1], [5, ["a_av_actor50_s"], 
 const [re] = t.avatarElement("a_av_actor50_t", "a", ed.tf, "PH2", 5000, "m2", ed);
 const rp = new Map(); for (let k = 0; k < re[4].length; k += 2) rp.set(re[4][k], re[4][k + 1]);
 if (re[2] !== 1 || rp.get(84) !== -0.3 || rp.get(300) !== 9 || rp.get(58) !== "PH2" || rp.get(176) !== 5000 || rp.get(194) !== "m2" || rp.get(202) !== 2) throw new Error("avatar look");
+// トランジション（[43] の 0 が種類、1 が長さ）: 入りにあるシーンは長さだけ遅らせて読み、前のシーンは半分延ばす。最初のシーンの入りは見ない
+const tr = t.state([[12, "a", null, 0], [12, "b", null, 0], [12, "c", null, 0], [43, [], [1, 500, 0, 10], "a", []], [43, [], [3, 1], "b", []], [43, [], [1, 500, 0, 10], "c", []],
+  [58, "a_bgm", [177, 2, 184, "a", 176, 60000, 122, 1, 123, 30000]], [60, "a_bgm", [], [123, 9000]]]);
+if (JSON.stringify([0, 1, 2].map((i) => t.pad(tr, i))) !== '[{"lead":0,"tail":0},{"lead":0,"tail":250},{"lead":500,"tail":0}]') throw new Error("pad");
+if (tr.music?.end !== 9000 || JSON.stringify(t.trimMusic(tr.music, 70000)) !== '[60,"a_bgm",[120,121,191,193],[173,0,122,1,123,60000],[]]') throw new Error("music");
+// 下書きのオブジェクトの出る時刻（[35] の 4）は、声の読み始めにそろえる
+const dg = [[[12, "a", null, 0], [35, "x", 0, [3, 500, 4, 3012], "a"]], [[12, "b", null, 0], [43, [], [1, 500, 0, 10], "b", []], [35, "y", 0, [3, 500, 4, 13291, 0, 20], "b"]]];
+t.startWithVoice(dg);
+if (dg[0][1][3].join() !== "3,500,4,0" || dg[1][2][3].join() !== "3,500,4,500,0,20") throw new Error("startWithVoice");
 const gone = t.state([...am, [36, 0, "a"], [0, ["a_av_actor50_s"]]]);
 if ("a" in gone.avatar || gone.timing.a.join() !== "x") throw new Error("state avatar removed");
 // updateScenes: 新しい音声は SAVE_EVERY シーンずつ保存し、途中で止まっても、できたシーンは保存してから止まる。回し直すと残りだけ作る
@@ -276,6 +286,7 @@ async function resumes() {
   const n = t.SAVE_EVERY + 2, model = [], saves = [], drops = [], opened = new Set(), left = new Set();
   let tts = 0, failAt = n, calls = 0, refused = 0, refuse = () => false, hang = false, noSid = false;
   for (let i = 0; i < n; i++) model.push([12, `s${i}`, null, 0], [15, `s${i}:notes_text`, null, 0, `台本${i}`]);
+  model.push([43, [], [0, 10, 1, 500], "s1", []], [58, "s0_bgm", [177, 2, 184, "s0", 176, 60000, 122, 1, 123, 30000]]); // 2 つ目のシーンの入りにトランジション、最初のシーンに BGM
   globalThis.document = { cookie: "SAPISID=x" };
   const ok = (o) => ({ ok: true, text: async () => (typeof o === "string" ? o : JSON.stringify(o)) });
   globalThis.fetch = async (url, opt = {}) => {
@@ -299,6 +310,10 @@ async function resumes() {
   const run = () => window.VidsClient.updateScenes({ vidsId: "V", scripts: Array.from({ length: n }, (_, i) => `台本${i}`) });
   const err = await run().then(() => null, (e) => e);
   if (!err || saves.join() !== `${t.SAVE_EVERY},${n - 1 - t.SAVE_EVERY}`) throw new Error(`updateScenes の途中の保存: ${saves} ${err}`);
+  // 音声は 100 ミリ秒（sb 4844）。前のシーンはトランジションの半分だけ延び、BGM はその終わりで止まる。入りにトランジションのあるシーンは 500 ミリ秒目から読む
+  const at = (k) => model.find((c) => c[0] === 58 && c[1].startsWith(`s${k}_vo`)), len = (k) => model.findLast((c) => c[0] === 18 && c[1][0] === `s${k}`)?.[3][1];
+  if (len(0) !== 351 || len(1) !== 601 || at(1)[2][at(1)[2].indexOf(173) + 1] !== 500 || at(0)[2][at(0)[2].indexOf(173) + 1] !== 0) throw new Error(`シーンの長さ: ${len(0)} ${len(1)}`);
+  if (t.state(model).music.end !== 351) throw new Error(`BGM の終わり: ${t.state(model).music.end}`);
   failAt = 0; saves.length = 0;
   const r = await run();
   if (saves.join() !== "1" || r.updated.join() !== String(n)) throw new Error(`updateScenes の続き: ${saves} ${JSON.stringify(r.updated)}`);
