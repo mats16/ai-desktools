@@ -333,15 +333,15 @@ waited.told = False
 
 
 def music_of(ms):
-    """BGM の長さ（createFromSlides の musicMs）を出す形に。"""
+    """BGM の長さ（inspect の musicMs。最初のシーンの終わりで止まる）を出す形に。"""
     return f"{ms / 1000:.0f} 秒" if ms else "なし"
 
 
-def summary(c, music_ms, label, avatar=None):
+def summary(c, label, avatar=None):
     """inspect の結果から。回し直したときも、Vids に今あるものを数える。"""
     total = sum(d or 0 for d in c["ms"]) / 1000
     print(f"シーン {c['scenes']}・音声 {sum(1 for w in c['who'] if w)}（{label}）" + (f"・うち avatar {sum(1 for w in c['who'] if w and w.startswith('actor'))}（{avatar}）" if avatar else "")
-          + f"・BGM {music_of(music_ms)}・音声の合計 {total:.1f} 秒")
+          + f"・BGM {music_of(c.get('musicMs'))}・音声の合計 {total:.1f} 秒")
 
 
 def mode_of(args, voice_default, avatar_default=None):
@@ -443,7 +443,7 @@ def create(args):
     except (Exception, SystemExit) as e:  # 外せなくても音声は作る。作り終えたあとにもう一度外す
         print(f"前の Vids の控えを外せなかった（{e!r}）。音声を作ったあとにもう一度外す", file=sys.stderr, flush=True)
     waited(b)
-    print(f"シーン {b['scenes']}・台本・画像・BGM（{music_of(b['musicMs'])}）を保存した。続けて音声" + ("と avatar" if avatar else "") + "を作る", flush=True)
+    print(f"シーン {b['scenes']}・台本・画像・BGM（{'最初のシーンの間' if b['musicMs'] else 'なし'}）を保存した。続けて音声" + ("と avatar" if avatar else "") + "を作る", flush=True)
     # 2. 音声と avatar（時間の大半）。作ったシーンから保存していくので、止まっても Vids は捨てない。続きは update で作る（できたシーンは作り直さない）
     done = False
     try:
@@ -455,7 +455,7 @@ def create(args):
             raise
         report(c, scenes, readers(label, avatar))
         waited(r)
-        summary(c, b["musicMs"], label, avatar)
+        summary(c, label, avatar)
         done = True
     finally:
         # もう一度外す。止まったとき（音声の途中・要修正）も、1 回目が失敗していても、音声を作る間に別の create が作ったものも

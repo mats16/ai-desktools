@@ -158,7 +158,14 @@
   }
 
   const SAVE_EVERY = 8; // 新しい音声を何シーンずつ保存するか（updateScenes）
-  const MUSIC_MS = 30000; // BGM は鳴り始めから 30 秒で終える（曲のままだと動画の最後まで鳴る）。画面で帯の終わりを引いたときと同じ 122・123
+  // BGM は最初のシーンの終わりで止める（曲のままだと動画の最後まで鳴る）。画面で帯の終わりを引いたときと同じ 122・123。
+  // シーンの長さは音声で決まるので、最初のシーンを作るたびに合わせ直す（updateScenes）。外す鍵は画面と同じ（空の並びは 400 で断られる、2026-10-28）。画面で頭を切って遅らせた BGM（120・121・173）も、シーンの頭から鳴らす
+  const trimMusic = (music, sceneMs) => [60, music.id, [120, 121, 191, 193], [173, 0, 122, 1, 123, Math.min(sceneMs, music.ms)], []];
+
+  // シーンの前後の余白。トランジションは切れ目をまたいで、長さの半分ずつ前と後ろのシーンに掛かる（画面で確かめた、2026-10-28）。
+  // 音声がトランジションに掛からないよう、入りにトランジションのあるシーンは、その長さだけ遅らせて読み始め（lead。avatar は使わない。makeAvatar）、
+  // 次のシーンの入りにトランジションがあれば、その半分だけシーンを延ばす（tail）。画面で直したときと同じ値（2026-10-28 の版の記録）
+  const pad = (st, i) => ({ lead: i ? st.transition[st.scenes[i]] ?? 0 : 0, tail: Math.ceil((st.transition[st.scenes[i + 1]] ?? 0) / 2) });
 
   const placeholder = (doc) => `PLACEHOLDER_${doc.sid}_${doc.ph++}`;
 
@@ -215,12 +222,17 @@
   // avatar を置く要素。画面で Mask video の楕円を選び、縦横を同じに切り抜いたときと同じ形（種類 8 は楕円。基準の大きさは 120000 EMU 四方で、
   // 変換の倍率 tf[0]・tf[3] を掛けた大きさになる。79・84 は横の拡大と左へのずらし（16:9 の動画の真ん中を正方形に切る）。87・88 は動画の縦・横）
   // look: 作り直す avatar の前の要素の {type, props}。画面で直した形・切り抜き・枠・影を引き継ぎ、動画・長さ・台本の印（58・176・194）だけを替える
-  const avatarElement = (id, sceneId, tf, media, ms, md5, look = null) => [
+  const avatarElement = (id, sceneId, tf, media, ms, md5, look = null, tail = 0) => [
     [3, id, look?.type ?? 8, tf, look ? flat(new Map([...props(look.props), [58, media], [176, ms], [194, md5]]))
       : [22, 381, 177, 3, 19, [null, 3], 58, media, 188, 1, 200, 1, 15, [null, 4], 16, 1, 183, 16 / 9, 202, 2, 194, md5, 57, 3, 176, ms,
         180, 1, 87, 540, 88, 960, 79, 16 / 9, 80, 1, 84, -7 / 18, 85, 0, 90, 0], sceneId],
-    [35, id, 0, [0, 20, 1, 2, 10, 0, 3, 0, 5, [null, 1, []], 6, 1, 7, ms], sceneId], [18, [sceneId], [], [16, ms]]];
+    [35, id, 0, [0, 20, 1, 2, 10, 0, 3, 0, 5, [null, 1, []], 6, 1, 7, ms], sceneId], [18, [sceneId], [], [16, ms + tail]]];
   const avatarOf = (id) => id.match(/_av_(actor\d+)_/)?.[1]; // avatar の要素の ID に、avatar の ID を入れておく（update が、どの avatar かを見る）
+
+  const startWithVoice = (groups) => {
+    const st = state(groups.flat());
+    groups.forEach((g, k) => { for (const c of g) if (c[0] === 35) { const p = props(c[3]); p.set(4, pad(st, k).lead); c[3] = flat(p); } });
+  };
 
   const DOC_LEVEL = (c) => [1, 45, 13].includes(c[0]) || (c[0] === 18 && c[1]?.[0] === "n") || (c[0] === 12 && c[1] === "flix-master");
   const props = (p) => { const o = new Map(); for (let i = 0; i + 1 < p.length; i += 2) o.set(p[i], p[i + 1]); return o; };
@@ -240,6 +252,10 @@
     if (sceneIds.length !== scenes.length) throw new Error(`下書きのシーンが ${sceneIds.length}、ページが ${scenes.length}（音声を別のシーンに置かないよう止める）`);
     const size = Object.fromEntries(assets.filter((a) => Array.isArray(a[2])).map((a) => [a[0], a[2][2]]));
 
+    // オブジェクトの出る時刻（[35] の 4）: 下書きは、下書きの声で読んだときの位置に合わせて出す（例: 13 秒目）が、声は updateScenes が作り直すので
+    // 位置がずれ、声より短い・遅れて出るオブジェクトになる。すべて声の読み始め（lead）に出す（画面で直したときと同じ）
+    startWithVoice(groups);
+
     // 画像: 元の Slides の blob を、この Vids に写す
     const blobs = new Set();
     for (const g of groups) for (const c of g) if (c[0] === 3) { const v = props(c[4] || []).get(49); if (v) blobs.add(v); }
@@ -257,14 +273,14 @@
       c[4] = flat(p);
     }
 
-    // BGM: 下書きが選んだ曲（Shutterstock）。176 は曲の長さのまま、終わり（123）を MUSIC_MS にする
+    // BGM: 下書きが選んだ曲（Shutterstock）。176 は曲の長さのまま、終わり（123）を最初のシーンの終わりにする（今は下書きの長さ。音声を作ると合わせ直す）
     const audio = [], bgm = assets.find((a) => a[0] === "background-audio");
     let musicMs = 0;
     if (music && bgm) {
       const [src, , [sec, nanos], , title] = bgm[3];
       const got = (await insertMedia(doc, "LMS_AUDIO", { [src]: { si: src, ki: 1 } }))[src];
       const p = placeholder(doc), ms = sec * 1000 + Math.round((nanos ?? 0) / 1e6); blobIdMap[p] = got.ni;
-      musicMs = Math.min(ms, MUSIC_MS);
+      musicMs = Math.min(ms, props(groups[0].find((c) => c[0] === 12)[4] ?? []).get(16) ?? 5000);
       audio.push([58, `${sceneIds[0]}_bgm`, [118, 20, 158, 2, 173, 0, 175, 1800, 176, ms, 177, 2, 122, 1, 123, musicMs,
         181, `${title} (Provided by Shutterstock)`, 184, sceneIds[0], 190, 2, 200, 1, 204, -6, 58, p]]);
     }
@@ -282,17 +298,21 @@
     return { vidsId, scenes: sceneIds.length, musicMs, revision: doc.rev, waited: doc.waited };
   }
 
-  // 文書のモデル（コマンドの並び）から: シーンの ID（並びの順）、シーンの台本の文字、シーンの音声の要素、シーンの avatar の要素、シーンの時間の並び
+  // 文書のモデル（コマンドの並び）から: シーンの ID（並びの順）、シーンの台本の文字、シーンの音声の要素、シーンの avatar の要素、シーンの時間の並び、
+  // BGM（{id, ms: 曲の長さ, end: 鳴り終わる位置}）、シーンの入りのトランジションの長さ（ミリ秒）
   function state(model) {
     const scenes = [], text = {}, voice = {}, media = {}; // media: 要素の ID → 付いているシーン（音声・BGM）
+    const look = {}, sound = {}; // シーン → トランジションの属性、音声の要素の ID → 属性（[60] で替わる）
     const avatar = {}, timing = {}; // avatar: シーン → {id, md5, actor, tf}。timing: シーン → 時間の並びの要素の ID（[35] で入り [36, 位置, シーン] で抜ける）
     for (const c of model) {
       if (c[0] === 12 && c[3] === 0) scenes.push(c[1]);
       else if (c[0] === 13 && scenes.includes(c[4])) scenes.splice(scenes.indexOf(c[4]), 1); // シーンを消す [13, 位置, 0, null, ID]
       else if (c[0] === 15) { const t = text[c[1]] ?? ""; text[c[1]] = t.slice(0, c[3]) + c[4] + t.slice(c[3]); } // 文字を入れる [15, 枠, null, 位置, 文字]
       else if (c[0] === 16) { const t = text[c[1]] ?? ""; text[c[1]] = t.slice(0, c[3]) + t.slice(c[4]); }        // 消す [16, 枠, null, 始め, 終わり]
-      else if (c[0] === 58) { const p = props(c[2]); media[c[1]] = p.get(184); if (p.get(177) === 3) voice[p.get(184)] = { id: c[1], md5: p.get(194), label: p.get(181), ms: p.get(176) }; }
-      else if (c[0] === 59) { delete media[c[1]]; for (const k of Object.keys(voice)) if (voice[k].id === c[1]) delete voice[k]; }
+      else if (c[0] === 58) { const p = props(c[2]); media[c[1]] = p.get(184); sound[c[1]] = p; if (p.get(177) === 3) voice[p.get(184)] = { id: c[1], md5: p.get(194), label: p.get(181), ms: p.get(176) }; }
+      else if (c[0] === 59) { delete media[c[1]]; delete sound[c[1]]; for (const k of Object.keys(voice)) if (voice[k].id === c[1]) delete voice[k]; }
+      else if (c[0] === 60 && sound[c[1]]) { for (const k of c[2] ?? []) sound[c[1]].delete(k); for (const [k, v] of props(c[3] ?? [])) sound[c[1]].set(k, v); } // [60, ID, [外す鍵], [鍵, 値, …]]
+      else if (c[0] === 43) { const m = (look[c[3]] ??= new Map()); for (const k of c[1] ?? []) m.delete(k); for (const [k, v] of props(c[2] ?? [])) m.set(k, v); } // [43, [外す鍵], [鍵, 値, …], シーン]。0 が種類、1 が長さ
       else if (c[0] === 3 && Array.isArray(c[4]) && props(c[4]).get(202) === 2) // [3, ID, 種類, 変換, 属性, シーン]
         avatar[c[5]] = { id: c[1], md5: props(c[4]).get(194), actor: avatarOf(c[1]), tf: c[3], type: c[2], props: c[4] };
       else if (c[0] === 6) { for (const a of Object.values(avatar)) if (a.id === c[1]) a.tf = c[2]; }           // 動かす [6, ID, 変換]
@@ -305,7 +325,10 @@
       else if (c[0] === 36) timing[c[2]]?.splice(c[1], 1);
     }
     const script = (id) => (text[`${id}:notes_text`] ?? "").replace(/\n$/, "");
-    return { scenes, script, voice, media, avatar, timing };
+    const transition = Object.fromEntries(Object.entries(look).map(([id, m]) => [id, m.has(0) ? m.get(1) ?? 0 : 0]));
+    const bgm = Object.entries(sound).find(([, p]) => p.get(177) === 2);
+    const music = bgm && { id: bgm[0], ms: bgm[1].get(176), end: bgm[1].get(122) ? bgm[1].get(123) : bgm[1].get(176) };
+    return { scenes, script, voice, media, avatar, timing, transition, music };
   }
 
   // シーンの avatar を消すコマンド（画面で選んで Delete を押したときと同じ: 時間の並びから抜き、要素を消す）
@@ -316,8 +339,9 @@
     return [...(at >= 0 ? [[36, at, sceneId]] : []), [0, [a.id]]];
   };
 
-  // 1 シーンの音声を Conversational voice で作り、取り込む。戻り値は、置くコマンドと長さ（ミリ秒）
-  async function voiceover(doc, blobIdMap, sceneId, script, voice, label, id) {
+  // 1 シーンの音声を Conversational voice で作り、取り込む。lead ミリ秒目から読み、シーンは読み終わりから tail ミリ秒あとで終える（pad）。
+  // 戻り値は、置くコマンドと、音声の長さ（ms）とシーンの長さ（len）（ミリ秒）
+  async function voiceover(doc, blobIdMap, sceneId, script, voice, label, id, { lead, tail }) {
     const tts = await genai(doc, "generate", ttsBody(script, voice));
     const ref = findList(tts, (x) => x.length >= 4 && x[1] === "bard_storage" && x[3] === "lookup_temp_data");
     if (!ref) throw new Error(`シーン ${sceneId}: 音声の応答に一時ファイルがない`);
@@ -325,13 +349,16 @@
     const got = (await insertMedia(doc, "CONTRIB_SERVICE_AUDIO", { [key]: { si: { co: "bard_storage", sc: "lookup_temp_data", uk: ref[0] }, ki: 0 } }))[key];
     const ms = Math.round((Number(got.sb) - 44) / 48); // 24 kHz・16 bit・モノラルの WAV（2026-10-21 の実測で長さと一致）
     const p = placeholder(doc); blobIdMap[p] = got.ni;
-    return { ms, commands: [[58, id, [118, 100, 158, 2, 173, 0, 176, ms, 177, 3, 181, `${script.replace(/\[[^\]]*\]/g, "").trim().slice(0, 20)} - ${label}`,
-      184, sceneId, 194, md5b64(script), 200, 1, 202, 1, 58, p]], [18, [sceneId], [], [16, ms + 1]]] };
+    const len = lead + ms + tail + 1;
+    return { ms, len, commands: [[58, id, [118, 100, 158, 2, 173, lead, 176, ms, 177, 3, 181, `${script.replace(/\[[^\]]*\]/g, "").trim().slice(0, 20)} - ${label}`,
+      184, sceneId, 194, md5b64(script), 200, 1, 202, 1, 58, p]], [18, [sceneId], [], [16, len]]] };
   }
 
   // 1 シーンの AI avatar を作り、取り込む。avatar: {id: "actor50", voice: "achird"}（声は avatar ごとに決まっている）。tf: 置く位置と大きさ（avatarElement）。
-  // 戻り値は、置くコマンドと長さ（ミリ秒）と、生成の応答にある avatar の回数（{limit, left}）
-  async function makeAvatar(doc, blobIdMap, sceneId, script, avatar, tf, look = null) {
+  // 戻り値は、置くコマンドと、動画の長さ（ms）とシーンの長さ（len）（ミリ秒）と、生成の応答にある avatar の回数（{limit, left}）。
+  // shortcut: avatar は lead を使わず 0 ミリ秒目から出す（時間の並びの 7 が終わりか長さかを確かめていない）。入りにトランジションのあるシーンでは、
+  // avatar がトランジションに掛かり、オブジェクト（startWithVoice で lead に出す）より先に話し始める。気になるなら画面で直す。確かめたら lead を足す
+  async function makeAvatar(doc, blobIdMap, sceneId, script, avatar, tf, look = null, tail = 0) {
     const tts = await genai(doc, "generate", ttsBody(script, avatar.voice));
     const audio = findList(tts, (x) => x.length >= 4 && x[1] === "bard_storage" && x[3] === "lookup_temp_data");
     if (!audio) throw new Error(`シーン ${sceneId}: 音声の応答に一時ファイルがない`);
@@ -353,8 +380,8 @@
     const key = `bard_storagelookup_temp_data${video[0]}`;
     const got = (await insertMedia(doc, "CONTRIB_SERVICE_VIDEO", { [key]: { si: { co: "bard_storage", sc: "lookup_temp_data", uk: video[0] }, ki: 0 } }))[key];
     const p = placeholder(doc); blobIdMap[p] = got.ni;
-    return { ms, quota: q && { limit: Number(q[0]), left: Number(q[2]) },
-      commands: avatarElement(`${sceneId}_av_${avatar.id}_${doc.sid}`, sceneId, tf, p, ms, md5b64(script), look) };
+    return { ms, len: ms + tail, quota: q && { limit: Number(q[0]), left: Number(q[2]) },
+      commands: avatarElement(`${sceneId}_av_${avatar.id}_${doc.sid}`, sceneId, tf, p, ms, md5b64(script), look, tail) };
   }
 
   // avatar の回数。生成の応答に、その月の上限と残り（例: 50 回のうち 46）がある。残りのいちばん少ないものを控える
@@ -387,7 +414,7 @@
   // avatar: {id, voice} なら、台本のあるシーンを AI avatar にする（avatar と台本が合っていれば作り直さない）。置く場所は places[i]（[倍率, 0, 0, 倍率, x, y]、
   // null はそのシーンだけ音声）。places がなければ、今の avatar の場所のまま（今が音声だけのシーンは音声のまま）。シーンの数が違えば何もしない
   async function updateScenes(doc, { scripts, voice = "Achird", label = "Elio", avatar = null, places = null }) {
-    const st = state(doc.model), { scenes, script, voice: vo, avatar: av } = st;
+    const st = state(doc.model), { scenes, script, voice: vo, avatar: av, music } = st;
     if (scenes.length !== scripts.length) return { sceneCount: scenes.length, updated: [] };
     const plan = scenes.map((id, i) => {
       const s = scripts[i], a = av[id], v = vo[id], tf = places ? places[i] : a?.tf;
@@ -433,9 +460,11 @@
     }));
     const made = await pool(jobs, avatar ? 3 : 1, async (j) => {
       const blobIdMap = {};
-      const r = !j.s ? null : j.want ? await makeAvatar(doc, blobIdMap, j.id, j.s, avatar, j.tf, j.look) : await voiceover(doc, blobIdMap, j.id, j.s, voice, label, `${j.id}_vo_${doc.sid}`);
+      const r = !j.s ? null : j.want ? await makeAvatar(doc, blobIdMap, j.id, j.s, avatar, j.tf, j.look, pad(st, j.i).tail) : await voiceover(doc, blobIdMap, j.id, j.s, voice, label, `${j.id}_vo_${doc.sid}`, pad(st, j.i));
       lowest(quota, r?.quota);
-      ready.push({ blobIdMap, cmds: [...j.drop, ...(r?.commands ?? (j.drop.length ? [[18, [j.id], [], [16, 5000]]] : []))] }); // 音声を外したシーンは、空の Vids の空シーンと同じ 5 秒にする（古い音声の長さのまま無音にしない）
+      const cmds = [...j.drop, ...(r?.commands ?? (j.drop.length ? [[18, [j.id], [], [16, 5000]]] : []))]; // 音声を外したシーンは、空の Vids の空シーンと同じ 5 秒にする（古い音声の長さのまま無音にしない）
+      if (j.i === 0 && music && cmds.length) cmds.push(trimMusic(music, r ? r.len : 5000));
+      ready.push({ blobIdMap, cmds });
       if (j.want || ready.length >= SAVE_EVERY) await flush();
       return r ?? {};
     }, (r) => checkQuota(r, jobs.slice(1).filter((j) => j.want).length, quota));
@@ -445,17 +474,17 @@
   }
 
   // 読み直して確かめる: シーンの数、シーンごとに台本の文字が scripts と合うか、読む要素（avatar か音声）の台本の MD5（194）が合うか（どちらもなければ null）、
-  // 読むのが誰か（avatar の ID か、音声の名札の声。どちらもなければ null）、avatar と音声の両方があるシーン、読む要素の長さ（ミリ秒）
+  // 読むのが誰か（avatar の ID か、音声の名札の声。どちらもなければ null）、avatar と音声の両方があるシーン、読む要素の長さ（ミリ秒）、BGM が鳴り終わる位置（ミリ秒。なければ 0）
   async function inspect(doc, { scripts }) {
-    const { scenes, script, voice, avatar } = state(doc.model);
+    const { scenes, script, voice, avatar, music } = state(doc.model);
     const reader = (id) => avatar[id] ?? voice[id];
     return { scenes: scenes.length, revision: doc.rev, textMatch: scenes.map((id, i) => script(id) === (scripts[i] ?? "")),
       voiceMatch: scenes.map((id, i) => (reader(id) ? reader(id).md5 === md5b64(scripts[i] ?? "") : null)),
       who: scenes.map((id) => avatar[id]?.actor ?? voice[id]?.label?.split(" - ").at(-1) ?? null),
       both: scenes.flatMap((id, i) => (avatar[id] && voice[id] ? [i + 1] : [])),
-      ms: scenes.map((id) => (avatar[id] ? props(avatar[id].props).get(176) : voice[id]?.ms) ?? null) };
+      ms: scenes.map((id) => (avatar[id] ? props(avatar[id].props).get(176) : voice[id]?.ms) ?? null), musicMs: music?.end ?? 0 };
   }
 
-  window.VidsClient = { createFromSlides: session(createFromSlides), updateScenes: session(updateScenes), inspect: session(inspect), _test: { SAVE_EVERY, REST, LEAVE, RESENDS, OWN_SID, restSeconds, md5b64, draftBody, ttsBody, avatarBody, avatarElement, state, unplace, pool } };
+  window.VidsClient = { createFromSlides: session(createFromSlides), updateScenes: session(updateScenes), inspect: session(inspect), _test: { SAVE_EVERY, REST, LEAVE, RESENDS, OWN_SID, restSeconds, md5b64, draftBody, ttsBody, avatarBody, avatarElement, state, unplace, pool, pad, trimMusic, startWithVoice } };
   return "VidsClient loaded";
 })();
