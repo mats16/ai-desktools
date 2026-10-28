@@ -50,6 +50,8 @@ EMU = 914400
 INSET = 0.1  # 文字の枠の内側の余白（API で変えられない）。枠をこの分だけ外に出し、文字の端を箱の端にそろえる
 PAD = 0.08   # 箱と、その上に重ねる文字の枠の間（INSET と合わせて、枠と文字の間が 1 字分ほどになる）
 CORNER_RADIUS = 0.1  # in。元の AI Deck Factory の pptx と同じ、辺の長さによらない丸み
+TERM_BAR, TERM_GAP = 0.30, 6  # ターミナルの窓（d.code の title）の帯の高さ（in）、コマンドの行の前の空き（pt）
+TERM_LIGHTS = ("FF5F57", "FEBC2E", "28C840")  # macOS の窓の信号の色。テーマに入れない飾りだが、ターミナルの窓とひと目でわかる（2026-10-28）
 X, W = 0.6, 12.13  # 本文の左端と幅（左右の余白 0.6 in）
 Y_KICK, Y_TITLE, Y_LEAD = 0.40, 0.62, 1.20
 Y_BODY, Y_BODY_NOLEAD = 1.78, 1.62  # 本文の上端（リードがあるとき、ないとき）
@@ -706,12 +708,35 @@ class Deck:
         左寄せ（align="START"）なら、箱の端と文字の間を 1 字分空ける（text の pad）。"""
         return self.text(sid, x, y, w, h, v, size=size, color=color, bold=bold, align=align, valign="MIDDLE", fill=fill, radius=radius, pad=pad, mono=mono)
 
-    def code(self, sid, x, y, w, h, lines, hot=(), size=11):
+    def code(self, sid, x, y, w, h, lines, hot=(), size=11, title=None):
         """濃紺のコードの箱。lines は 1 行ずつの文字列で、英数字は等幅（MONO）。hot の行（0 始まりの番号）は濃紺の上の赤の太字。
-        [slides-component-008] 3 つ目の資料で要ったので pages.py から移した（pages.md）。"""
-        self.anchor = self.box(sid, x, y, w, h, NAVY)
-        parts = [(ln + ("\n" if i < len(lines) - 1 else ""), {"color": RED_ON_NAVY, "bold": True} if i in hot else {}) for i, ln in enumerate(lines)]
-        return self.text(sid, x + 0.22, y + 0.14, w - 0.4, h - 0.24, parts, size=size, color=WHITE, spacing=110, edge=True, mono=True)
+        [slides-component-008] 3 つ目の資料で要ったので pages.py から移した（pages.md）。
+        title を渡すと、ターミナルの窓にする: 上に信号の 3 つの丸と title の帯を置き、`$ ` で始まる行（打つコマンド）を白の太字にして前を
+        TERM_GAP だけ空け、ほかの行（出力）を SUB_ON_NAVY にする（2026-10-28）。"""
+        top = 0 if title is None else TERM_BAR
+        if title is None:
+            self.anchor = self.box(sid, x, y, w, h, NAVY)
+        else:
+            self.anchor = self.box(sid, x, y, w, h, PANEL)
+            self.box(sid, x, y + top, w, h - top, NAVY)
+            self._shape(sid, x, y + top, w, CORNER_RADIUS, NAVY)  # 地の上の角を四角にして帯につなぐ
+            # 帯の文字は塗りのある図形の中の小さな文字にする（9pt。lint の FIG_MIN_PT が通す。slides-visual-037）。塗りは下の窓と同じ色で見えない。丸はその上に置く
+            self.text(sid, x, y, w, top, title, size=9, color=HEAD, bold=True, align="CENTER", valign="MIDDLE", fill=PANEL)
+            m = (top - 0.11) / 2  # 丸と窓の上の辺の間。左の辺との間も同じにする
+            for i, c in enumerate(TERM_LIGHTS):
+                self._shape(sid, x + m + i * 0.17, y + m, 0.11, 0.11, c, None, "ELLIPSE")
+        cmd = [title is not None and ln.startswith("$ ") for ln in lines]
+        parts = [(ln + ("\n" if i < len(lines) - 1 else ""), {"color": RED_ON_NAVY, "bold": True} if i in hot else ({"color": WHITE, "bold": True} if cmd[i] else {}))
+                 for i, ln in enumerate(lines)]
+        e = self.text(sid, x + 0.22, y + top + 0.14, w - 0.4, h - top - 0.24, parts, size=size, color=WHITE if title is None else SUB_ON_NAVY,
+                      spacing=110, edge=True, mono=True)
+        at = 0
+        for i, ln in enumerate(lines):
+            if i and cmd[i]:
+                self.reqs.append({"updateParagraphStyle": {"objectId": e, "textRange": {"type": "FIXED_RANGE", "startIndex": at, "endIndex": at + u16(ln)},
+                                                           "style": {"spaceAbove": pt(TERM_GAP)}, "fields": "spaceAbove"}})
+            at += u16(ln) + 1
+        return e
 
     def card(self, sid, x, y, w, h=None, head=None, body=None, items=None, fill=CARD, line=RULE, step=None, bullets=False, corner="round"):
         """見出しと本文の箱。箱の上に一回り小さい文字の枠を重ねる（文字の枠の内側の余白は変えられないので、枠と文字の間をここで空ける）。
@@ -1000,7 +1025,7 @@ SPEC_EL = {  # type → (要るキー, 書けるキー)
     "card": ({}, {"head": "s", "text": "md", "items": "items", "fill": "c", "line": "c", "step": "p",
                   "icon": "s", "num": "ns", "image": "s", "shape": NUM_SHAPES, "align": ("left", "center"), "valign": ("top", "middle"), "corner": CORNERS}),  # icon・num・image は印（どれか 1 つ）。shape は num の形、corner は箱の角
     "stat": ({"value": "s"}, {"unit": "s", "label": "s", "sub": "s", "size": "p", "color": "c", "fill": "c", "line": "c", "align": ("left", "center")}),  # 数字の強調
-    "code": ({"text": "s"}, {"hot": "ints", "size": "p"}),
+    "code": ({"text": "s"}, {"hot": "ints", "size": "p", "title": "s"}),  # title でターミナルの窓（d.code）
     "table": ({"rows": "rows"}, {"widths": "nums", "header": "hn", "first_col": "b", "zebra": "b", "align": "aligns", "valign": tuple(VALIGN), "borders": TABLE_BORDERS,
                                  "mono_cols": "ints", "size": "p", "row_h": "nh", "fills": "fills"}),  # セルは記法つきの文字か TABLE_CELL
     "image": ({"src": "s"}, {"alt": "s"}),
@@ -1045,7 +1070,7 @@ SPEC_THEME = ({}, {"description": "s", "font": "s", "mono": "s", "copyright": "s
 # raw に書いた Deck の引数のうち、形のキーで書けるもの（type, 引数 → 形のキー）。lint が知らせ、slides.py upgrade が書き換える。形に足したらここにも足す
 # 同じ名前で同じ意味のもの（数え始めや単位の違う mono_cols・hot・fills・widths と、stat の size・color〔数字の大きさと色〕は入れない。2026-10-16 のレビュー）
 _SAME = {"text": "size color bold align valign mono fill line dash weight radius pad spacing", "label": "size color fill bold align mono pad radius",
-         "card": "head fill line step corner", "code": "size", "table": "size header first_col zebra align valign borders row_h", "image": "alt", "icon": "size color",
+         "card": "head fill line step corner", "code": "size title", "table": "size header first_col zebra align valign borders row_h", "image": "alt", "icon": "size color",
          "num": "size fill shape", "box": "fill line dash weight radius", "arrow": "color head dash weight", "stat": "fill line align"}
 SPEC_PROMOTED = {(t, k): k for t, ks in _SAME.items() for k in ks.split()} | {("text", "gap"): "para_gap", ("text", "kind"): "shape", ("box", "kind"): "shape"}
 MD = re.compile(r"\\([\\*`\[\]<{}])|\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\{(\d+(?:\.\d+)?):(.+?)\}|`([^`]+)`|\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)|<br>")  # URL の中の 1 段の () も読む
@@ -1693,7 +1718,9 @@ class SpecPage:
             avail = w - 2 * PAD - 2 * INSET - (11 * 1.3 / 72 if bul else 0)
             return card_top(w, e.get("head")) + (spec_text_h(body, avail, 11, 125) + 2 * INSET if body else 0) + (0.1 if least else CARD_END)  # 本文の枠は下端の 0.1 in 上まで（d.card）
         if kind == "code":
-            return sum(est_lines(ln, w - 0.4, size, True) for ln in e["text"].split("\n")) * size * 1.2 * 1.1 / 72 + 0.28
+            lines = e["text"].split("\n")
+            term = TERM_BAR + sum(ln.startswith("$ ") for ln in lines[1:]) * TERM_GAP / 72 if "title" in e else 0
+            return sum(est_lines(ln, w - 0.4, size, True) for ln in lines) * size * 1.2 * 1.1 / 72 + 0.28 + term
         if kind == "table":
             ws, rows = self.table_cells(e, w, loc)
             return table_h(ws, rows, size, e.get("row_h", 0.36), e.get("header", True), [c - 1 for c in e.get("mono_cols", [])], e.get("first_col", True))
@@ -2008,8 +2035,9 @@ class SpecPage:
             self.index.append((loc, (e.get("head") or "") + spec_plain(body or "")))
             return self.emit("card", loc, e, x=x, y=y, w=w, h=h, head=e.get("head"), body=body, bullets=bul, **colors)
         if kind == "code":
-            self.index.append((loc, e["text"]))
-            return self.emit("code", loc, e, x=x, y=y, w=w, h=h, lines=e["text"].split("\n"), hot=[n - 1 for n in e.get("hot", [])], size=e.get("size", 11))
+            self.index.append((loc, e.get("title", "") + e["text"]))
+            return self.emit("code", loc, e, x=x, y=y, w=w, h=h, lines=e["text"].split("\n"), hot=[n - 1 for n in e.get("hot", [])], size=e.get("size", 11),
+                             **({"title": e["title"]} if "title" in e else {}))
         if kind == "table":
             ws, rows = self.table_cells(e, w, loc)
             self.index.append((loc, " ".join(spec_plain(c["text"]) for r in rows for c in r)))
@@ -2333,7 +2361,7 @@ SPEC_UNIT = {"w": "幅（in）", "h": "高さ（in）", "x": "frame の左上か
              "bars.unit": "数のあとに付ける単位", "stat.unit": "単位（数字の半分の大きさ）", "horizontal": "横の棒（名前が長い・順位）。既定は縦の棒（時の流れ）", "bars.hot": "強調する棒の番号（1 から。赤）",
              "bars.line": "折れ線（縦の棒だけ）。棒と別の目盛りで、棒の上の段に引く（率・累計など単位の違う数）。threshold と一緒に書ける",
              "bars.threshold": "目標・上限などの直線（いつも棒と同じ目盛り。赤の点線）。折れ線の目盛りの線は引けない", "values": "棒ごとの数（items の順）",
-             "code.hot": "赤の太字にする行（1 から）", "table.header": "見出しの行の数（true は 1、false は 0）", "table.valign": "セルの上下の寄せ（既定は middle）",
+             "code.hot": "赤の太字にする行（1 から）", "code.title": "ターミナルの窓の帯の文字。書くと上に信号の丸と帯を置き、「$ 」で始まる行をコマンドとして白の太字に、ほかの行を出力として灰色にする", "table.header": "見出しの行の数（true は 1、false は 0）", "table.valign": "セルの上下の寄せ（既定は middle）",
              "borders": "罫線。rows は横の罫線だけ（既定）、grid は縦横と外枠（結合したセルの区切りを見せるとき）、none はなし",
              "colspan": "右へ結合する列の数（覆う位置にはセルを書かない。HTML と同じ）", "rowspan": "下へ結合する行の数（下の行の、覆う位置にはセルを書かない）",
              "cell.fill": "そのセルの塗り（濃い色なら文字は白）。行か列の全部は表の fills", "cell.color": "文字の色（書かなければ塗りから決まる）",
@@ -3750,6 +3778,12 @@ def selftest():
     g.code(sid, 1, 1, 6, 1, ["ln -s a b", "pi mcp list"], hot=(1,))  # コードの箱: 等幅、hot の行は赤の太字
     assert any(r.get("updateTextStyle", {}).get("style", {}).get("fontFamily") == MONO for r in g.reqs[start:])
     assert any(r.get("updateTextStyle", {}).get("style", {}).get("foregroundColor") == {"opaqueColor": paint(RED_ON_NAVY)} for r in g.reqs[start:])
+    start = len(g.reqs)
+    g.code(sid, 1, 1, 6, 2, ["$ ls", "a b", "$ pwd"], title="ターミナル")  # ターミナルの窓: 信号の丸 3 つ、2 つ目からのコマンドの行の前だけを空ける
+    assert sum(r.get("createShape", {}).get("shapeType") == "ELLIPSE" and r["createShape"]["elementProperties"]["size"]["width"]["magnitude"] == round(0.11 * EMU)
+               for r in g.reqs[start:]) == 3
+    gaps = [r["updateParagraphStyle"]["textRange"] for r in g.reqs[start:] if r.get("updateParagraphStyle", {}).get("fields") == "spaceAbove"]
+    assert gaps == [{"type": "FIXED_RANGE", "startIndex": 9, "endIndex": 14}], gaps  # 最後の行でも文字の長さ（14）を超えない
 
     def make(d):
         d.cover("t", "k")
@@ -4980,6 +5014,12 @@ def selftest_diff():
     with contextlib.redirect_stdout(io.StringIO()):
         lint.lint_slides(dict(q, slides=q["slides"][1:]), r := lint.Report(), only={2})  # 表紙を外したデッキの 2 枚目だけを見ても
     assert r.hits[lint.NO_COVER]  # 「1 枚目が表紙でない」（デッキ全体の規則）は絞らない
+    t = make_deck(lambda d: d.code(d.page("見出し"), X, Y_BODY, 6, 1.2, ["$ ls", "a b"], title="ターミナル"), "t")
+    pt_ = json.loads(json.dumps(p))
+    pt_["masters"][0]["pageProperties"]["colorScheme"]["colors"] = [{"type": "LIGHT2", "color": rgb("EEEDE9")}]  # 帯の PANEL（テーマの色がないと塗りに見えない）
+    with contextlib.redirect_stdout(io.StringIO()):
+        lint.lint_slides(local_json(json.loads(resolved(t, pt_)), t, pt_), r := lint.Report())
+    assert not r.hits[f"{lint.MIN_PT}pt 未満の文字"], r.hits  # ターミナルの帯の 9pt は塗りのある図形の中の文字（slides-visual-037）
 
     # ページのハッシュ: 組むたびに変わる ID では変わらず、中身が変わったページと、そこへリンクするページだけが変わる
     _, h1, links, n1 = pages_of(d, json.loads(resolved(d, p)))
