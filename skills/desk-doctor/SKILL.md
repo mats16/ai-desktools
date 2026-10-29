@@ -18,7 +18,7 @@ Prints one item per line as 「OK」, 「要修正」, or 「要確認」. Exits
 | Item | What to do on `要修正` or `要確認` |
 |---|---|
 | Python 3.11 or later, uv | Install them. Without uv, the image measurements (`box_pad.py`, `doc_layout.py`, `sheet.py`) and lint's phrase-break check (BudouX) do not run |
-| `desk.toml`, `AGENTS.md` (`CLAUDE.md`, `references_index.md`) | Place them with desk-init |
+| `desk.toml`, `AGENTS.md` (`CLAUDE.md`, `references_index.md`, `drive_folders.md`) | Place them with desk-init (a hand-written `references_index.md` from before 2026-10-29 is split by desk-migrate) |
 | 「設定」, 「ワークスペース」 | Always `OK`: the settings file and the workspace in use. The first `desk.toml` found walking up from the current folder, else `~/.desk.toml` (the path in `DESK_CONFIG` if set) and its `workspace` |
 | 「個人の設定」 | `~/.desk.toml` cannot be read, has no `workspace`, or its folder does not exist. Fix the file. `要修正` when this workspace uses it; `要確認` when this workspace has its own `desk.toml` (conversations opened in other folders stop) |
 | 「設定が 2 つ」 | The workspace in `~/.desk.toml`, or a folder above it, has `desk.toml`, so conversations read different settings inside and outside it. Ask the user which to keep: merge the values into `~/.desk.toml` and move that `desk.toml` to `.desk/migrate/` (step 2 of "Move the settings to `~/.desk.toml`" in `../desk-migrate/SKILL.md`; `to-user` refuses because `~/.desk.toml` exists), or delete `~/.desk.toml` |

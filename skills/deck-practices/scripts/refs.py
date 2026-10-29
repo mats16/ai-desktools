@@ -11,8 +11,12 @@ usage:
       台帳と出典の表の形の誤り（あれば exit 1）、照合していない行（危ない順。照合の子に渡す）、確認が「未」の行、
       古い行（確かめてから --days 日を過ぎた出典を使う、提供・数字の行）、確かめたあとに元が更新された出典。
       --fetch は元の更新日を取り直して台帳に書く（渡す前に回す）
+  refs.py index [<ワークスペース>]
+      ワークスペースの台帳（Customers/・Internal/・Research/ の下の references.md）から、全体の索引 references_index.md を作り直す。
+      1 つの出典を 1 行にし、同じ出典を使ったフォルダはまとめ、確かめた日の新しい順に並べる。add と seen のあとにも作り直す。
+      手で書いた前の形の索引は上書きしない（desk-migrate で移す）
   refs.py --selftest"""
-import argparse, contextlib, html, json, re, subprocess, sys, urllib.request
+import argparse, contextlib, html, json, os, re, subprocess, sys, urllib.request
 from datetime import date, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -36,6 +40,11 @@ HEAD = ("# 出典の台帳\n\n社内の URL と会議の ID が入る。納品�
         "足すときは `refs.py add`、読み直したら `refs.py seen`。\n\n")
 ID_RUN = re.compile(r"^\s*([SF]\d+(?:\s*[・,、÷×/*+＋−-]\s*[SF]\d+)*)")  # 出典の列の頭の ID の並び（「S3 の Regions の表」「F4÷F5」）。頭だけを読む（「Amazon S3」を ID にしない）
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+INDEX, INDEX_DIRS = "references_index.md", ("Customers", "Internal", "Research")  # 全体の索引と、台帳を探すフォルダ
+INDEX_NOTE = "`refs.py index` が"  # 作った索引の頭の印。ないものは手で書いた前の形（2026-10-29 まで）で、上書きしない
+LINE_MAX, PLACES_MAX = 200, 3  # 索引の 1 行の字数（URL までは切らない。末尾のフォルダを除く）と、並べるフォルダの数。前の索引は「使った」が伸び続け、広い語の grep が 10 万字を超えた
+URL = re.compile(r"https?://[^\s)|>\]」）、。]+")
+MTG = re.compile(r"(?<!\w)mtg_\w+")  # 会議の ID（Dahlia）
 
 
 def row(line):
@@ -356,6 +365,106 @@ def check(folder, fetch_now=False, days=14, today=None, fetcher=None):
     return len(errs)
 
 
+def keys(t):
+    """文の中の出典の形（URL と会議の ID）。全体の索引が同じ出典をまとめ、desk-migrate が台帳にあるかを見る。"""
+    return [key(u) for u in URL.findall(t)] + MTG.findall(t)
+
+
+def ledgers(ws):
+    return sorted(p for d in INDEX_DIRS if (Path(ws) / d).is_dir() for p in (Path(ws) / d).rglob("references.md"))
+
+
+def short(text):
+    """索引の 1 行の本文を LINE_MAX 字に詰める。最初の URL までは切らない（開き直すのに要る）。"""
+    keep = m.end() + 1 if (m := URL.search(text)) else 0
+    return text if len(text) <= max(LINE_MAX, keep + 40) else text[:max(LINE_MAX, keep + 40)] + "…"
+
+
+def entries(p, folder):
+    """台帳の出典: 新しい形の表の行と、前の形の行（表の外の箇条書きと、ほかの表の行）。[(まとめる形, 日付, 索引の 1 行の本文)]。
+    まとめる形は URL（Google の文書はファイルの ID）か会議の ID。場所がそのどちらでもない行（手元のファイル・口頭・メモ）は、その資料の中でしか
+    使わないので出さない。ただし Research/references.md（資料に結びつかない出典と、前の索引から移した行）は、フォルダごとに別にして出す。"""
+    text = p.read_text(encoding="utf-8", errors="replace")
+    lines, src = text.splitlines(), sources(text)[1]
+    out, skip = [], {r["_line"] for r in src.values()}
+    for r in src.values():
+        t, name = r["場所"], r["名前"]
+        k = key(t) if re.match(r"https?://", t) else m.group(0) if (m := MTG.search(t)) else f"{folder}|{t}"
+        head = f"[{name}]({t})" if name and re.match(r"https?://", t) else f"{name}（{t}）" if name else t
+        out.append((k, r["確かめた日"] if DATE.fullmatch(r["確かめた日"]) else "",
+                    short(f"{head} — {r['種類']}・社外{r['社外']}・{r['確かめた日']}" + (f"。{r['使い道']}" if r["使い道"] else ""))))
+    heads = {i for i in range(len(lines) - 1) if row(lines[i]) and (s := row(lines[i + 1])) and all(re.fullmatch(r":?-+:?", c) for c in s)}
+    for i, line in enumerate(lines):
+        if i in skip or i in heads:
+            continue
+        if (c := row(line)) is not None:
+            if all(re.fullmatch(r":?-*:?", x) for x in c) or re.fullmatch(r"F\d+", c[0]):  # 区切りと、出典の表の事実
+                continue
+            body = " — ".join(x for x in c if x)
+        elif m := re.match(r"\s*[-*] +(.+)", line):
+            body = m.group(1).strip()
+        else:
+            continue
+        ks = keys(body)
+        out.append((ks[0] if ks else f"{folder}|{body}", max(DATE.findall(body), default=""), short(body)))
+    return [e for e in out if folder == "Research" or "|" not in e[0]]
+
+
+def generated(p):
+    """作った索引か（ないか空なら、作ってよい）。頭に印のないものは、手で書いた前の形。"""
+    if not p.is_file():
+        return True
+    with open(p, encoding="utf-8", errors="replace") as f:
+        head = f.read(2000)
+    return not head.strip() or INDEX_NOTE in head
+
+
+def index(ws, today=None):
+    """全体の索引を作り直し、出典の数を返す。手で書いた前の形なら、作らずに None。"""
+    ws, today = Path(ws), today or date.today().isoformat()
+    (ws / ".desk").mkdir(exist_ok=True)
+    with locked(ws / ".desk" / "index.lock"):  # 台帳を読むところから。並んで足した子の行を、あとから書く索引が落とさない
+        p = ws / INDEX
+        if not generated(p):
+            return None
+        groups = {}
+        for f in ledgers(ws):
+            folder = f.parent.relative_to(ws).as_posix()
+            for k, d, body in entries(f, folder):
+                groups.setdefault(k, []).append((d, body, folder))  # 日付のない前の形の行は末尾に（ファイルの時刻は、移した日や直した日になる）
+        rows = []
+        for g in groups.values():
+            g.sort(reverse=True)  # 本文は、いちばん新しく確かめた台帳のもの
+            d, body, _ = g[0]
+            places = list(dict.fromkeys(x[2] for x in g))
+            where = "、".join(places[:PLACES_MAX]) + (f" ほか {len(places) - PLACES_MAX} か所" if len(places) > PLACES_MAX else "")
+            rows.append((d, f"- {body}（{where}）"))
+        rows.sort(key=lambda r: r[0], reverse=True)
+        tmp = p.with_name(p.name + ".tmp")
+        tmp.write_text(
+            f"# 参考資料の索引\n\n{INDEX_NOTE}、各フォルダの `references.md`（`Customers/`・`Internal/`・`Research/` の下）から作り直す。手で直さない（次に作り直すと消える）。\n\n"
+            "- 探すとき: 検索より先に `grep -n <語> references_index.md drive_folders.md`。1 行に 1 つの出典（URL か会議の ID のあるもの。手元のファイルと口頭は、その資料の `references.md` だけにある）。同じ出典を使ったフォルダは行の末尾にまとめ、"
+            "確かめた日の新しい順に並ぶ。詳しくは、そのフォルダの `references.md`。\n"
+            "- 足すとき: 資料の出典は `refs.py add <資料のフォルダ> <URL>`、資料に結びつかない出典（調べもの・会議）は `refs.py add Research <URL>`。足すと、この索引も作り直す。\n"
+            "- Google Drive のフォルダと上げた資料は `drive_folders.md`（手で足す）。\n"
+            "- 社内の URL と個人名が入るので、納品物に入れない。社外が「不可」の資料と【社内】の資料は、顧客向けに使う前に、社外に出せるかを確かめる。\n\n"
+            f"{len(rows)} 件（{today} に作った）\n\n" + "".join(r + "\n" for _, r in rows), encoding="utf-8")
+        os.replace(tmp, p)  # grep が書きかけを読まない
+    return len(rows)
+
+
+def workspace(start="."):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import desk  # ワークスペースの探し方（textlint はこのファイルをパスで読むので、使うときに読む）
+    return f[1] if (f := desk.locate(start)) else None
+
+
+def reindex(folder):
+    """add・seen のあとに、その資料のワークスペースの索引を作り直す（ワークスペースが見つからなければ何もしない）。"""
+    if (ws := workspace(folder)) and index(ws) is None:
+        print(f"（{ws / INDEX} は手で書いた前の形なので、作り直していない。desk-migrate の apply で移す）", file=sys.stderr)
+
+
 def selftest():
     import io, tempfile
     with tempfile.TemporaryDirectory() as tmp:
@@ -425,6 +534,35 @@ def selftest():
         assert page_meta({}, b'<script>{"dateModified": "2026-10-14 16:26:26Z"}</script>')["updated"] == "2026-10-14" and page_meta({}, b"<p>x</p>") == {}
         assert key("https://a.com/x?id=AAAAAAAAAAAAAAAAAAAAAAAA") != key("https://b.org/x?id=AAAAAAAAAAAAAAAAAAAAAAAA")  # ファイルの ID で比べるのは Google の文書だけ
         assert guess_kind("https://acme.slack.com/archives/C1/p1") == "チャット" and guess_kind("https://example.com") is None and guess_kind("https://github.com/o/r") == "公式" and guess_kind(tmp) == "データ"
+    with tempfile.TemporaryDirectory() as tmp:  # 全体の索引: 新しい形と前の形の台帳から、同じ出典を 1 行にまとめる
+        ws = Path(tmp)
+        put = lambda rel, text: ((ws / rel).parent.mkdir(parents=True, exist_ok=True), (ws / rel).write_text(text))
+        put("Customers/A/x/references.md", HEAD + "| " + " | ".join(SRC_COLS) + " |\n|" + "---|" * len(SRC_COLS) + "\n"
+            "| S1 | A の docs | https://docs.example.com/a | 公式 | 2026-10-01 | 2026-10-20 | 可 | p.3 の表 |\n| S2 | 定例 | meetings mtg_01abc | 会議 | 2026-10-21 | 2026-10-21 | 不可 |  |\n"
+            "| S3 | 口頭 | ユーザー（会話） | 口頭 | 2026-10-21 | 2026-10-21 | 不可 |  |\n\n## 出典の表\n\n| ID | 言うこと | 種類 | 出典 | 確認 |\n|---|---|---|---|---|\n| F1 | https://z.example.com の 3 件 | 数字 | S1 | 済 |\n")
+        put("Internal/y/references.md", "# references\n\n形: 元 — 見る箇所 — 確かめた日\n\n- [A docs](https://docs.example.com/a/) — 2026-10-25 — 公開 — p.5 の図\n"
+            f"- [長い](https://long.example.com) — {'あ' * 400}\n\n| 資料 | URL・場所 | メモ |\n|---|---|---|\n| B | https://b.example.com/x | 図 |\n")
+        put("Internal/z/references.md", "| 資料 | メモ |\n|---|---|\n| ユーザー（会話） | 別の資料の口頭 |\n")
+        put("Research/references.md", "## 前の索引から\n\n- 使わなかったもの: C の事例（数字が古い）\n- [定例の続き](Dahlia: mtg_01abc) — 【社内】・2026-10-22\n")
+        assert index(ws, today="2026-10-29") == 5
+        t = (ws / INDEX).read_text()
+        body = t.split("に作った）\n\n")[1].splitlines()
+        assert generated(ws / INDEX) and t.startswith("# 参考資料の索引") and "5 件（2026-10-29 に作った）" in t
+        assert body[0] == "- [A docs](https://docs.example.com/a/) — 2026-10-25 — 公開 — p.5 の図（Internal/y、Customers/A/x）"  # 同じ URL（末尾の / は見ない）は 1 行に、新しく確かめた台帳の本文で
+        assert "- [定例の続き](Dahlia: mtg_01abc) — 【社内】・2026-10-22（Research、Customers/A/x）" in body  # 会議は ID でまとめる
+        assert "- B — https://b.example.com/x — 図（Internal/y）" in body and "ユーザー（会話）" not in t  # 前の形の表の行も読む。口頭（場所が URL でも会議でもない）は資料の台帳だけ
+        assert "- 使わなかったもの: C の事例（数字が古い）（Research）" in body and not any(s in t for s in ("z.example.com", "資料 — URL", "形: 元", "| S1"))  # Research の場所のない行は出す。事実の行・表の見出し・地の文は出さない
+        assert (long := next(b for b in body if "long.example.com" in b)).endswith("…（Internal/y）") and len(long) < LINE_MAX + 20
+        g = "https://docs.google.com/presentation/d/" + "x" * 300
+        assert short("あ" * 300).endswith("…") and short(f"[a]({g}) — " + "い" * 300).startswith(f"[a]({g})")  # 長い URL も切らない
+        assert index(ws, today="2026-10-29") == 5 and (ws / INDEX).read_text() == t  # 何度作り直しても同じ
+        (ws / INDEX).write_text("# 参考資料の索引\n\n- [手で書いた](https://x.example.com) — 観点\n")
+        assert index(ws) is None and "手で書いた" in (ws / INDEX).read_text() and not generated(ws / INDEX)  # 前の形は上書きしない（desk-migrate で移す）
+        assert keys("[a](https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/edit)、Dahlia: mtg_01x") == ["1AbCdEfGhIjKlMnOpQrStUvWxYz", "mtg_01x"]
+    with tempfile.TemporaryDirectory() as tmp:  # desk-init の雛形は、出典のない索引と同じ頭（雛形は手で直すので、ずれたら止める）
+        assert index(tmp) == 0
+        tpl = Path(__file__).resolve().parents[2] / "desk-init" / "templates" / INDEX
+        assert tpl.read_text().split("0 件")[0] == (Path(tmp) / INDEX).read_text().split("0 件")[0] and generated(tpl)
     print("selftest ok")
 
 
@@ -436,11 +574,19 @@ def main(argv):
     s.add_argument("--updated", type=lambda v: v if DATE.fullmatch(v) else sys.exit(f"--updated は YYYY-MM-DD: {v}")); s.add_argument("--out", choices=("可", "不可"))
     s = sub.add_parser("seen"); s.add_argument("folder"); s.add_argument("ids", nargs="+")
     s = sub.add_parser("check"); s.add_argument("folder"); s.add_argument("--fetch", action="store_true"); s.add_argument("--days", type=int, default=14)
+    s = sub.add_parser("index"); s.add_argument("ws", nargs="?")
     a = ap.parse_args(argv)
     if a.cmd == "add":
         add(a.folder, a.target, a.name, a.kind, a.use, a.updated, a.out)
+        reindex(a.folder)
     elif a.cmd == "seen":
         seen(a.folder, a.ids)
+        reindex(a.folder)
+    elif a.cmd == "index":
+        ws = Path(a.ws) if a.ws else workspace() or sys.exit("ワークスペースが見つからない（desk.toml も ~/.desk.toml の workspace もない）。ワークスペースを渡す")
+        if (n := index(ws)) is None:
+            sys.exit(f"{ws / INDEX} は手で書いた前の形なので、上書きしない。desk-migrate の apply で移すと、作り直せる")
+        print(f"作り直した: {ws / INDEX}（{n} 件）")
     else:
         return 1 if check(a.folder, a.fetch, a.days) else 0
 

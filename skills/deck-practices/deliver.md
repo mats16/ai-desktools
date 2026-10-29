@@ -22,7 +22,7 @@ If `[feedback.google_comments] watch_hours` in `desk.toml` is greater than 0, st
 
 ## 11. Clean up
 
-Check that no findings for this material remain with the destination 「未」 (`ledger.py list --deck <material folder> --open`; so that if a correction drops out of a conversation summary, it can be picked up again from the ledger), and that 「あと」 in the three-representative-pages log is filled in ([rules.md](rules.md)). Add the materials you used to `references_index.md`. Do not leave PDFs or images used for checking in the folder ("What to keep" below).
+Check that no findings for this material remain with the destination 「未」 (`ledger.py list --deck <material folder> --open`; so that if a correction drops out of a conversation summary, it can be picked up again from the ledger), and that 「あと」 in the three-representative-pages log is filled in ([rules.md](rules.md)). Check that every material you used is a row of the material's `references.md` (`refs.py add`; the overall index `references_index.md` is rebuilt from it, so do not edit the index by hand). Do not leave PDFs or images used for checking in the folder ("What to keep" below).
 
 ## What to keep
 

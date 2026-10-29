@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """usage: init.py [<ワークスペース>] [--user]   （--selftest で自己確認）
-ワークスペースに、決まり（AGENTS.md・CLAUDE.md・recipes/）、設定（desk.toml）、索引（references_index.md）の雛形と、資料のフォルダを置く。
+ワークスペースに、決まり（AGENTS.md・CLAUDE.md・recipes/）、設定（desk.toml）、索引（references_index.md。refs.py が台帳から作り直す）と Drive の置き場所（drive_folders.md）の雛形と、資料のフォルダを置く。
 --user: 設定はワークスペースに置かず、個人の設定（~/.desk.toml。DESK_CONFIG があればそのパス）に置き、頭の workspace にワークスペースを書く。
 あるファイルは上書きしない（置いたもの・残したものを出す）。標準ライブラリだけ。ワークスペースを省くと、今いるフォルダ。"""
 import os, sys, tempfile, tomllib

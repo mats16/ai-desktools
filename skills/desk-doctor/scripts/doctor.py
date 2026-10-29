@@ -53,7 +53,7 @@ def check(ws, local=False):
     except tomllib.TOMLDecodeError as e:
         ng(f"{conf.name} の書き方", str(e))
         return out
-    for name, need in (("AGENTS.md", ng), ("CLAUDE.md", warn), ("references_index.md", warn)):
+    for name, need in (("AGENTS.md", ng), ("CLAUDE.md", warn), ("references_index.md", warn), ("drive_folders.md", warn)):
         (ok if (root / name).is_file() else need)(name, "" if (root / name).is_file() else "ない。desk-init で置く")
     if old := sorted((root / "Customers").glob("*/CLAUDE.md")):
         how = lambda p: f"{p.relative_to(root)}（{'memory.md に中身を移して消す' if (p.parent / 'memory.md').exists() else 'memory.md に名前を変える'}）"
@@ -69,13 +69,15 @@ def check(ws, local=False):
             (("同じパスのファイルへの足しと上書き",), "AGENTS.md の決まりの置き場所", "前の雛形の「rules/<スキル>/<ファイル>（プラグインの同じパスのファイルへの足しと上書き）」が残っている。今は recipes/<名前>/RECIPE.md のレシピを frontmatter（description・step・per_material）で出す。desk-init の雛形の今の文（「決まりの優先」の 1 つ目）に替える"),
             (("同じファイルへの足しと上書き",), "AGENTS.md のフォルダの表", "前の雛形の「rules/<スキル>/<ファイル> … プラグインの同じファイルへの足しと上書き」が残っている。desk-init の雛形の今の行（recipes/<名前>/RECIPE.md … 頭の frontmatter に、いつ使うかと、出す場面を書く）に替える"),
             (("`rules.md` の「決まりの層」", "（決まりの層、"), "AGENTS.md の決まりの層", "前の雛形の「決まりの層」（deck-practices/rules.md の前の節の名前）が残っている。層はなくした（ワークスペースの決まりが優先し、ワークスペースどうしは条件が狭いほう）。節の名前は「Workspace rules」。desk-init の雛形の今の文に替える"),
-            (("決まりには ID と短い理由だけを書き",), "AGENTS.md の決まりの ID", "前の雛形の「決まりには ID と短い理由だけを書き」が残っている。ワークスペースの決まりには ID を付けない（戻し先はファイル。台帳が版を残す）。desk-init の雛形の今の文（「修正の指示」の「直したら、その場で戻す」）に替える")):
+            (("決まりには ID と短い理由だけを書き",), "AGENTS.md の決まりの ID", "前の雛形の「決まりには ID と短い理由だけを書き」が残っている。ワークスペースの決まりには ID を付けない（戻し先はファイル。台帳が版を残す）。desk-init の雛形の今の文（「修正の指示」の「直したら、その場で戻す」）に替える"),
+            (("`references_index.md` にも足す", "過去に使った資料は、直下の `references_index.md` にまとめる"), "AGENTS.md の索引の足し方",  # 2026-10-29 までの雛形
+             "前の雛形の「references_index.md にも足す」か「過去に使った資料は、直下の references_index.md にまとめる」が残っている。2026-10-29 から、索引は refs.py が各フォルダの references.md から作り直す（手で足すと、次に作り直すと消える）。Drive の置き場所は drive_folders.md。desk-init の雛形の今の文（「調べもの」の最後と「フォルダの置き方」）に替える")):
         if any(x in agents for x in needles):
             warn(name, what)
     if any("frontmatter" in x and re.search(r"`paths`|paths:", x) for x in agents.splitlines()):  # 同じ行に書いたものだけ。 2026-10-29 から、レシピは作業ごとに出る（desk-migrate は文の意味までは書き換えない）
         warn("AGENTS.md のレシピの出し方", "AGENTS.md に frontmatter の paths の書き方が残っている。2026-10-29 から、レシピ（recipes/<名前>/RECIPE.md）は step（gather・build。書かなければどの作業でも）と per_material で出る（deck-practices/rules.md の「Workspace rules」）。その文を直す")
     if old := migrate.needs(root):  # 前の名前の rules/ は読まれず、前の ID は台帳とつながらない
-        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの頭に frontmatter を置き、ワークスペースの決まりの ID を外し、2026-10-29 に rules/ を recipes/<名前>/RECIPE.md にし、source-scout を desk-crawl にした）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
+        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの頭に frontmatter を置き、ワークスペースの決まりの ID を外し、2026-10-29 に rules/ を recipes/<名前>/RECIPE.md にし、source-scout を desk-crawl にし、索引の references_index.md を台帳から作るものにした）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
     odd, top = [], root / desk.RECIPES  # レシピの形と frontmatter（deck-practices/rules.md の「Workspace rules」）
     for p, m in (rules := desk.rules(root)):
         rel = p.relative_to(root)
@@ -307,7 +309,9 @@ def selftest():
         agents.write_text(agents.read_text() + "\n- 決まりは、このファイルと `rules/<スキル>/<ファイル>`（プラグインの同じパスのファイルへの足しと上書き）。`rules.md` の「決まりの層」。決まりには ID と短い理由だけを書き、日付は台帳に。\n")
         assert all(kinds()[n] == "要確認" for n in ("AGENTS.md の決まりの置き場所", "AGENTS.md の決まりの層", "AGENTS.md の決まりの ID")) and "AGENTS.md のレシピの出し方" not in kinds()
         agents.write_text(agents.read_text() + "\n- 開くと、frontmatter の `paths` にそのファイルを書いたものが出る。\n")
-        assert kinds()["AGENTS.md のレシピの出し方"] == "要確認"
+        assert kinds()["AGENTS.md のレシピの出し方"] == "要確認" and "AGENTS.md の索引の足し方" not in kinds()  # 今の雛形
+        agents.write_text(agents.read_text() + "\n- 資料に使えそうな出典は `references_index.md` にも足す。\n")
+        assert kinds()["AGENTS.md の索引の足し方"] == "要確認"
         toml = Path(tmp) / "desk.toml"
         assert kinds()["brand.copyright"] == "要修正" and kinds()["brand.company"] == "要確認"
         toml.write_text(toml.read_text().replace("[brand]", '[brand]\ncopyright = "© Acme 2026"', 1))

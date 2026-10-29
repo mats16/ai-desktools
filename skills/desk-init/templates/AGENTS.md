@@ -50,10 +50,10 @@ AI Desk Tools（プラグイン）で、スライドとドキュメントを作�
 
 資料を作らない調査の依頼（「〇〇を調べて」など）は、返事で答えるだけで終わらせず、`Research/<内容>_<YYYYMMDD>.md` に残す（同じことを調べ直さないため）。
 
-- 先に `grep -rln <語> Research/ references_index.md` で前の調査を探す。あれば読み、足りないところだけ調べて同じファイルに足す（末尾の「更新」に日付と変わったこと）。
+- 先に `grep -rln <語> Research/ references_index.md` で前の調査と、前に使った出典を探す。あれば読み、足りないところだけ調べて同じファイルに足す（末尾の「更新」に日付と変わったこと）。
 - 書くこと: 依頼（ユーザーの言葉のまま）、結論（冒頭に数行）、根拠と出典（URL と確かめた日）、確かめたことと推測の区別、未確認のこと。社外秘が入るなら冒頭に【社内】と書く。
-- **書いたら・足したら、Google Drive に写す。** `python3 <スキル deck-practices のフォルダ>/scripts/drive_put.py research Research/<内容>_<YYYYMMDD>.md`。Google Docs に変えて、`desk.toml` の `drive.desk` の下の `Research`（なければ作る）に上げる。同じ名前があれば上書きし、URL は変わらない。初めて上げたら、`references_index.md` の「Google Drive の置き場所」の `Research` の行（なければ足す）の下に `- 上げた: Research/<内容>_<YYYYMMDD>.md → [<YYYYMMDD>_<内容>](URL)（初めて上げた日）` を足す。写しは控えと、人がブラウザで読むためのもの。元はこのフォルダの md で、探すのも読むのもこちらでする。Drive の写しは直さず、コメントも付けない（上げ直すと、直しは消え、コメントは付け先を失う）。
-- ある資料のための調べものは、`Research/` ではなく、その資料のフォルダ（`references.md`・`社内メモ_*.md`）に書く。出典は `refs.py add` で `references.md` に 1 行ずつ足し、ページに出す事実は構成案の「出典の表」に、出典の ID と一緒に書く（deck-practices の materials.md の "Ledger"）。資料に使えそうな出典は `references_index.md` にも足す。
+- **書いたら・足したら、Google Drive に写す。** `python3 <スキル deck-practices のフォルダ>/scripts/drive_put.py research Research/<内容>_<YYYYMMDD>.md`。Google Docs に変えて、`desk.toml` の `drive.desk` の下の `Research`（なければ作る）に上げる。同じ名前があれば上書きし、URL は変わらない。初めて上げたら、`drive_folders.md` の `Research` の行（なければ足す）の下に `- 上げた: Research/<内容>_<YYYYMMDD>.md → [<YYYYMMDD>_<内容>](URL)（初めて上げた日）` を足す。写しは控えと、人がブラウザで読むためのもの。元はこのフォルダの md で、探すのも読むのもこちらでする。Drive の写しは直さず、コメントも付けない（上げ直すと、直しは消え、コメントは付け先を失う）。
+- ある資料のための調べものは、`Research/` ではなく、その資料のフォルダ（`references.md`・`社内メモ_*.md`）に書く。出典は `refs.py add` で `references.md` に 1 行ずつ足し、ページに出す事実は構成案の「出典の表」に、出典の ID と一緒に書く（deck-practices の materials.md の "Ledger"）。全体の索引 `references_index.md` は、`refs.py` が各フォルダの `references.md` から作り直すので、手で書かない。資料に結びつかない調べもので、ほかの資料にも使えそうな出典は `refs.py add Research <URL> --use <何に使えるか>` で足す（`Research/references.md`）。
 
 ## 社外秘と顧客の情報
 
@@ -85,12 +85,13 @@ themes/slides/<名前>.json                         … スライドのテーマ
 assets/                                           … 自分だけの画像（ページの JSON の "src": "asset:<名前>" が先に探す）
 .desk/                                            … スクリプトが書く記録（lint・desk-dreaming・コメントの見張り）と、顧客の profile の前の版。手で直さない
 desk.toml                                         … 人ごとに変わる設定値（スクリプトが読む。~/.desk.toml に置いたときは、ここに置かない）
-references_index.md                               … 過去に使った資料の索引
+references_index.md                               … 過去に使った出典の索引（refs.py が各フォルダの references.md から作る。手で直さない）
+drive_folders.md                                  … Google Drive の置き場所と、上げた資料（手で足す）
 ```
 
 - `Customers/` の下は顧客（会社）ごとのフォルダ。下の表にない顧客なら、英字の略称で作る。顧客について社内で話す資料は `Internal/` に置く。
 - 作業用の写し（書き出した pptx、ページの画像、確認用の PDF など）は `/tmp` に置き、使い終わったら消す。参考にした資料は写しを置かず、URL を `references.md` に書く。
-- **過去に使った資料は、直下の `references_index.md` にまとめる。** 探すときは、検索より先に `grep -n <語> references_index.md`。
+- **過去に使った出典と作った資料は、直下の `references_index.md`（出典。`refs.py` が作る）と `drive_folders.md`（Drive に上げた資料）で探す。** 検索より先に `grep -n <語> references_index.md drive_folders.md`。
 - **エージェントが読み書きするファイルの名前は、英数字とハイフン・アンダーバーだけにする。** 納品物と、ユーザーが読む `構成案*.md`・`社内メモ_*.md` は日本語の名前のまま。
 - ワークスペースの直下に、上に書いたもののほかのファイルを作らない。
 - git で管理するのは、決まり（`AGENTS.md`・`CLAUDE.md`・`recipes/`・`themes/`・`assets/`）と、調べ直しの記録（`Research/deck_research/`）だけ（`.gitignore`）。資料と台帳、設定（`desk.toml`。人ごとの値）は入れない。

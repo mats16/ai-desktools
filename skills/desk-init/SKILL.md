@@ -1,6 +1,6 @@
 ---
 name: desk-init
-description: Create an AI Desk Tools workspace (the folder that holds materials and rules). Places templates of AGENTS.md, CLAUDE.md, references_index.md, recipes/, and .gitignore, plus Customers/, Internal/, and Research/, and the settings desk.toml in the workspace or in ~/.desk.toml (never overwrites existing files), fills in the settings with the user, and checks with desk-doctor. Use when asked 「ワークスペースを作って」, 「setup して」, or 「AI Desk Tools を使い始めたい」.
+description: Create an AI Desk Tools workspace (the folder that holds materials and rules). Places templates of AGENTS.md, CLAUDE.md, references_index.md, drive_folders.md, recipes/, and .gitignore, plus Customers/, Internal/, and Research/, and the settings desk.toml in the workspace or in ~/.desk.toml (never overwrites existing files), fills in the settings with the user, and checks with desk-doctor. Use when asked 「ワークスペースを作って」, 「setup して」, or 「AI Desk Tools を使い始めたい」.
 ---
 
 # Create a workspace

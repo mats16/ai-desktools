@@ -25,7 +25,7 @@ The page elements (type, position, size, text) can be read directly with the Sli
 
 ## 1. Search
 
-- Before searching, look at `references_index.md` at the top of the working folder (the overall index of materials used before) and `references.md` in the material's folder. If you have seen a material before, reread it from that URL and page (if the source's last updated date is newer than the date you checked it, also check whether the content has changed).
+- Before searching, look at `references_index.md` at the top of the working folder (the overall index of sources used before, rebuilt from every `references.md`), `drive_folders.md` (materials made before), and `references.md` in the material's folder. If you have seen a material before, reread it from that URL and page (if the source's last updated date is newer than the date you checked it, also check whether the content has changed).
 - Search with the internal cross search, and check the contents in file storage, chat, and the wiki ([materials.md](../deck-practices/materials.md) "Internal materials"). Add every material you looked at to `references.md`, including ones you decided not to use. To read the contents of Google Slides, having the internal search tool summarize it fails less often than WebFetch （社内 6）. To choose pages, look with `gslides.py pages` and `thumb`.
 - [slides-reuse-002] **For pages that depict the product's main feature (architecture and so on), search for a good-looking figure before drawing your own.** Look at internal decks other than the product pitch and Field Kit, figures in the docs, and figures in the official blog and product pages, and use them in Stages 1–3. Do not settle for a self-made box diagram that only gets the meaning across.
 - **Search for a version in the material's language first.** Pages of global decks have often been translated by local SMEs (for example, the list of Japanese materials in the internal wiki). If one exists, use it instead of translating (SIEM example).
@@ -88,7 +88,7 @@ In 「流用元」 at the end of `構成案.md`, write one row per page.
 
 - Stage 4 may go in a separate bullet list as 「考え方を借りたもの」 (SIEM example).
 - In customer-facing materials, write the names and URLs of internal materials only in the outline and the internal memo. Do not write them in the slide's source line or notes (write a public source or the company's own name).
-- When finished, add the materials you used to `references_index.md`. As the point of view, note in a few words which stage you used and why (examples: 「日本語版があり段階 1 で差し替え」「英語の図を段階 2 で画像に。読み方のパネルを足した」).
+- For each material you used, write in a few words which stage you used and why in the 「使い道」 column of `references.md` (`refs.py add … --use`); the overall index shows it (examples: 「日本語版があり段階 1 で差し替え」「英語の図を段階 2 で画像に。読み方のパネルを足した」).
 - If more than half of the main deck's pages would come from one internal deck via Stage 1, ask the user before rebuilding. Copying that deck in Google Slides and editing it can be faster.
 
 ## 5. Checks at the finish
