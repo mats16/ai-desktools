@@ -23,7 +23,7 @@ TARGETS, AUDIENCES = ("slides", "docs", "vids"), ("顧客向け", "社内向け"
 RECIPES, RECIPE = "recipes", "RECIPE.md"  # ワークスペースの決まりのフォルダと、決まりを書くファイル（recipes/<名前>/RECIPE.md。2026-10-29 に rules/<名前>.md から替えた）
 STEPS = ("gather", "build")  # frontmatter の step の値。書かなければ、資料を作るどの作業でも出す（per_material: true は、資料ごとに選ぶ）
 TRIGGERS = {  # プラグインのファイル（<スキル>/<ファイル>）→ そのファイルを開いたときに出すレシピの種類。make は step のないもの（資料を作るどの作業でも）
-    "gather": ("deck-practices/materials.md", "deck-practices/start.md", "customer-profile/*", "source-scout/*", "deck-research/*"),
+    "gather": ("deck-practices/materials.md", "deck-practices/start.md", "customer-profile/*", "desk-crawl/*", "deck-research/*"),
     "build": ("slides-build/*", "docs-build/*", "vids-build/*", "vids-voice/*", "slides-template/*"),
     "make": ("deck-practices/*", "slides-build/*", "docs-build/*", "deck-review/*", "deck-comments/*", "vids-build/*", "vids-voice/*", "slides-template/*")}
 

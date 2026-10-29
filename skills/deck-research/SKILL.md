@@ -1,6 +1,6 @@
 ---
 name: deck-research
-description: Use when re-researching best practices for making materials (the content and look of slides and documents) and for the mechanisms that have AI agents do it (skills, instructions, check scripts). Holds the list of sources, search terms that worked, research tips, the record of past research, and the findings adopted and passed over. Read when asked 「ベストプラクティスを調べ直して」, 「前回から変わったことを調べて」, or 「資料作成のスキルを更新して」.
+description: Use when re-researching best practices for making materials (the content and look of slides and documents) and for the mechanisms that have AI agents do it (skills, instructions, check scripts). Holds the list of sources, search terms that worked, research tips, the record of past research, and the findings adopted and passed over. Read when asked 「ベストプラクティスを調べ直して」, 「前回から変わったことを調べて」, or 「資料作成のスキルを更新して」. Not for gathering material for a deck (`deck-practices` `materials.md`) or for reading fixed places on a schedule (`desk-crawl`).
 ---
 
 # Ongoing research on best practices for making materials

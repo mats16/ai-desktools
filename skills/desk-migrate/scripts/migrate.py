@@ -18,6 +18,7 @@ paths にそのパスを書いた frontmatter を足す（出る場面は前と�
 （当たるプラグインのファイルがどれも材料を集める作業なら gather、どれも組む作業なら build、ほかは書かない）。paths のなかったものは per_material: true（資料ごとに選ぶ）。
 点検の checks.py は recipes/slide_checks/・doc_checks/ に、ドキュメントのテンプレートは recipes/doc_templates/templates/ に移す。台帳・AGENTS.md・CLAUDE.md・顧客の memory.md・
 レシピ・構成案の中の前のパスも書き換える。前の段の移しは rules/ の中で済ませてから、最後にこの段を回す。
+2026-10-29 の版で、source-scout を desk-crawl にした（決まりの ID は ids_20261029.json）。記録の .desk/scout/<話題>/ は、状態・種類・mode を今の形にして .desk/crawl/<話題>/ に移す。
 何度回してもよい。標準ライブラリだけ。"""
 import fnmatch, json, os, re, shutil, subprocess, sys, tempfile, time
 from collections import Counter
@@ -35,7 +36,7 @@ MOVES = [  # rules/ の下の前のパス → 今のパス（上から当てる�
     ("deck-practices/visual_doc.md", "docs-build/visual.md"), ("deck-build/slides.md", "slides-build/pages.md"),
     ("deck-build", "slides-build"), ("doc-build", "docs-build"), ("deck-template", "slides-template"),
     ("slides-speaker-notes", "vids-voice"), ("vids-beta", "vids-build"),
-    *((f"factory-{s}", f"desk-{s}") for s in ("init", "doctor", "migrate", "kaizen")), ("dreaming", "desk-dreaming")]
+    *((f"factory-{s}", f"desk-{s}") for s in ("init", "doctor", "migrate", "kaizen")), ("dreaming", "desk-dreaming"), ("source-scout", "desk-crawl")]
 OLD_CONF, OLD_DIR = "factory.toml", ".factory"  # 2026-10-25 より前の設定と記録のフォルダの名前
 NAMES = [  # 2026-10-25 の名前の替え。本文・台帳と、設定に当てる（決まりの ID の factory-dreaming は ids_20261025.json で替える。
            # .factory は、パスの頭にあるものだけが記録のフォルダ。~/.factory・${HOME}/.factory・.factory-old はほかのもの）
@@ -60,7 +61,8 @@ PATHS = [  # 本文の中のパスとスキルの名前（決まりの ID は先
     (r"deck-build/scripts/(docs|doc_layout)\.py", r"docs-build/scripts/\1.py"), (r"deck-build/scripts/(gapi|sheet|drive_put)\.py", r"deck-practices/scripts/\1.py"),
     *((rf"(?<![{B}]){a}(?![{B}])", b) for a, b in (("deck-build", "slides-build"), ("doc-build", "docs-build"), ("deck-template", "slides-template"),
                                                     ("slides-speaker-notes", "vids-voice"), ("vids-beta", "vids-build"))), *NAMES,
-    (DREAMING, "desk-dreaming")]  # .factory を .desk にしたあとに当てる
+    (DREAMING, "desk-dreaming"),  # .factory を .desk にしたあとに当てる
+    (rf"(?<![{B}])source-scout(?![{B}])", "desk-crawl"), (rf"(?<![{B}])\.desk/scout(?![{B}])", ".desk/crawl"), (rf"(?<![.{B}])scout\.py(?![{B}])", "crawl.py")]  # 2026-10-29。記録の .desk/scout/ は move_scout が .desk/crawl/ に移す
 OLD_IDS = [re.compile(rf"(?<![{B}])(ws-)?(" + "|".join(sorted(map(re.escape, m["prefixes"]), key=len, reverse=True)) + rf")-(\d{{3}})(?![{B}])") for m in MAPS]
 WS_ID = re.compile(r"\[(ws-[\w-]+?-\d{3})\]")
 WS_FULL = re.compile(r"ws-[a-z][\w-]*?-\d{3}")  # 台帳の値がまるごとワークスペースの ID
@@ -93,6 +95,79 @@ def conf_keys(text):
 def data_moves(ws):
     """2026-10-25 より前の名前で残っているもの: [(前, 今)]。"""
     return [(ws / old, ws / new) for old, new in ((OLD_CONF, "desk.toml"), (OLD_DIR, ".desk")) if (ws / old).exists()]
+
+
+SCOUT_TIER = {"core": "follow", "muted": "candidate"}  # 2026-10-29: source-scout の状態 → desk-crawl の状態（muted は人が休ませた先。読まない dropped にはしない）
+SCOUT_KIND = {"gmail": "gmail-search"}  # 種類の名前の替え（wiki は、どの wiki かが分からないので替えない）
+SCOUT_MODE = {"filter": "Busy source: scan the first lines and open only posts that look like an announcement or match a marker note.",
+              "index": "Digest source: open the original post of each item you pick, because the summary can be wrong."}  # mode は覚え書きになった
+
+
+def scout_moves(ws):
+    """2026-10-29: source-scout の記録 .desk/scout/<話題>/ → desk-crawl の .desk/crawl/<話題>/ [(前, 今)]。"""
+    old = ws / ".desk" / "scout"
+    return [(p, ws / ".desk" / "crawl" / p.name) for p in sorted(old.iterdir()) if p.is_dir()] if old.is_dir() else []
+
+
+def scout_id(sid):
+    k, _, ref = sid.partition(":") if isinstance(sid, str) else ("", "", "")
+    return f"{SCOUT_KIND[k]}:{ref}" if k in SCOUT_KIND and ref else sid
+
+
+def move_scout(ws):
+    """.desk/scout/ の話題を、今の形（状態・種類・mode）にして .desk/crawl/ に移す。前の中身は .desk/migrate/scout_<時刻>/ に控える。
+    移す先がもうあれば、上書きせずに出す（寄せるのは人が決める）。前の回の取りこぼし（misses）は、子の読み方の外れだったので写さない
+    （今は、使う側が返したものだけを取りこぼしとして数える）。読み手の反応（feedback）と項目の value も、もう使わないので写さない。"""
+    old = ws / ".desk" / "scout"
+    if not old.is_dir():
+        return []
+    out, day, stamp = [], time.strftime("%Y-%m-%d"), time.strftime("%Y%m%d-%H%M%S")
+    for src, dst in scout_moves(ws):
+        if dst.exists():
+            out.append(f"移していない（移す先がもうある。中身を寄せて前のほうを消す）: {src.relative_to(ws)}/ → {dst.relative_to(ws)}/")
+            continue
+        try:  # 1 つの話題が読めなくても（壊れた JSON、思わない形）、ほかの話題とあとの段は止めない
+            reg = json.loads((src / "sources.json").read_text(encoding="utf-8")) if (src / "sources.json").is_file() else {"sources": {}, "notes": [], "next_note": 1}
+            lines = [json.loads(l) for l in (src / "runs.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()] if (src / "runs.jsonl").is_file() else []
+            n, srcs = reg.get("next_note", 1), {}
+            for sid, e in reg.get("sources", {}).items():
+                e = {**e, "tier": SCOUT_TIER.get(e.get("tier"), e.get("tier") or "candidate")}
+                if text := SCOUT_MODE.get(e.pop("mode", None)):
+                    e["notes"] = e.get("notes", []) + [{"id": f"n{n}", "text": text, "added": day, "helpful": 0, "harmful": 0}]
+                    n += 1
+                srcs[scout_id(sid)] = e
+            reg["sources"], reg["next_note"] = srcs, n
+            for done in reg.get("applied", {}).values():  # 当てた覚え書きの控え [位置, 先, 文] の先も替える（記録し直したときに、当てたと分かるように）
+                done["lessons"] = [[k[0], scout_id(k[1]), *k[2:]] if isinstance(k, list) and len(k) > 1 else k for k in done.get("lessons", [])]
+            rows = []
+            # ponytail: 前の読み手の反応（feedback・value 0）は手柄から外さずに捨てる。used を消すと「使われた済み」の印も消えるため。source-scout の記録は 3 日分しかない
+            for r in lines:
+                r.pop("feedback", None), r.pop("misses", None)
+                for x in (x for k in ("reads", "discovered", "lessons") for x in r.get(k, []) if isinstance(x, dict) and "source" in x):
+                    x["source"] = scout_id(x["source"])
+                for i in r.get("items", []):
+                    i.pop("value", None)
+                    i["seen_in"] = [scout_id(x) for x in i.get("seen_in", [])]
+                    if i.get("origin"):
+                        i["origin"] = scout_id(i["origin"])
+                rows.append(json.dumps(r, ensure_ascii=False))
+        except (OSError, ValueError, TypeError, AttributeError) as e:
+            out.append(f"要判断: {src.relative_to(ws)}/ を読めないので移していない（{e}）。直してから apply を回し直すか、要らなければ消す")
+            continue
+        (backup := ws / ".desk" / "migrate" / f"scout_{stamp}").mkdir(parents=True, exist_ok=True)
+        shutil.copytree(src, backup / src.name, dirs_exist_ok=True)  # 移す話題だけを控える（移さないものを回すたびに写さない）
+        dst.mkdir(parents=True)
+        (dst / "sources.json").write_text(json.dumps(reg, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        if rows:
+            (dst / "runs.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
+        shutil.rmtree(src)  # plan.json は前の回の読み方なので写さない（次の plan が作る）
+        out.append(f"移した: {src.relative_to(ws)}/ → {dst.relative_to(ws)}/（状態・種類・mode を desk-crawl の形にした）")
+        if wiki := sorted(x for x in srcs if x.startswith("wiki:")):
+            out.append(f"要判断: {dst.relative_to(ws)}/sources.json の {'・'.join(wiki)} は、wiki のサービスの名前（confluence: など）の先にする（desk-crawl の kinds.md）")
+    if not any(p.is_dir() for p in old.iterdir()):  # 話題を移し終えたら、残りのファイル（.DS_Store など。話題でないので控えない）ごと消す。残すと crawl.py が止まったままになる
+        shutil.rmtree(old)
+        out.append("要判断: 定期の集めを前の名前（source-scout）で登録していれば、登録したプロンプトのスキルの名前を desk-crawl に替える（登録はワークスペースの外にあり、ここからは直せない）")
+    return out
 
 
 def move_data(ws):
@@ -183,7 +258,8 @@ def rewrite(text, paths=True, seen=None, ws_map=None):
 
 def texts(ws):
     """ID とパスを書き換える、人と会話が書くファイル。"""
-    return [p for p in [ws / "AGENTS.md", *sorted((ws / "rules").rglob("*.md")), *sorted((ws / "Customers").glob("*/memory.md"))] if p.is_file()]
+    return [p for p in [ws / "AGENTS.md", ws / "CLAUDE.md", *sorted((ws / "rules").rglob("*.md")), *sorted((ws / "recipes").rglob("*.md")),
+                        *sorted((ws / "Customers").glob("*/memory.md"))] if p.is_file()]  # recipes/ は 2026-10-29 から。そのあとの名前の替え（source-scout）も届くように
 
 
 VERBATIM = {"quote", "a", "reason"}  # 台帳の、人の言葉をそのまま持つ欄（修正の指示の原文、判断待ちの答え、却下の理由）。書き換えない
@@ -355,7 +431,8 @@ def decide(ws, i, target):
 def needs(ws):
     """前の版のまま残っているもの（desk-doctor が出す）。"""
     moves, edit, _, _ = plan(ws)
-    return ([str(a.relative_to(ws)) for a, _ in data_moves(ws)] + [f"rules/{f.relative_to(ws / 'rules')}" for f, _ in moves] + [str(p.relative_to(ws)) for p in edit]
+    return ([str(a.relative_to(ws)) for a, _ in data_moves(ws)] + [".desk/scout/（desk-crawl の .desk/crawl/ へ）"] * (ws / ".desk" / "scout").is_dir()
+            + [f"rules/{f.relative_to(ws / 'rules')}" for f, _ in moves] + [str(p.relative_to(ws)) for p in edit]
             + [f"{p.relative_to(ws)}（frontmatter）" for p, _ in fronts(ws, {f for f, _ in moves})]
             + [f"台帳の {i} の変更先（{a} → {b or '要判断'}）" for i, a, b, _ in relinks(ws)] + id_needs(ws)
             + [f"rules/{s.relative_to(ws / 'rules')}（recipes/ へ）" for s, _ in (recipe_moves(ws) if RECIPES else [])])
@@ -693,7 +770,7 @@ def to_recipes(ws, backup):
 
 
 def apply(ws):
-    data = move_data(ws)  # 台帳（.desk/ledger.jsonl）を書き換える前に、名前を今の版にする
+    data = move_data(ws) + move_scout(ws)  # 台帳（.desk/ledger.jsonl）を書き換える前に、名前を今の版にする
     moves, edit, split, ws_map = plan(ws)
     # 前の名前で整理を回していた。移すもの（rules/dreaming/ のファイルか、前の名前の残る本文）があるときだけ。前の名前が何も残らなければ、登録し直したあとと見分けられない
     old_run = (ws / ".desk" / "dreaming").is_dir() and (any(src.is_relative_to(ws / "rules" / "dreaming") for src, _ in moves) or any(DREAMING.search(t) for t in strings(ws)))
@@ -706,7 +783,7 @@ def apply(ws):
     while backup.exists():  # 同じ秒に回し直しても、前の控え（前の版の中身）を上書きしない
         n += 1
         backup = backup.with_name(f"{backup.name.split('_')[0]}_{n}")
-    for p in [ws / "AGENTS.md", ws / "rules", ws / "recipes", ws / ".desk" / "ledger.jsonl", *sorted((ws / "Customers").glob("*/memory.md"))]:
+    for p in [ws / "AGENTS.md", ws / "CLAUDE.md", ws / "rules", ws / "recipes", ws / ".desk" / "ledger.jsonl", *sorted((ws / "Customers").glob("*/memory.md"))]:
         if p.exists():
             dst = backup / p.relative_to(ws)
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -956,6 +1033,49 @@ def selftest():
         assert (led["to"], led["quote"], led["by"]) == ("ws-desk-dreaming-001", "dreaming して", "dreaming")  # 原文と、書いた者の種類は替えない
         assert ledger.state(ws)[0]["c-0001"]["to"] == "rules/desk-dreaming/run.md"  # 台帳はファイルとして読む
         assert needs(ws) == [] and apply(ws) == ["移すものはない（今の版）"]
+    with tempfile.TemporaryDirectory() as tmp:  # 2026-10-29: source-scout の上書き・名前・記録を desk-crawl に
+        ws = Path(tmp)
+        put = lambda rel, text: ((ws / rel).parent.mkdir(parents=True, exist_ok=True), (ws / rel).write_text(text))
+        put("desk.toml", "")
+        put("rules/source-scout/SKILL.md", "---\ndescription: 読む先\npaths: [source-scout/SKILL.md]\n---\n\n- 毎朝 `scout.py plan` を回す（source-scout-002 より優先）。\n")
+        put("AGENTS.md", "スキル `source-scout`（`../source-scout/scripts/scout.py`）。記録は `.desk/scout/`。\n")
+        put(".desk/scout/t/sources.json", json.dumps({"sources": {
+            "slack:A": {"tier": "core", "mode": "filter", "notes": [{"id": "n1", "text": "x", "helpful": 1, "harmful": 0}]},
+            "gmail:label:news": {"tier": "muted", "mode": "search"}, "wiki:123": {"tier": "candidate"}}, "notes": [], "next_note": 2,
+            "applied": {"2026-10-27T07:00+09:00": {"lessons": [[0, "gmail:label:news", "Skip digests"], [1, "*", "x"]], "votes": [[0, "n1", True]], "changes": []}}}))
+        put(".desk/scout/t/runs.jsonl", json.dumps({"id": "2026-10-27T07:00+09:00", "until": "2026-10-27T07:00+09:00",
+            "reads": [{"source": "gmail:label:news", "ok": True}], "items": [{"url": "https://x/1", "used": True, "value": 0, "seen_in": ["slack:A", "gmail:label:news"]}],
+            "misses": [{"source": "slack:A", "url": "https://x/2"}], "feedback": [{"url": "https://x/1", "value": 0}]}) + "\n")
+        put(".desk/scout/t/plan.json", "{}")
+        put(".desk/scout/.DS_Store", "x")  # 話題のほかのファイルが残っても、移し終えたら消す
+        put(".desk/scout/u/runs.jsonl", json.dumps({"id": "r", "items": [{"url": "https://u/1", "used": True, "seen_in": ["slack:A"]},
+            {"url": "https://u/2", "used": True, "value": 0, "seen_in": ["slack:A"]}], "feedback": [{"url": "https://u/1/", "value": 0}]}) + "\n")
+        put("recipes/news/RECIPE.md", "---\ndescription: x\n---\n\n- `scout.py plan` を回す（[source-scout-002] より優先）。記録は `.desk/scout/`。\n")
+        assert "rules/source-scout/SKILL.md" in needs(ws) and any(x.startswith(".desk/scout/") for x in needs(ws))
+        out = apply(ws)
+        assert (ws / "rules" / "desk-crawl" / "SKILL.md").read_text() == "---\ndescription: 読む先\npaths: [desk-crawl/SKILL.md]\n---\n\n- 毎朝 `crawl.py plan` を回す（desk-crawl-002 より優先）。\n"
+        assert not (ws / "rules" / "source-scout").exists() and not (ws / ".desk" / "scout").exists() and list((ws / ".desk" / "migrate").glob("scout_*/t/runs.jsonl"))
+        assert (ws / "AGENTS.md").read_text() == "スキル `desk-crawl`（`../desk-crawl/scripts/crawl.py`）。記録は `.desk/crawl/`。\n"
+        reg = json.loads((ws / ".desk" / "crawl" / "t" / "sources.json").read_text())
+        assert {k: v["tier"] for k, v in reg["sources"].items()} == {"slack:A": "follow", "gmail-search:label:news": "candidate", "wiki:123": "candidate"}, reg
+        assert [n["id"] for n in reg["sources"]["slack:A"]["notes"]] == ["n1", "n2"] and "mode" not in reg["sources"]["slack:A"] and reg["next_note"] == 3
+        assert reg["applied"]["2026-10-27T07:00+09:00"]["lessons"] == [[0, "gmail-search:label:news", "Skip digests"], [1, "*", "x"]]  # 当てた控えの先も替える
+        run = json.loads((ws / ".desk" / "crawl" / "t" / "runs.jsonl").read_text())
+        assert run["items"][0] == {"url": "https://x/1", "used": True, "seen_in": ["slack:A", "gmail-search:label:news"]} and "misses" not in run and "feedback" not in run, run  # used は残す（使われた済みの印）
+        assert not (ws / ".desk" / "crawl" / "t" / "plan.json").exists()
+        assert [i["used"] for i in json.loads((ws / ".desk" / "crawl" / "u" / "runs.jsonl").read_text())["items"]] == [True, True]
+        assert (ws / "recipes" / "news" / "RECIPE.md").read_text().endswith("- `crawl.py plan` を回す（[desk-crawl-002] より優先）。記録は `.desk/crawl/`。\n")  # レシピの中の名前も替える
+        assert any(o.startswith("要判断: 定期の集め") for o in out) and any("wiki:123" in o for o in out), out
+        assert needs(ws) == [] and apply(ws) == ["移すものはない（今の版）"]
+        put(".desk/scout/v/runs.jsonl", "{broken\n")  # 読めない話題は移さずに知らせ、ほかは止めない
+        put(".desk/scout/w/sources.json", "[]")
+        put("CLAUDE.md", "source-scout を使う。\n")
+        out = apply(ws)
+        assert all(any(o.startswith(f"要判断: .desk/scout/{t}/ を読めない") for o in out) and (ws / ".desk" / "scout" / t).is_dir() for t in "vw"), out
+        assert (ws / "CLAUDE.md").read_text() == "desk-crawl を使う。\n" and any(p.read_text() == "source-scout を使う。\n" for p in (ws / ".desk" / "migrate").glob("*/CLAUDE.md"))
+        shutil.rmtree(ws / ".desk" / "scout")
+        put(".desk/scout/t/sources.json", "{}")  # 移す先がもうあれば、上書きしない
+        assert any(o.startswith("移していない") for o in apply(ws)) and (ws / ".desk" / "scout" / "t").is_dir()
     with tempfile.TemporaryDirectory() as tmp:  # 整理を回していない（.desk/dreaming/ がない）なら、登録し直しは出さない
         ws = Path(tmp)
         (ws / "desk.toml").write_text("")
@@ -1176,6 +1296,7 @@ if __name__ == "__main__":
         ids, new, open_ = ws_ids(ws)
         heads = fronts(ws, {s for s, _ in moves})
         data = [f"移す: {s.relative_to(ws)} → {d.relative_to(ws)}" for s, d in data_moves(ws)] + ["（台帳の書き換えは、.desk/ に移したあとの check で出る）"] * (ws / OLD_DIR).is_dir()
+        data += [f"移す: {s.relative_to(ws)}/ → {d.relative_to(ws)}/（状態・種類・mode を desk-crawl の形に）" for s, d in scout_moves(ws)]
         print("\n".join(data + [f"移す: {s.relative_to(ws)} → {d.relative_to(ws)}" for s, d in moves] + [f"書き換える: {p.relative_to(ws)}{changed(p, ws_map)}" for p in edit]
                         + [f"frontmatter を足す: {p.relative_to(ws)}" for p, h in heads if h] + by_hand(ws, heads)
                         + [f"要判断（apply のあと）: rules/{k} は {v} に分けた" for k, v in split if (moves or edit) and not RECIPES]

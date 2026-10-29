@@ -54,7 +54,7 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 
 | フォルダ | `plugin list` の enabled | 読み込まれたスキル |
 |---|---|---|
-| `~/adf-plugin-test`（入れたフォルダ） | true | `desk-tools:` の 17 個（customer-profile、deck-comments、deck-practices、deck-research、deck-review、docs-build、desk-dreaming、desk-doctor、desk-init、desk-kaizen、desk-migrate、desk-recipes、slides-build、slides-template、source-scout、vids-build、vids-voice） |
+| `~/adf-plugin-test`（入れたフォルダ） | true | `desk-tools:` の 17 個（customer-profile、deck-comments、deck-practices、deck-research、deck-review、docs-build、desk-crawl、desk-dreaming、desk-doctor、desk-init、desk-kaizen、desk-migrate、desk-recipes、slides-build、slides-template、vids-build、vids-voice） |
 | `~/Documents` | false | `.agents/skills` の 6 つ（`desk-tools:` が付かない。プラグインのものではない） |
 | `/tmp` | false | なし |
 | `~/adf-plugin-test/Internal`（入れたフォルダのサブフォルダ） | false | なし |
