@@ -43,7 +43,7 @@ DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 INDEX, INDEX_DIRS = "references_index.md", ("Customers", "Internal", "Research")  # 全体の索引と、台帳を探すフォルダ
 INDEX_NOTE = "`refs.py index` が"  # 作った索引の頭の印。ないものは手で書いた前の形（2026-10-29 まで）で、上書きしない
 LINE_MAX, PLACES_MAX = 200, 3  # 索引の 1 行の字数（URL までは切らない。末尾のフォルダを除く）と、並べるフォルダの数。前の索引は「使った」が伸び続け、広い語の grep が 10 万字を超えた
-URL = re.compile(r"https?://[^\s)|>\]」（）、。]+")  # 和文の括弧と句読点で切る（索引の行の末尾の「（フォルダ）」も URL に入れない）
+URL = re.compile(r"https?://(?:[^\s()|<>\[\]」（）、。]|\([^\s()|<>\[\]」（）、。]*\))+")  # 対の括弧は URL のうち（…/Foo_(bar)）。リンクを閉じる「)」と、和文の括弧・句読点で切る（索引の行の末尾の「（フォルダ）」も入れない）
 MTG = re.compile(r"(?<!\w)mtg_\w+")  # 会議の ID（Dahlia）
 
 
@@ -643,6 +643,10 @@ def selftest():
         body = (ws / INDEX).read_text().split("に作った）\n\n")[1].splitlines()
         assert "- [Newer A](https://example.com/a) 2026-10-29（Internal/u、Research）" in body and "- [A](https://example.com/a) and [Unique B](https://example.com/b)（Research）" in body  # 2 つ目の URL にも、その URL と前の 60 字の行がある
         assert around("あ" * 100 + " [L](https://l.example.com) と mtg_01x", "mtg_01x") == "…" + ("あ" * 100 + " [L](https://l.example.com) と mtg_01x")[-67:]
+        put("Research/references.md", (ws / "Research/references.md").read_text() + "- [A](https://a.example.com) and [B](https://example.com/a_(b)/details) 2026-10-01\n")
+        put("Internal/t/references.md", "- [Newer A](https://a.example.com) 2026-10-29\n")
+        index(ws, today="2026-10-29")
+        assert "https://example.com/a_(b)/details" in (ws / INDEX).read_text()  # 括弧のある URL も、2 つ目からの行に完全な形で出る（PR のレビュー。同じ URL の型で読み直さずに、文字で比べる）
         shown = set(keys((ws / INDEX).read_text()))
         assert all(set(keys(b)) <= shown for f in ledgers(ws) for _, _, b, _ in entries(f, f.parent.relative_to(ws).as_posix(), "2026-10-29"))  # 台帳の行の URL と会議の ID は、どれも索引に出る
         real, out = workspace, io.StringIO()
@@ -674,6 +678,8 @@ def selftest():
         assert index(ws) is None and "手で書いた" in (ws / INDEX).read_text() and not generated(ws / INDEX)  # 前の形は上書きしない（desk-migrate で移す）
         assert keys("[a](https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/edit)、Dahlia: mtg_01x") == ["1AbCdEfGhIjKlMnOpQrStUvWxYz", "mtg_01x"]
         assert keys("- 参考: https://blog.example.com/post（Internal/y）") == ["https://blog.example.com/post"]  # 索引の行の末尾の「（フォルダ）」を URL に入れない
+        assert URL.findall("[A](https://a.example.com) と [B](https://example.com/a_(b)/details)、(https://w.example.org/Foo_(bar)) <https://y.example.com/q?a=1#f>") == [
+            "https://a.example.com", "https://example.com/a_(b)/details", "https://w.example.org/Foo_(bar)", "https://y.example.com/q?a=1#f"]  # 対の括弧は URL のうち。リンクを閉じる「)」では止まる
     with tempfile.TemporaryDirectory() as tmp:  # desk-init の雛形は、出典のない索引と同じ頭（雛形は手で直すので、ずれたら止める）
         assert index(tmp) == 0
         tpl = Path(__file__).resolve().parents[2] / "desk-init" / "templates" / INDEX

@@ -247,7 +247,7 @@ def fill_uses(ws, lines):
     text = {}
     for line in lines:
         if ks := refs.keys(line):
-            text.setdefault(ks[0], re.sub(r"^\s*-\s*(\[[^\]]*\]\([^)]*\))?\s*—?\s*", "", line).strip())
+            text.setdefault(ks[0], re.sub(rf"^\s*-\s*(\[[^\]]*\]\({refs.URL.pattern}\))?\s*—?\s*", "", line).strip())  # 頭のリンクを外す（URL の対の括弧も、refs と同じに読む）
     done = []
     for f in refs.ledgers(ws):
         try:
@@ -1398,6 +1398,9 @@ def selftest_index():
         assert "### 製品" in r and all(s in r for s in ("- [M](https://m.example.com)・[C]", "- 使わなかったもの: E（数字が古い）", "mtg_01abc")) and "grep -n" not in r and r.rstrip().endswith(MARK)
         src = refs.sources((ws / "Customers/A/x/references.md").read_text())[1]
         assert src["S1"]["使い道"] == "【公開】・2026-10-20。観点: 表の形" and src["S2"]["使い道"] == "p.2"  # 空の使い道だけに写す
+        (q := Path(tmp) / "w" / "Internal" / "q").mkdir(parents=True)
+        (q / "references.md").write_text(refs.HEAD + "| " + " | ".join(refs.SRC_COLS) + " |\n|" + "---|" * len(refs.SRC_COLS) + "\n| S1 | W | https://w.example.org/Foo_(bar) | 記事 | 不明 | 2026-10-01 | 可 |  |\n")
+        assert fill_uses(Path(tmp) / "w", ["- [W](https://w.example.org/Foo_(bar)) — 観点 W"]) == [("Internal/q/references.md", "S1", "観点 W")]  # 括弧のある URL のリンクも、切れ端を残さずに外して写す
         t = (ws / refs.INDEX).read_text()
         assert refs.generated(ws / refs.INDEX) and "- [A の docs](https://docs.example.com/a) — 公式・社外可・2026-10-20。【公開】・2026-10-20。観点: 表の形（Customers/A/x）" in t
         assert "- [M](https://m.example.com)・[C](https://c.example.com) — 片方だけ台帳にある（Research、Internal/y）" in t and "Google Drive" not in t.split("に作った）")[1]
