@@ -64,7 +64,7 @@ mkdir -p .codex && { grep -qs 'desk-tools@desk-tools' .codex/config.toml || prin
 - 1 つめで出たときは、Claude Code と同じく `marketplace add` を飛ばし、入れ元（`marketplaceSource`）が違えばユーザーに聞く。
 - 3 つめに出たパスが `<プラグイン>`（`~/.codex/plugins/cache/` の写し）。
 - 4 つめでユーザーの設定の `enabled` を切り、5 つめでワークスペースだけで入れる。4 つめが止まったら、`~/.codex/config.toml` の `[plugins."desk-tools@desk-tools"]` を見せ、`enabled = false` にしてもらう（切らないと、どのフォルダの会話にもスキルが出る）。5 つめは、ワークスペースの `.codex/config.toml` にもう `desk-tools@desk-tools` があれば足さないので、そのときは中身を見て `enabled = true` かを確かめる。ワークスペースの `.codex/config.toml` は、そのフォルダを信頼したときだけ読まれる。
-- hook は、次に対話の Codex をワークスペースで開いたとき、`/hooks` で `desk-tools` の 2 つを信頼してもらう（6 で伝える。信頼するまで `rules/` が出ない。`<プラグイン>/docs/codex-plugin.md`）。
+- hook は、次に対話の Codex をワークスペースで開いたとき、`/hooks` で `desk-tools` の 2 つを信頼してもらう（6 で伝える。信頼するまで `recipes/` のレシピが出ない。`<プラグイン>/docs/codex-plugin.md`）。
 
 **pi**
 

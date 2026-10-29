@@ -10,7 +10,7 @@ description: Write Japanese documents (proposals, research reports, explanatory 
 | What you make | Read before you start writing |
 |---|---|
 | Google Docs (default) | This file and [visual.md](visual.md) (the visual rules for documents) |
-| A document written from a workspace template (`rules/docs-build/templates/<name>/doc.md`), or making or fixing a template | [templates.md](templates.md), in addition to the two above |
+| A document written from a workspace template (`recipes/<recipe>/templates/<name>/doc.md`), or making or fixing a template | [templates.md](templates.md), in addition to the two above |
 | Writing a document theme file (`themes/docs/<name>.json`) | [themes.md](themes.md) |
 | Reading `docs.py check` and lint output | [lint.md](lint.md) |
 | Changing `docs.py`, or a build that fails or looks wrong in an unexpected way (Docs API pitfalls) | [api.md](api.md); after editing `docs.py`, `doc_lint.py`, or `doc_layout.py`, also the bullet 「When you edit docs.py, doc_lint.py, or doc_layout.py」 in [templates.md](templates.md) (selftests and rebuilding the template samples) |
@@ -95,7 +95,7 @@ flowchart LR
 
 ### 1.3 Templates
 
-If the workspace has a template for this kind of document (`rules/docs-build/templates/<name>/doc.md`), start from it with `docs.py init <name>`. How to write from a template, what check matches against it, and how to make or fix one: [templates.md](templates.md).
+If the workspace has a template for this kind of document (`recipes/<recipe>/templates/<name>/doc.md`; the recipe says which template to use when), start from it with `docs.py init <name>`. How to write from a template, what check matches against it, and how to make or fix one: [templates.md](templates.md).
 
 ## 2. What docs.py check does
 

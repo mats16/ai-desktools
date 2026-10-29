@@ -45,7 +45,7 @@ for d in <ワークスペース> /tmp; do
   (cd $d && claude plugin list --json) | python3 -c "import json,sys; [print(p['id'], p['scope'], p['enabled']) for p in json.load(sys.stdin) if p['id']=='desk-tools@desk-tools']"
 done
 
-# 会話に読み込まれるスキル: ワークスペースでは desk-tools:* の 16 個、ほかのフォルダでは 0
+# 会話に読み込まれるスキル: ワークスペースでは desk-tools:* の 17 個、ほかのフォルダでは 0
 cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-format stream-json --verbose \
   | python3 -c "import json,sys; e=next(e for e in map(json.loads, sys.stdin) if e.get('subtype')=='init'); print(sorted(s for s in e['skills'] if s.startswith('desk-tools:')))"
 ```
@@ -54,7 +54,7 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 
 | フォルダ | `plugin list` の enabled | 読み込まれたスキル |
 |---|---|---|
-| `~/adf-plugin-test`（入れたフォルダ） | true | `desk-tools:` の 16 個（customer-profile、deck-comments、deck-practices、deck-research、deck-review、docs-build、desk-dreaming、desk-doctor、desk-init、desk-kaizen、desk-migrate、slides-build、slides-template、source-scout、vids-build、vids-voice） |
+| `~/adf-plugin-test`（入れたフォルダ） | true | `desk-tools:` の 17 個（customer-profile、deck-comments、deck-practices、deck-research、deck-review、docs-build、desk-dreaming、desk-doctor、desk-init、desk-kaizen、desk-migrate、desk-recipes、slides-build、slides-template、source-scout、vids-build、vids-voice） |
 | `~/Documents` | false | `.agents/skills` の 6 つ（`desk-tools:` が付かない。プラグインのものではない） |
 | `/tmp` | false | なし |
 | `~/adf-plugin-test/Internal`（入れたフォルダのサブフォルダ） | false | なし |
@@ -70,7 +70,7 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 /desk-tools:desk-doctor
 ```
 
-doctor の要修正が 0 になれば使える。ワークスペースの決まり（`rules/` の下の、frontmatter に `description` のある .md）は、frontmatter の `paths` に当たるプラグインのファイルを Read で開くと hook が続けて出す（2026-10-12 に、そのときの同じパスの `rules/deck-practices/visual.md` で確かめた。サブフォルダで開いた会話では出ない）。`paths` のない決まりは、構成案の頭の「使う決まり」に書いたものを、構成案を開くと出す。`/desk-tools:<スキル>` で呼んだときは、道具を通らずに SKILL.md が入るので、UserPromptSubmit の hook が、その SKILL.md に `paths` が当たる決まりを出す（2026-10-20 に確かめた）。自動のコンパクションのあと、Claude Code は呼んだスキルの SKILL.md を付け直すので、SessionStart（`compact`）の hook がその決まりを出し直す（2026-10-25 に `/compact` で確かめた）。frontmatter の `paths`、`deck-practices/start.md` を開いたときの一覧、構成案の「使う決まり」は、2026-10-27 に sandbox の会話の記録で確かめた（Read と `/desk-tools:deck-review`）。スキルは `desk-tools:` を付けた名前で呼ぶ（`/desk-tools:slides-build` など）。
+doctor の要修正が 0 になれば使える。ワークスペースの決まり（レシピ。`recipes/<名前>/RECIPE.md` で、frontmatter に `description` のあるもの）は、資料づくりのプラグインのファイルを Read で開くと、その作業（`step`）に当たるものを hook が続けて出す（2026-10-12 に、そのときの形〔同じパスの `rules/deck-practices/visual.md`〕で確かめた。サブフォルダで開いた会話では出ない）。`per_material: true` のレシピは、構成案の頭の「使う決まり」に書いたものを、構成案を開くと出す。`/desk-tools:<スキル>` で呼んだときは、道具を通らずに SKILL.md が入るので、UserPromptSubmit の hook が、その SKILL.md を開いたときと同じものを出す（2026-10-20 に確かめた）。自動のコンパクションのあと、Claude Code は呼んだスキルの SKILL.md を付け直すので、SessionStart（`compact`）の hook がその決まりを出し直す（2026-10-25 に `/compact` で確かめた）。frontmatter の `paths`（2026-10-29 からは `step`）、`deck-practices/start.md` を開いたときの一覧、構成案の「使う決まり」は、2026-10-27 に sandbox の会話の記録で確かめた（Read と `/desk-tools:deck-review`）。スキルは `desk-tools:` を付けた名前で呼ぶ（`/desk-tools:slides-build` など）。
 
 ## 注意
 

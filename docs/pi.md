@@ -13,7 +13,7 @@ pi install -l git:github.com/mats16/ai-desktools   # git から
 ```
 
 - 書き込まれるのは `<ワークスペース>/.pi/settings.json` の `packages`。手元のパスは `.pi/` からの相対のパスで入るので、ワークスペースか checkout を動かしたら入れ直す。
-- 入るもの（`package.json` の `pi`）: `skills/` の 16 個のスキルと、`extensions/rules.ts`（プラグインのファイルを read・bash で開いたら、frontmatter の `paths` が当たるワークスペースの `rules/` の決まりを、資料の `構成案*.md` などを開いたら顧客の `memory.md` と、構成案の「使う決まり」に書いた決まりを続けて出す。今の文脈に残っているものは出し直さない。2026-10-27 に、read と `/skill:deck-review` で確かめた）。
+- 入るもの（`package.json` の `pi`）: `skills/` の 17 個のスキルと、`extensions/rules.ts`（プラグインのファイルを read・bash で開いたら、その作業に当たるワークスペースのレシピ〔`recipes/<名前>/RECIPE.md`〕を、資料の `構成案*.md` などを開いたら顧客の `memory.md` と、構成案の「使う決まり」に書いた決まりを続けて出す。今の文脈に残っているものは出し直さない。2026-10-27 に、そのときの `rules/` の形で、read と `/skill:deck-review` で確かめた）。
 - スキルは `/skill:desk-init` のように呼ぶ。入れたら `desk-init`、続けて `desk-doctor`（README の「入れ方」）。
 
 ## project trust
@@ -37,7 +37,7 @@ cd ~ && pi list                   # User packages にだけ出る（ここに de
 (echo '{"type":"get_commands"}'; sleep 6) | pi --mode rpc --no-session | grep -o '"name":"skill:[^"]*"'
 ```
 
-ワークスペースでは 16 個（`desk-init` … `desk-kaizen`）が `scope: project` で出て、ほかのフォルダでは出ない。何も出ないときは、trust を保存していない（上の「project trust」）か、起動が返事より遅れている。`/trust` で保存するか、`sleep` を延ばしてもう一度回す。
+ワークスペースでは 17 個（`desk-init` … `desk-kaizen`）が `scope: project` で出て、ほかのフォルダでは出ない。何も出ないときは、trust を保存していない（上の「project trust」）か、起動が返事より遅れている。`/trust` で保存するか、`sleep` を延ばしてもう一度回す。
 
 ## pi はワークスペースの直下で起こす
 
@@ -57,4 +57,4 @@ cd <ワークスペース>
 pi remove -l ~/Projects/ai-desktools   # 入れたときと同じ書き方で
 ```
 
-ワークスペースのファイル（`desk.toml`・`AGENTS.md`・`rules/`・`.desk/`）と、個人の設定の `~/.desk.toml` は残る。
+ワークスペースのファイル（`desk.toml`・`AGENTS.md`・`recipes/`・`.desk/`）と、個人の設定の `~/.desk.toml` は残る。

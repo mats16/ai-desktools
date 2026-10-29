@@ -25,7 +25,7 @@ An AI Desk Tools template is the Google Slides file that `slides.py new` copies.
 
 ## Where the rules live
 
-The rules a template must meet when you adjust it. To change a value, edit the source of truth (to change it in the workspace, write it in a rule file in `rules/` whose `paths` names this file).
+The rules a template must meet when you adjust it. To change a value, edit the source of truth (to change it in the workspace, write it in a recipe with `step: build`).
 
 | Rule | Source of truth | What measures it |
 |---|---|---|

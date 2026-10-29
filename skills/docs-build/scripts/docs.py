@@ -4,7 +4,7 @@
 markdown で内容を詰め、テンプレートとともに API で組み、直しを繰り返す（doc.py の make(d) から移した）。
 usage（資料の build/ で。doc.md は今いるフォルダのもの）:
   docs.py themes   テーマ（既定とワークスペースの themes/docs/<名前>.json）の名前と説明。資料ごとに選ぶ（docs-build の SKILL.md の 1.2。テーマのファイルの書き方は ../themes.md）
-  docs.py init <テンプレートの名前>   テンプレート（ワークスペースの rules/docs-build/templates/<名前>/doc.md）を写して doc.md を作る
+  docs.py init <テンプレートの名前>   テンプレート（ワークスペースの recipes/<レシピ>/templates/<名前>/doc.md）を写して doc.md を作る
   docs.py new <Drive のフォルダの URL か ID> <Drive 上の名前>   空の Google Doc を作って組む
   docs.py build <URL か ID> [--force]   組み直す（本文をすべて入れ替える。URL は変わらない）。前に組んだあとに画面で直されているか、
                                         未解決のコメントがあれば止まる。直しを doc.md に入れてから --force で組み直す
@@ -793,11 +793,14 @@ def load_doc():
 
 
 def template_md(name):
-    """テンプレートの doc.md（ワークスペースの rules/docs-build/templates/<名前>/。会社の文書の型なので、プラグインには入れない）。"""
-    p = gapi.workspace() / "rules" / "docs-build" / "templates" / name / "doc.md"
-    if not p.is_file():
-        sys.exit(f"テンプレート {name} がない（{p}）")
-    return str(p)
+    """テンプレートの doc.md（ワークスペースの recipes/<レシピ>/templates/<名前>/。会社の文書の型なので、プラグインには入れない。使い分けはそのレシピの RECIPE.md）。"""
+    root = gapi.workspace() / "recipes"
+    found = sorted(p for p in root.rglob(f"templates/{glob.escape(name)}/doc.md") if p.is_file()) if root.is_dir() else []
+    if len(found) > 1:
+        sys.exit(f"テンプレート {name} が {len(found)} つある（{'、'.join(str(p.relative_to(root.parent)) for p in found)}）。名前を分ける")
+    if not found:
+        sys.exit(f"テンプレート {name} がない（{root}/<レシピ>/templates/{name}/doc.md）")
+    return str(found[0])
 
 
 def cmd_init(name):
@@ -1247,6 +1250,21 @@ def selftest():
             pass
     got = lambda props: (globals().__setitem__("request", lambda *a, **k: {"appProperties": props}), built_fonts("x"))[1]
     assert got({FONTS: "BIZ UDPGothic\tIBM Plex Mono"}) == ("BIZ UDPGothic", "IBM Plex Mono") and got({}) == ("Noto Sans JP", "Cascadia Mono") != (FONT, MONO)  # 組んだときの書体。印のない文書は、入れたテーマによらず既定
+    with tempfile.TemporaryDirectory() as ws:  # テンプレートは、どのレシピのフォルダの templates/ にあってもよい。同じ名前が 2 つなら止める
+        real, gapi.workspace = gapi.workspace, lambda: Path(ws)
+        try:
+            for f in ("recipes/poc/templates/poc_plan/doc.md", "recipes/a/templates/x/doc.md", "recipes/b/templates/x/doc.md"):
+                (Path(ws) / f).parent.mkdir(parents=True)
+                (Path(ws) / f).write_text("# t\n")
+            assert template_md("poc_plan").endswith("recipes/poc/templates/poc_plan/doc.md")
+            for name, msg in (("x", "2 つある"), ("nope", "がない")):
+                try:
+                    template_md(name)
+                    raise AssertionError(name)
+                except SystemExit as e:
+                    assert msg in str(e), e
+        finally:
+            gapi.workspace = real
     print("selftest ok")
 
 

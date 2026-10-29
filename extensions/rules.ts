@@ -1,4 +1,4 @@
-// pi の側のつなぎ: read・bash の結果に、frontmatter の paths が当たるワークスペースの決まり（読んだパス・コマンドと、出力に中身が出たファイルで見る）と、顧客の memory.md・構成案の「使う決まり」を足す。/skill:<名前> で呼んだスキルには、その SKILL.md に当たる決まりを足す（今の文脈に残るものは足さない）。中身は hooks/rules_overlay.py（Claude Code・Codex と共有）
+// pi の側のつなぎ: read・bash の結果に、その作業（読んだパス・コマンドと、出力に中身が出たファイルで見る）で出すワークスペースのレシピ（recipes/<名前>/RECIPE.md）と、顧客の memory.md・構成案の「使う決まり」を足す。/skill:<名前> で呼んだスキルには、その SKILL.md を読んだときと同じものを足す（今の文脈に残るものは足さない）。中身は hooks/rules_overlay.py（Claude Code・Codex と共有）
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

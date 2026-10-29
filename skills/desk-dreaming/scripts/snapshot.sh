@@ -1,6 +1,6 @@
 #!/bin/sh
 # usage: cd <ワークスペース> && snapshot.sh save | diff <tar.gz> | restore <tar.gz>
-# 定期の整理の前に、指示（AGENTS.md・CLAUDE.md・rules/）、顧客の memory（Customers/*/memory.md）、索引、調べ直しの記録（Research/deck_research/）、Claude Code のメモリを固めて残す。
+# 定期の整理の前に、指示（AGENTS.md・CLAUDE.md・recipes/。移す前の前の版の rules/ も）、顧客の memory（Customers/*/memory.md）、索引、調べ直しの記録（Research/deck_research/）、Claude Code のメモリを固めて残す。
 # diff はその写しから後の変更を出し、restore はその写しに戻す（写しのあとに足したファイルは消さない）。
 # 写しはワークスペースの .desk/dreaming/backup/。lint の記録（.desk/lint_runs.jsonl）は、戻すと消えるので入れない。
 set -eu
@@ -10,7 +10,7 @@ MEM=$HOME/.claude/projects/$(printf %s "$ROOT" | tr '/._' '---')/memory
 DIR=$ROOT/.desk/dreaming/backup
 CMD=${1:-} ARG=${2:-}
 set --  # 固めるパスは引数に並べる（空白のあるフォルダも 1 つのパスのまま渡す）
-for p in "$ROOT/AGENTS.md" "$ROOT/CLAUDE.md" "$ROOT/references_index.md" "$ROOT/rules" "$ROOT"/Customers/*/memory.md "$ROOT/Research/deck_research" "$MEM"; do
+for p in "$ROOT/AGENTS.md" "$ROOT/CLAUDE.md" "$ROOT/references_index.md" "$ROOT/recipes" "$ROOT/rules" "$ROOT"/Customers/*/memory.md "$ROOT/Research/deck_research" "$MEM"; do
   [ -e "$p" ] && set -- "$@" "${p#/}"
 done
 case $CMD in

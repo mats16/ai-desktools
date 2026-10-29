@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """スライドとドキュメントで同じ lint の部品: 本文の表記の決まり（HARD・WARN）、色のコントラスト、出典の表の照合、指摘の入れ物（Report）、
-ワークスペースの点検（rules/<スキル>/checks.py）、要確認の記録（.desk/lint_runs.jsonl）。スライドは slides-build の lint.py、
+ワークスペースの点検（recipes/ の下の checks.py）、要確認の記録（.desk/lint_runs.jsonl）。スライドは slides-build の lint.py、
 ドキュメントは docs-build の doc_lint.py が読む。標準ライブラリだけ。
 usage: python3 textlint.py --stats   要確認の残り方（規則ごと。desk-dreaming/run.md の 5）
        python3 textlint.py --selftest"""
-import hashlib, json, os, re, sys, time, unicodedata
+import copy, hashlib, json, os, re, sys, time, unicodedata
 from collections import defaultdict
 
 sys.dont_write_bytecode = True
@@ -122,31 +122,37 @@ class Report:
         return n
 
 
-CHECKS = {"slides": "slides-build", "doc": "docs-build"}  # 点検の関数の名前 → ワークスペースの rules/<スキル>/checks.py
-
-
 def workspace_checks(kind, data, r):
-    """ワークスペースの点検。スライドは rules/slides-build/checks.py の slides(p, r)、ドキュメントは rules/docs-build/checks.py の doc(doc, r) を呼ぶ
-    （修正の指示から育てる、そのワークスペースだけの点検。deck-practices/rules.md の「Workspace rules」）。足された指摘のうち、checks.py の HARD にある名前は要修正、ほかは要確認。"""
+    """ワークスペースの点検。recipes/ の下の checks.py（そのレシピのフォルダに置く。テンプレートの templates/ の下は見ない）のうち、
+    スライドは slides(p, r)、ドキュメントは doc(doc, r) を持つものを、パスの順に呼ぶ（修正の指示から育てる、そのワークスペースだけの点検。deck-practices/rules.md の「Workspace rules」）。
+    足された指摘のうち、そのファイルの HARD にある名前は要修正、ほかは要確認。"""
     import importlib.util
     try:
-        path = gapi.workspace() / "rules" / CHECKS[kind] / "checks.py"
+        root = gapi.workspace() / "recipes"
     except SystemExit:  # ワークスペースがない
         return 0
-    if not path.is_file():
-        return 0
-    spec = importlib.util.spec_from_file_location("workspace_checks", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    if not (fn := getattr(mod, kind, None)):
-        return 0
-    before = {k for k, v in r.hits.items() if v}
-    fn(data, r)
-    new = [k for k, v in r.hits.items() if v and k not in before]
-    hard = [k for k in new if k in getattr(mod, "HARD", ())]
-    r.extra_hard |= set(hard)
-    n = r.show(hard, f"要修正（ワークスペースの点検 {path}）")
-    r.show([k for k in new if k not in hard], "要確認（ワークスペースの点検）")
+    n = 0
+    for path in sorted(root.rglob("checks.py")) if root.is_dir() else []:
+        if "templates" in path.relative_to(root).parts[1:] or not path.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location("workspace_checks", path)
+        mod = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(mod)
+        except ModuleNotFoundError as e:  # 前の雛形の、頭で import lint（スライドだけ）・import doc_lint（ドキュメントだけ）する点検は、ほかの lint では飛ばす
+            if e.name == {"slides": "doc_lint", "doc": "lint"}[kind]:
+                continue
+            raise
+        if not (fn := getattr(mod, kind, None)):
+            continue
+        before = {k: len(v) for k, v in r.hits.items()}
+        fn(data, r)
+        view = copy.copy(r)  # このファイルが足した指摘だけ（前のファイルと同じ名前に足しても）
+        view.hits = defaultdict(list, {k: v[before.get(k, 0):] for k, v in r.hits.items() if len(v) > before.get(k, 0)})
+        hard = [k for k in view.hits if k in getattr(mod, "HARD", ())]
+        r.extra_hard |= set(hard)
+        n += view.show(hard, f"要修正（ワークスペースの点検 {path}）")
+        view.show([k for k in view.hits if k not in hard], f"要確認（ワークスペースの点検 {path.parent.relative_to(root.parent)}）")
     return n
 
 
@@ -215,18 +221,23 @@ def selftest():
         assert load_facts(tmp) == "40%" and load_facts(os.path.join(tmp, "nothing")) is None  # 資料のフォルダの出典の表を読み、構成案も台帳もなければ None
     assert not_in_facts(["売上は 1,200 億円", "３．２倍", "12%"], "1200 億円、3.2 倍") == ["12%"]  # 桁区切り・全角はそろえ、表にない値だけを出す
     assert not_in_facts(["40.0 %", "0.60 ドル", "100 件", "3.2 倍"], "40%、0.6 ドル、100.0 件、3.24 倍") == ["3.2 倍"]  # 小数の終わりの 0 は見ない。丸めた値は出す
-    # ワークスペースの点検: HARD の名前だけ要修正になる。スライドとドキュメントは、それぞれのスキルの checks.py
+    # ワークスペースの点検: HARD の名前だけ要修正になる。recipes/ の下のどのレシピのフォルダの checks.py も、持っている関数（slides・doc）だけ
     with tempfile.TemporaryDirectory() as ws, contextlib.chdir(ws), contextlib.redirect_stdout(io.StringIO()):
         Path(ws, "desk.toml").write_text("")
-        Path(ws, "rules", "slides-build").mkdir(parents=True)
-        Path(ws, "rules", "slides-build", "checks.py").write_text(
+        Path(ws, "recipes", "brand").mkdir(parents=True)
+        Path(ws, "recipes", "brand", "checks.py").write_text(
             'HARD = {"禁止の語"}\ndef slides(p, r):\n    r.hits["禁止の語"].append("p1")\n    r.hits["気になる語"].append("p2")\n')
         gapi.find_config.cache_clear()
         r = Report()
         assert workspace_checks("slides", {}, r) == 1 and r.hits["気になる語"] and workspace_checks("doc", {}, Report()) == 0
-        Path(ws, "rules", "docs-build").mkdir()
-        Path(ws, "rules", "docs-build", "checks.py").write_text('def doc(doc, r):\n    r.hits["文書の語"].append("段落 1")\n')
-        assert workspace_checks("doc", {}, r := Report()) == 0 and r.hits["文書の語"]  # HARD がなければ要確認
+        Path(ws, "recipes", "group", "proposal").mkdir(parents=True)
+        Path(ws, "recipes", "group", "proposal", "checks.py").write_text('HARD = {"文書の語"}\ndef doc(doc, r):\n    r.hits["文書の語"].append("段落 1")\n')
+        Path(ws, "recipes", "brand", "checks.py").write_text('def doc(doc, r):\n    r.hits["社名"].append("段落 2")\n    r.hits["文書の語"].append("段落 3")\n')  # 同じ名前に、HARD にしないファイルが先に足しても
+        Path(ws, "recipes", "slide_checks").mkdir()
+        Path(ws, "recipes", "slide_checks", "checks.py").write_text("import lint\ndef slides(p, r):\n    pass\n")  # 前の雛形の、頭で import するスライドの点検は、ドキュメントの lint では飛ばす
+        Path(ws, "recipes", "proposal", "templates", "t").mkdir(parents=True)
+        Path(ws, "recipes", "proposal", "templates", "t", "checks.py").write_text("raise SystemExit('テンプレートの中は読まない')\n")
+        assert workspace_checks("doc", {}, r := Report()) == 1 and r.hits["社名"] and r.hits["文書の語"] and r.extra_hard == {"文書の語"} and r.hits["文書の語"] == ["段落 3", "段落 1"]  # HARD はそのファイルの名前だけ（数えるのは、そのファイルが足したものだけ）
     gapi.find_config.cache_clear()
     print("selftest ok")
 

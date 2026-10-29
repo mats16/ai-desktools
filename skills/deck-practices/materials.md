@@ -8,7 +8,7 @@ Read this when gathering internal materials and customer information (steps 3 an
 
 ## Internal materials (reuse and messaging)
 
-The tools are listed by role in the settings `desk.toml` under `[sources]` (`search`, `chat`, `meetings`, `wiki`, `crm`, `usage`). For a role that is not listed, ask the user to paste the material or URL. How to use each tool and where to look in that company are in the workspace's `rules/deck-practices/materials.md`.
+The tools are listed by role in the settings `desk.toml` under `[sources]` (`search`, `chat`, `meetings`, `wiki`, `crm`, `usage`). For a role that is not listed, ask the user to paste the material or URL. How to use each tool and where to look in that company are in the workspace's gathering recipe (`step: gather`; the hook shows it when you open this file).
 
 - **Internal cross search** (`search`): search here first for materials on the same theme (「<製品名> pitch deck」「<テーマ> 日本語」「<顧客の業種> 事例」 and so on).
 - **File storage**: read the contents of the Google Slides and Docs you found (for Google Slides, `../slides-build/scripts/gslides.py` also works).

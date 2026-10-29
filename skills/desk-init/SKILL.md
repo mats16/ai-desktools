@@ -1,6 +1,6 @@
 ---
 name: desk-init
-description: Create an AI Desk Tools workspace (the folder that holds materials and rules). Places templates of AGENTS.md, CLAUDE.md, references_index.md, rules/, and .gitignore, plus Customers/, Internal/, and Research/, and the settings desk.toml in the workspace or in ~/.desk.toml (never overwrites existing files), fills in the settings with the user, and checks with desk-doctor. Use when asked 「ワークスペースを作って」, 「setup して」, or 「AI Desk Tools を使い始めたい」.
+description: Create an AI Desk Tools workspace (the folder that holds materials and rules). Places templates of AGENTS.md, CLAUDE.md, references_index.md, recipes/, and .gitignore, plus Customers/, Internal/, and Research/, and the settings desk.toml in the workspace or in ~/.desk.toml (never overwrites existing files), fills in the settings with the user, and checks with desk-doctor. Use when asked 「ワークスペースを作って」, 「setup して」, or 「AI Desk Tools を使い始めたい」.
 ---
 
 # Create a workspace
@@ -30,7 +30,7 @@ When installing through a conversation (the repository's `INSTALL.md`), step 1 i
    - `[drive]`: the root locations for customer-facing and internal slides and documents.
    - `[review]`: do not ask. Keep the template defaults (the outline review is done by AI; `/deck-review` runs up to 3 rounds). Change only when the user says so.
    - `[feedback.google_comments] watch_hours`: how long to watch comments after delivering a material. When installing through a conversation, write the value asked in step 1 of `INSTALL.md`. Otherwise do not ask; keep the template's 0 (no watching), and change only when the user says so.
-   - `[sources]`: tools for gathering material (internal search, chat, meeting records, wiki, customer ledger, spend). Offer candidates from the MCP servers and skills in your own tool list and ask. To make per-tool usage a rule, write it in `rules/deck-practices/materials.md` with frontmatter `description` and `paths: [deck-practices/materials.md]` ("Workspace rules" in `../deck-practices/rules.md`).
+   - `[sources]`: tools for gathering material (internal search, chat, meeting records, wiki, customer ledger, spend). Offer candidates from the MCP servers and skills in your own tool list and ask. To make per-tool usage a rule, write it in a recipe for the company's tools (such as `recipes/internal_tools/RECIPE.md`) with frontmatter `description` and `step: gather` (`../desk-recipes/SKILL.md`).
 4. **Adjust `AGENTS.md`.** Add the user's customers to the 「顧客とフォルダ」 table. Ask whether to create a profile for each added customer now; if yes, create it with the skill `customer-profile` (after filling `[sources]`). For template rules that do not fit, ask the user before changing them (workspace rules take priority, so changes here take effect).
 5. **Ask whether to use git.** To keep a history of growing rules and checks, run `git init` in the workspace and make the first commit (the placed `.gitignore` includes only the rules, themes, assets, and the research log; the settings hold per-person values and stay out). The user decides whether to push to a remote.
 6. **Check.** Run the skill `desk-doctor` and fix until there are 0 `要修正`.
