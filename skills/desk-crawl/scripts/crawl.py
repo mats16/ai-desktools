@@ -19,7 +19,7 @@ usage:
   crawl.py --selftest
 先の id は <kind>:<ref>。流れは <サービス>:<ref>、検索は <サービス>-search:<語>、開かれた形式は feed・web（slack:C0123456789、
 slack-search:japaneast、gmail-search:label:product-news、feed:https://…/feed.xml、web:https://…、web-search:<語>、confluence:<ページ>）。"""
-import difflib, html, ipaddress, json, math, re, statistics, sys, urllib.error, urllib.parse, urllib.request
+import difflib, html, ipaddress, json, math, re, socket, statistics, sys, urllib.error, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
@@ -41,6 +41,7 @@ COOL = 10          # 探索して何も使われなかった候補は、この�
 NEW_DAYS, NEW_MAX = 14, 3  # 作られてこの日数のうちの、まだ読んでいない先は、ほかの候補より先に探索する（1 回に NEW_MAX まで）
 CATCHUP = timedelta(days=7)  # 前に読んだ所から取り戻す、いちばん古い始まり
 MORE_MAX = 3       # その回の中で追加に読む先の数
+FEED_MAX = 5 * 2**20  # 1 つのフィードで読む大きさの上限
 NOTES_MAX = 5      # 子に渡す覚え書きの数（先ごと・話題ごと）。全部渡すと、回すほど依頼文が重くなる
 NOTE_STALE = 30    # この回数のあいだ効いた票の付かない覚え書きは、子に渡さない（消さない。sources で見える）
 SITE_MIN = 2       # 使われた項目の出典（public_url）に、この回数出た、読む先にないサイトを挙げる
@@ -84,8 +85,8 @@ def when(s):
 
 
 def folder(topic):
-    if not re.fullmatch(r"[\w-]+", topic):
-        sys.exit(f"話題の名前は英数字と - だけ（{topic}）")
+    if not re.fullmatch(r"\w[\w-]*", topic):  # - で始まる名前は、取り違えた引数（plan -h）なので話題にしない
+        sys.exit(f"話題の名前は英数字と - だけで、英数字で始める（{topic}）")
     root = ROOT or ((f := desk.locate()) and f[1]) or sys.exit(desk.missing())
     if (old := Path(root) / ".desk" / OLD).exists():  # 黙って記録が 2 か所に分かれないよう、前の名前の記録があれば止める
         sys.exit(f"前の名前（source-scout）の記録 {old} がある。状態と種類の名前が変わったので、そのままでは読めない。"
@@ -141,7 +142,10 @@ def kind(sid):
 
 def canon(url):
     """同じ項目の URL を 1 つにそろえる。追跡の引数・#・末尾の / を外し、ホストを小文字にする（Slack の thread_ts などほかの引数は残す）。"""
-    p = urllib.parse.urlsplit(url.strip())
+    try:
+        p = urllib.parse.urlsplit(url.strip())
+    except ValueError:  # 子の返事やフィードの壊れた URL（http://[::1 など）1 つで、まとめ全体を止めない
+        return url.strip()
     slack = p.netloc.lower().endswith(".slack.com")  # Slack のリンクの cid（チャンネル）はパスと同じなので外す
     q = [(k, v) for k, v in urllib.parse.parse_qsl(p.query, keep_blank_values=True) if not TRACKING.match(k) and not (slack and k == "cid")]
     return urllib.parse.urlunsplit((p.scheme.lower(), p.netloc.lower(), p.path.rstrip("/") or "/", urllib.parse.urlencode(sorted(q)), ""))
@@ -471,9 +475,9 @@ def prompt(topic, n, goal):
 
 
 def parse_feed(xml, since):
-    """RSS の item と Atom の entry を (日時, 題, URL, 要約) にする。日付しかないフィード（00:00）があるので、since の日の始まり（UTC）から取る。"""
+    """RSS の item と Atom の entry を (日時, 題, URL, 要約) にする。since からの項目を取る。日付しかない項目（その時差で 00:00）は、
+    since の日の項目も取る（時刻がないので、since より前かがわからない）。時刻のある項目は since で切り、前の回の項目をまた出さない。"""
     root, out = ET.fromstring(xml), []
-    day = since.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     ns = {"a": "http://www.w3.org/2005/Atom"}
     def date(text, parse):
         """読めない日付の項目は捨てる（1 つの項目でフィード全体を落とさない）。時差のない日付（-0000 など）は UTC とみなす。"""
@@ -496,26 +500,32 @@ def parse_feed(xml, since):
     clean = lambda s: " ".join(html.unescape(re.sub(r"<[^>]+>", " ", s)).split())[:300]
     got, titles = [], set()
     for d, t, u, s in out:  # 同じ項目が別の URL で 2 回出るフィードがある（製品のページと全体のページ）。題で 1 つにする
-        if d and d >= day and u and norm_title(clean(t)) not in titles:
+        if d and (d >= since or d.time() == datetime.min.time() and d.date() >= since.astimezone(d.tzinfo).date()) \
+                and u and norm_title(clean(t)) not in titles:
             titles.add(norm_title(clean(t)))
             got.append((d, clean(t), u, clean(s)))
     return got
 
 
 def unsafe_feed(url):
-    """開かないフィードの URL なら理由を返す: http・https でない、手元の名前、手元・社内の IP アドレス。
-    ponytail: 名前を引いた先の IP は見ない（DNS で社内に向く名前は通る）。要れば socket.getaddrinfo で引いて同じに見る"""
-    p = urllib.parse.urlsplit(url)
+    """開かないフィードの URL なら理由を返す: http・https でない、手元の名前、引いた先が手元・社内の IP アドレス。
+    名前は引いて、出た IP を全部見る（2130706433・0x7f.1 のような数の書き方も、OS が 127.0.0.1 に読むのでここで止まる）。
+    shortcut: 引いてからつなぐまでに DNS の答えが変わると通る。子の返事から入る先を開くだけなので、要れば引いた IP につなぐ"""
+    try:
+        p = urllib.parse.urlsplit(url)
+        port = p.port  # 数でない・範囲の外のポートは、ここで ValueError になる
+    except ValueError:
+        return "URL の形が違う"  # 1 つの壊れた URL で、ほかのフィードの取得を止めない
     if p.scheme not in ("http", "https"):
         return "http・https の URL ではない"
-    host = (p.hostname or "").lower()
+    host = (p.hostname or "").lower().rstrip(".")  # localhost. のような末尾の点も同じ名前
     if not host or host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
         return "手元・社内の名前の URL は開かない"
     try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return ""
-    return "" if ip.is_global else "手元・社内の IP アドレスの URL は開かない"
+        ips = {a[4][0] for a in socket.getaddrinfo(host, port or 443, proto=socket.IPPROTO_TCP)}
+    except (OSError, UnicodeError):
+        return ""  # 引けない名前は、開くときに落ちる（取れなかった先として次の回に取り戻す）
+    return "" if all(ipaddress.ip_address(ip.split("%")[0]).is_global for ip in ips) else "手元・社内の IP アドレスの URL は開かない"
 
 
 class SafeRedirect(urllib.request.HTTPRedirectHandler):
@@ -545,7 +555,9 @@ def feeds(topic, out=None):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
             with OPENER.open(req, timeout=60) as r:
-                got = parse_feed(r.read(), start(since, until, st[sid]))
+                if len(body := r.read(FEED_MAX + 1)) > FEED_MAX:  # 大きすぎる先で手元のメモリを使い切らない
+                    raise ValueError(f"フィードが {FEED_MAX // 2**20} MB を超える")
+                got = parse_feed(body, start(since, until, st[sid]))
         except Exception as x:  # 1 つのフィードが落ちても、ほかは取る。取れなかった先は次の回に取り戻す
             res["reads"].append({"source": sid, "name": e.get("name", ""), "ok": False, "error": str(x)[:200]})
             continue
@@ -725,7 +737,11 @@ def add_misses(run, ms):
 
 def sites(reg, rows):
     """使われた項目の出典（public_url）のサイトのうち、まだ読む先にないもの: [(件数, ホスト)]。読む先の id と url のホスト（dropped も）は外す。"""
-    host = lambda u: (urllib.parse.urlsplit(u).hostname or "").lower().removeprefix("www.")
+    def host(u):
+        try:
+            return (urllib.parse.urlsplit(u).hostname or "").lower().removeprefix("www.")
+        except ValueError:
+            return ""
     known = {host(x) for sid, e in reg["sources"].items() for x in (sid.split(":", 1)[1], e.get("url", "")) if x.startswith("http")}
     n = Counter(host(i["public_url"]) for r in rows for i in r.get("items", [])
                 if i.get("used") and str(i.get("public_url", "")).startswith("http"))
@@ -761,13 +777,16 @@ def record(topic, path, outputs=(), missed=()):
     day = run["id"][:10]
     kept = list(dict.fromkeys(applied.setdefault("changes", []) + run.get("changes", [])))  # 前に当てた直しは、記録に残す
     changes = []
-    for n, l in enumerate(run.get("lessons", [])):  # 回の中の位置も鍵にする（2 つの子が同じ票を返したら 2 票）
-        k = [n, l.get("source", "*"), l["text"]]
+    seen = Counter()  # 同じ覚え書きの何回目かも鍵にする（2 つの子が同じものを返したら 2 つ）。回の中の位置は、まとめ直すと子の返事の順で変わるので使わない
+    for l in run.get("lessons", []):
+        k = [seen[(l.get("source", "*"), l["text"])], l.get("source", "*"), l["text"]]
+        seen[tuple(k[1:])] += 1
         if k not in applied["lessons"]:
             changes.append(add_note(reg, k[1], k[2], day))
             applied["lessons"].append(k)
-    for n, v in enumerate(run.get("votes", [])):
-        k = [n, v["note"], bool(v.get("helpful", True))]
+    for v in run.get("votes", []):
+        k = [seen[(v["note"], bool(v.get("helpful", True)))], v["note"], bool(v.get("helpful", True))]
+        seen[tuple(k[1:])] += 1
         if k in applied["votes"]:
             continue
         applied["votes"].append(k)
@@ -972,6 +991,9 @@ def selftest():
     rdf = b"""<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">
               <item><title>R</title><link>https://f/r</link><dc:date>2026-10-26T02:00:00+00:00</dc:date></item></rdf:RDF>"""
     assert [u for _, _, u, _ in parse_feed(rdf, when("2026-10-26T07:00+09:00"))] == ["https://f/r"]  # RSS 1.0（RDF）の item と dc:date
+    day = b"""<rss><channel><item><title>d</title><link>https://f/d</link><pubDate>Sun, 25 Oct 2026 00:00:00 GMT</pubDate></item>
+              <item><title>t</title><link>https://f/t</link><pubDate>Sun, 25 Oct 2026 15:00:00 GMT</pubDate></item></channel></rss>"""
+    assert [u for _, _, u, _ in parse_feed(day, when("2026-10-26T07:00+09:00"))] == ["https://f/d"]  # 日付だけの項目は since の日から、時刻のある項目は since から
     try:
         opts(["--goal"], {"goal"})
         raise AssertionError("値のない --goal で止まらない")
@@ -1093,6 +1115,10 @@ def selftest():
         (folder("t") / "runs.jsonl").write_text(lines[0] + "\n")  # 台帳を書いたあと、回の記録を書く前に落ちた
         q(record, "t", str(Path(d) / "run2.json"), [str(Path(d) / "d2.md"), str(Path(d) / "d3.md")])
         assert json.dumps(registry("t")["notes"]) == before and len(runs("t")) == 2  # 記録し直しても、当てた覚え書きと票を二重に当てない
+        (Path(d) / "c0.json").write_text(json.dumps({"lessons": [{"source": "*", "text": "Release pages list the region"}], "votes": [{"note": "n1", "helpful": False}]}))
+        q(merge, "t", [str(Path(d) / "c0.json"), str(Path(d) / "c3.json")], str(Path(d) / "run3.json"))  # more で足した返事が前に並んでも（10.json は 2.json より前）
+        q(record, "t", str(Path(d) / "run3.json"), [str(Path(d) / "d2.md"), str(Path(d) / "d3.md")])
+        assert registry("t")["notes"][0]["helpful"] == 1 and registry("t")["sources"]["slack:A"]["notes"][0]["harmful"] == 3  # 前に当てた分は当て直さず、足した票だけ当てる
         q(set_, "t", ["web:https://blog.example.com", "tier=dropped"])
         assert not sites(registry("t"), runs("t"))  # 資料のサイトは dropped にすれば、もう出さない
         rep = q(report, "t")
@@ -1181,14 +1207,16 @@ def selftest():
         assert not check(rn) and next(r for r in rn["reads"] if r["source"] == "slack:A")["since"] and "urls" not in rn["items"][0], rn  # plan の始まりを null で消さない
         for k, spec in FIELDS.items():  # コードが読む欄が表にある（表の外の欄を読み始めたら、ここで気づく）
             assert NEED[k] in spec and all(t in OK for t in spec.values()), k
-        q(set_, "u", ["feed:file:///etc/hosts", "tier=follow"])
+        for bad in ("feed:https://example.com:bad/feed", "feed:http://[::1/f", "feed:file:///etc/hosts"):
+            q(set_, "u", [bad, "tier=follow"])
         q(plan, "u", {})
         q(feeds, "u", str(Path(d) / "f.json"))
         got = json.loads((Path(d) / "f.json").read_text())
-        assert got["reads"][0]["ok"] is False and not got["candidates"], got  # http・https でないフィードは開かない
+        assert len(got["reads"]) == 3 and not any(r["ok"] for r in got["reads"]) and not got["candidates"], got  # 形の違う URL と http・https でないフィードは開かず、ほかの先も続けて読む
         assert check({"id": "x", "discovered": [{"source": "slack:Z", "created": "Oct 24"}]}) and check({"id": "x", "since": "yesterday"})
         assert md_urls("[a](https://w/Foo_(bar)) と [b](https://x/2)。 https://x/3]") == {canon("https://w/Foo_(bar)"), canon("https://x/2"), canon("https://x/3")}
         assert canon("https://github.com/o/r/blob/x?ref=v1") != canon("https://github.com/o/r/blob/x?ref=v2")  # ref は版を指すので残す
+        assert canon(" http://[::1/f ") == "http://[::1/f" and not sites({"sources": {}}, [{"items": [{"used": True, "public_url": "http://[::1/f"}] * 2}])
         assert canon("https://w.slack.com/archives/C1/p2?cid=C1") == canon("https://w.slack.com/archives/C1/p2")
         (Path(d) / "list.json").write_text("[1, 2]")
         try:
@@ -1249,6 +1277,7 @@ def selftest():
         assert [r["id"] for r in sorted(mixed, key=run_time)] == ["a", "b"]  # 時差が違っても時刻の順
         assert unsafe_feed("http://169.254.169.254/x") and unsafe_feed("http://localhost/f") and unsafe_feed("http://10.0.0.1/f")
         assert not unsafe_feed("https://example.com/feed.xml")
+        assert all(unsafe_feed(u) for u in ("http://localhost./f", "http://2130706433/f", "http://0x7f.1/f", "http://[::1]/f", "http://[::ffff:127.0.0.1]/f"))
         fresh_reg = {"sources": {"slack:F": {"tier": "candidate", "created": "2026-12-01"}}, "notes": []}
         assert choose(fresh_reg, [], 0, when("2026-12-02T07:00+09:00"))[2] == []  # --explore 0 なら新しい先も読まない
         assert choose(fresh_reg, [], 3, when("2026-12-02T07:00+09:00"))[2] == ["slack:F"]
