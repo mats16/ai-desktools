@@ -19,6 +19,8 @@ paths にそのパスを書いた frontmatter を足す（出る場面は前と�
 点検の checks.py は recipes/slide_checks/・doc_checks/ に、ドキュメントのテンプレートは recipes/doc_templates/templates/ に移す。台帳・AGENTS.md・CLAUDE.md・顧客の memory.md・
 レシピ・構成案の中の前のパスも書き換える。前の段の移しは rules/ の中で済ませてから、最後にこの段を回す。
 2026-10-29 の版で、source-scout を desk-crawl にした（決まりの ID は ids_20261029.json）。記録の .desk/scout/<話題>/ は、状態・種類・mode を今の形にして .desk/crawl/<話題>/ に移す。
+同じ日に、全体の索引 references_index.md を、手で書くものから refs.py index が台帳（references.md）から作るものにした。手で書いた前の索引は、Drive の節を drive_folders.md に、
+作り直した索引に出ない行を Research/references.md に移し、同じ出典が出る行は消して（控えに残す）、作り直す。
 何度回してもよい。標準ライブラリだけ。"""
 import fnmatch, json, os, re, shutil, subprocess, sys, tempfile, time
 from collections import Counter
@@ -29,6 +31,7 @@ PLUGIN = HERE.parents[1]  # プラグインの skills/
 sys.path.insert(0, str(PLUGIN / "deck-practices" / "scripts"))
 import desk  # noqa: E402  ワークスペースの探し方
 import ledger  # noqa: E402  台帳の提案の状態（state）
+import refs  # noqa: E402  出典の台帳と全体の索引（2026-10-29 から作るもの）
 from ledger import TOPICS  # noqa: E402  決まりの ID の主題
 MAPS = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(HERE.glob("ids_*.json"))]  # 日付の順。ids: 前の ID → 今の ID、prefixes: 前の接頭辞 → 今の接頭辞（ws- と、もうない ID に使う）
 MOVES = [  # rules/ の下の前のパス → 今のパス（上から当てる。フォルダはその下を全部）
@@ -167,6 +170,162 @@ def move_scout(ws):
     if not any(p.is_dir() for p in old.iterdir()):  # 話題を移し終えたら、残りのファイル（.DS_Store など。話題でないので控えない）ごと消す。残すと crawl.py が止まったままになる
         shutil.rmtree(old)
         out.append("要判断: 定期の集めを前の名前（source-scout）で登録していれば、登録したプロンプトのスキルの名前を desk-crawl に替える（登録はワークスペースの外にあり、ここからは直せない）")
+    return out
+
+
+DRIVE = "drive_folders.md"  # Drive のフォルダと上げた資料（手で持つ）。2026-10-29 まで references_index.md の節
+DRIVE_HEAD = re.compile(r"## Google Drive の置き場所(（[^`]*）)?\s*$")  # 前の索引の Drive の節の見出し（説明の文の中の `## Google Drive の置き場所` は見出しでない）
+FORMAT = re.compile(r"`[^`]*<[^>`]+>[^`]*`")  # 前の索引の書き方の例（`- [<顧客>: <会議の名前>](…)`）。出典でない
+
+
+MARK = "<!-- desk-migrate が前の references_index.md から移した。この行を消すと、次の apply でまた移す -->"  # 移しを 1 度だけにする印。足した塊の最後の行
+RESEARCH_HEAD = refs.HEAD + "資料に結びつかない出典（調べもの・会議）の台帳。足すときは `refs.py add Research <URL>`。\n\n"
+
+
+def index_plan(ws):
+    """手で書いた前の形の references_index.md の分け方: (Drive の節の行, {節の見出し: 移す行}, [(節の見出し, 消す行)], 移さない行)。前の形でなければ None。
+    URL か会議の ID のある行は、まず消すほうに入れる（作り直した索引に見えるかは settle が確かめ、見えないものは移すほうに回す）。場所のない行
+    （使わなかった資料・URL を残していない資料・調べもの）は移す。頭の説明と、前の雛形の書き方の例は移さない（_dropped.md に残す）。"""
+    if refs.generated(p := ws / refs.INDEX):
+        return None
+    drive, moved, dropped, skipped, sec = [], {}, [], [], None
+    for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("## "):
+            sec = DRIVE if DRIVE_HEAD.match(line) else line[3:].strip()
+        elif not line.strip():
+            if sec == DRIVE:
+                drive.append(line)
+        elif line.startswith("# "):  # 題と、# で書いた見出し。移さないが、一覧に残す
+            skipped.append(line)
+        elif not (ks := refs.keys(line)) and (sec is None or FORMAT.search(line)):
+            skipped.append(line)
+        elif sec == DRIVE:
+            drive.append(line)
+        elif ks:
+            dropped.append((sec or "（見出しの前）", line))
+        else:
+            moved.setdefault(sec, []).append(line)
+    return drive, moved, dropped, skipped
+
+
+def research_block(moved):
+    """Research/references.md に足す行。移す行を、前の索引の節の見出しの下に並べる。箇条書きでない行（番号の箇条書き・地の文）は `- ` の箇条書きにする
+    （refs.py index は箇条書きと表の行しか読まないので、そのままだと索引に出ない）。"""
+    bullet = lambda x: x if re.match(r"\s*[-*] |\s*\|", x) else "- " + re.sub(r"^\s*(?:\d+[.)]|\+)\s+", "", x).strip()
+    return ([f"## 前の索引から移したもの（{time.strftime('%Y-%m-%d')}）", "", "前の references_index.md（手で書いた形）にあって、作り直した索引に出ない行。見出しは前の索引の節。"]
+            + [x for s, ls in moved.items() for x in ("", f"### {s}", "", *map(bullet, ls))])
+
+
+def settle(ws, moved, dropped, today):
+    """消す行のうち、移しを済ませたあとの索引に URL か会議の ID が 1 つでも見えないものを、移す行に回す。(移す行, 消す行, 回せない行)。
+    見えるかは、台帳の写しに移しを当てて索引を作り、その文で見る（どの台帳の本文が行に出るか、どこで切るかを当て推量しない）。移すと出る本文が替わるので、
+    回すものがなくなるまで繰り返す。移しがもう済んでいる（Research/references.md に印がある）なら、回せない行を返す（前の索引は消さない）。"""
+    moved, dropped = {s: list(ls) for s, ls in moved.items()}, list(dropped)
+    research = ws / "Research" / "references.md"
+    done = research.is_file() and MARK.encode() in research.read_bytes()
+    while True:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            for f in refs.ledgers(ws):
+                (dst := tmp / f.relative_to(ws)).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(f, dst)
+            if moved and not done:
+                (tmp / "Research").mkdir(exist_ok=True)
+                append_block(tmp / "Research" / "references.md", RESEARCH_HEAD, research_block(moved))
+            fill_uses(tmp, [x for _, x in dropped])
+            seen = set(refs.keys("\n".join(refs.index_lines(tmp, today))))
+        bad = [(s, x) for s, x in dropped if not set(refs.keys(x)) <= seen]
+        dropped = [d for d in dropped if d not in set(bad)]
+        if not bad or done:
+            return moved, dropped, bad
+        for s, x in bad:
+            moved.setdefault(s, []).append(x)
+
+
+def fill_uses(ws, lines):
+    """台帳の新しい形の行で使い道が空のものに、同じ出典の前の索引の行の文（名前と URL のあと）を写す。写した [(台帳, ID, 文)]（戻すときに消す）。"""
+    text = {}
+    for line in lines:
+        if ks := refs.keys(line):
+            text.setdefault(ks[0], re.sub(rf"^\s*-\s*(\[[^\]]*\]\({refs.URL.pattern}\))?\s*—?\s*", "", line).strip())  # 頭のリンクを外す（URL の対の括弧も、refs と同じに読む）
+    done = []
+    for f in refs.ledgers(ws):
+        try:
+            ledger_text = f.read_text(encoding="utf-8")
+        except UnicodeDecodeError:  # set_cells は読み直して書くので、壊れたバイトのある台帳には写さない（止めると、apply のほかの段も進まない）
+            continue
+        ch = {}
+        for sid, r in refs.sources(ledger_text)[1].items():
+            if (ks := refs.keys(r["場所"])) and ks[0] in text and not r["使い道"].strip():
+                ch[sid] = {"使い道": text[ks[0]]}
+        if ch:
+            refs.set_cells(f, ch)
+            done += [(f.relative_to(ws).as_posix(), sid, c["使い道"]) for sid, c in ch.items()]
+    return done
+
+
+def append_block(p, head, block):
+    """block を、終わりの印（MARK）と一緒に 1 回の書き込みで p の末尾に足す（p がなければ head から作る）。印がもうあれば足さずに False。
+    前の中身は読み解かず書き戻さないので、壊れたバイトがあっても止まらない。人が中の行を直しても、印が残る限り二度足さない。"""
+    old = p.read_bytes() if p.is_file() else b""
+    if MARK.encode() in old:
+        return False
+    # shortcut: 書き込みの途中で止まると、印のないまま半分が残り、回し直すと二重になる。1 回の書き込みなので、まず起きない。起きたら、印のない塊を手で消す
+    with open(p, "ab") as f:
+        f.write(((head if not old.strip() else "\n") + "\n".join(block).strip("\n") + "\n" + MARK + "\n").encode("utf-8"))
+    return True
+
+
+def move_index(ws):
+    """2026-10-29: 手で書いた references_index.md を分け、refs.py index が作るものにする。前のものは .desk/migrate/ に控える。
+    Drive の節は drive_folders.md に、作り直した索引に出ない行は節の見出しごと Research/references.md に移す（どちらも、印の付いた塊を 1 度だけ足す）。
+    同じ出典が出る行は消し（控えと _dropped.md に残す）、その出典の新しい形の行の使い道が空なら、前の行の文を写す。"""
+    if not (plan := index_plan(ws)):
+        return []
+    drive, moved, dropped, skipped = plan
+    today = time.strftime("%Y-%m-%d")
+    moved, dropped, stuck = settle(ws, moved, dropped, today)
+    if stuck:  # 印のある塊にはもう足せない。消すと見えなくなる行を消さない
+        return [f"要判断: references_index.md を分けていない。前の移しの印のある Research/references.md に足せないのに、消すと索引に見えなくなる行が {len(stuck)} 行ある"
+                f"（例: {stuck[0][1][:80]}）。前に移した塊を、印の行まで消してから apply を回し直す"]
+    p, stamp, n = ws / refs.INDEX, time.strftime("%Y%m%d-%H%M%S"), 1
+    (bk := ws / ".desk" / "migrate").mkdir(parents=True, exist_ok=True)
+    while (bk / f"references_index_{stamp}.md").exists():  # 同じ秒に回し直しても、前の控えと消した行の一覧を上書きしない
+        n += 1
+        stamp = f"{stamp.split('_')[0]}_{n}"
+    shutil.copy2(p, bk / f"references_index_{stamp}.md")
+    out = [f"控え: .desk/migrate/references_index_{stamp}.md"]
+    unplaced = []  # 印のある塊がもうあって足さなかった行のうち、そのファイルにない行（前の移しのあとに前の索引に足した行など）。一覧に残す
+    def move(what, dst, head, block, k):
+        if k:
+            dst.parent.mkdir(exist_ok=True)
+            if append_block(dst, head, block):
+                out.append(f"移した: references_index.md の{what} → {dst.relative_to(ws)}（{k} 行）")
+                return
+            have = set(dst.read_text(encoding="utf-8", errors="replace").splitlines())  # 見るだけ。書き戻さない
+            unplaced.extend(x for x in block if x.strip() and not x.startswith("#") and x not in have)  # 見出しは日付が替わるので比べない
+            out.append(f"移していない（もう移してある。塊の最後の印の行を消すと、また移す）: references_index.md の{what} → {dst.relative_to(ws)}（{k} 行）")
+    move("「Google Drive の置き場所」", ws / DRIVE, (PLUGIN / "desk-init" / "templates" / DRIVE).read_text(encoding="utf-8").rstrip("\n") + "\n\n", drive, sum(bool(x.strip()) for x in drive))
+    move("作り直した索引に出ない行", ws / "Research" / "references.md", RESEARCH_HEAD, research_block(moved), sum(map(len, moved.values())))
+    filled = fill_uses(ws, [x for _, x in dropped])
+    if unplaced:
+        out.append(f"要判断: 前に移した塊（印のあるもの）になく、どこにも移していない行が {len(unplaced)} 行ある（例: {unplaced[0][:80]}）。"
+                   f"_dropped.md の「移していない行」から、drive_folders.md か Research/references.md に手で足す")
+    if dropped or skipped or unplaced:
+        (bk / f"references_index_{stamp}_dropped.md").write_text(
+            "".join(x + "\n" for _, x in dropped)
+            + "".join(["\n## 使い道に写した台帳の行（戻すときは、この使い道を消す）\n\n"] * bool(filled) + [f"- {f} {sid}: {u}\n" for f, sid, u in filled])
+            + "".join(["\n## 移さなかった行（前の索引の頭の説明と、前の雛形の書き方の例）\n\n"] * bool(skipped) + [x + "\n" for x in skipped])
+            + "".join(["\n## 移していない行（前に移した印のある塊にない行。要るものは手で足す）\n\n"] * bool(unplaced) + [x + "\n" for x in unplaced]), encoding="utf-8")
+        out.append(f"消した: references_index.md の、作り直した索引に同じ出典が出る行（{len(dropped)} 行）と、頭の説明・書き方の例（{len(skipped)} 行）。"
+                   f"一覧は .desk/migrate/references_index_{stamp}_dropped.md。台帳の使い道が空だった {len(filled)} 行には、前の行の文を写した（同じ一覧の末尾）")
+    p.unlink()
+    out.append(f"作り直した: references_index.md（refs.py index。{refs.index(ws)} 件。手で直さない）")
+    seen = set(refs.keys((ws / refs.INDEX).read_text(encoding="utf-8", errors="replace")))
+    if lost := [x for _, x in dropped if not set(refs.keys(x)) <= seen]:  # settle と同じになるはず。違えば知らせる（消した行は控えと一覧にある）
+        out.append(f"要判断: 消した行のうち {len(lost)} 行の URL が、作り直した索引に見えない（例: {lost[0][:80]}）。一覧から Research/references.md に写す")
+    if hid := [x for ls in moved.values() for x in ls if not set(refs.keys(x)) <= seen]:  # 移した行の URL と会議の ID も、どれも索引のどこかの行に出る
+        out.append(f"要判断: 移した行のうち {len(hid)} 行の URL が、作り直した索引に見えない（例: {hid[0][:80]}）。Research/references.md の行の形を見る")
     return out
 
 
@@ -432,6 +591,7 @@ def needs(ws):
     """前の版のまま残っているもの（desk-doctor が出す）。"""
     moves, edit, _, _ = plan(ws)
     return ([str(a.relative_to(ws)) for a, _ in data_moves(ws)] + [".desk/scout/（desk-crawl の .desk/crawl/ へ）"] * (ws / ".desk" / "scout").is_dir()
+            + [f"{refs.INDEX}（手で書いた前の形。refs.py index が作るものにする）"] * (not refs.generated(ws / refs.INDEX))
             + [f"rules/{f.relative_to(ws / 'rules')}" for f, _ in moves] + [str(p.relative_to(ws)) for p in edit]
             + [f"{p.relative_to(ws)}（frontmatter）" for p, _ in fronts(ws, {f for f, _ in moves})]
             + [f"台帳の {i} の変更先（{a} → {b or '要判断'}）" for i, a, b, _ in relinks(ws)] + id_needs(ws)
@@ -770,7 +930,7 @@ def to_recipes(ws, backup):
 
 
 def apply(ws):
-    data = move_data(ws) + move_scout(ws)  # 台帳（.desk/ledger.jsonl）を書き換える前に、名前を今の版にする
+    data = move_data(ws) + move_scout(ws) + move_index(ws)  # 台帳（.desk/ledger.jsonl）を書き換える前に、名前を今の版にする
     moves, edit, split, ws_map = plan(ws)
     # 前の名前で整理を回していた。移すもの（rules/dreaming/ のファイルか、前の名前の残る本文）があるときだけ。前の名前が何も残らなければ、登録し直したあとと見分けられない
     old_run = (ws / ".desk" / "dreaming").is_dir() and (any(src.is_relative_to(ws / "rules" / "dreaming") for src, _ in moves) or any(DREAMING.search(t) for t in strings(ws)))
@@ -1201,7 +1361,102 @@ def selftest():
         assert to_user(ws)[0].startswith("移していない（上の") and (ws / "desk.toml").is_file() and not conf.exists()
     RECIPES = True
     selftest_recipes()
+    selftest_index()
     print("selftest ok")
+
+
+def selftest_index():
+    """2026-10-29: 手で書いた references_index.md を分け、作るものにする。何度回してもよい。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        ws = Path(tmp)
+        put = lambda rel, text: ((ws / rel).parent.mkdir(parents=True, exist_ok=True), (ws / rel).write_text(text))
+        put("desk.toml", "")
+        put("Customers/A/x/references.md", refs.HEAD + "| " + " | ".join(refs.SRC_COLS) + " |\n|" + "---|" * len(refs.SRC_COLS) + "\n"
+            "| S1 | A の docs | https://docs.example.com/a | 公式 | 2026-10-01 | 2026-10-20 | 可 |  |\n| S2 | B | https://b.example.com | 記事 | 不明 | 2026-10-20 | 可 | p.2 |\n")
+        put("Internal/y/references.md", "- [M](https://m.example.com) — 前の形の台帳\n")
+        put(refs.INDEX, "# 参考資料の索引\n\n- 探すとき: `grep -n <語> references_index.md`。\n- 書き方: `- [資料名](URL) — 観点`\n"
+            "- [前の行](https://pre.example.com) — 説明の中に差し込まれた行\n\n## 製品\n\n"
+            "- [A docs](https://docs.example.com/a) — 【公開】・2026-10-20。観点: 表の形\n- [B](https://b.example.com) — 観点: 使い道が書いてある\n"
+            "- [M](https://m.example.com)・[C](https://c.example.com) — 片方だけ台帳にある\n- [D（調査）](Research/d_20261020.md) — 【社内】。観点: 調べもの\n"
+            "- 使わなかったもの: E（数字が古い）\n\n## Google Drive の置き場所（顧客のフォルダと、上げた資料）\n\n仕上げた資料を置く先。\n上げた資料は `- 上げた: <ローカルのフォルダ> → [<名前>](URL)` で足す。\n\n"
+            "- A 社（`Customers/A/`）: [A](https://drive.google.com/drive/folders/AAAAAAAAAAAAAAAAAAAAAAAA)\n"
+            "  - 上げた: `Customers/A/x` → [20261020_A](https://docs.google.com/presentation/d/BBBBBBBBBBBBBBBBBBBBBBBB/edit)\n\n"
+            "## 会議\n\n`- [<顧客>: <会議の名前>](<会議の ID>) — 観点`\n- [A: 定例](Dahlia: mtg_01abc) — 【社内】・2026-10-21\n")
+        before = (ws / refs.INDEX).read_text()
+        drive, moved, dropped, skipped = index_plan(ws)
+        assert [x for x in drive if x.strip()][-1].startswith("  - 上げた:") and [x[:6] for x in skipped] == ["# 参考資料", "- 探すとき", "- 書き方:", "上げた資料は", "`- [<顧"]  # 頭の説明と、前の雛形の書き方の例は移さない
+        moved, dropped, stuck = settle(ws, moved, dropped, "2026-10-29")
+        assert [x for _, x in dropped] == ["- [A docs](https://docs.example.com/a) — 【公開】・2026-10-20。観点: 表の形", "- [B](https://b.example.com) — 観点: 使い道が書いてある"] and not stuck
+        assert {s: len(ls) for s, ls in moved.items()} == {"（見出しの前）": 1, "製品": 3, "会議": 1}, moved  # 台帳にない URL の行（片方だけある行も）と、場所のない行は移す
+        assert any("references_index.md（手で書いた" in x for x in needs(ws))
+        out = move_index(ws)
+        assert [x.split(":")[0] for x in out] == ["控え", "移した", "移した", "消した", "作り直した"] and "使い道が空だった 1 行" in out[3], out
+        assert any(p.read_text() == before for p in (ws / ".desk" / "migrate").glob("references_index_*[0-9].md"))
+        d = (ws / DRIVE).read_text()
+        assert d.startswith("# Google Drive の置き場所") and "  - 上げた: `Customers/A/x`" in d and "<名前>](URL)` で足す" not in d and d.rstrip().endswith(MARK)  # 前の雛形の書き方の例は写さない
+        r = (ws / "Research" / "references.md").read_text()
+        assert "### 製品" in r and all(s in r for s in ("- [M](https://m.example.com)・[C]", "- 使わなかったもの: E（数字が古い）", "mtg_01abc")) and "grep -n" not in r and r.rstrip().endswith(MARK)
+        src = refs.sources((ws / "Customers/A/x/references.md").read_text())[1]
+        assert src["S1"]["使い道"] == "【公開】・2026-10-20。観点: 表の形" and src["S2"]["使い道"] == "p.2"  # 空の使い道だけに写す
+        (q := Path(tmp) / "w" / "Internal" / "q").mkdir(parents=True)
+        (q / "references.md").write_text(refs.HEAD + "| " + " | ".join(refs.SRC_COLS) + " |\n|" + "---|" * len(refs.SRC_COLS) + "\n| S1 | W | https://w.example.org/Foo_(bar) | 記事 | 不明 | 2026-10-01 | 可 |  |\n")
+        assert fill_uses(Path(tmp) / "w", ["- [W](https://w.example.org/Foo_(bar)) — 観点 W"]) == [("Internal/q/references.md", "S1", "観点 W")]  # 括弧のある URL のリンクも、切れ端を残さずに外して写す
+        t = (ws / refs.INDEX).read_text()
+        assert refs.generated(ws / refs.INDEX) and "- [A の docs](https://docs.example.com/a) — 公式・社外可・2026-10-20。【公開】・2026-10-20。観点: 表の形（Customers/A/x）" in t
+        assert "- [M](https://m.example.com)・[C](https://c.example.com) — 片方だけ台帳にある（Research、Internal/y）" in t and "Google Drive" not in t.split("に作った）")[1]
+        assert move_index(ws) == [] and not any("references_index" in x for x in needs(ws))  # 2 回目は何もしない
+        dl = next((ws / ".desk" / "migrate").glob("*_dropped.md")).read_text()
+        assert "## 使い道に写した台帳の行" in dl and "- Customers/A/x/references.md S1: 【公開】・2026-10-20。観点: 表の形" in dl and "## 移さなかった行" in dl and "- 探すとき:" in dl  # 戻すときに消す行と、移さなかった行
+        (ws / DRIVE).write_text(d.replace("  - 上げた: `Customers/A/x`", "  - 上げた（直した）: `Customers/A/x`"))  # 人が 1 行直したあとに
+        shutil.copy2(next((ws / ".desk" / "migrate").glob("references_index_*[0-9].md")), ws / refs.INDEX)  # 消す前に止まった apply か、控えを戻した
+        again = move_index(ws)
+        assert sum(x.startswith("移していない（もう移してある") for x in again) == 2 and refs.generated(ws / refs.INDEX), again  # 印があれば足さない
+        assert (ws / DRIVE).read_text().count("- A 社") == 1 and (ws / "Research" / "references.md").read_text().count("使わなかったもの: E") == 1 and "### 製品" in r and (ws / "Research" / "references.md").read_text().count("## 前の索引から移したもの") == 1
+        assert len(list((ws / ".desk" / "migrate").glob("*_dropped.md"))) == 2 and len(list((ws / ".desk" / "migrate").glob("references_index_*[0-9].md"))) == 2  # 同じ秒でも前の控えを上書きしない
+        shutil.copy2(next((ws / ".desk" / "migrate").glob("references_index_*[0-9].md")), ws / refs.INDEX)
+        put("Customers/A/x/references.md", refs.HEAD + "| " + " | ".join(refs.SRC_COLS) + " |\n|" + "---|" * len(refs.SRC_COLS) + "\n")  # 台帳の行を消したあとに回し直す
+        out = move_index(ws)
+        assert len(out) == 1 and out[0].startswith("要判断: references_index.md を分けていない") and not refs.generated(ws / refs.INDEX), out  # 印のある塊に足せないので、消さない
+    with tempfile.TemporaryDirectory() as tmp:  # 台帳の文にあるだけの URL は索引に出ないので消さない。壊れたバイトの台帳でも止まらず、回し直しても重ねない
+        ws = Path(tmp)
+        put = lambda rel, text: ((ws / rel).parent.mkdir(parents=True, exist_ok=True), (ws / rel).write_text(text))
+        put("desk.toml", "")
+        put("Internal/y/references.md", "# references\n\n参考: https://p.example.com の記事\n\n1. [N](https://n.example.com) — 番号の箇条書き\n\n## 出典の表\n\n"
+            "| ID | 言うこと | 種類 | 出典 | 確認 |\n|---|---|---|---|---|\n| F1 | https://z.example.com の 3 件 | 数字 | S1 | 済 |\n\n"
+            f"- [L](https://l.example.com) — {'あ' * 300} https://tail.example.com\n\n| 資料 | 場所 |\n|---|---|\n| 定例の要点 {'い' * 210} | Dahlia: mtg_01late |\n")
+        (ws / "Customers/B/x").mkdir(parents=True)
+        bad = (refs.HEAD + "| " + " | ".join(refs.SRC_COLS) + " |\n|" + "---|" * len(refs.SRC_COLS) + "\n| S1 | Q | https://q.example.com | 記事 | 不明 | 2026-10-20 | 可 |  |\n").encode() + b"\xff\n"
+        (ws / "Customers/B/x/references.md").write_bytes(bad)
+        put(refs.INDEX, "# 参考資料の索引\n\n## 製品\n\n" + "".join(f"- [{c}](https://{c}.example.com) — 観点 {c}\n" for c in "pnzq") + "- [T](https://tail.example.com) — 切った行の後ろ\n"
+            "- [A: 定例](Dahlia: mtg_01late) — 長い行の後ろの会議の ID\n1. [X](https://numbered.example.com) — 番号の箇条書き\n参考: https://para.example.com の記事\n+ [P](https://plus.example.com)\n\n"
+            "## Google Drive の置き場所（顧客のフォルダと、上げた資料）\n\n- B 社: [B](https://drive.google.com/drive/folders/CCCCCCCCCCCCCCCCCCCCCCCC)\n")
+        drive, moved, dropped, skipped = index_plan(ws)
+        moved, dropped, stuck = settle(ws, moved, dropped, "2026-10-29")
+        assert [x for _, x in dropped] == ["- [q](https://q.example.com) — 観点 q", "- [T](https://tail.example.com) — 切った行の後ろ", "- [A: 定例](Dahlia: mtg_01late) — 長い行の後ろの会議の ID"], dropped  # 長い行の後ろの URL と会議の ID も、索引に自分の行があるので見える
+        assert [x[:5] for x in moved["製品"]] == ["- [p]", "- [n]", "- [z]", "1. [X", "参考: h", "+ [P]"], moved  # 地の文・番号の箇条書き・事実の表の URL は索引に出ない
+        out = move_index(ws)
+        assert "使い道が空だった 0 行" in out[3] and (ws / "Customers/B/x/references.md").read_bytes() == bad and refs.generated(ws / refs.INDEX), out  # 壊れたバイトの台帳には写さず、止まらない
+        assert all(k in (ws / refs.INDEX).read_text() for k in ("mtg_01late", "q.example.com", "p.example.com", "tail.example.com", "numbered.example.com", "para.example.com", "plus.example.com"))  # 箇条書きでない行も、箇条書きにして移す
+        assert "- 参考: https://para.example.com の記事" in (ws / "Research" / "references.md").read_text() and not any(x.startswith("要判断") for x in out)
+        shutil.copy2(next((ws / ".desk" / "migrate").glob("references_index_*[0-9].md")), ws / refs.INDEX)  # 消す前に止まった apply か、控えを戻したあと
+        again = move_index(ws)
+        assert not any(x.startswith("移した:") for x in again) and refs.generated(ws / refs.INDEX), again  # 移した行はもう索引に出るので消すほうに入り、Drive は印で足さない
+        assert (ws / DRIVE).read_text().count("- B 社:") == 1 and (ws / "Research" / "references.md").read_text().count("観点 p") == 1  # 同じ行を二度足さない
+        old = next(p for p in (ws / ".desk" / "migrate").glob("references_index_*[0-9].md")).read_text()  # 塊を残したまま前の索引を戻し、行を足して回し直す
+        put(refs.INDEX, old.replace("## 製品\n\n", "# 古い見出し\n\n## 製品\n\n- 使わなかったもの: 新しい行\n") + "- C 社: 場所はあとで\n")
+        out = move_index(ws)
+        lost = (ws / ".desk" / "migrate").glob("*_dropped.md")
+        assert any(x.startswith("要判断: 前に移した塊") and "2 行" in x for x in out) and any("新しい行" in p.read_text() and "C 社" in p.read_text() and "# 古い見出し" in p.read_text() for p in lost), out  # どこにも残らずに消える行を作らない
+    with tempfile.TemporaryDirectory() as tmp:  # 移した行で、索引の行に出る本文が替わっても、消した行の URL は見えたまま（R2・R3）
+        ws = Path(tmp)
+        put = lambda rel, text: ((ws / rel).parent.mkdir(parents=True, exist_ok=True), (ws / rel).write_text(text))
+        put("desk.toml", "")
+        put("Customers/A/x/references.md", refs.HEAD + "| " + " | ".join(refs.SRC_COLS) + " |\n|" + "---|" * len(refs.SRC_COLS) + "\n"
+            "| S1 | A docs | https://a.example.com | 公式 | 不明 | 2026-10-01 | 可 | 図は https://c.example.com の p.2 |\n")
+        put(refs.INDEX, "# 参考資料の索引\n\n## 製品\n\n- [C](https://c.example.com) — 観点 C\n- [A](https://a.example.com) — 【公開】・2026-10-20。https://d.example.com も\n")
+        moved, dropped, stuck = settle(ws, *index_plan(ws)[1:3], "2026-10-29")
+        assert [x for _, x in dropped] == ["- [C](https://c.example.com) — 観点 C"] and [x[:5] for x in moved["製品"]] == ["- [A]"]  # 使い道の中の c にも索引の行がある。d は台帳にないので移す
+        assert move_index(ws) and "https://c.example.com" in (ws / refs.INDEX).read_text()  # A の行を移して a の行の本文が替わっても、c は見えたまま
 
 
 def selftest_recipes():
@@ -1297,6 +1552,11 @@ if __name__ == "__main__":
         heads = fronts(ws, {s for s, _ in moves})
         data = [f"移す: {s.relative_to(ws)} → {d.relative_to(ws)}" for s, d in data_moves(ws)] + ["（台帳の書き換えは、.desk/ に移したあとの check で出る）"] * (ws / OLD_DIR).is_dir()
         data += [f"移す: {s.relative_to(ws)}/ → {d.relative_to(ws)}/（状態・種類・mode を desk-crawl の形に）" for s, d in scout_moves(ws)]
+        if ip := index_plan(ws):
+            moved, dropped, stuck = settle(ws, ip[1], ip[2], time.strftime("%Y-%m-%d"))
+            data.append(f"分ける: {refs.INDEX}（手で書いた前の形）。Drive の節 {sum(bool(x.strip()) for x in ip[0])} 行は {DRIVE} に、作り直した索引に出ない {sum(map(len, moved.values()))} 行は "
+                        f"Research/references.md に移し、同じ出典が出る {len(dropped)} 行と、頭の説明・書き方の例 {len(ip[3])} 行は消して（一覧に残す）、refs.py index で作り直す"
+                        + (f"。要判断: 消すと見えなくなるのに移せない行が {len(stuck)} 行" if stuck else ""))
         print("\n".join(data + [f"移す: {s.relative_to(ws)} → {d.relative_to(ws)}" for s, d in moves] + [f"書き換える: {p.relative_to(ws)}{changed(p, ws_map)}" for p in edit]
                         + [f"frontmatter を足す: {p.relative_to(ws)}" for p, h in heads if h] + by_hand(ws, heads)
                         + [f"要判断（apply のあと）: rules/{k} は {v} に分けた" for k, v in split if (moves or edit) and not RECIPES]

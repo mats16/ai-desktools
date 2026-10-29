@@ -21,7 +21,7 @@ Other materials in the customer folder and `社内メモ_*.md` describe the coun
 
 ## 3. Find internal materials
 
-Search `references_index.md` first. Then find internal decks, documents, and chat discussions on the same theme, and decide what to reuse and which messages to align with ([materials.md](materials.md); how to reuse: [reuse.md](../slides-build/reuse.md)).
+Search `references_index.md` (sources used before) and `drive_folders.md` (materials made before) first (`grep -n <word> references_index.md drive_folders.md`). Then find internal decks, documents, and chat discussions on the same theme, and decide what to reuse and which messages to align with ([materials.md](materials.md); how to reuse: [reuse.md](../slides-build/reuse.md)).
 
 ## 4. Gather customer information
 

@@ -1,6 +1,6 @@
 ---
 name: desk-dreaming
-description: Periodically tidies this folder's instructions (AGENTS.md), rules, and skills from conversation logs and the rule ledger (modeled on Devin's Dreaming). Rule changes drawn from conversations become proposals that wait for the user's reply. Safe cleanups (index entries, overlaps, stale text, broken paths) are applied directly and reported. Once a month it also reruns the deck-research survey. A scheduler calls it with the one line in prompt.txt. Also read it when the user says 「整理して」「desk-dreaming して」「提案を適用して」「推奨どおり」.
+description: Periodically tidies this folder's instructions (AGENTS.md), rules, and skills from conversation logs and the rule ledger (modeled on Devin's Dreaming). Rule changes drawn from conversations become proposals that wait for the user's reply. Safe cleanups (rebuilding the index, overlaps, stale text, broken paths) are applied directly and reported. Once a month it also reruns the deck-research survey. A scheduler calls it with the one line in prompt.txt. Also read it when the user says 「整理して」「desk-dreaming して」「提案を適用して」「推奨どおり」.
 ---
 
 # Scheduled cleanup (desk-dreaming)
