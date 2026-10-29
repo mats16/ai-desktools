@@ -70,8 +70,8 @@ def check(ws, local=False):
             (("同じファイルへの足しと上書き",), "AGENTS.md のフォルダの表", "前の雛形の「rules/<スキル>/<ファイル> … プラグインの同じファイルへの足しと上書き」が残っている。desk-init の雛形の今の行（recipes/<名前>/RECIPE.md … 頭の frontmatter に、いつ使うかと、出す場面を書く）に替える"),
             (("`rules.md` の「決まりの層」", "（決まりの層、"), "AGENTS.md の決まりの層", "前の雛形の「決まりの層」（deck-practices/rules.md の前の節の名前）が残っている。層はなくした（ワークスペースの決まりが優先し、ワークスペースどうしは条件が狭いほう）。節の名前は「Workspace rules」。desk-init の雛形の今の文に替える"),
             (("決まりには ID と短い理由だけを書き",), "AGENTS.md の決まりの ID", "前の雛形の「決まりには ID と短い理由だけを書き」が残っている。ワークスペースの決まりには ID を付けない（戻し先はファイル。台帳が版を残す）。desk-init の雛形の今の文（「修正の指示」の「直したら、その場で戻す」）に替える"),
-            (("`references_index.md` にも足す", "過去に使った資料は、直下の `references_index.md` にまとめる"), "AGENTS.md の索引の足し方",  # 2026-10-29 までの雛形
-             "前の雛形の「references_index.md にも足す」か「過去に使った資料は、直下の references_index.md にまとめる」が残っている。2026-10-29 から、索引は refs.py が各フォルダの references.md から作り直す（手で足すと、次に作り直すと消える）。Drive の置き場所は drive_folders.md。desk-init の雛形の今の文（「調べもの」の最後と「フォルダの置き方」）に替える")):
+            (("`references_index.md` にも足す", "過去に使った資料は、直下の `references_index.md` にまとめる", "`references_index.md` の「Google Drive の置き場所」"), "AGENTS.md の索引の足し方",  # 2026-10-29 までの雛形
+             "前の雛形の「references_index.md にも足す」「過去に使った資料は、直下の references_index.md にまとめる」「references_index.md の「Google Drive の置き場所」の Research の行」のどれかが残っている。2026-10-29 から、索引は refs.py が各フォルダの references.md から作り直す（手で足した行は、作り直すときに .desk/ に控えて消える）。Drive の置き場所と上げた資料は drive_folders.md。desk-init の雛形の今の文（「調べもの」の 1 つ目・3 つ目・4 つ目と「フォルダの置き方」）に替える")):
         if any(x in agents for x in needles):
             warn(name, what)
     if any("frontmatter" in x and re.search(r"`paths`|paths:", x) for x in agents.splitlines()):  # 同じ行に書いたものだけ。 2026-10-29 から、レシピは作業ごとに出る（desk-migrate は文の意味までは書き換えない）
@@ -310,8 +310,11 @@ def selftest():
         assert all(kinds()[n] == "要確認" for n in ("AGENTS.md の決まりの置き場所", "AGENTS.md の決まりの層", "AGENTS.md の決まりの ID")) and "AGENTS.md のレシピの出し方" not in kinds()
         agents.write_text(agents.read_text() + "\n- 開くと、frontmatter の `paths` にそのファイルを書いたものが出る。\n")
         assert kinds()["AGENTS.md のレシピの出し方"] == "要確認" and "AGENTS.md の索引の足し方" not in kinds()  # 今の雛形
-        agents.write_text(agents.read_text() + "\n- 資料に使えそうな出典は `references_index.md` にも足す。\n")
-        assert kinds()["AGENTS.md の索引の足し方"] == "要確認"
+        for old in ("- 資料に使えそうな出典は `references_index.md` にも足す。", "- 初めて上げたら、`references_index.md` の「Google Drive の置き場所」の `Research` の行の下に足す。"):
+            base = agents.read_text()
+            agents.write_text(base + "\n" + old + "\n")
+            assert kinds()["AGENTS.md の索引の足し方"] == "要確認", old
+            agents.write_text(base)
         toml = Path(tmp) / "desk.toml"
         assert kinds()["brand.copyright"] == "要修正" and kinds()["brand.company"] == "要確認"
         toml.write_text(toml.read_text().replace("[brand]", '[brand]\ncopyright = "© Acme 2026"', 1))

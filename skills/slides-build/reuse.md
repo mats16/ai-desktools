@@ -88,7 +88,7 @@ In 「流用元」 at the end of `構成案.md`, write one row per page.
 
 - Stage 4 may go in a separate bullet list as 「考え方を借りたもの」 (SIEM example).
 - In customer-facing materials, write the names and URLs of internal materials only in the outline and the internal memo. Do not write them in the slide's source line or notes (write a public source or the company's own name).
-- For each material you used, write in a few words which stage you used and why in the 「使い道」 column of `references.md` (`refs.py add … --use`); the overall index shows it (examples: 「日本語版があり段階 1 で差し替え」「英語の図を段階 2 で画像に。読み方のパネルを足した」).
+- For each material you used, write in a few words which stage you used and why in the 「使い道」 column of `references.md` (`refs.py add … --use` adds it only with a new row; for a source already there, edit that row's cell); the overall index shows it (examples: 「日本語版があり段階 1 で差し替え」「英語の図を段階 2 で画像に。読み方のパネルを足した」).
 - If more than half of the main deck's pages would come from one internal deck via Stage 1, ask the user before rebuilding. Copying that deck in Google Slides and editing it can be faster.
 
 ## 5. Checks at the finish

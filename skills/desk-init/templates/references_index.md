@@ -2,7 +2,7 @@
 
 `refs.py index` が、各フォルダの `references.md`（`Customers/`・`Internal/`・`Research/` の下）から作り直す。手で直さない（次に作り直すと消える）。
 
-- 探すとき: 検索より先に `grep -n <語> references_index.md drive_folders.md`。1 行に 1 つの出典（URL か会議の ID のあるもの。手元のファイルと口頭は、その資料の `references.md` だけにある）。同じ出典を使ったフォルダは行の末尾にまとめ、確かめた日の新しい順に並ぶ。詳しくは、そのフォルダの `references.md`。
+- 探すとき: 検索より先に `grep -n <語> references_index.md drive_folders.md`。1 行に 1 つの出典（URL か会議の ID のあるもの。手元のファイルと口頭は、その資料の `references.md` だけにある）。同じ出典を使ったフォルダは行の末尾にまとめ、日付の新しい順に並ぶ（新しい形の行は確かめた日、前の形の行は行の中のいちばん新しい日付。今日より先の日付は見ない）。詳しくは、そのフォルダの `references.md`。
 - 足すとき: 資料の出典は `refs.py add <資料のフォルダ> <URL>`、資料に結びつかない出典（調べもの・会議）は `refs.py add Research <URL>`。足すと、この索引も作り直す。
 - Google Drive のフォルダと上げた資料は `drive_folders.md`（手で足す）。
 - 社内の URL と個人名が入るので、納品物に入れない。社外が「不可」の資料と【社内】の資料は、顧客向けに使う前に、社外に出せるかを確かめる。
