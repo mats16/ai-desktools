@@ -640,7 +640,7 @@ def to_recipes(ws, backup):
         return v
     out, before = [], {}
     for p in [*recipe_texts(ws), *(ws / ".desk" / "harness").glob("*.json")]:
-        before[p] = p.read_text(encoding="utf-8")
+        before[p] = p.read_text(encoding="utf-8", errors="surrogateescape")  # 壊れたバイトのある構成案も、そのバイトのまま書き戻す
         dst = backup / p.relative_to(ws)
         if not dst.exists():
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -675,10 +675,10 @@ def to_recipes(ws, backup):
         if p.name in ("AGENTS.md", "CLAUDE.md", ".gitignore"):  # ワークスペースのフォルダとしての rules/ も（雛形の「rules/ の決まりのファイル」・!/rules/）
             n = re.sub(r"(?<![\w./-])rules/(?![\w.<-])", "recipes/", n).replace("!/rules/", "!/recipes/")  # パスの続くもの（rules/<…>・rules/x.md）は、移したものと雛形の置き場所だけ（pairs）。ほかは下で知らせる
         if n != t:
-            p.write_text(n, encoding="utf-8")
+            p.write_text(n, encoding="utf-8", errors="surrogateescape")
             out.append(f"書き換えた: {p.relative_to(ws)}（前の rules/ のパス）")
     for p in (ws / "AGENTS.md", ws / "CLAUDE.md"):  # 書き換えられなかった前のパス（どこへ移ったか分からない）は、推し量って書き換えずに知らせる
-        left = [x.strip()[:80] for x in (p.read_text(encoding="utf-8").splitlines() if p.is_file() else []) if re.search(r"(?<![\w./-])rules/", x)]
+        left = [x.strip()[:80] for x in (p.read_text(encoding="utf-8", errors="replace").splitlines() if p.is_file() else []) if re.search(r"(?<![\w./-])rules/", x)]
         if left:
             out.append(f"要判断: {p.name} に前の rules/ のパスが残っている（{' / '.join(left[:3])}{f' ほか {len(left) - 3} 行' if len(left) > 3 else ''}）。今のレシピのパスに直す")
     vs = ledger.versions(ws) if led.is_file() else {}
@@ -1133,6 +1133,8 @@ def selftest_recipes():
         deck = ws / "Customers" / "acme" / "d"
         deck.mkdir(parents=True)
         (deck / "構成案.md").write_text("- **使う決まり:** rules/account_plan.md\n- 前は rules/account_plan.md の章立てで作った。\n")
+        (deck.parent / "e").mkdir()
+        (deck.parent / "e" / "構成案.md").write_bytes("- **使う決まり:** rules/account_plan.md\n- 欠けた字（".encode() + b"\xbc\x89\n")  # 壊れたバイトがあっても止まらず、そのバイトのまま書き戻す
         (ws / "Customers" / "acme" / "memory.md").write_text("- 訳は rules/slides-build/visual.md の書体\n")
         led = ws / ".desk" / "ledger.jsonl"
         led.parent.mkdir()
@@ -1154,6 +1156,7 @@ def selftest_recipes():
         assert "step" not in front("content") and "step" not in front("deck_review_visual") and "paths" not in front("content")  # 作業がまたがるもの・レビューは書かない（資料を作るどの作業でも）
         assert front("account_plan")["per_material"] == front("content_internal")["per_material"] == "true" and not (ws / "rules").exists()  # 資料の種類ごとのファイルへの足しも、資料ごとに選ぶ  # paths のなかったものは資料ごとに選ぶ。rules/ は残らない
         assert "recipes/slide_checks/checks.py" in (ws / "AGENTS.md").read_text() and "recipes/doc_checks/checks.py" in (ws / "AGENTS.md").read_text() and "`recipes/` に置く" in (ws / "AGENTS.md").read_text() and "!/recipes/" in (ws / ".gitignore").read_text()
+        assert (deck.parent / "e" / "構成案.md").read_bytes() == "- **使う決まり:** recipes/account_plan/RECIPE.md\n- 欠けた字（".encode() + b"\xbc\x89\n"
         assert (deck / "構成案.md").read_text() == "- **使う決まり:** recipes/account_plan/RECIPE.md\n- 前は rules/account_plan.md の章立てで作った。\n" and "recipes/slides_build_visual/RECIPE.md" in (ws / "Customers" / "acme" / "memory.md").read_text()
         c = ledger.state(ws)[0]["c-0001"]
         assert c["to"] == "recipes/slides_build_visual/RECIPE.md" and c["quote"] == "rules/slides-build/visual.md のとおり" and c["decided"]  # 台帳の戻し先はつながる。ユーザーの言葉はそのまま
