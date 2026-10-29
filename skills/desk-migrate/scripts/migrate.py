@@ -137,7 +137,7 @@ def move_scout(ws):
                     n += 1
                 srcs[scout_id(sid)] = e
             reg["sources"], reg["next_note"] = srcs, n
-            for done in reg.get("applied", {}).values():  # 当てた覚え書きの控え [位置, 先, 文] の先も替える（記録し直したときに、当てたと分かるように）
+            for done in reg.get("applied", {}).values():  # 当てた覚え書きの控え [何回目, 先, 文] の先も替える（記録し直したときに、当てたと分かるように）
                 done["lessons"] = [[k[0], scout_id(k[1]), *k[2:]] if isinstance(k, list) and len(k) > 1 else k for k in done.get("lessons", [])]
             rows = []
             # ponytail: 前の読み手の反応（feedback・value 0）は手柄から外さずに捨てる。used を消すと「使われた済み」の印も消えるため。source-scout の記録は 3 日分しかない
