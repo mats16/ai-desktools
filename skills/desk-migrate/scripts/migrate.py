@@ -324,8 +324,8 @@ def move_index(ws):
     seen = set(refs.keys((ws / refs.INDEX).read_text(encoding="utf-8", errors="replace")))
     if lost := [x for _, x in dropped if not set(refs.keys(x)) <= seen]:  # settle と同じになるはず。違えば知らせる（消した行は控えと一覧にある）
         out.append(f"要判断: 消した行のうち {len(lost)} 行の URL が、作り直した索引に見えない（例: {lost[0][:80]}）。一覧から Research/references.md に写す")
-    if hid := [x for ls in moved.values() for x in ls if (ks := refs.keys(x)) and ks[0] not in seen]:  # 移した行は、最初の URL か会議の ID が索引に出る（2 つ目からは、長い行なら切れる）
-        out.append(f"要判断: 移した行のうち {len(hid)} 行の最初の URL が、作り直した索引に見えない（例: {hid[0][:80]}）。Research/references.md の行の形を見る")
+    if hid := [x for ls in moved.values() for x in ls if not set(refs.keys(x)) <= seen]:  # 移した行の URL と会議の ID も、どれも索引のどこかの行に出る
+        out.append(f"要判断: 移した行のうち {len(hid)} 行の URL が、作り直した索引に見えない（例: {hid[0][:80]}）。Research/references.md の行の形を見る")
     return out
 
 
@@ -1429,8 +1429,8 @@ def selftest_index():
             "## Google Drive の置き場所（顧客のフォルダと、上げた資料）\n\n- B 社: [B](https://drive.google.com/drive/folders/CCCCCCCCCCCCCCCCCCCCCCCC)\n")
         drive, moved, dropped, skipped = index_plan(ws)
         moved, dropped, stuck = settle(ws, moved, dropped, "2026-10-29")
-        assert [x for _, x in dropped] == ["- [q](https://q.example.com) — 観点 q", "- [A: 定例](Dahlia: mtg_01late) — 長い行の後ろの会議の ID"], dropped  # 長い行でも会議の ID は切らないので見える
-        assert [x[:5] for x in moved["製品"]] == ["- [p]", "- [n]", "- [z]", "- [T]", "1. [X", "参考: h", "+ [P]"], moved  # 地の文・番号の箇条書き・事実の表・切った行の後ろの URL は索引に出ない
+        assert [x for _, x in dropped] == ["- [q](https://q.example.com) — 観点 q", "- [T](https://tail.example.com) — 切った行の後ろ", "- [A: 定例](Dahlia: mtg_01late) — 長い行の後ろの会議の ID"], dropped  # 長い行の後ろの URL と会議の ID も、索引に自分の行があるので見える
+        assert [x[:5] for x in moved["製品"]] == ["- [p]", "- [n]", "- [z]", "1. [X", "参考: h", "+ [P]"], moved  # 地の文・番号の箇条書き・事実の表の URL は索引に出ない
         out = move_index(ws)
         assert "使い道が空だった 0 行" in out[3] and (ws / "Customers/B/x/references.md").read_bytes() == bad and refs.generated(ws / refs.INDEX), out  # 壊れたバイトの台帳には写さず、止まらない
         assert all(k in (ws / refs.INDEX).read_text() for k in ("mtg_01late", "q.example.com", "p.example.com", "tail.example.com", "numbered.example.com", "para.example.com", "plus.example.com"))  # 箇条書きでない行も、箇条書きにして移す
@@ -1452,8 +1452,8 @@ def selftest_index():
             "| S1 | A docs | https://a.example.com | 公式 | 不明 | 2026-10-01 | 可 | 図は https://c.example.com の p.2 |\n")
         put(refs.INDEX, "# 参考資料の索引\n\n## 製品\n\n- [C](https://c.example.com) — 観点 C\n- [A](https://a.example.com) — 【公開】・2026-10-20。https://d.example.com も\n")
         moved, dropped, stuck = settle(ws, *index_plan(ws)[1:3], "2026-10-29")
-        assert dropped == [] and len(moved["製品"]) == 2  # 移した A の行が新しい本文になり、使い道の中の c が見えなくなるので、C の行も移す（2 回目で）
-        assert move_index(ws) and "https://c.example.com) — 観点 C" in (ws / refs.INDEX).read_text()
+        assert [x for _, x in dropped] == ["- [C](https://c.example.com) — 観点 C"] and [x[:5] for x in moved["製品"]] == ["- [A]"]  # 使い道の中の c にも索引の行がある。d は台帳にないので移す
+        assert move_index(ws) and "https://c.example.com" in (ws / refs.INDEX).read_text()  # A の行を移して a の行の本文が替わっても、c は見えたまま
 
 
 def selftest_recipes():

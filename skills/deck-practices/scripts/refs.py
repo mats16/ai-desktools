@@ -383,8 +383,15 @@ def short(text, k=""):
     return text if len(text) <= n else text[:n] + "…"
 
 
+def around(text, k):
+    """text の中の k（URL か会議の ID）と、その前の 60 字（リンクの名前が入る）。行の 2 つ目からの URL の、索引の行の本文。"""
+    m = next((m for m in URL.finditer(text) if key(m.group(0)) == k), None)
+    i, j = (m.start(), m.end() + 1) if m else (max(text.find(k), 0), max(text.find(k), 0) + len(k))  # +1 はリンクの「)」
+    return ("…" if i > 60 else "") + text[max(i - 60, 0):j]
+
+
 def entries(p, folder, today):
-    """台帳の出典: 新しい形の表の行と、前の形の行（表の外の箇条書きと、ほかの表の行）。[(まとめる形, 日付, 索引の 1 行の本文)]。
+    """台帳の出典: 新しい形の表の行と、前の形の行（表の外の箇条書きと、ほかの表の行）。[(まとめる形, 日付, 本文, 本文の URL と会議の ID)]。
     まとめる形は URL（Google の文書はファイルの ID）か会議の ID。場所がそのどちらでもない行（手元のファイル・口頭・メモ）は、その資料の中でしか
     使わないので出さない。ただし Research/references.md（資料に結びつかない出典と、前の索引から移した行）は、フォルダごとに別にして出す。
     日付は、新しい形の行は確かめた日、前の形の行は行の中のいちばん新しい日付。どちらも、今日より先の日付は見ない（公開の予定や書き違い）。"""
@@ -406,30 +413,37 @@ def entries(p, folder, today):
             t, name = r["場所"], r["名前"]
             k = ks[0] if (ks := keys(t)) else f"{folder}|{t}"
             head = f"[{name}]({t})" if name and re.match(r"https?://", t) else f"{name}（{t}）" if name else t
-            out.append((k, r["確かめた日"] if DATE.fullmatch(r["確かめた日"]) and r["確かめた日"] <= today else "",
-                        short(f"{head} — {r['種類']}・社外{r['社外']}・{r['確かめた日']}" + (f"。{r['使い道']}" if r["使い道"] else ""), k)))
+            text = f"{head} — {r['種類']}・社外{r['社外']}・{r['確かめた日']}" + (f"。{r['使い道']}" if r["使い道"] else "")
+            out.append((k, r["確かめた日"] if DATE.fullmatch(r["確かめた日"]) and r["確かめた日"] <= today else "", text, keys(text)))
             continue
         else:
             body = " — ".join(x for x in c if x)
         k = ks[0] if (ks := keys(body)) else f"{folder}|{body}"
-        out.append((k, max((d for d in DATE.findall(body) if d <= today), default=""), short(body, k)))
+        out.append((k, max((d for d in DATE.findall(body) if d <= today), default=""), body, ks))
     return [e for e in out if folder == "Research" or "|" not in e[0]]
 
 
 def index_lines(ws, today):
-    """全体の索引の出典の行（新しい順）。desk-migrate も、前の索引の行が作り直したあとに見えるかを、台帳の写しでこれを作って確かめる。"""
-    groups = {}
+    """全体の索引の出典の行（新しい順）。台帳の行にある URL と会議の ID は、どれも索引のどこかの行に出る: 行の最初のもので 1 行にまとめ、
+    2 つ目からで、どの行の最初でもないもの（長い行で切れる・同じ出典の別の本文が出る）は、その URL と前の 60 字だけを別に 1 行にする
+    （本文ごと繰り返すと、広い語の grep が前の手書きの索引より多くなった。2026-10-29 にユーザーが選んだ）。
+    desk-migrate も、前の索引の行が作り直したあとに見えるかを、台帳の写しでこれを作って確かめる。"""
+    groups, more = {}, {}
     for f in ledgers(ws):
         folder = f.parent.relative_to(ws).as_posix()
-        for k, d, body in entries(f, folder, today):
+        for k, d, body, ks in entries(f, folder, today):
             groups.setdefault(k, []).append((d, body, folder))  # 日付のない前の形の行は末尾に（ファイルの時刻は、移した日や直した日になる）
+            for x in ks:
+                if x != k:
+                    more.setdefault(x, []).append((d, body, folder))
+    extra = {x: g for x, g in more.items() if x not in groups}
     rows = []
-    for g in groups.values():
+    for k, g in [*groups.items(), *extra.items()]:
         g.sort(reverse=True)  # 本文は、日付のいちばん新しい台帳のもの
         d, body, _ = g[0]
         places = list(dict.fromkeys(x[2] for x in g))
         where = "、".join(places[:PLACES_MAX]) + (f" ほか {len(places) - PLACES_MAX} か所" if len(places) > PLACES_MAX else "")
-        rows.append((d, f"- {body}（{where}）"))
+        rows.append((d, f"- {around(body, k) if k in extra else short(body, k)}（{where}）"))
     rows.sort(key=lambda r: r[0], reverse=True)
     return [r for _, r in rows]
 
@@ -462,7 +476,7 @@ def index(ws, today=None):
             return None
         rows = index_lines(ws, today)
         text = (f"# 参考資料の索引\n\n{INDEX_NOTE}、各フォルダの `references.md`（`Customers/`・`Internal/`・`Research/` の下）から作り直す。手で直さない（次に作り直すと消える）。\n\n"
-                "- 探すとき: 検索より先に `grep -n <語> references_index.md drive_folders.md`。1 行に 1 つの出典（URL か会議の ID のあるもの。手元のファイルと口頭は、その資料の `references.md` だけにある）。同じ出典を使ったフォルダは行の末尾にまとめ、"
+                "- 探すとき: 検索より先に `grep -n <語> references_index.md drive_folders.md`。1 行に 1 つの出典（URL か会議の ID のあるもの。台帳の行にある URL と会議の ID は、どれもどこかの行に出る。手元のファイルと口頭は、その資料の `references.md` だけにある）。同じ出典を使ったフォルダは行の末尾にまとめ、"
                 "日付の新しい順に並ぶ（新しい形の行は確かめた日、前の形の行は行の中のいちばん新しい日付。今日より先の日付は見ない）。詳しくは、そのフォルダの `references.md`。\n"
                 "- 足すとき: 資料の出典は `refs.py add <資料のフォルダ> <URL>`、資料に結びつかない出典（調べもの・会議）は `refs.py add Research <URL>`。足すと、この索引も作り直す。\n"
                 "- Google Drive のフォルダと上げた資料は `drive_folders.md`（手で足す）。\n"
@@ -623,6 +637,14 @@ def selftest():
         assert "- [短い行](https://short.example.com) — 公式・社外可・2026-10-21（Internal/v）" in body  # 使い道のない短い行も、見出しで新しい形と見る
         assert all(any(k in b for b in body) for k in ("mtg_01late", "mtg_01tail", "https://wiki.example.com/p"))  # 長い行でも、まとめる形は切らない。URL が頭にない場所もまとめる
         assert body.index(next(b for b in body if "typo.example" in b)) > body.index(next(b for b in body if "short.example" in b))  # 新しい形の行の確かめた日も、今日より先は見ない
+        put("Research/references.md", (ws / "Research/references.md").read_text() + "- [A](https://example.com/a) and [Unique B](https://example.com/b) 2026-10-01\n")
+        put("Internal/u/references.md", "- [Newer A](https://example.com/a) 2026-10-29\n")  # 同じ出典の新しい本文が出ても（PR のレビュー）
+        index(ws, today="2026-10-29")
+        body = (ws / INDEX).read_text().split("に作った）\n\n")[1].splitlines()
+        assert "- [Newer A](https://example.com/a) 2026-10-29（Internal/u、Research）" in body and "- [A](https://example.com/a) and [Unique B](https://example.com/b)（Research）" in body  # 2 つ目の URL にも、その URL と前の 60 字の行がある
+        assert around("あ" * 100 + " [L](https://l.example.com) と mtg_01x", "mtg_01x") == "…" + ("あ" * 100 + " [L](https://l.example.com) と mtg_01x")[-67:]
+        shown = set(keys((ws / INDEX).read_text()))
+        assert all(set(keys(b)) <= shown for f in ledgers(ws) for _, _, b, _ in entries(f, f.parent.relative_to(ws).as_posix(), "2026-10-29"))  # 台帳の行の URL と会議の ID は、どれも索引に出る
         real, out = workspace, io.StringIO()
         try:
             globals()["workspace"] = lambda start=".": sys.exit("個人の設定が読めない")
