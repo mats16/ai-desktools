@@ -28,7 +28,7 @@ desk-kaizen の Issue（skills/desk-kaizen/SKILL.md の「Body template」）か
 
 ## 影響と戻し方
 
-<!-- 既存の資料・ワークスペースの rules/・checks.py への影響。決まりや点検の名前を変えたなら、ワークスペースで直すこと。戻すときは revert でよいか。 -->
+<!-- 既存の資料・ワークスペースの recipes/・checks.py への影響。決まりや点検の名前を変えたなら、ワークスペースで直すこと。戻すときは revert でよいか。 -->
 
 ## レビューで見てほしいところ
 

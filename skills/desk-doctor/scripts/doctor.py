@@ -2,7 +2,7 @@
 """usage: doctor.py [<ワークスペース>] [--local]   （--selftest で自己確認）
 AI Desk Tools を動かす前提を確かめる。--local は手元だけ見て、Google の API を呼ばない。
 1 行 1 項目で「OK」「要修正」「要確認」を出す。要修正が 1 つでもあれば exit 1。標準ライブラリだけ。"""
-import io, contextlib, fnmatch, json, math, os, re, shutil, subprocess, sys, tempfile, tomllib
+import io, contextlib, json, math, os, re, shutil, subprocess, sys, tempfile, tomllib
 from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parents[2]  # プラグインの skills/
@@ -66,24 +66,41 @@ def check(ws, local=False):
     if "- **日本語で作る。**" in agents:  # 2026-10-25 までの雛形
         warn("AGENTS.md の資料の言語", "前の雛形の「日本語で作る」が残っている。ワークスペースの決まりが優先するので、desk.toml の [desk] default_language が効かない。desk-init の雛形の今の文（[desk] default_language の言語で作る）に替える")
     for needles, name, what in (  # 2026-10-27 までの雛形の文。どれも、移行では本文を書き換えない（desk-migrate は決まりのファイルだけを移す）
-            (("同じパスのファイルへの足しと上書き",), "AGENTS.md の決まりの置き場所", "前の雛形の「rules/<スキル>/<ファイル>（プラグインの同じパスのファイルへの足しと上書き）」が残っている。今は rules/ の決まりのファイルを frontmatter（description・paths）で出す。desk-init の雛形の今の文（「決まりの優先」の 1 つ目）に替える"),
-            (("同じファイルへの足しと上書き",), "AGENTS.md のフォルダの表", "前の雛形の「rules/<スキル>/<ファイル> … プラグインの同じファイルへの足しと上書き」が残っている。desk-init の雛形の今の行（rules/<名前>.md … 頭の frontmatter に、いつ使うかと、出す場面を書く）に替える"),
+            (("同じパスのファイルへの足しと上書き",), "AGENTS.md の決まりの置き場所", "前の雛形の「rules/<スキル>/<ファイル>（プラグインの同じパスのファイルへの足しと上書き）」が残っている。今は recipes/<名前>/RECIPE.md のレシピを frontmatter（description・step・per_material）で出す。desk-init の雛形の今の文（「決まりの優先」の 1 つ目）に替える"),
+            (("同じファイルへの足しと上書き",), "AGENTS.md のフォルダの表", "前の雛形の「rules/<スキル>/<ファイル> … プラグインの同じファイルへの足しと上書き」が残っている。desk-init の雛形の今の行（recipes/<名前>/RECIPE.md … 頭の frontmatter に、いつ使うかと、出す場面を書く）に替える"),
             (("`rules.md` の「決まりの層」", "（決まりの層、"), "AGENTS.md の決まりの層", "前の雛形の「決まりの層」（deck-practices/rules.md の前の節の名前）が残っている。層はなくした（ワークスペースの決まりが優先し、ワークスペースどうしは条件が狭いほう）。節の名前は「Workspace rules」。desk-init の雛形の今の文に替える"),
             (("決まりには ID と短い理由だけを書き",), "AGENTS.md の決まりの ID", "前の雛形の「決まりには ID と短い理由だけを書き」が残っている。ワークスペースの決まりには ID を付けない（戻し先はファイル。台帳が版を残す）。desk-init の雛形の今の文（「修正の指示」の「直したら、その場で戻す」）に替える")):
         if any(x in agents for x in needles):
             warn(name, what)
+    if any("frontmatter" in x and re.search(r"`paths`|paths:", x) for x in agents.splitlines()):  # 同じ行に書いたものだけ。 2026-10-29 から、レシピは作業ごとに出る（desk-migrate は文の意味までは書き換えない）
+        warn("AGENTS.md のレシピの出し方", "AGENTS.md に frontmatter の paths の書き方が残っている。2026-10-29 から、レシピ（recipes/<名前>/RECIPE.md）は step（gather・build。書かなければどの作業でも）と per_material で出る（deck-practices/rules.md の「Workspace rules」）。その文を直す")
     if old := migrate.needs(root):  # 前の名前の rules/ は読まれず、前の ID は台帳とつながらない
-        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの頭に frontmatter を置き、ワークスペースの決まりの ID を外した）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
-    plugin, odd = [str(p.relative_to(SKILLS)) for p in SKILLS.glob("*/**/*.md")], []  # 決まりの frontmatter（deck-practices/rules.md の「Workspace rules」）
+        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの頭に frontmatter を置き、ワークスペースの決まりの ID を外し、2026-10-29 に rules/ を recipes/<名前>/RECIPE.md にした）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
+    odd, top = [], root / desk.RECIPES  # レシピの形と frontmatter（deck-practices/rules.md の「Workspace rules」）
     for p, m in (rules := desk.rules(root)):
         rel = p.relative_to(root)
-        odd += [f"{rel} の paths の {g}（当たるプラグインのファイルがない。プラグインが分けたか名前を変えたら、今のファイルに直す）" for g in desk.listed(m, "paths") if not fnmatch.filter(plugin, g)]
-        if not desk.listed(m, "paths") and (same := p.relative_to(root / "rules").as_posix()) in plugin:  # 前の版の同じパスの置き場所で、paths がない。そのファイルを開いても出ず、資料ごとに選ぶ決まりになる
-            odd.append(f"{rel} に paths がない（プラグインの {same} を開いたときに出すなら paths: [{same}] を書く。資料ごとに選ぶ決まりなら rules/ の直下へ移す）")
+        if "paths" in m:
+            odd.append(f"{rel} に paths がある（前の版の書き方で、hook は読まない。材料を集めるときなら step: gather、組むときなら step: build、資料を作るどの作業でもなら書かない）")
+        if m.get("step", "") not in ("", *desk.STEPS):
+            odd.append(f"{rel} の step の {m['step']}（{'・'.join(desk.STEPS)} のどれか。資料を作るどの作業でも出すなら書かない）")
+        if desk.kind(m) == "material" and m.get("step"):
+            odd.append(f"{rel} に per_material と step の両方がある（資料ごとに選ぶレシピは、構成案を開いたときだけ出る。step は効かない）")
         odd += [f"{rel} の {k} の {v}（{'・'.join(vals)} のどれか）" for k, vals in (("targets", desk.TARGETS), ("audience", desk.AUDIENCES)) for v in desk.listed(m, k) if v not in vals]
         if (n := len(p.read_text(encoding="utf-8"))) > desk.RULE_MAX:
-            odd.append(f"{rel} が {n:,} 字（{desk.RULE_MAX:,} 字まで。memory と並ぶと hook が途中で切るので、場面ごとに分ける）")
-    (warn if odd else ok)("ワークスペースの決まり", "、".join(odd) if odd else f"{len(rules)} ファイル")
+            odd.append(f"{rel} が {n:,} 字（{desk.RULE_MAX:,} 字まで。memory と並ぶと hook が途中で切るので、もっと狭い目的のレシピに分ける）")
+        if skill := next((x for x in p.relative_to(top).parts[:-1] if (SKILLS / x / "SKILL.md").is_file()), None):
+            odd.append(f"{rel} がスキルの名前のフォルダ（{skill}）にある（目的の名前にする。desk-recipes の SKILL.md の §2）")
+        if p.parent != top and (p.parent.parent / desk.RECIPE).is_file():
+            odd.append(f"{rel} がほかのレシピのフォルダの中にある（hook は両方を別々のレシピとして出す。資源なら RECIPE.md の名前を替える）")
+    have = {p for p, _ in rules}
+    for p in sorted(top.rglob("*.md")) if top.is_dir() else []:  # 決まりとして出ないもの: レシピのフォルダの外の .md と、description のない RECIPE.md
+        rel = p.relative_to(root)
+        inside = any((d / desk.RECIPE).is_file() for d in p.parents if d.is_relative_to(top) and d != top)
+        if p.name == desk.RECIPE and p.parent != top and p not in have and "templates" not in p.relative_to(top).parts[1:]:
+            odd.append(f"{rel} の頭に frontmatter の description がない（ないと hook が出さない）")
+        elif not inside and p != top / "README.md" and "templates" not in p.relative_to(top).parts[1:]:
+            odd.append(f"{rel} はレシピでない（決まりは recipes/<名前>/RECIPE.md に書く。hook は出さない）")
+    (warn if odd else ok)("ワークスペースの決まり", "、".join(odd) if odd else f"レシピ {len(rules)} 個")
     if cfg.get("desk", {}).get("source"):  # 2026-10-14 まで、desk-kaizen が worktree を作る checkout（前の [factory] source。desk-migrate が [desk] にする）
         warn("desk.source", "使わなくなった（desk-kaizen は .desk/kaizen/ に自分で clone する）。desk.toml から消す")
     names = sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md"))
@@ -252,20 +269,30 @@ def selftest():
         assert "顧客の memory" not in kinds()
         agents = Path(tmp) / "AGENTS.md"
         assert "AGENTS.md の方針のレビュー" not in kinds() and "前の版のワークスペース" not in kinds()  # 今の雛形
-        (Path(tmp) / "rules" / "deck-build").mkdir()
+        (Path(tmp) / "rules" / "deck-build").mkdir(parents=True)
         (Path(tmp) / "rules" / "deck-build" / "checks.py").write_text("x")
-        assert kinds()["前の版のワークスペース"] == "要修正"
-        shutil.rmtree(Path(tmp) / "rules" / "deck-build")
+        assert kinds()["前の版のワークスペース"] == "要修正"  # 前の版の rules/ が残っている
+        shutil.rmtree(Path(tmp) / "rules")
         assert kinds()["ワークスペースの決まり"] == "OK"
-        (Path(tmp) / "rules" / "x.md").write_text("---\ndescription: x\npaths: [slides-build/visual.md, slides-build/*, nope/a.md]\ntargets: [video]\n---\n" + "あ" * desk.RULE_MAX)
+        rx = Path(tmp) / "recipes" / "x"
+        rx.mkdir(parents=True)
+        (rx / "RECIPE.md").write_text("---\ndescription: x\npaths: [slides-build/visual.md]\nstep: review\ntargets: [video]\n---\n" + "あ" * desk.RULE_MAX)
         d = next(d for k, n, d in check(Path(tmp), local=True) if n == "ワークスペースの決まり")
-        assert kinds()["ワークスペースの決まり"] == "要確認" and "nope/a.md" in d and "slides-build/" not in d and "targets の video" in d and f"字（{desk.RULE_MAX:,} 字まで" in d, d
-        (Path(tmp) / "rules" / "x.md").unlink()
-        (Path(tmp) / "rules" / "slides-build").mkdir(exist_ok=True)
-        (Path(tmp) / "rules" / "slides-build" / "visual.md").write_text("---\ndescription: 見た目の足し\n---\n- 16pt\n")
+        assert kinds()["ワークスペースの決まり"] == "要確認" and "paths がある" in d and "step の review" in d and "targets の video" in d and f"字（{desk.RULE_MAX:,} 字まで" in d, d
+        (rx / "RECIPE.md").write_text("---\ndescription: x\nstep: build\n---\n- 16pt\n")
+        (rx / "templates" / "t").mkdir(parents=True)
+        (rx / "templates" / "t" / "doc.md").write_text("# テンプレート\n")
+        (rx / "note.md").write_text("資源\n")
+        assert kinds()["ワークスペースの決まり"] == "OK"  # 資源とテンプレートは決まりでない
+        (Path(tmp) / "recipes" / "loose.md").write_text("---\ndescription: 前の形\n---\n")
+        (Path(tmp) / "recipes" / "RECIPE.md").write_text("---\ndescription: フォルダがない\n---\n")
+        (Path(tmp) / "recipes" / "slides-build" / "y").mkdir(parents=True)
+        (Path(tmp) / "recipes" / "slides-build" / "y" / "RECIPE.md").write_text("---\ndescription: y\n---\n")
+        (Path(tmp) / "recipes" / "z").mkdir()
+        (Path(tmp) / "recipes" / "z" / "RECIPE.md").write_text("- description がない\n")
         d = next(d for k, n, d in check(Path(tmp), local=True) if n == "ワークスペースの決まり")
-        assert "paths がない" in d and "paths: [slides-build/visual.md]" in d, d  # 前の版の同じパスの置き場所で paths がないと、そのファイルを開いても出ない
-        (Path(tmp) / "rules" / "slides-build" / "visual.md").unlink()
+        assert "recipes/loose.md はレシピでない" in d and "recipes/RECIPE.md はレシピでない" in d and "スキルの名前のフォルダ（slides-build）" in d and "recipes/z/RECIPE.md の頭に frontmatter の description がない" in d, d
+        shutil.rmtree(Path(tmp) / "recipes")
         agents.write_text(agents.read_text() + "\n同じ問いで、方針を決めたあとを AI のレビューでそのまま作るか、人がレビューするかも選んでもらう。\n")
         assert kinds()["AGENTS.md の方針のレビュー"] == "要確認"
         assert "AGENTS.md の返したあとの直し" not in kinds()  # 今の雛形
@@ -278,7 +305,9 @@ def selftest():
         agents.write_text(agents.read_text() + "\n- 前は「決まりの層」があった（自分で書いたメモ）。\n")
         assert "AGENTS.md の決まりの層" not in kinds()  # 自分で書いた文の語には当てない
         agents.write_text(agents.read_text() + "\n- 決まりは、このファイルと `rules/<スキル>/<ファイル>`（プラグインの同じパスのファイルへの足しと上書き）。`rules.md` の「決まりの層」。決まりには ID と短い理由だけを書き、日付は台帳に。\n")
-        assert all(kinds()[n] == "要確認" for n in ("AGENTS.md の決まりの置き場所", "AGENTS.md の決まりの層", "AGENTS.md の決まりの ID"))
+        assert all(kinds()[n] == "要確認" for n in ("AGENTS.md の決まりの置き場所", "AGENTS.md の決まりの層", "AGENTS.md の決まりの ID")) and "AGENTS.md のレシピの出し方" not in kinds()
+        agents.write_text(agents.read_text() + "\n- 開くと、frontmatter の `paths` にそのファイルを書いたものが出る。\n")
+        assert kinds()["AGENTS.md のレシピの出し方"] == "要確認"
         toml = Path(tmp) / "desk.toml"
         assert kinds()["brand.copyright"] == "要修正" and kinds()["brand.company"] == "要確認"
         toml.write_text(toml.read_text().replace("[brand]", '[brand]\ncopyright = "© Acme 2026"', 1))

@@ -3564,10 +3564,10 @@ def lint_local(path="pages.py", url=None, talk=False, pages=None):
     reqs = json.loads(resolved(deck, p))
     *_, digest = pages_of(deck, reqs)  # ノートだけ変えたページも見る
     ws = gapi.find_config()
-    rules = [Path(__file__).with_name("lint.py"), Path(__file__), Path(brand.__file__).with_name("textlint.py"), Path(brand.__file__)] + ([ws[1] / "rules" / "slides-build" / "checks.py"] if ws else [])
+    rules = [Path(__file__).with_name("lint.py"), Path(__file__), Path(brand.__file__).with_name("textlint.py"), Path(brand.__file__)] + (sorted((ws[1] / "recipes").rglob("checks.py")) if ws else [])
     import lint
     facts = lint.load_facts()  # 資料のフォルダ（build/ の親）の出典の表。変われば、前に通ったページも見直す（deck-lint-026）
-    key = "\0".join([str(Path(path).resolve()), str(talk), json.dumps(p, sort_keys=True), str(facts)] + [f.read_text() if f.is_file() else "" for f in rules])  # lint の結果を変えるもの（見るテーマのマスター・レイアウト、--talk、規則の lint.py・slides.py・ワークスペースの checks.py）が変われば、前の記録を使わない
+    key = "\0".join([str(Path(path).resolve()), str(talk), json.dumps(p, sort_keys=True), str(facts)] + [f.read_text() if f.is_file() else "" for f in rules])  # lint の結果を変えるもの（見るテーマのマスター・レイアウト、--talk、規則の lint.py・slides.py・ワークスペースの recipes/ の checks.py）が変われば、前の記録を使わない
     state = Path(tempfile.gettempdir()) / f"slides_lint_{gapi.user()}_{hashlib.sha1(key.encode()).hexdigest()[:8]}.json"
     clean = set(json.loads(state.read_text())) if state.is_file() else set()  # 前に見て、要修正のなかったページのハッシュ
     if pages in (None, "all"):

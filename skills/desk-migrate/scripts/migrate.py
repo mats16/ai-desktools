@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """usage: migrate.py [check]                         前の版のワークスペースで、変えるものを出す（何も変えない）
-       migrate.py apply                         控えを .desk/migrate/<時刻>/ に取ってから、rules/ を移し、決まりの ID とパスを書き換え、frontmatter を足し、ワークスペースの決まりの ID を外す
+       migrate.py apply                         控えを .desk/migrate/<時刻>/ に取ってから、rules/ を移し、決まりの ID とパスを書き換え、frontmatter を足し、ワークスペースの決まりの ID を外し、rules/ を recipes/ にする
        migrate.py relink <P-ID> <rules/ のファイル>|--split   分け直しで行き先が決まらない台帳の提案の、行き先を決める（apply の要判断に出る）
        migrate.py relink-id <ws- の ID> <ワークスペースのファイル>|戻さない   ID を外すときにファイルが決まらない ID（2 つのファイルにある・どこにもない）の行き先を決め、ID を外す
        migrate.py to-user                       ワークスペースの desk.toml を個人の設定（~/.desk.toml。DESK_CONFIG があればそのパス）に移し、workspace を足す
@@ -14,8 +14,13 @@
 paths にそのパスを書いた frontmatter を足す（出る場面は前と同じ。ファイルは動かさないので、台帳のファイルへのつながりもそのまま）。
 同じ日の次の版で、ワークスペースの決まりから ID（[ws-…]）を外した。ID → 書いてあるファイルの対応を台帳の migrated の記録に残し（ledger.py は前の記録の ID をそのファイルとして読む。
 台帳の前の行は書き換えない）、ファイルごとに ID を外す前と後の全文を「移行」の版として残す（ledger.py undo で戻せる）。
+2026-10-29 の版で、rules/ を recipes/ にし、決まりのファイルを 1 つずつフォルダにした（rules/<…>/<名前>.md → recipes/<名前>/RECIPE.md）。frontmatter の paths は step にする
+（当たるプラグインのファイルがどれも材料を集める作業なら gather、どれも組む作業なら build、ほかは書かない）。paths のなかったものは per_material: true（資料ごとに選ぶ）。
+点検の checks.py は recipes/slide_checks/・doc_checks/ に、ドキュメントのテンプレートは recipes/doc_templates/templates/ に移す。台帳・AGENTS.md・CLAUDE.md・顧客の memory.md・
+レシピ・構成案の中の前のパスも書き換える。前の段の移しは rules/ の中で済ませてから、最後にこの段を回す。
 何度回してもよい。標準ライブラリだけ。"""
-import json, os, re, shutil, subprocess, sys, tempfile, time
+import fnmatch, json, os, re, shutil, subprocess, sys, tempfile, time
+from collections import Counter
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -352,7 +357,8 @@ def needs(ws):
     moves, edit, _, _ = plan(ws)
     return ([str(a.relative_to(ws)) for a, _ in data_moves(ws)] + [f"rules/{f.relative_to(ws / 'rules')}" for f, _ in moves] + [str(p.relative_to(ws)) for p in edit]
             + [f"{p.relative_to(ws)}（frontmatter）" for p, _ in fronts(ws, {f for f, _ in moves})]
-            + [f"台帳の {i} の変更先（{a} → {b or '要判断'}）" for i, a, b, _ in relinks(ws)] + id_needs(ws))
+            + [f"台帳の {i} の変更先（{a} → {b or '要判断'}）" for i, a, b, _ in relinks(ws)] + id_needs(ws)
+            + [f"rules/{s.relative_to(ws / 'rules')}（recipes/ へ）" for s, _ in (recipe_moves(ws) if RECIPES else [])])
 
 
 def id_needs(ws):
@@ -366,7 +372,8 @@ def fronts(ws, skip=()):
     """frontmatter（description）のない rules/ の .md: [(ファイル, 頭に足す frontmatter か None)]。プラグインのスキルのフォルダの下（前の版の、同じパスへの上書き）なら、
     そのパスを paths にする（出る場面は前と同じ）。ほかと、frontmatter はあるが description のないものは None（何に効くか分からないので、手で書く）。
     README.md と docs-build のテンプレート（templates/ の下）は決まりでない（desk.rules と同じ）。skip はこれから移すファイル（移したあとのパスで見る）。"""
-    root, have = ws / "rules", {p for p, _ in desk.rules(ws)}
+    root = ws / "rules"
+    have = {p for p in root.rglob("*.md") if p.is_file() and desk.described(desk.front(p.read_text(encoding="utf-8", errors="ignore")))} if root.is_dir() else set()  # 前の版の決まりのファイル（2026-10-27 の形）
     skills = {p.parent.name for p in PLUGIN.glob("*/SKILL.md")}
     out = []
     for p in sorted(root.rglob("*.md")) if root.is_dir() else []:
@@ -542,6 +549,149 @@ def defined(rid):
     return [f for f in PLUGIN.rglob("*.md") if f"[{rid}]" in f.read_text(encoding="utf-8")]
 
 
+MATERIAL = ("deck-practices/content_customer.md", "deck-practices/content_internal.md", "deck-practices/content_explain.md")  # 資料の種類ごとに開くプラグインのファイル（content.md の §1 を 2026-10-24 に分けたもの）
+USED = re.compile(r"使う決まり")  # 構成案の「使う決まり」の行（hooks/rules_overlay.py の USE）
+RECIPES = True  # 最後の段（rules/ → recipes/）を回すか。selftest が、前の段の結果を rules/ の中で確かめるときだけ外す
+slug = lambda s: re.sub(r"\W+", "_", s.lower()).strip("_") or "recipe"  # レシピのフォルダの名前（小文字と _。和文の名前は残し、組み直しで英語の名前にする）
+
+
+def recipe_moves(ws):
+    """2026-10-29: 前の版の rules/ の下のファイル → recipes/ の下 [(前, 今)]。決まりの .md は recipes/<名前>/RECIPE.md（名前はファイルの名前。
+    ほかのフォルダに同じ名前があれば、フォルダの名前もつなぐ）、点検の checks.py は recipes/slide_checks/・doc_checks/、テンプレートは recipes/doc_templates/templates/。
+    rules/README.md は移さない（控えに残し、雛形の recipes/README.md を置く）。"""
+    root = ws / "rules"
+    if not root.is_dir():
+        return []
+    files = [p for p in sorted(root.rglob("*")) if p.is_file() and not p.name.startswith(".") and "__pycache__" not in p.parts]
+    rule = lambda rel: rel.suffix == ".md" and rel != Path("README.md") and "templates" not in rel.parts[:-1]
+    short = lambda rel: slug(rel.stem) if slug(rel.stem) not in ("skill", "readme", "templates", "checks") else slug("_".join(rel.with_suffix("").parts))  # よくある名前と、資源のフォルダの名前は、フォルダの名前もつなぐ
+    count = Counter(short(p.relative_to(root)) for p in files if rule(p.relative_to(root)))
+    out, used = [], {d.name for d in (ws / "recipes").iterdir()} if (ws / "recipes").is_dir() else set()  # 今ある recipes/ の名前とも重ねない（手で作ったレシピ・途中まで移したもの）
+    for p in files:
+        rel = p.relative_to(root)
+        if rel == Path("README.md"):
+            continue
+        if "templates" in rel.parts[:-1]:
+            dst = Path("doc_templates", *rel.parts[rel.parts.index("templates"):])
+        elif p.name == "checks.py" and len(rel.parts) == 2:
+            dst = Path({"slides-build": "slide_checks", "docs-build": "doc_checks"}.get(rel.parts[0], f"{slug(rel.parts[0])}_checks"), "checks.py")
+        elif rule(rel):
+            name = short(rel) if count[short(rel)] == 1 else slug("_".join(rel.with_suffix("").parts))
+            while name in used:  # つないだ名前がほかの名前と重なっても、1 つのレシピに 2 つを移さない
+                name += "_2"
+            used.add(name)
+            dst = Path(name, "RECIPE.md")
+        else:
+            dst = rel  # 決まりでないファイル（画像など）は同じパスに。要るレシピのフォルダへは人が移す
+        out.append((p, ws / "recipes" / dst))
+    return out
+
+
+def recipe_front(text):
+    """前の版の frontmatter（paths）を今の形に。paths の行（続きの「  - 」の行も）を消し、当たるプラグインのファイルの作業（desk.triggers）から step を書く。
+    paths のなかったものは per_material: true。frontmatter のないもの・description のないものは、そのまま（desk-doctor が知らせる）。"""
+    meta = desk.front(text)
+    if not desk.described(meta) or "step" in meta or "per_material" in meta:
+        return text
+    lines = text.split("\n")
+    end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+    head, drop = [], False
+    for x in lines[1:end]:
+        if re.match(r"paths\s*:", x):
+            drop = True
+            continue
+        if drop and (x[:1] in (" ", "\t") or x.lstrip().startswith("- ")):
+            continue
+        drop = False
+        head.append(x)
+    globs = desk.listed(meta, "paths")
+    if not globs or all(g in MATERIAL for g in globs):  # 資料の種類ごとのファイルへの足しは、その種類の資料でしか開かれなかった。資料ごとに選ぶ
+        head.append("per_material: true")
+    else:
+        plugin = [str(f.relative_to(PLUGIN)) for f in PLUGIN.glob("*/**/*.md")]
+        hit = [desk.triggers(f) for f in plugin if any(fnmatch.fnmatchcase(f, g) for g in globs)]
+        step = next((s for s in desk.STEPS if hit and all(s in h for h in hit)), None)
+        head += [f"step: {step}"] if step else []
+    return "\n".join(["---", *head, *lines[end:]])
+
+
+def recipe_texts(ws):
+    """前のパスを書き換えるファイル: AGENTS.md・CLAUDE.md・.gitignore・顧客の memory.md・構成案（「使う決まり」）。レシピは移したあとに別に見る。"""
+    fs = [ws / "AGENTS.md", ws / "CLAUDE.md", ws / ".gitignore", *sorted((ws / "Customers").glob("*/memory.md"))]
+    fs += [p for d in ("Customers", "Internal") for p in sorted((ws / d).rglob("構成案*.md"))]
+    return [p for p in fs if p.is_file()]
+
+
+def to_recipes(ws, backup):
+    """rules/ を recipes/ にする（recipe_moves）。先に、台帳の外の直しを「手で直した」版にしてから、台帳と本文の前のパスを書き換え、
+    書き換えた決まりのファイルには「移行」の版を残す（台帳に版のないものは、あとの baselines が「初めの版」にする）。"""
+    moves = recipe_moves(ws)
+    if not moves and not (ws / "rules").is_dir():
+        return []
+    led = ws / ".desk" / "ledger.jsonl"
+    if led.is_file():
+        ledger.drift(ws, quiet=True, record=True)  # 書き換えの前の直しを、ユーザーの直しとして残す（移行の版に混ぜない）
+    fixed = [("rules/slides-build/checks.py", "recipes/slide_checks/checks.py"), ("rules/docs-build/checks.py", "recipes/doc_checks/checks.py"),
+             ("rules/docs-build/templates/", "recipes/doc_templates/templates/"), ("rules/<名前>.md", "recipes/<名前>/RECIPE.md"), ("rules/README.md", "recipes/README.md")]  # 雛形の文が指す置き場所（ファイルがなくても、本文の文を今の置き場所に）
+    pairs = sorted({**dict(fixed), **{f"rules/{s.relative_to(ws / 'rules').as_posix()}": f"recipes/{d.relative_to(ws / 'recipes').as_posix()}" for s, d in moves if not d.exists()}}.items(), key=lambda x: -len(x[0]))  # 移さないもの（先がもうある）の前のパスは、ほかのファイルを指すように書き換えない
+    def swap_all(v):
+        for a, b in pairs:
+            v = re.sub(rf"(?<![\w.-]){re.escape(a)}" + ("" if a.endswith("/") else r"(?![\w./-])"), b, v)
+        return v
+    out, before = [], {}
+    for p in [*recipe_texts(ws), *(ws / ".desk" / "harness").glob("*.json")]:
+        before[p] = p.read_text(encoding="utf-8")
+        dst = backup / p.relative_to(ws)
+        if not dst.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(p, dst)
+    for src, dst in moves:
+        if dst.exists():
+            out.append(f"移していない（移す先がもうある。中身を寄せて前のほうを消す）: {src.relative_to(ws)} → {dst.relative_to(ws)}")
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        old = src.read_text(encoding="utf-8") if dst.name == "RECIPE.md" else None
+        src.rename(dst)
+        if old is not None:
+            before[dst] = old
+            dst.write_text(swap_all(recipe_front(old)), encoding="utf-8")
+        out.append(f"移した: {src.relative_to(ws)} → {dst.relative_to(ws)}")
+        if not (dst.name in (desk.RECIPE, "checks.py") or "templates" in dst.relative_to(ws / "recipes").parts):  # 画像などは、どのレシピのフォルダにも入っていない（hook も名前を添えない）
+            out.append(f"要判断: {dst.relative_to(ws)} はレシピのフォルダの外にある。使うレシピのフォルダへ移し、RECIPE.md の中のパスを直す")
+    if (readme := ws / "rules" / "README.md").is_file():
+        readme.unlink()  # 控えにある。雛形の今の README を置く
+        out.append("消した: rules/README.md（控えに残した。recipes/README.md は desk-init の雛形）")
+    if not (ws / "recipes" / "README.md").exists() and (ws / "recipes").is_dir():
+        shutil.copy2(PLUGIN / "desk-init" / "templates" / "recipes" / "README.md", ws / "recipes" / "README.md")
+    for d in sorted((p for p in [ws / "rules", *(ws / "rules").rglob("*")] if p.is_dir()), key=lambda p: len(p.parts), reverse=True):
+        if not any(d.iterdir()):
+            d.rmdir()
+    if led.is_file() and (n := ledger_lines(led, swap_all)) != led.read_text(encoding="utf-8"):
+        led.write_text(n, encoding="utf-8")
+        out.append(f"書き換えた: {led.relative_to(ws)}（前の rules/ のパス）")
+    for p in [*recipe_texts(ws), *(ws / ".desk" / "harness").glob("*.json")]:
+        t = before[p]
+        n = "".join(swap_all(x) if USED.search(x) else x for x in t.splitlines(keepends=True)) if p.name.startswith("構成案") else swap_all(t)  # 構成案は「使う決まり」の行だけ（hook が読む。ほかは過去の記録のまま）
+        if p.name in ("AGENTS.md", "CLAUDE.md", ".gitignore"):  # ワークスペースのフォルダとしての rules/ も（雛形の「rules/ の決まりのファイル」・!/rules/）
+            n = re.sub(r"(?<![\w./-])rules/(?![\w.<-])", "recipes/", n).replace("!/rules/", "!/recipes/")  # パスの続くもの（rules/<…>・rules/x.md）は、移したものと雛形の置き場所だけ（pairs）。ほかは下で知らせる
+        if n != t:
+            p.write_text(n, encoding="utf-8")
+            out.append(f"書き換えた: {p.relative_to(ws)}（前の rules/ のパス）")
+    for p in (ws / "AGENTS.md", ws / "CLAUDE.md"):  # 書き換えられなかった前のパス（どこへ移ったか分からない）は、推し量って書き換えずに知らせる
+        left = [x.strip()[:80] for x in (p.read_text(encoding="utf-8").splitlines() if p.is_file() else []) if re.search(r"(?<![\w./-])rules/", x)]
+        if left:
+            out.append(f"要判断: {p.name} に前の rules/ のパスが残っている（{' / '.join(left[:3])}{f' ほか {len(left) - 3} 行' if len(left) > 3 else ''}）。今のレシピのパスに直す")
+    vs = ledger.versions(ws) if led.is_file() else {}
+    for p, t in before.items():  # 書き換えた決まりのファイルの版（パスは今のもの）
+        rel = p.relative_to(ws).as_posix()
+        if ledger.rule_file(rel) and rel in vs and p.is_file() and (n := p.read_text(encoding="utf-8")) != vs[rel][-1][3]:
+            ledger.revise(ws, rel, vs[rel][-1][3], n, kind="移行")
+    if (ws / "rules").exists():
+        out.append(f"要判断: rules/ に移せなかったものが残っている（{'・'.join(str(x.relative_to(ws)) for x in sorted((ws / 'rules').rglob('*')) if x.is_file())[:300]}）。中身を recipes/ のレシピに寄せてから消す")
+    out.append("要判断: レシピは前のファイルを 1 つずつフォルダにしただけ。目的ごとにまとめ直す（desk-recipes の SKILL.md の §5）。step は paths から決めたので、合っているかを見る")
+    return out
+
+
 def apply(ws):
     data = move_data(ws)  # 台帳（.desk/ledger.jsonl）を書き換える前に、名前を今の版にする
     moves, edit, split, ws_map = plan(ws)
@@ -549,14 +699,14 @@ def apply(ws):
     old_run = (ws / ".desk" / "dreaming").is_dir() and (any(src.is_relative_to(ws / "rules" / "dreaming") for src, _ in moves) or any(DREAMING.search(t) for t in strings(ws)))
     heads = fronts(ws)  # 移すものがあれば、移したあとで見直す
     ids, new, open_ = ws_ids(ws)  # 書き換えるものがなければ、今の形の ID のまま
-    if not moves and not edit and not any(h for _, h in heads) and not new and not strip_plan(ws, ids):
+    if not moves and not edit and not any(h for _, h in heads) and not new and not strip_plan(ws, ids) and not (RECIPES and (ws / "rules").is_dir()):
         return data + relink(ws) + by_hand(ws, heads) + id_asks(ws, ids, open_) or ["移すものはない（今の版）"]
     backup = ws / ".desk" / "migrate" / time.strftime("%Y%m%d-%H%M%S")
     n = 1
     while backup.exists():  # 同じ秒に回し直しても、前の控え（前の版の中身）を上書きしない
         n += 1
         backup = backup.with_name(f"{backup.name.split('_')[0]}_{n}")
-    for p in [ws / "AGENTS.md", ws / "rules", ws / ".desk" / "ledger.jsonl", *sorted((ws / "Customers").glob("*/memory.md"))]:
+    for p in [ws / "AGENTS.md", ws / "rules", ws / "recipes", ws / ".desk" / "ledger.jsonl", *sorted((ws / "Customers").glob("*/memory.md"))]:
         if p.exists():
             dst = backup / p.relative_to(ws)
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -598,19 +748,23 @@ def apply(ws):
             p.write_text(head + p.read_text(encoding="utf-8"), encoding="utf-8")
             out.append(f"frontmatter を足した: {p.relative_to(ws)}（paths は前と同じパス。description は、何に効くかが分かるように直してよい）")
     out += by_hand(ws, heads)
-    for rel, where in plan(ws)[2] if moves or edit else []:  # 分けた件は、前の版から移すときだけ（frontmatter を足すだけのときは、もう分けてある。check と同じ）
+    for rel, where in plan(ws)[2] if (moves or edit) and not RECIPES else []:  # 分けた件は、前の版から移すときだけ（frontmatter を足すだけのときは、もう分けてある。check と同じ）。recipes/ に移すなら、レシピは作業ごとに出るので、どのファイルへの足しかは要らない
         out += [f"要判断: rules/{rel} は、プラグインで {where} に分けた。決まりごとに、足しているプラグインの節のファイルを frontmatter の paths に足す"
                 "（決まりを、そのファイルを paths に持つファイルへ移してもよい。ID はそのまま）"] + suggest(ws, rel)
     d = relink_files(ws)[0]  # 初めて移行した時点にある提案だけを見張る（そのあとに出した提案は今の版のもの。回し直しても足さない）
     if not (d / "relink.json").is_file():  # 当て済みは、いま文がそのファイルにあるもの（移行の前から文のないものは、drift の受け持ち）
         now = {p["id"] for p in in_split(ws) if p["status"] == "未適用" or p["new"].strip() and (ws / p["file"]).is_file() and p["new"].strip() in (ws / p["file"]).read_text(encoding="utf-8")}
         (d / "relink.json").write_text(json.dumps(sorted(now)), encoding="utf-8")
-    out += asks(relinks(ws))
+    out += [] if RECIPES else asks(relinks(ws))  # recipes/ に移すと、分けたファイルの提案は、前の文を丸ごと持つレシピについていく（決めることがない）
     ids, new, open_ = ws_ids(ws)  # 2026-10-27: ワークスペースの決まりの ID を外す（ほかの書き換えのあとの、今の形の ID で）
     out += hand_edits(ws) + strip_ids(ws, ids, new) + baselines(ws) + id_asks(ws, ids, open_)
     if off := off_topic(ws):
         out.append(f"要判断: 角括弧なしで書いた、もうプラグインにない前の ID がある（{'・'.join(off)}）。ids_*.json の prefixes で今の主題を見て、"
                    "その文を直すか、要らなければ消す（ID だと言い切れないので、ここでは替えない）")
+    if RECIPES and ws_ids(ws)[2]:  # 決められない ID は rules/ のファイルで探す（relink-id）。決めるまで移さない
+        out.append("要判断: rules/ から recipes/ への移しは、上の ID の行き先を決めてから（relink-id のあと、apply を回し直す）")
+    elif RECIPES:  # 2026-10-29: 最後に rules/ を recipes/ に（前の段は rules/ の中で済ませる）
+        out += to_recipes(ws, backup) + baselines(ws)
     if old_run:  # 登録はワークスペースの外（アプリ・launchd・cron）にあり、ここからは直せない
         out.append("要判断: 定期の整理を前の名前（dreaming）で登録していれば、前の登録を消して登録し直す（desk-dreaming の SKILL.md を開いてから、その schedule.md の頭。"
                    "前の登録のままだと、run.sh が見つからないか前のスキルを呼んで止まり、報告も出ない）")
@@ -631,6 +785,8 @@ def relink_id(ws, x, to):
 
 
 def selftest():
+    global RECIPES
+    RECIPES = False  # 前の段（2026-10-24〜27）は、rules/ の中の結果で確かめる。最後の段は selftest_recipes
     assert all(m["ids"].get(n, n) == n for m in MAPS for n in m["ids"].values())  # 今の ID は、前の ID として読んでも替わらない（何度回してもよい）
     IDS = {k: rewrite(k, paths=False) for m in MAPS[:1] for k in m["ids"]}
     with tempfile.TemporaryDirectory() as tmp:
@@ -671,10 +827,13 @@ def selftest():
         assert "slides-visual-012" in (r / "slides-build" / "visual.md").read_text() and (r / "docs-build" / "templates" / "a" / "doc.md").is_file()
         assert (r / "slides-build" / "checks.py").is_file() and (r / "docs-build" / "checks.py").is_file() and not (r / "deck-build").exists() and not (r / "doc-build").exists()
         assert (r / "slides-build" / "checks.py").read_text().startswith("import lint ") and (r / "docs-build" / "checks.py").read_text().startswith("import doc_lint as lint ")
+        (ws / "recipes" / "doc_checks").mkdir(parents=True)  # 最後の段で移す先（lint は recipes/ の下の checks.py を読む）
+        shutil.copy2(r / "docs-build" / "checks.py", ws / "recipes" / "doc_checks" / "checks.py")
         run = subprocess.run([sys.executable, "-c", "import sys; sys.path[:0] = sys.argv[1:3]; import doc_lint, textlint; r = textlint.Report(); "
                               "doc_lint.workspace_checks('doc', {'body': {'content': []}}, r); print(r.hits['段落'])",
                               str(PLUGIN / "docs-build" / "scripts"), str(PLUGIN / "deck-practices" / "scripts")], cwd=ws, capture_output=True, text=True)
         assert run.returncode == 0 and "['0']" in run.stdout, run.stderr  # 写したドキュメントの点検が、ドキュメントの lint から読めて動く
+        shutil.rmtree(ws / "recipes")
         assert body(r / "vids-voice" / "en.md") == "- x\n- y\n"  # 主題の表にない ID も外す
         assert not any("主題の表にない" in o and "visual-012" in o for o in out)  # 原文の中の古い ID は、主題の表にない ID として出さない
         assert body(r / "vids-voice" / "ja.md") == "- 間を長く（vids-voice-ja-002 より優先）。\n"
@@ -920,7 +1079,86 @@ def selftest():
         (ws / OLD_CONF).unlink()
         Path(tmp, "desk.toml").write_text("")  # 上に desk.toml がある: 移すと、中で開いたときにそちらが勝つ
         assert to_user(ws)[0].startswith("移していない（上の") and (ws / "desk.toml").is_file() and not conf.exists()
+    RECIPES = True
+    selftest_recipes()
     print("selftest ok")
+
+
+def selftest_recipes():
+    """2026-10-29: rules/ → recipes/。決まりはフォルダごとのレシピに、paths は step に、台帳と本文の前のパスは今のパスに。何度回してもよい。"""
+    with tempfile.TemporaryDirectory() as tmp:  # 和文の名前は残し、つないだ名前がほかの名前と重なっても、1 つのレシピに 2 つを移さない
+        ws = Path(tmp)
+        for f in ("rules/顧客向け.md", "rules/x/顧客向け.md", "rules/a/b.md", "rules/c/b.md", "rules/a_b.md", "rules/---.md", "rules/cxo.md", "recipes/cxo/RECIPE.md", "rules/logo.png", "recipes/logo.png"):
+            (ws / f).parent.mkdir(parents=True, exist_ok=True)
+            (ws / f).write_text("x")
+        dst = [d.relative_to(ws / "recipes").as_posix() for _, d in recipe_moves(ws)]
+        assert len(set(dst)) == len(dst) and {"顧客向け/RECIPE.md", "x_顧客向け/RECIPE.md", "recipe/RECIPE.md", "cxo_2/RECIPE.md"} <= set(dst), dst  # 手で作った recipes/cxo/ とも重ねない
+        (ws / "AGENTS.md").write_text("- 画像は rules/logo.png、決まりは rules/cxo.md\nrules/<名前>.md … 決まり（rules/README.md）\n")
+        out = to_recipes(ws, ws / "backup")
+        assert (ws / "AGENTS.md").read_text() == "- 画像は rules/logo.png、決まりは recipes/cxo_2/RECIPE.md\nrecipes/<名前>/RECIPE.md … 決まり（recipes/README.md）\n" and any("移していない" in x and "logo.png" in x for x in out)  # 移さなかったものの前のパスは書き換えない。前の雛形の置き場所は今の置き場所に
+        assert any(x.startswith("要判断: AGENTS.md に前の rules/ のパスが残っている（- 画像は rules/logo.png") for x in out), out  # 書き換えなかった前のパスは知らせる
+    with tempfile.TemporaryDirectory() as tmp:  # 決められない ID があれば、relink-id で決めるまで rules/ を移さない（relink-id は rules/ で ID を探す）
+        ws = Path(tmp).resolve()
+        (ws / "desk.toml").write_text("")
+        for f in ("a.md", "b.md"):
+            (ws / "rules").mkdir(exist_ok=True)
+            (ws / "rules" / f).write_text("---\ndescription: x\n---\n- [ws-example-001] 残す\n")
+        cwd = os.getcwd()
+        os.chdir(ws)
+        try:
+            out = apply(ws)
+            assert (ws / "rules" / "a.md").is_file() and any("relink-id のあと" in x for x in out), out
+            relink_id(ws, "ws-example-001", "rules/a.md")
+            apply(ws)
+        finally:
+            os.chdir(cwd)
+        assert not (ws / "rules").exists() and "ws-example-001" not in (ws / "recipes" / "a" / "RECIPE.md").read_text() + (ws / "recipes" / "b" / "RECIPE.md").read_text()
+    with tempfile.TemporaryDirectory() as tmp:
+        ws = Path(tmp).resolve()
+        (ws / "desk.toml").write_text("")
+        r = ws / "rules"
+        files = {"slides-build/visual.md": "---\ndescription: 見た目\npaths: [slides-build/visual.md]\n---\n- 16pt\n",
+                 "deck-practices/materials.md": "---\ndescription: 道具\npaths:\n  - deck-practices/materials.md\n  - deck-research/sources.md\ntargets: [slides]\n---\n- Glean\n",
+                 "deck-practices/content.md": "---\ndescription: 中身\npaths: [deck-practices/content.md, slides-build/visual.md]\n---\n- 主張\n",
+                 "deck-review/visual.md": "---\ndescription: レビューの見た目\npaths: [deck-review/prompt_slides.md]\n---\n- 観点\n",
+                 "docs-build/templates.md": "---\ndescription: PoC の計画書\npaths: [docs-build/templates.md]\n---\n- 章立て\n",
+                 "deck-practices/content_internal.md": "---\ndescription: 社内の資料\npaths: [deck-practices/content_internal.md]\n---\n- 社内\n",
+                 "account_plan.md": "---\ndescription: Account Plan\naudience: [社内向け]\n---\n- 章\n",
+                 "slides-build/checks.py": "def slides(p, r):\n    pass\n", "docs-build/templates/poc/doc.md": "# PoC\n", "README.md": "# rules/\n", "slides-build/logo.png": "png"}
+        for f, x in files.items():
+            (r / f).parent.mkdir(parents=True, exist_ok=True)
+            (r / f).write_text(x)
+        (ws / "AGENTS.md").write_text("- 決まりは `rules/` に置く。点検は `rules/slides-build/checks.py`。ドキュメントの点検は `rules/docs-build/checks.py`。\n")
+        (ws / ".gitignore").write_text("/*\n!/rules/\n")
+        deck = ws / "Customers" / "acme" / "d"
+        deck.mkdir(parents=True)
+        (deck / "構成案.md").write_text("- **使う決まり:** rules/account_plan.md\n- 前は rules/account_plan.md の章立てで作った。\n")
+        (ws / "Customers" / "acme" / "memory.md").write_text("- 訳は rules/slides-build/visual.md の書体\n")
+        led = ws / ".desk" / "ledger.jsonl"
+        led.parent.mkdir()
+        led.write_text(json.dumps({"ts": "2026-10-28T00:00:00Z", "kind": "correction", "id": "c-0001", "deck": "Customers/acme/d", "quote": "rules/slides-build/visual.md のとおり",
+                                   "fix": "x", "to": "rules/slides-build/visual.md", "check": "レビュー", "decided": True}, ensure_ascii=False) + "\n")
+        cwd = os.getcwd()
+        os.chdir(ws)
+        try:
+            assert any("recipes/ へ" in x for x in needs(ws))
+            out = apply(ws)
+        finally:
+            os.chdir(cwd)
+        rc = ws / "recipes"
+        got = {str(p.relative_to(rc)) for p in rc.rglob("*") if p.is_file()}
+        assert got == {"materials/RECIPE.md", "content/RECIPE.md", "deck_review_visual/RECIPE.md", "slides_build_visual/RECIPE.md", "account_plan/RECIPE.md",
+                       "slide_checks/checks.py", "doc_templates/templates/poc/doc.md", "slides-build/logo.png", "README.md", "docs_build_templates/RECIPE.md", "content_internal/RECIPE.md"}, got  # 同じ名前（visual）は、フォルダの名前もつなぐ
+        front = lambda f: desk.front((rc / f / "RECIPE.md").read_text())
+        assert front("slides_build_visual")["step"] == "build" and front("materials")["step"] == "gather" and front("materials")["targets"] == ["slides"]  # どのファイルも同じ作業なら step に
+        assert "step" not in front("content") and "step" not in front("deck_review_visual") and "paths" not in front("content")  # 作業がまたがるもの・レビューは書かない（資料を作るどの作業でも）
+        assert front("account_plan")["per_material"] == front("content_internal")["per_material"] == "true" and not (ws / "rules").exists()  # 資料の種類ごとのファイルへの足しも、資料ごとに選ぶ  # paths のなかったものは資料ごとに選ぶ。rules/ は残らない
+        assert "recipes/slide_checks/checks.py" in (ws / "AGENTS.md").read_text() and "recipes/doc_checks/checks.py" in (ws / "AGENTS.md").read_text() and "`recipes/` に置く" in (ws / "AGENTS.md").read_text() and "!/recipes/" in (ws / ".gitignore").read_text()
+        assert (deck / "構成案.md").read_text() == "- **使う決まり:** recipes/account_plan/RECIPE.md\n- 前は rules/account_plan.md の章立てで作った。\n" and "recipes/slides_build_visual/RECIPE.md" in (ws / "Customers" / "acme" / "memory.md").read_text()
+        c = ledger.state(ws)[0]["c-0001"]
+        assert c["to"] == "recipes/slides_build_visual/RECIPE.md" and c["quote"] == "rules/slides-build/visual.md のとおり" and c["decided"]  # 台帳の戻し先はつながる。ユーザーの言葉はそのまま
+        assert ledger.drift(ws, quiet=True) == [] and any("目的ごとにまとめ直す" in x for x in out) and "要判断: recipes/slides-build/logo.png はレシピのフォルダの外にある。使うレシピのフォルダへ移し、RECIPE.md の中のパスを直す" in out and not needs(ws)  # 書き換えたものは版になり、もう移すものはない
+        assert apply(ws) == ["移すものはない（今の版）"]
 
 
 if __name__ == "__main__":
@@ -937,10 +1175,11 @@ if __name__ == "__main__":
         data = [f"移す: {s.relative_to(ws)} → {d.relative_to(ws)}" for s, d in data_moves(ws)] + ["（台帳の書き換えは、.desk/ に移したあとの check で出る）"] * (ws / OLD_DIR).is_dir()
         print("\n".join(data + [f"移す: {s.relative_to(ws)} → {d.relative_to(ws)}" for s, d in moves] + [f"書き換える: {p.relative_to(ws)}{changed(p, ws_map)}" for p in edit]
                         + [f"frontmatter を足す: {p.relative_to(ws)}" for p, h in heads if h] + by_hand(ws, heads)
-                        + [f"要判断（apply のあと）: rules/{k} は {v} に分けた" for k, v in split if moves or edit]
+                        + [f"要判断（apply のあと）: rules/{k} は {v} に分けた" for k, v in split if (moves or edit) and not RECIPES]
                         + [f"台帳を合わせる: {i} の変更先 {a} → {b}" for i, a, b, _ in relinks(ws) if b] + asks(relinks(ws))
                         + [f"決まりの ID を外す: {p.relative_to(ws)}（{len(WS_ID.findall(t)) - len(WS_ID.findall(n))} 個）" for p, t, n in strip_plan(ws, ids)]
-                        + [f"台帳をつなぐ: {x} → {f}" for x, f in sorted(new.items())] + id_asks(ws, ids, open_)) or "移すものはない（今の版）")
+                        + [f"台帳をつなぐ: {x} → {f}" for x, f in sorted(new.items())] + id_asks(ws, ids, open_)
+                        + [f"移す（recipes/ へ）: {s.relative_to(ws)} → {d.relative_to(ws)}" for s, d in recipe_moves(ws)]) or "移すものはない（今の版）")
     elif a == ["apply"]:
         print("\n".join(apply(ws)))
     elif len(a) == 3 and a[0] == "relink":

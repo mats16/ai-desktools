@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """usage: init.py [<ワークスペース>] [--user]   （--selftest で自己確認）
-ワークスペースに、決まり（AGENTS.md・CLAUDE.md・rules/）、設定（desk.toml）、索引（references_index.md）の雛形と、資料のフォルダを置く。
+ワークスペースに、決まり（AGENTS.md・CLAUDE.md・recipes/）、設定（desk.toml）、索引（references_index.md）の雛形と、資料のフォルダを置く。
 --user: 設定はワークスペースに置かず、個人の設定（~/.desk.toml。DESK_CONFIG があればそのパス）に置き、頭の workspace にワークスペースを書く。
 あるファイルは上書きしない（置いたもの・残したものを出す）。標準ライブラリだけ。ワークスペースを省くと、今いるフォルダ。"""
 import os, sys, tempfile, tomllib
@@ -9,7 +9,7 @@ from pathlib import Path
 TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
 sys.path.insert(0, str(TEMPLATES.parents[1] / "deck-practices" / "scripts"))
 import desk  # noqa: E402  個人の設定の場所と、workspace の書き方
-DIRS = ("Customers", "Internal", "Research", ".desk")  # 雛形のないフォルダ（雛形のある rules/ は写すときにできる）
+DIRS = ("Customers", "Internal", "Research", ".desk")  # 雛形のないフォルダ（雛形のある recipes/ は写すときにできる）
 
 
 def init(ws, user=False):
@@ -56,7 +56,7 @@ def selftest():
         (local / "AGENTS.md").write_text("mine")
         out = init(local)
         assert (local / "AGENTS.md").read_text() == "mine" and any("残した" in o and "AGENTS.md" in o for o in out)
-        assert (local / "desk.toml").is_file() and (local / "rules" / "README.md").is_file() and (local / "Customers").is_dir()
+        assert (local / "desk.toml").is_file() and (local / "recipes" / "README.md").is_file() and (local / "Customers").is_dir()
         assert all("残した" in o for o in init(local))  # 2 回目は何も上書きしない
         ws, conf = Path(tmp, "ws").resolve(), Path(tmp, "home", ".desk.toml")
         os.environ["DESK_CONFIG"] = str(conf)

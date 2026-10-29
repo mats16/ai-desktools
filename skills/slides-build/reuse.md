@@ -29,7 +29,7 @@ The page elements (type, position, size, text) can be read directly with the Sli
 - Search with the internal cross search, and check the contents in file storage, chat, and the wiki ([materials.md](../deck-practices/materials.md) "Internal materials"). Add every material you looked at to `references.md`, including ones you decided not to use. To read the contents of Google Slides, having the internal search tool summarize it fails less often than WebFetch （社内 6）. To choose pages, look with `gslides.py pages` and `thumb`.
 - [slides-reuse-002] **For pages that depict the product's main feature (architecture and so on), search for a good-looking figure before drawing your own.** Look at internal decks other than the product pitch and Field Kit, figures in the docs, and figures in the official blog and product pages, and use them in Stages 1–3. Do not settle for a self-made box diagram that only gets the meaning across.
 - **Search for a version in the material's language first.** Pages of global decks have often been translated by local SMEs (for example, the list of Japanese materials in the internal wiki). If one exists, use it instead of translating (SIEM example).
-- When the same figure appears in several decks, choose the newest version of the product team's source deck (Pitch Deck, Field Kit, and so on). If there is a list of official internal decks, write it in the workspace's `rules/slides-build/reuse.md`, with frontmatter `description` and `paths: [slides-build/reuse.md]` ("Workspace rules" in `../deck-practices/rules.md`).
+- When the same figure appears in several decks, choose the newest version of the product team's source deck (Pitch Deck, Field Kit, and so on). If there is a list of official internal decks, write it in the workspace's recipe for the company's internal materials (`step: gather`, or `step: build` if it is needed only while building; `../desk-recipes/SKILL.md`).
 
 ## 2. Checks at every stage
 
@@ -37,7 +37,7 @@ The page elements (type, position, size, text) can be read directly with the Sli
 - [slides-reuse-004] **Is it current?** Look at the source deck's last updated date. Check the release stage (GA, Preview, and so on) against the current state in the docs. Do not use screenshots of old screens. Also do not use screens with trial names (test and so on) or hand-drawn marks baked in; if the content is a structure (such as a catalog tree), redraw it with shapes. That needs no re-shooting and is easy to fix.
 - **聞き手に合うか。** 社内のピッチ資料は営業色が強いことが多い。主語が自社の売り込みのページは、顧客の IT 部門などにはそのまま使わない（段階 3 か 4 で、聞き手の問いから書き直す）。AGENTS.md の「いい資料の考え方」に合わせる。
 - **Is the message the same?** Check that the heading and the claim (the assertion or the lead) of that page in the outline say the same thing as the source page. If not, that stage cannot be used.
-- [slides-reuse-005] **製品のメッセージの柱にそろえる。** まとめや提案の要素の並べ方は、社内と公開の製品のメッセージの柱にそろえる（柱の例はワークスペースの `rules/slides-build/reuse.md`）。訳語は公開の資料の、この資料と同じ言語の版に合わせ、柱は「<自社> の整理」と出典を付けて引く。社内の資料にある強い言い方（業界唯一、ロックインなし、知能はもう十分）は使わず、「乗り換え」のように聞き手のいまの基盤を否定して聞こえる言い方は「足す・替える」にする。
+- [slides-reuse-005] **製品のメッセージの柱にそろえる。** まとめや提案の要素の並べ方は、社内と公開の製品のメッセージの柱にそろえる（柱の例は、ワークスペースの社内の資料のレシピ）。訳語は公開の資料の、この資料と同じ言語の版に合わせ、柱は「<自社> の整理」と出典を付けて引く。社内の資料にある強い言い方（業界唯一、ロックインなし、知能はもう十分）は使わず、「乗り換え」のように聞き手のいまの基盤を否定して聞こえる言い方は「足す・替える」にする。
 
 ## 3. Four stages
 

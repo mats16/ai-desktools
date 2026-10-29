@@ -37,11 +37,11 @@ mkdir -p .codex && { grep -qs 'desk-tools@desk-tools' .codex/config.toml || prin
 
 ## hook を信頼する
 
-プラグインの hook（`rules/` と顧客の `memory.md` を続けて出すもの）は、信頼するまで動かない。対話の Codex で `/hooks` を開き、`desk-tools` の 5 つ（PostToolUse の Read・Bash・Skill、UserPromptSubmit、SessionStart）を信頼する。Read と Skill は Claude Code のためのもので、Codex では起きない。SessionStart（`compact`）は、Claude Code でコンパクションのあとに付け直されるスキルの上書きを出し直すためのもので、Codex では何も出さない（Codex はコンパクションで、呼んだスキルの中身も hook の差し込みも消す）。
+プラグインの hook（`recipes/` のレシピと顧客の `memory.md` を続けて出すもの）は、信頼するまで動かない。対話の Codex で `/hooks` を開き、`desk-tools` の 5 つ（PostToolUse の Read・Bash・Skill、UserPromptSubmit、SessionStart）を信頼する。Read と Skill は Claude Code のためのもので、Codex では起きない。SessionStart（`compact`）は、Claude Code でコンパクションのあとに付け直されるスキルの上書きを出し直すためのもので、Codex では何も出さない（Codex はコンパクションで、呼んだスキルの中身も hook の差し込みも消す）。
 
 - 信頼は hook の中身のハッシュに付く。`hooks/hooks.json` が変わった版を取ると、信頼し直すまで止まる（起動のときに `/hooks` を開くよう知らせが出る）。
 - `codex exec`（desk-dreaming の `run.sh codex`、レビューの子）は聞けない。先に対話の Codex で信頼しておく。
-- Codex はファイルをシェル（`cat`・`sed` など）で読むので、PostToolUse は `Bash` で効く。`$desk-tools:slides-build` のように呼んだスキルは、道具を使わずに SKILL.md が入るので、UserPromptSubmit がプロンプトから拾って、その SKILL.md に frontmatter の `paths` が当たる `rules/` の決まりを出す（2026-10-27 に、`sed` で開いた `paths`・一覧・構成案の「使う決まり」と、`$desk-tools:deck-review` を、会話の記録の developer のメッセージで確かめた）。
+- Codex はファイルをシェル（`cat`・`sed` など）で読むので、PostToolUse は `Bash` で効く。`$desk-tools:slides-build` のように呼んだスキルは、道具を使わずに SKILL.md が入るので、UserPromptSubmit がプロンプトから拾って、その SKILL.md を開いたときと同じレシピを出す（2026-10-27 に、そのときの形〔frontmatter の `paths`〕で、`sed` で開いたもの・一覧・構成案の「使う決まり」と、`$desk-tools:deck-review` を、会話の記録の developer のメッセージで確かめた）。
 - Codex は `hooks.json` の `if`（Claude Code が `.md` に触れない Read・Bash で hook を起こさないための条件）を読まないので、Bash のたびに hook が起き、出すものがなければすぐ終わる。Codex は hook の差し込みが約 2,500 トークン（和文で約 3,300 字）を超えるとファイルに逃がして頭と末尾だけを見せるので、`additionalContextLimit` を 0 にして逃がさない。量は hook が 9,000 字までに抑える（README の「決めたこと」の 2026-10-25）。
 
 ## そのフォルダだけで効いているかを確かめる
@@ -62,8 +62,8 @@ cd <ワークスペース> && (printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"
 
 | フォルダ | 出たスキル | hook |
 |---|---|---|
-| ワークスペース（信頼した） | `desk-tools:` の 16 個 | `sed -n 1,3p ../skills/slides-build/visual.md` のあとと、`$desk-tools:desk-doctor` で呼んだときに、`rules/` の目印が差し込まれた |
-| ワークスペースのサブフォルダ | 16 個（親の `.codex/config.toml` も読まれる） | |
+| ワークスペース（信頼した） | `desk-tools:` の 17 個 | `sed -n 1,3p ../skills/slides-build/visual.md` のあとと、`$desk-tools:desk-doctor` で呼んだときに、ワークスペースの決まりの目印が差し込まれた（2026-10-27 の `rules/` の形で） |
+| ワークスペースのサブフォルダ | 17 個（親の `.codex/config.toml` も読まれる） | |
 | `/tmp` | 0 | |
 
 ## ワークスペースを作る
@@ -95,4 +95,4 @@ codex plugin remove desk-tools@desk-tools
 codex plugin marketplace remove desk-tools
 ```
 
-ワークスペースの `.codex/config.toml` の `[plugins."desk-tools@desk-tools"]` も消す。ワークスペースのファイル（`desk.toml`・`AGENTS.md`・`rules/`・`.desk/`）と、個人の設定の `~/.desk.toml` は残る。
+ワークスペースの `.codex/config.toml` の `[plugins."desk-tools@desk-tools"]` も消す。ワークスペースのファイル（`desk.toml`・`AGENTS.md`・`recipes/`・`.desk/`）と、個人の設定の `~/.desk.toml` は残る。

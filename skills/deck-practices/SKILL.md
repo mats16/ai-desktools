@@ -5,7 +5,7 @@ description: Read first when making or editing materials (decks and documents). 
 
 # Practices for making materials
 
-Open this first when making or editing materials. It builds on 「いい資料の考え方」 in the root `AGENTS.md` (the user's iron rules and the six things that hold for every material), and holds the workflow and the files to read in each situation. [deck-flow-001] Workspace rules (`AGENTS.md`, the rule files in `rules/` that the hook shows, and the customer's `memory.md`) take precedence over the plugin's skills. When they conflict, follow the workspace. Points the user has not decided yet are marked 「要判断」 in each file.
+Open this first when making or editing materials. It builds on 「いい資料の考え方」 in the root `AGENTS.md` (the user's iron rules and the six things that hold for every material), and holds the workflow and the files to read in each situation. [deck-flow-001] Workspace rules (`AGENTS.md`, the recipes in `recipes/` that the hook shows, and the customer's `memory.md`) take precedence over the plugin's skills. When they conflict, follow the workspace. Points the user has not decided yet are marked 「要判断」 in each file.
 
 ## Overall flow
 
@@ -60,7 +60,7 @@ Evidence:
 
 ## What to read when
 
-Do not wait for skills to be called automatically; open the following file when the situation comes up. Paths are `<skill>/<file>` (under the plugin's `skills/`). When you open one, the plugin hook then shows the workspace's rule files whose `paths` match it (workspace-only additions and overrides, which take precedence; the rule files chosen per material come with the outline). In environments where they do not appear, open them yourself ("Workspace rules" in [rules.md](rules.md)).
+Do not wait for skills to be called automatically; open the following file when the situation comes up. Paths are `<skill>/<file>` (under the plugin's `skills/`). When you open one, the plugin hook then shows the workspace's recipes for that step of the work (workspace-only additions and overrides, which take precedence; the recipes chosen per material come with the outline). In environments where they do not appear, open them yourself ("Workspace rules" in [rules.md](rules.md)).
 
 | Situation | File to open |
 |---|---|
@@ -79,8 +79,9 @@ Do not wait for skills to be called automatically; open the following file when 
 | Making a Google Vids video from a deck (only when the user explicitly asks, also when building or fixing a deck), or, after the notes of a deck change, updating the video made from it (without asking) | `vids-build/SKILL.md` (beta; when to make or update, setup, `create`, `update`, voices) |
 | Creating or adjusting a template (from a company template) | `slides-template/SKILL.md` (a table of which file to open: `create.md` for the three cases, mapping colors to roles, and fixing contrast; `fonts.md`; `dark.md`; switching the default theme) |
 | Received a correction, adding a rule | `deck-practices/rules.md` (workspace rules, routing corrections, verifying rules) |
+| Writing or editing a recipe (a correction routed on the spot, a direct request), splitting one, regrouping `recipes/` | `desk-recipes/SKILL.md` (one recipe per purpose, `step` and `per_material`, `description`, the form of items, templates and checks in the recipe's folder, regrouping through the ledger) |
 | Editing the plugin | `desk-kaizen/SKILL.md` (verifying on past materials, and the Issue) |
-| desk-doctor reports 「前の版のワークスペース」 | `desk-migrate/SKILL.md` (moving `rules/`, rule IDs, and the ledger to the current version) |
+| desk-doctor reports 「前の版のワークスペース」 | `desk-migrate/SKILL.md` (moving `rules/` to `recipes/`, rule IDs, and the ledger to the current version) |
 
 The history and the sources of the research are in the workspace's `Research/deck_research/log/` (the owner's logs; not included in the plugin). The abbreviations in parentheses in the text point to sections of those logs (the list of abbreviations is at the top of `state.md` in the same folder).
 

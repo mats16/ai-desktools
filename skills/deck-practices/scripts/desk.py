@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """ワークスペースと設定のファイルの探し方。スキルのスクリプトと hooks/rules_overlay.py（pi の拡張も）が、ここだけで探す（標準ライブラリだけ）。
 1. 今いるフォルダから上へ desk.toml を探す。見つかれば、そのフォルダがワークスペースで、その desk.toml だけを読む（workspace を書いても読まない）。
-2. なければ個人の設定（DESK_CONFIG のパス、なければ ~/.desk.toml）を読み、その workspace をワークスペースにする（資料・rules/・.desk/ はそこに置く）。
+2. なければ個人の設定（DESK_CONFIG のパス、なければ ~/.desk.toml）を読み、その workspace をワークスペースにする（資料・recipes/・.desk/ はそこに置く）。
    上に前の版の factory.toml があれば、2 に進まない（移す前のワークスペースの中で、別のワークスペースに書かない）。workspace が前の版のワークスペースなら止める。
 3. どちらもなければ None（呼ぶ側が止めて desk-init を案内する）。
 2 つを混ぜない（sandbox の desk.toml に書き忘れた [drive] が ~/.desk.toml から入ると、本番の Drive に書くため）。
 DESK_CONFIG を空にすると 2 を飛ばす（selftest と開発の worktree。~/.desk.toml の本番のワークスペースに戻らない）。
-ワークスペースの決まりのファイル（rules/ の下の、frontmatter に description のある .md）の探し方も、ここに置く（rules・front）。
+ワークスペースの決まり（レシピ。recipes/ の下の <名前>/RECIPE.md で、frontmatter に description のあるもの）の探し方と、どの作業で出すか（triggers）も、ここに置く（rules・front・kind）。
 usage: desk.py              ワークスペースのパスを出す（なければ exit 1）
        desk.py --selftest"""
-import json, os, sys, tempfile
+import fnmatch, json, os, sys, tempfile
 from pathlib import Path
 
 try:
@@ -20,6 +20,12 @@ except ImportError:  # hook と snapshot.sh は素の python3 で回る。上へ
 NAME, OLD = "desk.toml", "factory.toml"  # OLD は 2026-10-25 より前の設定の名前（desk-migrate で移す）
 RULE_MAX = 3800  # 決まりの 1 ファイルの字数の上限。hook が memory と並べて出すとき、決まりに回す半分（4,499 字）から、入りきらないものを挙げる添え書き（NOTE の 500 字）と見出し（パスが 79 字までなら 199 字まで）を引いても、最初のファイルが丸ごと入る（deck-practices/rules.md の「Workspace rules」）
 TARGETS, AUDIENCES = ("slides", "docs", "vids"), ("顧客向け", "社内向け", "コミュニティ向け")  # frontmatter の targets・audience の値（audience は deck-content-039 の資料の種類）
+RECIPES, RECIPE = "recipes", "RECIPE.md"  # ワークスペースの決まりのフォルダと、決まりを書くファイル（recipes/<名前>/RECIPE.md。2026-10-29 に rules/<名前>.md から替えた）
+STEPS = ("gather", "build")  # frontmatter の step の値。書かなければ、資料を作るどの作業でも出す（per_material: true は、資料ごとに選ぶ）
+TRIGGERS = {  # プラグインのファイル（<スキル>/<ファイル>）→ そのファイルを開いたときに出すレシピの種類。make は step のないもの（資料を作るどの作業でも）
+    "gather": ("deck-practices/materials.md", "deck-practices/start.md", "customer-profile/*", "source-scout/*", "deck-research/*"),
+    "build": ("slides-build/*", "docs-build/*", "vids-build/*", "vids-voice/*", "slides-template/*"),
+    "make": ("deck-practices/*", "slides-build/*", "docs-build/*", "deck-review/*", "deck-comments/*", "vids-build/*", "vids-voice/*", "slides-template/*")}
 
 
 def loads(text, where):
@@ -129,13 +135,26 @@ def listed(meta, key):
     return [v] if isinstance(v, str) else v
 
 
+def kind(meta):
+    """レシピの出し方: material（per_material: true。資料ごとに選び、構成案の「使う決まり」に書く）、gather・build（その作業のとき）、make（資料を作るどの作業でも）。"""
+    if str(meta.get("per_material", "")).lower() == "true":
+        return "material"
+    return s if (s := meta.get("step")) in STEPS else "make"
+
+
+def triggers(ref):
+    """プラグインのファイル ref（<スキル>/<ファイル>）を開いたときに出すレシピの種類。"""
+    return {k for k, globs in TRIGGERS.items() if any(fnmatch.fnmatchcase(ref, g) for g in globs)}
+
+
 def rules(ws):
-    """ワークスペースの決まりのファイル [(パス, frontmatter)]。rules/ の下の .md で、frontmatter に description のあるもの。
-    frontmatter のない README.md と、docs-build のテンプレート（rules/docs-build/templates/<名前>/doc.md。templates/ の下）は入れない。"""
-    root = Path(ws) / "rules"
+    """ワークスペースの決まり（レシピ）[(RECIPE.md のパス, frontmatter)]。recipes/ の下の RECIPE.md で、frontmatter に description のあるもの。
+    RECIPE.md のないフォルダは、レシピを集めるフォルダ。レシピのフォルダのほかのファイル（テンプレート・checks.py など）は資源で、決まりとして出さない。
+    テンプレートの templates/ の下は見ない。"""
+    root = Path(ws) / RECIPES
     out = []
-    for p in sorted(root.rglob("*.md")) if root.is_dir() else []:
-        if "templates" in p.relative_to(root).parts[:-1] or not p.is_file():
+    for p in sorted(root.rglob(RECIPE)) if root.is_dir() else []:
+        if "templates" in p.relative_to(root).parts[1:-1] or p.parent == root or not p.is_file():  # レシピのフォルダの中の templates/（recipes/templates/ という名前のレシピは見る）と、フォルダのない recipes/RECIPE.md
             continue
         try:
             meta = front(p.read_text(encoding="utf-8"))
@@ -154,7 +173,7 @@ def with_workspace(text, ws):
     ws = Path(ws).resolve()
     home = Path.home().resolve()
     value = "~/" + ws.relative_to(home).as_posix() if ws.is_relative_to(home) else str(ws)
-    line = f"workspace = {json.dumps(value, ensure_ascii=False)}  # 資料・rules/・.desk/ を置くフォルダ（ワークスペース。ここには desk.toml を置かない）\n\n"
+    line = f"workspace = {json.dumps(value, ensure_ascii=False)}  # 資料・recipes/・.desk/ を置くフォルダ（ワークスペース。ここには desk.toml を置かない）\n\n"
     lines = text.splitlines(keepends=True)
     if lines and not lines[-1].endswith("\n"):  # 最後の行に改行がなくても、続けて書かない
         lines[-1] += "\n"
@@ -224,12 +243,16 @@ def selftest():
         assert [described(front(f"---\ndescription: {v}\n  長い説明\n---\n")) for v in (">", "|-", "[a, b]", " # TODO", "x")] == ["", "", "", "", "x"]  # 複数行と並びは、description がないとみなす
         assert front("---\npaths: a.md\n  - b.md\n---\n")["paths"] == "a.md"  # 値のある key の下の「- 」は並びにしない（字に切らない）
         assert front("# 見出し\n---\n") == front("---\ndescription: x\n") == {} and listed({"audience": "顧客向け"}, "audience") == ["顧客向け"] and listed({}, "paths") == []  # 閉じていない
-        r = ws / "rules"
-        for f, t in (("a.md", "---\ndescription: x\n---\n"), ("README.md", "# rules/\n"), ("s/b.md", "---\ndescription:\n---\n"),
-                     ("docs-build/templates/p/doc.md", "---\ndescription: テンプレート\n---\n"), ("s/c.md", "---\ndescription: y\n---\n")):
+        r = ws / RECIPES
+        for f, t in (("a/RECIPE.md", "---\ndescription: x\n---\n"), ("README.md", "# recipes/\n"), ("s/b/RECIPE.md", "---\ndescription:\n---\n"), ("a/note.md", "---\ndescription: 資源\n---\n"),
+                     ("p/templates/q/RECIPE.md", "---\ndescription: テンプレート\n---\n"), ("s/c/RECIPE.md", "---\ndescription: y\n---\n"), ("d.md", "---\ndescription: 前の形\n---\n"),
+                     ("templates/RECIPE.md", "---\ndescription: テンプレートの使い分け\n---\n"), ("RECIPE.md", "---\ndescription: フォルダがない\n---\n")):
             (r / f).parent.mkdir(parents=True, exist_ok=True)
             (r / f).write_text(t)
-        assert [str(p.relative_to(r)) for p, _ in rules(ws)] == ["a.md", "s/c.md"] and rules(other) == []  # description のないもの・テンプレートは入れない
+        assert [str(p.relative_to(r)) for p, _ in rules(ws)] == ["a/RECIPE.md", "s/c/RECIPE.md", "templates/RECIPE.md"] and rules(other) == []  # RECIPE.md だけ（description のないもの・資源・テンプレート・前の形の .md は入れない）
+        assert [kind(m) for m in ({}, {"step": "gather"}, {"step": "build"}, {"step": "x"}, {"per_material": "true", "step": "build"})] == ["make", "gather", "build", "make", "material"]
+        assert triggers("deck-practices/materials.md") == {"gather", "make"} and triggers("slides-build/pages.md") == {"build", "make"} and triggers("deck-review/SKILL.md") == {"make"}
+        assert triggers("customer-profile/SKILL.md") == {"gather"} and triggers("desk-doctor/SKILL.md") == set()  # 資料づくりの外の作業では、step のないものは出さない
     print("selftest ok")
 
 

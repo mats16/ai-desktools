@@ -5,7 +5,7 @@ description: Improve the plugin (upstream). Takes the rules, checks, and script 
 
 # Improve the plugin (file an Issue upstream)
 
-Treat the workspace as one product whose rules (AGENTS.md, `rules/`) and checks (`rules/slides-build/checks.py`, `rules/docs-build/checks.py`) grow from accumulated corrections and exchanges. Of these, file only the ones that help other people too (not one person's taste or one customer's circumstances) as an Issue upstream (the plugin). What goes where is in "Workspace rules" of `../deck-practices/rules.md`.
+Treat the workspace as one product whose rules (AGENTS.md, `recipes/`) and checks (the `checks.py` in a recipe's folder) grow from accumulated corrections and exchanges. Of these, file only the ones that help other people too (not one person's taste or one customer's circumstances) as an Issue upstream (the plugin). What goes where is in "Workspace rules" of `../deck-practices/rules.md`.
 
 The plugin owner reads the Issue, decides whether to take it, and rewrites it to fit the rest of the code as a PR. So the Issue must contain enough material for the owner to decide without seeing the workspace (what happened, counts, verification results, images, the diff of the proposed change, open questions). The proposed change only needs to work in a verifiable form. Cleaning up, shrinking, and running reviews (simplify, review-loop, etc.) are the owner's job, so do not do them here.
 
@@ -23,7 +23,7 @@ $P clean <name>                                   # after the Issue is closed (d
 
 ## Steps
 
-1. **Decide what to file.** Combine into one: what to change and why (the findings and the number of materials and customers shown by `ledger.py why <rule ID or workspace file>` in the rule ledger, recurrences and review results, figures from `.desk/lint_runs.jsonl` or desk-dreaming's records). Do not write original quotes or material names in the Issue (after `start` in step 2, write them only in `verify/detail.md`); write counts in the Issue. If the workspace `rules/` has a copy, frame it as moving that copy upstream. Do not file preferences from a customer's `memory.md` directly (if two or more customers share one, desk-dreaming first moves it into `rules/`; "Customer memory" in `../deck-practices/rules.md`). Give a moved rule a new ID with the plugin's prefix (the next number after the largest one with the same prefix in `.desk/kaizen/<name>/repo`; no `ws-`). In the rule text write only the ID and a short reason, not dates or original quotes ("Routing corrections" in `../deck-practices/rules.md`).
+1. **Decide what to file.** Combine into one: what to change and why (the findings and the number of materials and customers shown by `ledger.py why <rule ID or workspace file>` in the rule ledger, recurrences and review results, figures from `.desk/lint_runs.jsonl` or desk-dreaming's records). Do not write original quotes or material names in the Issue (after `start` in step 2, write them only in `verify/detail.md`); write counts in the Issue. If a workspace recipe has a copy, frame it as moving that copy upstream. Do not file preferences from a customer's `memory.md` directly (if two or more customers share one, desk-dreaming first moves it into `rules/`; "Customer memory" in `../deck-practices/rules.md`). Give a moved rule a new ID with the plugin's prefix (the next number after the largest one with the same prefix in `.desk/kaizen/<name>/repo`; no `ws-`). In the rule text write only the ID and a short reason, not dates or original quotes ("Routing corrections" in `../deck-practices/rules.md`).
 2. **Run `start`, write the proposed change inside `.desk/kaizen/<name>/repo`, and commit.** Do not edit the plugin's install location. The branch is not pushed (the diff goes into the Issue), so commit granularity and messages are free.
 3. **Verify on past materials.** Choose by what changed.
    - Rules and checks (`lint.py`, `doc_lint.py`, `textlint.py`, things moved from `checks.py`): run `lint` on both materials the rule should fire on and materials it must not fire on. Candidates are the materials in `.desk/lint_runs.jsonl` (materials where that rule's finding appeared) and 「作った」 in `references_index.md`.
@@ -55,7 +55,7 @@ $P clean <name>                                   # after the Issue is closed (d
 <何で確かめたか、結果をどう読んだか（増えた指摘・消えた指摘が正しいか）。下に desk-kaizen が表と画像を足す>
 
 ## 影響
-<既存の資料・ワークスペースの rules/ への影響。ほかの人の資料で指摘が増えるか。なければ「なし」>
+<既存の資料・ワークスペースの recipes/ への影響。ほかの人の資料で指摘が増えるか。なければ「なし」>
 
 ## 迷ったところ
 <確信のない判断・前提（しきい値を何本の資料で決めたか、など）と、とらなかった案。なければ「なし」>

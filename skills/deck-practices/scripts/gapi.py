@@ -93,7 +93,7 @@ def config_path():
 
 
 def workspace():
-    """ワークスペース（資料・rules/・.desk/ を置くフォルダ）。"""
+    """ワークスペース（資料・recipes/・.desk/ を置くフォルダ）。"""
     return _found()[1]
 
 

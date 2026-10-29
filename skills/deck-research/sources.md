@@ -69,7 +69,7 @@ Add what worked, what missed, and access tips after each research run. The detai
 
 ## 7. Internal and plugins
 
-Internal information. Do not cite it in customer-facing materials. Write company-specific sources (chat channels, search terms, documents to read, internal plugins) in the workspace's `rules/deck-research/sources.md`, with frontmatter `description` and `paths: [deck-research/sources.md]` ("Workspace rules" in `../deck-practices/rules.md`).
+Internal information. Do not cite it in customer-facing materials. Write company-specific sources (chat channels, search terms, documents to read, internal plugins) in the workspace's recipe for the company's internal tools, with `step: gather` (which recipe and how to write it: `../desk-recipes/SKILL.md`).
 
 - **Plugins:** `~/.claude/plugins/installed_plugins.json` shows where the installed versions are.
 
