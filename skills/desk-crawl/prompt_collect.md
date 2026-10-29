@@ -39,13 +39,11 @@ Return one JSON object, and nothing else:
                  "seen_in": ["<every source id in this group where you saw it>"], "origin": "<source id of the original post, if it is outside this group>",
                  "public_url": "<public docs, blog, or release note URL, if any>", "published": "<ISO time>", "summary": "<2-3 sentences, with stage and dates in the source's words>"}],
  "discovered": [{"source": "<kind>:<ref>", "name": "<name>", "via": "forward|mention|search|thread|watch|wiki", "created": "<YYYY-MM-DD if shown>", "why": "<one line>"}],
- "misses": [{"source": "<id>", "url": "<link>", "why": "<which note or marker would have made you skip it>"}],
  "lessons": [{"source": "<id or *>", "text": "<one short imperative sentence that would make the next read cheaper or more accurate>"}],
  "votes": [{"note": "<note id>", "helpful": true}]}
 ```
 
 - `reads`: one entry per source in your group. If a source fails (timeout, no access, tool error), set `"ok": false` and `"error"`; do not guess its content.
 - `lessons`: only new and concrete ones (a marker, a noise pattern, a pagination or tool fact). Do not restate the notes above.
-- `misses`: items a note or marker would have made you skip, which you picked anyway (list them in `candidates` too), and vote that note `false`.
-- `votes`: for a note above that clearly helped (`true`) or misled you (`false`) this time. Leave out notes that did not matter.
+- `votes`: for a note above that clearly helped (`true`) or misled you (`false`) this time, such as a note or marker that would have made you skip an item you picked anyway. Leave out notes that did not matter.
 - Copy titles, stages, and dates in the original language of the source.

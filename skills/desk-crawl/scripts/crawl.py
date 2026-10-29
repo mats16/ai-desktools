@@ -10,8 +10,8 @@ usage:
   crawl.py feeds <topic> [--out <file>]   kind が feed の先（RSS・Atom）を読み、子の返事と同じ形の JSON を出す
   crawl.py merge <topic> <子の返事.json>... --out <run.json>   子の返事を 1 つの回の記録の下書きにまとめる（同じ URL は 1 つにし、
                       どの先で見えたかを足す。前の回までに使われた項目には dup、題の似たものには similar を付ける）。候補の一覧を出す
-  crawl.py record <topic> <run.json> [--published <出力の md>...] [--missed <取りこぼし.json>]   回を記録する。出力のどれかに
-                      URL があった項目を「使われた」にし、取りこぼしを足す。覚え書きの足しと票、候補から follow への引き上げを当てて出す
+  crawl.py record <topic> <run.json> [--published <出力の md>...] [--missed <取りこぼし.json>...]   回を記録する。出力のどれかに
+                      URL があった項目を「使われた」にし（出力を渡さなければ、前に記録した印のまま）、取りこぼしを足す。覚え書きの足しと票、候補から follow への引き上げを当てて出す
   crawl.py report <topic> [<回の id>]   まとめの md に貼る「## 情報源」の節を出す（既定は最後の回）。直近 10 回とその前の 10 回の比べも出す
   crawl.py sources <topic> [--json]     台帳と成績の表を出す（人が読む）。--json は、ほかの話題に写す JSON（follow の先と覚え書き）
   crawl.py set <topic> <先の id> key=value...   台帳を直す（tier・name・group・pinned・url・why・created、note=<覚え書き>）
@@ -160,7 +160,7 @@ def published(rows):
 
 
 def true_misses(run):
-    """その回の取りこぼしのうち、候補になかったもの（候補にあって選ばれなかったものは、選ぶ側の判断で、読む先の取りこぼしではない）。"""
+    """その回の取りこぼし（使う側が record --missed で返したもの）のうち、候補になかったもの（候補にあって選ばれなかったものは、選ぶ側の判断で、読む先の取りこぼしではない）。"""
     seen = {k for i in run.get("items", []) for k in keys(i)}
     return [m for m in run.get("misses", []) if not keys(m) & seen]
 
@@ -256,7 +256,7 @@ def every(reg, st, sid, T, med):
     s = st[sid]
     if reg["sources"].get(sid, {}).get("pinned"):
         return 1, "固定"
-    if T and T - 1 in (s["hot"], s["pointed"]):
+    if T - 1 in (s["hot"], s["pointed"]):
         return 1, "前の回で使われたか、指された"
     if s["rate"] is None or s["reads"] < MIN_READS or not med:
         return 1, ""  # まだ数えられない（読んだ回が少ない、どの先にも手柄がない）
@@ -293,7 +293,7 @@ def choose(reg, rows, explore=3, until=None):
         c = st[s]["created"] or reg["sources"].get(s, {}).get("created", "")
         return bool(c) and st[s]["reads"] == 0 and (until.date() - datetime.fromisoformat(c).date()).days <= NEW_DAYS
 
-    hot = sorted((s for s in cands if T and st[s]["hot"] == T - 1), key=lambda s: (-st[s]["c"], s))[:explore]
+    hot = sorted((s for s in cands if st[s]["hot"] == T - 1), key=lambda s: (-st[s]["c"], s))[:explore]
     new = sorted((s for s in cands if s not in hot and fresh(s)), key=lambda s: (st[s]["created"] or "", s), reverse=True)[:max(0, min(NEW_MAX, explore - len(hot)))]
     # ponytail: UCB1 に見つけた回数を少し足しただけの見込み。候補が数百を超えて外れが目立てば、話題の近さ（製品名の一致）を足す
     ucb = lambda s: st[s]["mean"] + math.sqrt(2 * math.log(T + 2) / (st[s]["n"] + 1)) + 0.05 * min(5, sum(st[s]["found"].values()))
@@ -363,7 +363,7 @@ def plan(topic, a):
             every_of[sid] = gap(n) + (f"（{why}）" if why else "")
     for sid in explore:  # 探索する先も、feed は feeds で取る
         s = st[sid]
-        why = ("前の回で手柄が付いた（取りこぼしか転送の元）" if rows and s["hot"] == len(rows) - 1 else
+        why = ("前の回で手柄が付いた（取りこぼしか転送の元）" if s["hot"] == len(rows) - 1 else
                f"新しい先（{s['created']} 作成）" if s["created"] and not s["reads"] else
                f"見つけた {sum(s['found'].values())} 回・使われた {s['used']:.1f}・読んだ {s['reads']} 回")
         groups["feed" if kind(sid) == "feed" else "explore"].append(entry(reg, st, rows, sid, since, until, why))
@@ -556,16 +556,16 @@ def merge(topic, files, out):
         if isinstance(d, dict) and ("items" in d or "id" in d):
             sys.exit(f"{f} は回の記録（merge の出力）で、子の返事ではない。子の返事と feeds の出力だけを渡す")
         if not isinstance(d, dict) or not all(isinstance(d.get(k, []), list) and all(isinstance(x, dict) for x in d.get(k, []))
-                                              for k in ("reads", "candidates", "discovered", "misses", "lessons", "votes")):
+                                              for k in ("reads", "candidates", "discovered", "lessons", "votes")):
             sys.exit(f"{f} は子の返事の形でない（../prompt_collect.md の Return。各項目はオブジェクトのリスト）")
-        if errs := check({"id": f, **{k: d.get(k, []) for k in ("reads", "discovered", "misses", "lessons", "votes")},
+        if errs := check({"id": f, **{k: d.get(k, []) for k in ("reads", "discovered", "lessons", "votes")},
                           "items": d.get("candidates", [])}):  # 回の記録と同じ確かめ（使う前に止める）
             sys.exit(f"{f} の形が違う:\n- " + "\n- ".join(errs))
         for rd in d.get("reads", []):
             run["reads"].append({**({"since": starts[rd["source"]]} if rd.get("source") in starts else {}), **rd,
                                  **({"explore": True} if rd.get("source") in explore else {}),
                                  **({"more": True} if rd.get("source") in extra else {})})
-        for k in ("discovered", "misses", "lessons", "votes"):
+        for k in ("discovered", "lessons", "votes"):  # 取りこぼしは子から取らない。使う側が record --missed で返すものだけにする（読み方の外れは覚え書きの票で返る）
             run[k] += d.get(k, [])
         for c in d.get("candidates", []):
             hits = []
@@ -604,7 +604,7 @@ def merge(topic, files, out):
             i["similar"] = f"{best[1][:10]}「{best[2]}」"
     write_json(Path(out), run)
     print(f"{out}: 読んだ先 {len(run['reads'])}（取れなかった {sum(not r.get('ok', True) for r in run['reads'])}）、候補 {len(run['items'])}、"
-          f"見つけた先 {len(run['discovered'])}、取りこぼし {len(run['misses'])}、覚え書き {len(run['lessons'])}\n")
+          f"見つけた先 {len(run['discovered'])}、覚え書き {len(run['lessons'])}\n")
     for n, i in enumerate(run["items"], 1):
         flag = f"［使われた済み {i['dup']}］" if i.get("dup") else (f"［似ている: {i['similar']}］" if i.get("similar") else "")
         print(f"{n}. {flag}{i.get('title', '')}｜{i.get('url', '')}｜{len(i['seen_in'])} 先: {', '.join(i['seen_in'])}")
@@ -669,14 +669,16 @@ def check(run):
     for r in run.get("reads", []):
         if not is_sid(r.get("source")):
             errs.append(f"reads の source は <kind>:<ref>: {r}")
+        if not isinstance(r.get("name", ""), str):
+            errs.append(f"reads の name は文字列: {r}")
         for k in ("since", "until"):
             if r.get(k) and bad_date(r[k]):
                 errs.append(f"reads の {k} は ISO の日時: {r}")
     for i in run.get("items", []):
         if not isinstance(i.get("url"), str) or not i["url"] or not all(isinstance(u, str) for u in i.get("urls", [])):
             errs.append(f"items の url（と urls）は URL の文字列: {i.get('title')}")
-        if not isinstance(i.get("public_url", ""), str):
-            errs.append(f"items の public_url は URL の文字列: {i.get('title')}")
+        if not isinstance(i.get("public_url", ""), str) or not isinstance(i.get("title", ""), str):
+            errs.append(f"items の public_url と title は文字列: {i.get('title')}")
         seen = i.get("seen_in", [])
         if not isinstance(seen, list) or not all(is_sid(x) for x in seen) or (i.get("origin") and not is_sid(i["origin"])):
             errs.append(f"items の seen_in・origin は <kind>:<ref>: {i.get('title')}")
@@ -685,6 +687,8 @@ def check(run):
     for d in run.get("discovered", []):
         if not is_sid(d.get("source")):
             errs.append(f"discovered の source は <kind>:<ref>: {d}")
+        if not isinstance(d.get("name", ""), str):
+            errs.append(f"discovered の name は文字列: {d}")
         if d.get("created") and bad_date(d["created"], day_only=True):
             errs.append(f"discovered の created は YYYY-MM-DD: {d}")
     for m in run.get("misses", []):
@@ -720,23 +724,26 @@ def sites(reg, rows):
     return sorted(((c, h) for h, c in n.items() if h and h not in known and c >= SITE_MIN), key=lambda x: (-x[0], x[1]))
 
 
-def record(topic, path, outputs=(), missed=None):
+def record(topic, path, outputs=(), missed=()):
     run = read_input(path)
     old = runs(topic)
+    prev = next((r for r in old if r["id"] == run.get("id")), None) if isinstance(run, dict) else None
     if isinstance(run, dict):
-        if prev := next((r for r in old if r["id"] == run.get("id")), None):  # 同じ回を記録し直しても、前に足した取りこぼしは残す
+        if prev:  # 同じ回を記録し直しても、前に足した取りこぼしは残す
             add_misses(run, prev.get("misses", []))
-        if missed:
-            ms = read_input(missed)
+        for f in missed:
+            ms = read_input(f)
             if not isinstance(ms, list) or not all(isinstance(m, dict) for m in ms):
-                sys.exit(f"{missed} は取りこぼしのオブジェクトのリスト（[{{\"url\": …, \"source\": \"<kind>:<ref>（分かれば）\", \"why\": …}}, …]）")
+                sys.exit(f"{f} は取りこぼしのオブジェクトのリスト（[{{\"url\": …, \"source\": \"<kind>:<ref>（分かれば）\", \"why\": …}}, …]）")
             add_misses(run, ms)
     if errs := check(run):  # 形を確かめてから印を付ける（壊れた記録で落ちない）
         sys.exit("記録の形が違う:\n- " + "\n- ".join(errs))
     if outputs:
         urls = set().union(*(md_urls(read_input(f, as_json=False)) for f in outputs))
-        for i in run.get("items", []):
-            i["used"] = bool(keys(i) & urls)
+    else:  # 出力を渡さずに記録し直す（取りこぼしだけ足す）ときは、前に使われたとした項目をそのまま残す
+        urls = {k for i in (prev or {}).get("items", []) if i.get("used") for k in keys(i)}
+    for i in run.get("items", []):
+        i["used"] = bool(keys(i) & urls) or (not outputs and not prev and bool(i.get("used")))
     reg = registry(topic)
     rows = [r for r in old if r["id"] != run["id"]]  # 同じ回を回し直したら置き換える
     # 回ごとに当てた覚え書きと票は、台帳に残す（同じ回を記録し直しても当て直さない。台帳を先に書くので、途中で落ちても当てた分と食い違わない）
@@ -848,7 +855,8 @@ def sources(topic, as_json=False):
     reg, rows = registry(topic), runs(topic)
     st = stats(rows)
     if as_json:  # ほかの話題に写す形（set --from が読む）。成績は写さない。新しい話題の記録で測り直すため
-        out = [{"id": "*", "notes": [n["text"] for n in notes_of(reg, "*", rows)]}] if notes_of(reg, "*", rows) else []
+        top = [n["text"] for n in notes_of(reg, "*", rows)]
+        out = [{"id": "*", "notes": top}] if top else []
         for sid, e in sorted(reg["sources"].items()):
             if e.get("tier") == "follow":
                 ns = [n["text"] for n in notes_of(reg, sid, rows)]
@@ -879,6 +887,8 @@ def set_(topic, a):
     else:
         if bad := [x for x in a[1:] if "=" not in x]:
             sys.exit(f"key=value の形でない: {bad}")
+        if dup := sorted(k for k, n in Counter(x.split("=", 1)[0] for x in a[1:]).items() if n > 1):
+            sys.exit(f"同じ項目を 2 回渡した（1 つだけ渡す）: {dup}")
         rows = [{"id": a[0] if a else "", **dict(x.split("=", 1) for x in a[1:])}]
     for r in rows:  # 全部の行を確かめてから書く（途中で止めても、台帳は半分だけ直らない）
         if r.get("id") == "*" and set(r) <= {"id", "note", "notes"}:
@@ -887,13 +897,17 @@ def set_(topic, a):
             sys.exit(f"先の id は <kind>:<ref>: {r}")
         if bad := set(r) - KEYS - {"id", "note", "notes"}:
             sys.exit(f"直せない項目: {sorted(bad)}（{sorted(KEYS)} と note）")
+        if bad := [k for k in KEYS - {"pinned"} if k in r and not isinstance(r[k], str)] + (["pinned"] if not isinstance(r.get("pinned", ""), (str, bool)) else []):
+            sys.exit(f"{sorted(bad)} は文字列（pinned は true・false でもよい）: {r.get('id')}")
+        if not isinstance(r.get("note", ""), str):
+            sys.exit(f"note は文: {r.get('id')}")
         if r.get("tier", "follow") not in TIERS:
             sys.exit(f"tier は {TIERS}")
         if r.get("created") and bad_date(r["created"], day_only=True):
             sys.exit(f"created は YYYY-MM-DD（{r['id']}: {r['created']}）")
         if r.get("group") in RESERVED:
             sys.exit(f"group に {sorted(RESERVED)} は使えない（plan が使う組の名前）")
-        if not all(isinstance(t, str) or isinstance(t, dict) and isinstance(t.get("text"), str) for t in r.get("notes", [])):
+        if not isinstance(r.get("notes", []), list) or not all(isinstance(t, str) or isinstance(t, dict) and isinstance(t.get("text"), str) for t in r.get("notes", [])):
             sys.exit(f"notes は文か {{\"text\": …}} のリスト: {r['id']}")
     for r in rows:
         sid = r.pop("id")
@@ -950,8 +964,13 @@ def selftest():
         raise AssertionError("値のない --goal で止まらない")
     except SystemExit:
         pass
-    assert opts(["r.json", "--published", "a.md", "b.md", "--missed", "m.json"], {"published", "missed"}, {"published"}) == (
-        {"published": ["a.md", "b.md"], "missed": "m.json"}, ["r.json"])
+    assert opts(["r.json", "--published", "a.md", "b.md", "--missed", "m.json", "--published", "c.md"], {"published", "missed"}, {"published", "missed"}) == (
+        {"published": ["a.md", "b.md", "c.md"], "missed": ["m.json"]}, ["r.json"])
+    try:
+        opts(["--goal", "a", "--goal", "b"], {"goal"})
+        raise AssertionError("2 回の --goal で止まらない")
+    except SystemExit:
+        pass
     with tempfile.TemporaryDirectory() as d:
         ROOT = d
         q = _quiet
@@ -959,7 +978,7 @@ def selftest():
         q(set_, "t", ["slack:B", "tier=follow", "name=quiet", "pinned=false"])
         q(set_, "t", ["slack:M", "name=old"])
         q(set_, "t", ["slack:A", "note=Link replies as p{ts}?thread_ts={parent}"])
-        for bad in (["slack:X", "group=explore"], ["slack:X", "group=more"], ["slack:X", "created=Oct 24"], ["slack:X", "tier", "follow"],
+        for bad in (["slack:X", "group=explore"], ["slack:X", "group=more"], ["slack:X", "name=a", "name=b"], ["slack:X", "created=Oct 24"], ["slack:X", "tier", "follow"],
                     ["slack:X", "tier=core"], ["slack:X", "mode=filter"], ["--from", str(Path(d) / "none.json")]):
             try:
                 q(set_, "t", bad)
@@ -980,7 +999,7 @@ def selftest():
                              {"title": "Chat", "url": "https://x/2", "seen_in": ["slack:A"]}],
               "discovered": [{"source": "slack:N", "name": "new-preview", "via": "forward", "created": "2026-10-24"}],
               "lessons": [{"source": "*", "text": "Forwarded posts carry no body; open the original"}]}
-        c2 = {"reads": [{"source": "slack:M", "ok": True, "scanned": 3, "picked": 0}],
+        c2 = {"reads": [{"source": "slack:M", "ok": True, "scanned": 3, "picked": 0}], "misses": [{"source": "slack:M", "url": "https://x/forward"}],
               "candidates": [{"title": "Genie is GA!", "url": "https://x/1", "seen_in": ["slack:M"]}]}
         for i, c in enumerate((c1, c2)):
             (Path(d) / f"c{i}.json").write_text(json.dumps(c))
@@ -989,6 +1008,7 @@ def selftest():
         assert r["id"] == "2026-10-26T07:00+09:00", r["id"]  # 回の id は期間の終わり（同じ日の 2 回目の回が 1 回目を置き換えない）
         assert len(r["items"]) == 2 and r["items"][0]["seen_in"] == ["slack:A", "slack:M"] and r["reads"][2].get("explore"), r
         assert r["reads"][1]["since"] == "2026-10-25T07:00+09:00", r["reads"][1]  # 子が since を書かなくても、plan の始まりを残す
+        assert r["misses"] == [], r["misses"]  # 子が misses を返しても、回の取りこぼしにしない
         (Path(d) / "d.md").write_text("- 出典（https://x/1）。\n")  # 全角の括弧と句点の前の URL も使われたと読む
         q(record, "t", str(Path(d) / "run.json"), [str(Path(d) / "d.md")])
         again = q(merge, "t", [str(Path(d) / "c0.json"), str(Path(d) / "c1.json")], str(Path(d) / "run1b.json"))
@@ -1058,13 +1078,14 @@ def selftest():
         assert "slack:N" in q(sources, "t")
         # 取りこぼし: 使う側が別の所で知った項目は、元の先の手柄になり、元が候補なら次の回に先に試す。記録し直しても残る
         (Path(d) / "m.json").write_text(json.dumps([{"url": "https://y/9", "source": "slack:Z", "why": "別の会議で聞いた"}]))
-        out = q(record, "t", str(Path(d) / "run2.json"), [str(Path(d) / "d2.md"), str(Path(d) / "d3.md")], str(Path(d) / "m.json"))
-        assert "取りこぼし 1" in out, out
+        (Path(d) / "m2.json").write_text(json.dumps([{"url": "https://y/7", "why": "別の案件"}]))
+        out = q(record, "t", str(Path(d) / "run2.json"), [], [str(Path(d) / "m.json"), str(Path(d) / "m2.json")])  # 出力を渡さず、2 つの案件の取りこぼしだけ足す
+        assert "取りこぼし 2" in out and "使われた 2" in out, out  # 前に使われたとした項目は残す
         q(record, "t", str(Path(d) / "run2.json"), [str(Path(d) / "d2.md"), str(Path(d) / "d3.md")])
-        assert [m["url"] for m in runs("t")[-1]["misses"]] == ["https://y/9"]
+        assert [m["url"] for m in runs("t")[-1]["misses"]] == ["https://y/9", "https://y/7"]
         (Path(d) / "m_bad.json").write_text(json.dumps([{"url": "https://y/8", "urls": [5]}]))
         try:
-            q(record, "t", str(Path(d) / "run2.json"), [], str(Path(d) / "m_bad.json"))  # 形の違う取りこぼしは、記録に入れる前に止める
+            q(record, "t", str(Path(d) / "run2.json"), [], [str(Path(d) / "m_bad.json")])  # 形の違う取りこぼしは、記録に入れる前に止める
             raise AssertionError("形の違う取りこぼしで止まらない")
         except SystemExit:
             pass
@@ -1107,10 +1128,9 @@ def selftest():
             reg["sources"]["slack:N"]["notes"][-1]["id"]]
         # 探索して何も使われなかった候補は COOL 回のあいだ選ばない
         cool = rows + [{"id": "z", "until": "2026-12-01T07:00+09:00", "reads": [{"source": "slack:P", "ok": True, "explore": True}]}]
-        u = lambda s: when(s)
-        assert "slack:P" not in choose(registry("t"), cool, 3, u("2026-12-01T08:00+09:00"))[2]
+        assert "slack:P" not in choose(registry("t"), cool, 3, when("2026-12-01T08:00+09:00"))[2]
         assert "slack:P" in choose(registry("t"), cool + [{"id": f"y{k}", "until": f"2026-12-{k + 2:02d}T07:00+09:00"} for k in range(COOL)], 3,
-                                   u("2026-12-20T07:00+09:00"))[2]
+                                   when("2026-12-20T07:00+09:00"))[2]
         assert check({"id": "x", "items": [{"title": "t"}]}) and not check(rows[0])
         q(set_, "u", ["feed:file:///etc/hosts", "tier=follow"])
         q(plan, "u", {})
@@ -1135,9 +1155,11 @@ def selftest():
         assert registry("t")["sources"]["slack:N"]["tier"] == "candidate"
         q(set_, "t", ["slack:N", "tier=follow"])
         for broken in ({"lessons": [{"source": "*"}]}, {"votes": [{"note": "n1", "helpful": "no"}]}, {"items": [{"url": "https://x", "seen_in": ["nokind"]}]},
-                       {"reads": "slack:A"}, {"misses": [{"source": "slack:A"}]}, {"items": [{"url": "https://x", "seen_in": ["a:b"], "public_url": 5}]}):
+                       {"reads": "slack:A"}, {"misses": [{"source": "slack:A"}]}, {"reads": [{"source": "slack:A", "name": 5}]},
+                       {"discovered": [{"source": "slack:A", "name": ["x"]}]}, {"items": [{"url": "https://x", "seen_in": ["a:b"], "public_url": 5}]}, {"items": [{"url": "https://x", "seen_in": ["a:b"], "title": 5}]}):
             assert check({"id": "x", **broken}), broken  # plan が毎回読む記録に、壊れた行を入れない
-        for rows_ in ({"id": "slack:Z"}, [{"tier": "follow"}], [{"id": "feed"}], [{"id": "*", "tier": "follow"}]):
+        for rows_ in ({"id": "slack:Z"}, [{"tier": "follow"}], [{"id": "feed"}], [{"id": "*", "tier": "follow"}], [{"id": "slack:Z", "notes": "one"}],
+                      [{"id": "slack:Z", "group": 5}], [{"id": "slack:Z", "url": 5}], [{"id": "slack:Z", "note": 5}], [{"id": "slack:Z", "pinned": 1}]):
             (Path(d) / "bad.json").write_text(json.dumps(rows_))
             try:
                 q(set_, "t", ["--from", str(Path(d) / "bad.json")])
@@ -1177,8 +1199,8 @@ def selftest():
         assert unsafe_feed("http://169.254.169.254/x") and unsafe_feed("http://localhost/f") and unsafe_feed("http://10.0.0.1/f")
         assert not unsafe_feed("https://example.com/feed.xml")
         fresh_reg = {"sources": {"slack:F": {"tier": "candidate", "created": "2026-12-01"}}, "notes": []}
-        assert choose(fresh_reg, [], 0, u("2026-12-02T07:00+09:00"))[2] == []  # --explore 0 なら新しい先も読まない
-        assert choose(fresh_reg, [], 3, u("2026-12-02T07:00+09:00"))[2] == ["slack:F"]
+        assert choose(fresh_reg, [], 0, when("2026-12-02T07:00+09:00"))[2] == []  # --explore 0 なら新しい先も読まない
+        assert choose(fresh_reg, [], 3, when("2026-12-02T07:00+09:00"))[2] == ["slack:F"]
         (Path(d) / ".desk" / OLD).mkdir(parents=True)
         try:
             folder("t")
@@ -1213,7 +1235,9 @@ def opts(a, names, multi=()):
                 j += 1
             if j == i + 1:
                 sys.exit(f"{a[i]} の値がない\n{__doc__}")
-            out[k] = a[i + 1:j] if k in multi else a[i + 1]
+            if k in out and k not in multi:  # 2 回目の値で 1 回目を黙って捨てない
+                sys.exit(f"{a[i]} を 2 回渡した（1 つだけ渡す）\n{__doc__}")
+            out[k] = out.get(k, []) + a[i + 1:j] if k in multi else a[i + 1]  # 同じ旗を繰り返しても、前の値を捨てない
             i = j
         else:
             rest.append(a[i])
@@ -1235,7 +1259,7 @@ def main():
     if cmd not in flags:
         sys.exit(__doc__)
     as_json = cmd == "sources" and "--json" in rest
-    o, r = opts([x for x in rest if not (as_json and x == "--json")], flags[cmd], {"published"})  # 引数の数は、ここで 1 か所で確かめる
+    o, r = opts([x for x in rest if not (as_json and x == "--json")], flags[cmd], {"published", "missed"})  # 引数の数は、ここで 1 か所で確かめる
     if not arity[cmd][0] <= len(r) <= arity[cmd][1]:
         sys.exit(f"{cmd} の引数の数が違う\n{__doc__}")
     if cmd == "plan":
@@ -1254,7 +1278,7 @@ def main():
     if cmd == "merge":
         return merge(topic, r, o.get("out") or sys.exit("--out <run.json> がない"))
     if cmd == "record":
-        return record(topic, r[0], o.get("published", []), o.get("missed"))
+        return record(topic, r[0], o.get("published", []), o.get("missed", []))
     if cmd == "report":
         return report(topic, r[0] if r else None)
     if cmd == "sources":
