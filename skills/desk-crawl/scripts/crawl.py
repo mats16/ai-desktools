@@ -748,10 +748,12 @@ def record(topic, path, outputs=(), missed=()):
         sys.exit("記録の形が違う:\n- " + "\n- ".join(errs))
     if outputs:
         urls = set().union(*(md_urls(read_input(f, as_json=False)) for f in outputs))
-    else:  # 出力を渡さずに記録し直す（取りこぼしだけ足す）ときは、前に使われたとした項目をそのまま残す
-        urls = {k for i in (prev or {}).get("items", []) if i.get("used") for k in refs(i)}
-    for i in run.get("items", []):
-        i["used"] = bool(refs(i) & urls) or (not outputs and not prev and bool(i.get("used")))
+        for i in run.get("items", []):
+            i["used"] = bool(refs(i) & urls)
+    elif prev:  # 出力を渡さずに記録し直す（取りこぼしだけ足す）ときは、項目ごとに前の印を写す。前の項目とは投稿の URL（keys）で合わせる
+        was = {k: bool(i.get("used")) for i in prev.get("items", []) for k in keys(i)}  # 広い public_url を共にする別の項目に、印を広げないため
+        for i in run.get("items", []):
+            i["used"] = any(was.get(k) for k in keys(i))
     reg = registry(topic)
     rows = [r for r in old if r["id"] != run["id"]]  # 同じ回を回し直したら置き換える
     # 回ごとに当てた覚え書きと票は、台帳に残す（同じ回を記録し直しても当て直さない。台帳を先に書くので、途中で落ちても当てた分と食い違わない）
@@ -1120,6 +1122,14 @@ def selftest():
         q(merge, "pub", [str(Path(d) / "cp.json")], str(Path(d) / "runp.json"))
         (Path(d) / "dp.md").write_text("- https://blog.example.com/p\n")
         assert "使われた 1" in q(record, "pub", str(Path(d) / "runp.json"), [str(Path(d) / "dp.md")])
+        (Path(d) / "cp2.json").write_text(json.dumps({"reads": [{"source": "slack:P", "ok": True}], "candidates": [
+            {"title": "A", "url": "https://w.slack.com/archives/C9/pa", "public_url": "https://docs.example.com/", "seen_in": ["slack:P"]},
+            {"title": "B", "url": "https://w.slack.com/archives/C9/pb", "public_url": "https://docs.example.com/", "seen_in": ["slack:P"]}]}))
+        q(merge, "pub", [str(Path(d) / "cp2.json")], str(Path(d) / "runp2.json"))
+        (Path(d) / "dp2.md").write_text("- https://w.slack.com/archives/C9/pa\n")
+        q(record, "pub", str(Path(d) / "runp2.json"), [str(Path(d) / "dp2.md")])
+        q(record, "pub", str(Path(d) / "runp2.json"))  # 出力なしで記録し直しても、共にする public_url で B を使われたにしない
+        assert [i["used"] for i in runs("pub")[-1]["items"]] == [True, False], runs("pub")[-1]["items"]
         # 写す: follow の先と覚え書きを、ほかの話題に写す（成績は写さない）
         (Path(d) / "export.json").write_text(q(sources, "t", True))
         q(set_, "t2", ["--from", str(Path(d) / "export.json")])
