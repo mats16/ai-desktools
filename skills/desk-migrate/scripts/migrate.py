@@ -761,7 +761,9 @@ def apply(ws):
     if off := off_topic(ws):
         out.append(f"要判断: 角括弧なしで書いた、もうプラグインにない前の ID がある（{'・'.join(off)}）。ids_*.json の prefixes で今の主題を見て、"
                    "その文を直すか、要らなければ消す（ID だと言い切れないので、ここでは替えない）")
-    if RECIPES:  # 2026-10-29: 最後に rules/ を recipes/ に（前の段は rules/ の中で済ませる）
+    if RECIPES and ws_ids(ws)[2]:  # 決められない ID は rules/ のファイルで探す（relink-id）。決めるまで移さない
+        out.append("要判断: rules/ から recipes/ への移しは、上の ID の行き先を決めてから（relink-id のあと、apply を回し直す）")
+    elif RECIPES:  # 2026-10-29: 最後に rules/ を recipes/ に（前の段は rules/ の中で済ませる）
         out += to_recipes(ws, backup) + baselines(ws)
     if old_run:  # 登録はワークスペースの外（アプリ・launchd・cron）にあり、ここからは直せない
         out.append("要判断: 定期の整理を前の名前（dreaming）で登録していれば、前の登録を消して登録し直す（desk-dreaming の SKILL.md を開いてから、その schedule.md の頭。"
@@ -1095,6 +1097,22 @@ def selftest_recipes():
         out = to_recipes(ws, ws / "backup")
         assert (ws / "AGENTS.md").read_text() == "- 画像は rules/logo.png、決まりは recipes/cxo_2/RECIPE.md\nrecipes/<名前>/RECIPE.md … 決まり（recipes/README.md）\n" and any("移していない" in x and "logo.png" in x for x in out)  # 移さなかったものの前のパスは書き換えない。前の雛形の置き場所は今の置き場所に
         assert any(x.startswith("要判断: AGENTS.md に前の rules/ のパスが残っている（- 画像は rules/logo.png") for x in out), out  # 書き換えなかった前のパスは知らせる
+    with tempfile.TemporaryDirectory() as tmp:  # 決められない ID があれば、relink-id で決めるまで rules/ を移さない（relink-id は rules/ で ID を探す）
+        ws = Path(tmp).resolve()
+        (ws / "desk.toml").write_text("")
+        for f in ("a.md", "b.md"):
+            (ws / "rules").mkdir(exist_ok=True)
+            (ws / "rules" / f).write_text("---\ndescription: x\n---\n- [ws-example-001] 残す\n")
+        cwd = os.getcwd()
+        os.chdir(ws)
+        try:
+            out = apply(ws)
+            assert (ws / "rules" / "a.md").is_file() and any("relink-id のあと" in x for x in out), out
+            relink_id(ws, "ws-example-001", "rules/a.md")
+            apply(ws)
+        finally:
+            os.chdir(cwd)
+        assert not (ws / "rules").exists() and "ws-example-001" not in (ws / "recipes" / "a" / "RECIPE.md").read_text() + (ws / "recipes" / "b" / "RECIPE.md").read_text()
     with tempfile.TemporaryDirectory() as tmp:
         ws = Path(tmp).resolve()
         (ws / "desk.toml").write_text("")

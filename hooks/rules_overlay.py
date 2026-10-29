@@ -243,7 +243,7 @@ def overlays(cwd, text, is_path=False, seen=(), key=None, output=""):
         refs += [r for r in printed(output, rule_lines(ws)) if r not in refs]  # レシピにプラグインの文を写していても、レシピを読んだのを出し直さない
     docs = decks(ws, cwd, text, is_path)
     kinds = set().union(*map(desk.triggers, refs)) | ({"make"} if docs else set())  # 資料のファイル（ページを書く子・レビューの子も構成案を読む）でも、step のないものを出す
-    if RESEARCH.search(text):  # 調べものでも、材料を集めるレシピを出す
+    if ".md" in text and RESEARCH.search(text):  # 調べものでも、材料を集めるレシピを出す。.md のないコマンドでは Claude Code と pi が hook を起こさないので、Codex もそろえる（雛形の「調べもの」は references_index.md と一緒に探す）
         kinds.add("gather")
     files = desk.rules(ws) if kinds else []  # ワークスペースの中でも、たいていの道具の呼び出しはここで終わる（recipes/ も会話の記録も読まない）
     mems = list(dict.fromkeys(m for p in docs if (m := memory(ws, p)) and m.is_file()))
@@ -634,7 +634,7 @@ def selftest():
         assert "Glean で探す" in got and "recipes/tools/ のファイル: templates/poc/doc.md。" in got and HEAD.findall(got).count("recipes/tools/RECIPE.md") == 1  # 資源は名前だけ（テンプレートの md は決まりとして出さない。中のレシピのファイルは、そのレシピのもの）
         shutil.rmtree(r / "tools" / "sub")
         assert "Glean" in overlays(ws, "/home/u/recipes/plug/skills/deck-practices/materials.md")  # プラグインを recipes という名前のフォルダの下に入れても
-        assert "Glean" in overlays(ws, "grep -rln Vercel Research/ references_index.md") and "Glean" not in overlays(deck, "cat references.md") and "Glean" not in overlays(ws, "slides-build/pages.md")  # 調べものでも。資料の出典の台帳（レビューの子も開く）と組むときは出さない
+        assert "Glean" in overlays(ws, "grep -rln Vercel Research/ references_index.md") and "Glean" not in overlays(ws, "grep -r Vercel Research/") and "Glean" not in overlays(deck, "cat references.md") and "Glean" not in overlays(ws, "slides-build/pages.md")  # 調べものでも。資料の出典の台帳（レビューの子も開く）と組むときは出さない
         assert overlays(ws, f"cat {ws}/recipes/tools/templates/slides-build/x.md") == "" == overlays(ws, "recipes/tools/deck-review/a.md")  # レシピの下のスキルの名前のパスは、プラグインのファイルでない
         assert overlays(ws, "cd recipes/tools && cat deck-review/a.md") == "" == overlays(ws, f"cat '{ws}/recipes/tools/my dir/deck-review/a.md'")  # cd のあとの相対パス・空白のあるパスでも（プラグインにないファイル）
         assert "Glean" in overlays(ws, "/plug/skills/customer-profile/SKILL.md") and "最初に聞くこと" not in overlays(ws, "/plug/skills/customer-profile/SKILL.md")  # 顧客の profile は集める作業（資料づくりの step のないものは出さない）
