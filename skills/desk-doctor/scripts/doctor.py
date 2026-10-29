@@ -75,7 +75,7 @@ def check(ws, local=False):
     if any("frontmatter" in x and re.search(r"`paths`|paths:", x) for x in agents.splitlines()):  # 同じ行に書いたものだけ。 2026-10-29 から、レシピは作業ごとに出る（desk-migrate は文の意味までは書き換えない）
         warn("AGENTS.md のレシピの出し方", "AGENTS.md に frontmatter の paths の書き方が残っている。2026-10-29 から、レシピ（recipes/<名前>/RECIPE.md）は step（gather・build。書かなければどの作業でも）と per_material で出る（deck-practices/rules.md の「Workspace rules」）。その文を直す")
     if old := migrate.needs(root):  # 前の名前の rules/ は読まれず、前の ID は台帳とつながらない
-        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの頭に frontmatter を置き、ワークスペースの決まりの ID を外し、2026-10-29 に rules/ を recipes/<名前>/RECIPE.md にした）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
+        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの頭に frontmatter を置き、ワークスペースの決まりの ID を外し、2026-10-29 に rules/ を recipes/<名前>/RECIPE.md にし、source-scout を desk-crawl にした）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
     odd, top = [], root / desk.RECIPES  # レシピの形と frontmatter（deck-practices/rules.md の「Workspace rules」）
     for p, m in (rules := desk.rules(root)):
         rel = p.relative_to(root)

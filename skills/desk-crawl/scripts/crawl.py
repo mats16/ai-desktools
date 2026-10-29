@@ -52,6 +52,7 @@ RESERVED = {"explore", "feed", "more"}  # plan と more が作る組の名前
 APPLIED_KEEP = 30  # 台帳に残す「当てた覚え書きと票」の控えの回数
 KEYS = {"tier", "name", "group", "pinned", "url", "why", "created"}
 OLD = "scout"      # 前の名前（source-scout）の記録のフォルダ（.desk/scout/）
+PIN = {True: True, False: False, "true": True, "false": False, "1": True, "0": False, "yes": True, "no": False}  # これ以外の pinned は止める（黙って false にしない）
 TRACKING = re.compile(r"^(utm_\w+|gclid|fbclid|mc_[ce]id|ref_src|trk)$")  # ref は版や枝を指すことがある（GitHub）ので外さない
 URL = re.compile(r"https?://[^\s<>{}|\"'`（）「」『』【】、。，]+")
 URL_TAIL = ".,;:!?*_~"  # md の文末と強調の記号（「https://x/1.」「**https://x/1**」）。URL の末尾に来ない
@@ -88,8 +89,8 @@ def folder(topic):
         sys.exit(f"話題の名前は英数字と - だけ（{topic}）")
     root = ROOT or ((f := desk.locate()) and f[1]) or sys.exit(desk.missing())
     if (old := Path(root) / ".desk" / OLD).exists():  # 黙って記録が 2 か所に分かれないよう、前の名前の記録があれば止める
-        sys.exit(f"前の名前（source-scout）の記録 {old} がある。状態の名前（core → follow、muted → candidate か dropped）と種類の名前"
-                 f"（gmail → gmail-search、wiki → confluence などサービスの名前）が変わったので、そのままでは読めない。写してから消すか、要らなければ消す")
+        sys.exit(f"前の名前（source-scout）の記録 {old} がある。状態と種類の名前が変わったので、そのままでは読めない。"
+                 f"desk-migrate の migrate.py apply で .desk/crawl/ に移してから回す")
     return Path(root) / ".desk" / "crawl" / topic
 
 
@@ -102,6 +103,13 @@ def write_json(p, data):
     tmp = p.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     tmp.replace(p)
+
+
+def no_null(v):
+    """JSON の null の欄を外す。子は書かない欄を null で返すことがあり、読む側の .get(欄, 既定) は null を既定にしないため（記録には null を入れない）。"""
+    if isinstance(v, dict):
+        return {k: no_null(x) for k, x in v.items() if x is not None}
+    return [no_null(x) for x in v] if isinstance(v, list) else v
 
 
 def read_input(path, as_json=True):
@@ -552,7 +560,7 @@ def merge(topic, files, out):
     starts = {e["id"]: e["since"] for g in p.get("groups", []) for e in g["sources"]}  # 子が since を書かなくても、取れなかった期間の始まりを残す
     by = {}
     for f in files:
-        d = read_input(f)
+        d = no_null(read_input(f))
         if isinstance(d, dict) and ("items" in d or "id" in d):
             sys.exit(f"{f} は回の記録（merge の出力）で、子の返事ではない。子の返事と feeds の出力だけを渡す")
         if not isinstance(d, dict) or not all(isinstance(d.get(k, []), list) and all(isinstance(x, dict) for x in d.get(k, []))
@@ -595,7 +603,7 @@ def merge(topic, files, out):
             i["dup"] = d[0][:10]
             continue
         t = norm_title(i.get("title"))
-        sm, best = difflib.SequenceMatcher(None, t), (0, "", "")
+        sm, best = difflib.SequenceMatcher(None, "", t), (0, "", "")  # 今の題を seq2 に置き（set_seq1 で前の題を替えても残る）
         for o, r, ot in old:  # 使われた題の数だけ比べるので、上限の見積もり（quick_ratio）で外れを先に落とす
             sm.set_seq1(o)
             if sm.real_quick_ratio() >= 0.85 and sm.quick_ratio() >= 0.85 and (x := sm.ratio()) > best[0]:
@@ -650,6 +658,24 @@ def is_sid(v):
     return isinstance(v, str) and re.fullmatch(r"[\w.-]+:.+", v) is not None
 
 
+FIELDS = {  # 回の記録（と子の返事）の欄の型。コードが読む欄は全部ここに書き、check はここだけで確かめる（欄ごとに書き足すと漏れるため）
+    "reads": {"source": "sid", "name": "str", "ok": "bool", "since": "time", "until": "time", "scanned": "int", "picked": "int",
+              "explore": "bool", "more": "bool", "error": "str"},
+    "items": {"url": "url", "urls": "strs", "title": "str", "public_url": "str", "seen_in": "sids", "origin": "sid", "used": "bool",
+              "summary": "str", "published": "str", "dup": "str", "similar": "str", "note": "str"},
+    "discovered": {"source": "sid", "name": "str", "via": "str", "created": "day", "why": "str"},
+    "misses": {"url": "url", "urls": "strs", "source": "sid", "title": "str", "why": "str"},
+    "lessons": {"source": "sid*", "text": "text"},
+    "votes": {"note": "str", "helpful": "bool"}}
+NEED = {"reads": "source", "items": "url", "discovered": "source", "misses": "url", "lessons": "text", "votes": "note"}
+OK = {"sid": (is_sid, "<kind>:<ref>"), "sid*": (lambda v: v == "*" or is_sid(v), "<kind>:<ref> か *"), "str": (lambda v: isinstance(v, str), "文字列"),
+      "text": (lambda v: isinstance(v, str) and v.strip() != "", "空でない文"), "url": (lambda v: isinstance(v, str) and v != "", "URL の文字列"),
+      "bool": (lambda v: isinstance(v, bool), "true・false"), "int": (lambda v: isinstance(v, int) and not isinstance(v, bool) and v >= 0, "0 以上の整数"),
+      "time": (lambda v: isinstance(v, str) and not bad_date(v), "ISO の日時"), "day": (lambda v: isinstance(v, str) and not bad_date(v, day_only=True), "YYYY-MM-DD"),
+      "strs": (lambda v: isinstance(v, list) and all(isinstance(x, str) for x in v), "文字列のリスト"),
+      "sids": (lambda v: isinstance(v, list) and all(is_sid(x) for x in v), "<kind>:<ref> のリスト")}
+
+
 def check(run):
     """回の記録の形。runs.jsonl に入るものは全部ここで確かめる（plan・report・sources が毎回読むので、壊れた行を入れない）。"""
     if not isinstance(run, dict):
@@ -660,48 +686,17 @@ def check(run):
     for k in ("since", "until"):
         if run.get(k) and bad_date(run[k]):
             errs.append(f"{k} は ISO の日時: {run[k]}")
-    lists = ("reads", "items", "discovered", "misses", "lessons", "votes", "changes")
-    for k in lists:
+    for k in (*FIELDS, "changes"):
         if not isinstance(run.get(k, []), list) or not all(isinstance(x, str if k == "changes" else dict) for x in run.get(k, [])):
             errs.append(f"{k} は{'文' if k == 'changes' else 'オブジェクト'}のリスト")
     if errs:
         return errs
-    for r in run.get("reads", []):
-        if not is_sid(r.get("source")):
-            errs.append(f"reads の source は <kind>:<ref>: {r}")
-        if not isinstance(r.get("name", ""), str):
-            errs.append(f"reads の name は文字列: {r}")
-        for k in ("since", "until"):
-            if r.get(k) and bad_date(r[k]):
-                errs.append(f"reads の {k} は ISO の日時: {r}")
-    for i in run.get("items", []):
-        if not isinstance(i.get("url"), str) or not i["url"] or not all(isinstance(u, str) for u in i.get("urls", [])):
-            errs.append(f"items の url（と urls）は URL の文字列: {i.get('title')}")
-        if not isinstance(i.get("public_url", ""), str) or not isinstance(i.get("title", ""), str):
-            errs.append(f"items の public_url と title は文字列: {i.get('title')}")
-        seen = i.get("seen_in", [])
-        if not isinstance(seen, list) or not all(is_sid(x) for x in seen) or (i.get("origin") and not is_sid(i["origin"])):
-            errs.append(f"items の seen_in・origin は <kind>:<ref>: {i.get('title')}")
-        elif not seen and not i.get("origin"):
-            errs.append(f"items に seen_in（見えた先）がない: {i.get('title')}")
-    for d in run.get("discovered", []):
-        if not is_sid(d.get("source")):
-            errs.append(f"discovered の source は <kind>:<ref>: {d}")
-        if not isinstance(d.get("name", ""), str):
-            errs.append(f"discovered の name は文字列: {d}")
-        if d.get("created") and bad_date(d["created"], day_only=True):
-            errs.append(f"discovered の created は YYYY-MM-DD: {d}")
-    for m in run.get("misses", []):
-        if not isinstance(m.get("url"), str) or not m["url"] or not all(isinstance(u, str) for u in m.get("urls", [])):
-            errs.append(f"misses の url は URL の文字列: {m}")
-        if m.get("source") and not is_sid(m["source"]):
-            errs.append(f"misses の source は <kind>:<ref>: {m}")
-    for l in run.get("lessons", []):
-        if not isinstance(l.get("text"), str) or not l["text"].strip() or not (l.get("source", "*") == "*" or is_sid(l["source"])):
-            errs.append(f"lessons は source（<kind>:<ref> か *）と text: {l}")
-    for v in run.get("votes", []):
-        if not isinstance(v.get("note"), str) or not isinstance(v.get("helpful", True), bool):
-            errs.append(f"votes は note（覚え書きの id）と helpful（true・false）: {v}")
+    for k, spec in FIELDS.items():
+        for x in run.get(k, []):
+            if NEED[k] not in x:
+                errs.append(f"{k} に {NEED[k]} がない: {x}")
+            errs += [f"{k} の {f} は{OK[t][1]}: {x}" for f, t in spec.items() if f in x and not OK[t][0](x[f])]  # null も止める（入るところで外す）
+    errs += [f"items に seen_in（見えた先）がない: {i.get('title')}" for i in run.get("items", []) if not i.get("seen_in") and not i.get("origin")]
     return errs
 
 
@@ -732,7 +727,7 @@ def record(topic, path, outputs=(), missed=()):
         if prev:  # 同じ回を記録し直しても、前に足した取りこぼしは残す
             add_misses(run, prev.get("misses", []))
         for f in missed:
-            ms = read_input(f)
+            ms = no_null(read_input(f))
             if not isinstance(ms, list) or not all(isinstance(m, dict) for m in ms):
                 sys.exit(f"{f} は取りこぼしのオブジェクトのリスト（[{{\"url\": …, \"source\": \"<kind>:<ref>（分かれば）\", \"why\": …}}, …]）")
             add_misses(run, ms)
@@ -897,8 +892,8 @@ def set_(topic, a):
             sys.exit(f"先の id は <kind>:<ref>: {r}")
         if bad := set(r) - KEYS - {"id", "note", "notes"}:
             sys.exit(f"直せない項目: {sorted(bad)}（{sorted(KEYS)} と note）")
-        if bad := [k for k in KEYS - {"pinned"} if k in r and not isinstance(r[k], str)] + (["pinned"] if not isinstance(r.get("pinned", ""), (str, bool)) else []):
-            sys.exit(f"{sorted(bad)} は文字列（pinned は true・false でもよい）: {r.get('id')}")
+        if bad := [k for k in KEYS - {"pinned"} if k in r and not isinstance(r[k], str)] + (["pinned"] if not isinstance(r.get("pinned", False), (bool, str, int)) or r.get("pinned", False) not in PIN else []):
+            sys.exit(f"{sorted(bad)} は文字列（pinned は true・false）: {r.get('id')}")
         if not isinstance(r.get("note", ""), str):
             sys.exit(f"note は文: {r.get('id')}")
         if r.get("tier", "follow") not in TIERS:
@@ -915,7 +910,7 @@ def set_(topic, a):
         notes = r.pop("notes", [])
         if sid != "*":
             if "pinned" in r:
-                r["pinned"] = r["pinned"] in (True, "true", "1", "yes")
+                r["pinned"] = PIN[r["pinned"]]
             e = reg["sources"].setdefault(sid, {"tier": "candidate", "added": day})
             if r.get("tier") and r["tier"] != e.get("tier"):
                 r["tier_since"] = now().isoformat(timespec="minutes")  # 下げたり上げたりした時。record は、候補に下げたあとの回の手柄だけで follow に戻す
@@ -971,6 +966,13 @@ def selftest():
         raise AssertionError("2 回の --goal で止まらない")
     except SystemExit:
         pass
+    for argv in (["plan", "t", "--hours", "72", "--since", "2026-10-28T07:00+09:00"], ["set", "t", "--from", "x.json", "slack:C", "tier=dropped"]):
+        sys.argv = ["crawl.py", *argv]
+        try:
+            main()
+            raise AssertionError(f"止まらない: {argv}")
+        except SystemExit as e:
+            assert "一緒に渡さない" in str(e.code), e.code
     with tempfile.TemporaryDirectory() as d:
         ROOT = d
         q = _quiet
@@ -1057,6 +1059,8 @@ def selftest():
         (Path(d) / "c3.json").write_text(json.dumps(c3))
         out = q(merge, "t", [str(Path(d) / "c3.json")], str(Path(d) / "run2.json"))
         assert "［使われた済み 2026-10-26］Genie is GA" in out, out
+        (Path(d) / "c_sim.json").write_text(json.dumps({"candidates": [{"title": "Genie is GA.", "url": "https://y/genie", "seen_in": ["slack:N"]}]}))
+        assert "［似ている: 2026-10-26「Genie is GA」］" in q(merge, "t", [str(Path(d) / "c_sim.json")], str(Path(d) / "run_sim.json"))  # 別の URL の似た題
         (Path(d) / "d2.md").write_text("**https://x/3**.\n")
         (Path(d) / "d3.md").write_text("[OBO](https://x/4)\n")  # 2 つの案件の出力。どちらかにあれば使われた
         out = q(record, "t", str(Path(d) / "run2.json"), [str(Path(d) / "d2.md"), str(Path(d) / "d3.md")])
@@ -1132,6 +1136,14 @@ def selftest():
         assert "slack:P" in choose(registry("t"), cool + [{"id": f"y{k}", "until": f"2026-12-{k + 2:02d}T07:00+09:00"} for k in range(COOL)], 3,
                                    when("2026-12-20T07:00+09:00"))[2]
         assert check({"id": "x", "items": [{"title": "t"}]}) and not check(rows[0])
+        assert no_null({"items": [{"url": "https://x", "origin": None, "urls": None}], "a": None}) == {"items": [{"url": "https://x"}]}  # null は入るところで外す
+        (Path(d) / "c_null.json").write_text(json.dumps({"reads": [{"source": "slack:A", "ok": True, "since": None, "scanned": None}],
+                                                         "candidates": [{"title": "N", "url": "https://n/1", "urls": None, "seen_in": ["slack:A"], "origin": None}]}))
+        q(merge, "t", [str(Path(d) / "c_null.json")], str(Path(d) / "run_null.json"))
+        rn = json.loads((Path(d) / "run_null.json").read_text())
+        assert not check(rn) and next(r for r in rn["reads"] if r["source"] == "slack:A")["since"] and "urls" not in rn["items"][0], rn  # plan の始まりを null で消さない
+        for k, spec in FIELDS.items():  # コードが読む欄が表にある（表の外の欄を読み始めたら、ここで気づく）
+            assert NEED[k] in spec and all(t in OK for t in spec.values()), k
         q(set_, "u", ["feed:file:///etc/hosts", "tier=follow"])
         q(plan, "u", {})
         q(feeds, "u", str(Path(d) / "f.json"))
@@ -1156,10 +1168,12 @@ def selftest():
         q(set_, "t", ["slack:N", "tier=follow"])
         for broken in ({"lessons": [{"source": "*"}]}, {"votes": [{"note": "n1", "helpful": "no"}]}, {"items": [{"url": "https://x", "seen_in": ["nokind"]}]},
                        {"reads": "slack:A"}, {"misses": [{"source": "slack:A"}]}, {"reads": [{"source": "slack:A", "name": 5}]},
-                       {"discovered": [{"source": "slack:A", "name": ["x"]}]}, {"items": [{"url": "https://x", "seen_in": ["a:b"], "public_url": 5}]}, {"items": [{"url": "https://x", "seen_in": ["a:b"], "title": 5}]}):
+                       {"discovered": [{"source": "slack:A", "name": ["x"]}]}, {"discovered": [{"source": "slack:A", "via": ["forward", "mention"]}]},
+                       {"reads": [{"source": "slack:A", "scanned": "12"}]}, {"reads": [{"source": "slack:A", "ok": "false"}]}, {"items": [{"url": None, "seen_in": ["a:b"]}]}, {"reads": [{"source": "slack:A", "ok": None}]}, {"items": [{"url": "https://x", "seen_in": ["a:b"], "public_url": 5}]}, {"items": [{"url": "https://x", "seen_in": ["a:b"], "title": 5}]}):
             assert check({"id": "x", **broken}), broken  # plan が毎回読む記録に、壊れた行を入れない
         for rows_ in ({"id": "slack:Z"}, [{"tier": "follow"}], [{"id": "feed"}], [{"id": "*", "tier": "follow"}], [{"id": "slack:Z", "notes": "one"}],
-                      [{"id": "slack:Z", "group": 5}], [{"id": "slack:Z", "url": 5}], [{"id": "slack:Z", "note": 5}], [{"id": "slack:Z", "pinned": 1}]):
+                      [{"id": "slack:Z", "group": 5}], [{"id": "slack:Z", "url": 5}], [{"id": "slack:Z", "note": 5}], [{"id": "slack:Z", "pinned": 2}],
+                      [{"id": "slack:Z", "pinned": "True"}], [{"id": "slack:Z", "pinned": []}]):
             (Path(d) / "bad.json").write_text(json.dumps(rows_))
             try:
                 q(set_, "t", ["--from", str(Path(d) / "bad.json")])
@@ -1256,12 +1270,16 @@ def main():
              "record": {"published", "missed"}, "report": set(), "sources": set(), "set": {"from"}}
     arity = {"plan": (0, 0), "more": (1, MORE_MAX), "prompt": (1, 1), "feeds": (0, 0), "merge": (1, 99), "record": (1, 1), "report": (0, 1),
              "sources": (0, 0), "set": (0, 99)}
+    apart = {"plan": [("hours", "since")], "set": [("from", "")]}  # 一緒に渡すと片方を黙って使わなくなる組（"" は位置の引数）
     if cmd not in flags:
         sys.exit(__doc__)
     as_json = cmd == "sources" and "--json" in rest
     o, r = opts([x for x in rest if not (as_json and x == "--json")], flags[cmd], {"published", "missed"})  # 引数の数は、ここで 1 か所で確かめる
     if not arity[cmd][0] <= len(r) <= arity[cmd][1]:
         sys.exit(f"{cmd} の引数の数が違う\n{__doc__}")
+    for x, y in apart.get(cmd, []):
+        if x in o and (y in o if y else r):
+            sys.exit(f"--{x} と{f' --{y}' if y else '、先の id・key=value'} は一緒に渡さない（片方を使わなくなる）\n{__doc__}")
     if cmd == "plan":
         if not (re.fullmatch(r"\d+(\.\d+)?", o.get("hours", "24")) and o.get("explore", "3").isdigit()) or any(
                 bad_date(o[k]) for k in ("since", "until") if k in o):
