@@ -36,7 +36,6 @@ PROMOTE = 2.0      # 候補が、重みを掛けて合わせたこの数の項�
 # ponytail: 段の境目は仮の値。実際の記録が 20 回たまったら、report の比べ（取りこぼしが増えずに読む先が減るか）を見て決め直す
 EVERY = ((0.5, 1), (0.25, 2), (0.0, 4))  # 1 日あたりの値打ちが、follow の先の中ほど（中央値）の何倍以上なら、何回に 1 回読むか
 MIN_READS = 5     # この回数読むまでは間を空けない（1 回の空振りで 4 回に 1 回にしない）。中ほども、この回数読んだ先だけで出す
-MUST_READ = timedelta(days=6)  # 前に読んでからこれを超えたら、間隔によらず読む（取り戻せる CATCHUP に収め、遅れても読み落とさない）
 DROP_READS, DROP_USED = 10, 0.5  # 4 回に 1 回の follow で、最後の DROP_READS 回の読みで使われたのが DROP_USED 件未満なら、外すかを聞く（自動では外さない）
 COOL = 10          # 探索して何も使われなかった候補は、この回数のあいだ探索しない（ほかの回で使われたものがあれば休ませない）
 NEW_DAYS, NEW_MAX = 14, 3  # 作られてこの日数のうちの、まだ読んでいない先は、ほかの候補より先に探索する（1 回に NEW_MAX まで）
@@ -156,20 +155,27 @@ def keys(item):
     return {canon(u) for u in [item.get("url"), *item.get("urls", [])] if u}
 
 
+def refs(item):
+    """項目を指す URL の全部（url・urls と、公開の出典 public_url）。使われたか・取りこぼしか・使われた済みかを見るときに使う
+    （使う側が出力に公開の URL を書いても、取りこぼしに公開の URL を返しても当たるように）。merge で項目をまとめるのは keys だけ
+    （docs の目次のような広い public_url で、別の話をまとめないため）。"""
+    return keys(item) | ({canon(item["public_url"])} if item.get("public_url") else set())
+
+
 def published(rows):
     """前の回までに使われた項目: URL → (回の id, 題)。"""
     out = {}
     for r in rows:
         for i in r.get("items", []):
             if i.get("used"):
-                for k in keys(i):
+                for k in refs(i):
                     out.setdefault(k, (r["id"], i.get("title", "")))
     return out
 
 
 def true_misses(run):
     """その回の取りこぼし（使う側が record --missed で返したもの）のうち、候補になかったもの（候補にあって選ばれなかったものは、選ぶ側の判断で、読む先の取りこぼしではない）。"""
-    seen = {k for i in run.get("items", []) for k in keys(i)}
+    seen = {k for i in run.get("items", []) for k in refs(i)}
     return [m for m in run.get("misses", []) if not keys(m) & seen]
 
 
@@ -276,11 +282,18 @@ def gap(n):
     return "毎回" if n == 1 else f"{n} 回に 1 回"
 
 
-def due(s, T, n, until):
-    """間隔が来たか。取れなかった先と、前に読んでから MUST_READ を超えた先は、間隔によらず読む。"""
+def due(s, T, n, until, gap=timedelta(days=1)):
+    """間隔が来たか。取れなかった先と、今回読まないと次の回で取り戻せなくなる先（前に読んだ所から次の回の終わりまでが CATCHUP に届く。
+    gap はふだんの回の間。毎日回すなら、前に読んでから 6 日で読む）は、間隔によらず読む。"""
     if n == 1 or s["last_read"] is None or s["fails"] or not s["until"]:
         return True
-    return T - s["last_read"] >= n or until - when(s["until"]) >= MUST_READ
+    return T - s["last_read"] >= n or until - when(s["until"]) + gap >= CATCHUP
+
+
+def gap_of(rows):
+    """ふだんの回の間: 直近 10 回の間の中ほど。回が 2 つより少なければ 1 日。"""
+    ts = [run_time(r) for r in rows[-11:]]
+    return statistics.median(b - a for a, b in zip(ts, ts[1:])) if len(ts) > 1 else timedelta(days=1)
 
 
 def choose(reg, rows, explore=3, until=None):
@@ -289,11 +302,11 @@ def choose(reg, rows, explore=3, until=None):
     st, T = stats(rows), len(rows)
     until = until or now()
     known = set(reg["sources"]) | set(st)
-    med = middle(reg, st)
+    med, gap = middle(reg, st), gap_of(rows)
     follow = {}
     for s in sorted(x for x in known if tier(reg, x) == "follow"):
         n, why = every(reg, st, s, T, med)
-        follow[s] = (n, why, due(st[s], T, n, until))
+        follow[s] = (n, why, due(st[s], T, n, until, gap))
     cands = [s for s in known if tier(reg, s) == "candidate"
              and not (st[s]["zero_explore"] is not None and T - 1 - st[s]["zero_explore"] < COOL and st[s]["c"] < 0.5)]
 
@@ -736,9 +749,9 @@ def record(topic, path, outputs=(), missed=()):
     if outputs:
         urls = set().union(*(md_urls(read_input(f, as_json=False)) for f in outputs))
     else:  # 出力を渡さずに記録し直す（取りこぼしだけ足す）ときは、前に使われたとした項目をそのまま残す
-        urls = {k for i in (prev or {}).get("items", []) if i.get("used") for k in keys(i)}
+        urls = {k for i in (prev or {}).get("items", []) if i.get("used") for k in refs(i)}
     for i in run.get("items", []):
-        i["used"] = bool(keys(i) & urls) or (not outputs and not prev and bool(i.get("used")))
+        i["used"] = bool(refs(i) & urls) or (not outputs and not prev and bool(i.get("used")))
     reg = registry(topic)
     rows = [r for r in old if r["id"] != run["id"]]  # 同じ回を回し直したら置き換える
     # 回ごとに当てた覚え書きと票は、台帳に残す（同じ回を記録し直しても当て直さない。台帳を先に書くので、途中で落ちても当てた分と食い違わない）
@@ -931,6 +944,9 @@ def selftest():
            "misses": [{"url": "https://m", "source": "s:4"}, {"url": "https://c", "source": "s:5"}, {"url": "https://n"}]}
     assert credits(run) == {"s:1": 1.5, "s:2": 0.5, "s:4": 1.0}, credits(run)  # 候補にあって選ばれなかった項目は、取りこぼしに数えない
     assert [m["url"] for m in true_misses(run)] == ["https://m", "https://n"]
+    pu = {"id": "p", "items": [{"url": "https://w.slack.com/archives/C1/p1", "public_url": "https://blog.example.com/release", "seen_in": ["slack:C1"]}],
+          "misses": [{"url": "https://blog.example.com/release/", "source": "web:https://blog.example.com"}]}
+    assert not true_misses(pu) and not credits(pu)  # 候補の公開の出典と同じ URL は、取りこぼしにしない
     # 1 日あたり: 4 日分をまとめて読んで 1 件の先と、毎日読んで 4 回に 1 件の先は、同じ値打ち
     daily = [{"id": f"d{k}", "until": f"2026-11-{k + 1:02d}T07:00+09:00", "since": f"2026-11-{k:02d}T07:00+09:00" if k else "2026-10-31T07:00+09:00",
               "reads": [{"source": "s:D", "ok": True}] + ([{"source": "s:W", "ok": True, "since": f"2026-10-{28 + k:02d}T07:00+09:00" if k < 4 else
@@ -1096,6 +1112,14 @@ def selftest():
         q(plan, "t", {"since": "2026-10-27T07:00+09:00", "until": "2026-10-28T07:00+09:00"})
         assert read_json(folder("t") / "plan.json", {})["explore_ids"][0] == "slack:Z"
         assert "- 取りこぼし:\n  - https://y/9（slack:Z）" in q(report, "t")
+        # 出力に公開の出典の URL だけを書いても、使われたになる
+        q(set_, "pub", ["slack:P", "tier=follow"])
+        q(plan, "pub", {"since": "2026-10-26T07:00+09:00", "until": "2026-10-27T07:00+09:00"})
+        (Path(d) / "cp.json").write_text(json.dumps({"reads": [{"source": "slack:P", "ok": True}], "candidates": [
+            {"title": "P", "url": "https://w.slack.com/archives/C9/p1", "public_url": "https://blog.example.com/p", "seen_in": ["slack:P"]}]}))
+        q(merge, "pub", [str(Path(d) / "cp.json")], str(Path(d) / "runp.json"))
+        (Path(d) / "dp.md").write_text("- https://blog.example.com/p\n")
+        assert "使われた 1" in q(record, "pub", str(Path(d) / "runp.json"), [str(Path(d) / "dp.md")])
         # 写す: follow の先と覚え書きを、ほかの話題に写す（成績は写さない）
         (Path(d) / "export.json").write_text(q(sources, "t", True))
         q(set_, "t2", ["--from", str(Path(d) / "export.json")])
@@ -1113,6 +1137,9 @@ def selftest():
         assert every(reg, st, "slack:B", T, middle(reg, st))[0] == 4 and every(reg, st, "slack:A", T, middle(reg, st))[0] == 1
         last = when(st["slack:B"]["until"])
         assert not due(st["slack:B"], T, 4, last + timedelta(days=1)) and due(st["slack:B"], T, 4, last + timedelta(days=6))
+        s4 = {"last_read": 0, "fails": 0, "until": "2026-10-01T07:00+09:00"}  # 4 日ごとに回す: 4 日目に飛ばすと、8 日目では 7 日しか取り戻せない
+        assert due(s4, 1, 4, when("2026-10-05T07:00+09:00"), timedelta(days=4)) and not due(s4, 1, 4, when("2026-10-02T07:00+09:00"))
+        assert gap_of([{"id": f"g{k}", "until": f"2026-10-{1 + 4 * k:02d}T07:00+09:00"} for k in range(4)]) == timedelta(days=4)
         sg = suggestions(reg, st, T)
         assert any(x.startswith("slack:B") and "外すか" in x for x in sg), sg
         reg["sources"]["slack:B"]["pinned"] = True
