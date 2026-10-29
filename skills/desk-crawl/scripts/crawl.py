@@ -142,7 +142,10 @@ def kind(sid):
 
 def canon(url):
     """同じ項目の URL を 1 つにそろえる。追跡の引数・#・末尾の / を外し、ホストを小文字にする（Slack の thread_ts などほかの引数は残す）。"""
-    p = urllib.parse.urlsplit(url.strip())
+    try:
+        p = urllib.parse.urlsplit(url.strip())
+    except ValueError:  # 子の返事やフィードの壊れた URL（http://[::1 など）1 つで、まとめ全体を止めない
+        return url.strip()
     slack = p.netloc.lower().endswith(".slack.com")  # Slack のリンクの cid（チャンネル）はパスと同じなので外す
     q = [(k, v) for k, v in urllib.parse.parse_qsl(p.query, keep_blank_values=True) if not TRACKING.match(k) and not (slack and k == "cid")]
     return urllib.parse.urlunsplit((p.scheme.lower(), p.netloc.lower(), p.path.rstrip("/") or "/", urllib.parse.urlencode(sorted(q)), ""))
@@ -508,14 +511,18 @@ def unsafe_feed(url):
     """開かないフィードの URL なら理由を返す: http・https でない、手元の名前、引いた先が手元・社内の IP アドレス。
     名前は引いて、出た IP を全部見る（2130706433・0x7f.1 のような数の書き方も、OS が 127.0.0.1 に読むのでここで止まる）。
     shortcut: 引いてからつなぐまでに DNS の答えが変わると通る。子の返事から入る先を開くだけなので、要れば引いた IP につなぐ"""
-    p = urllib.parse.urlsplit(url)
+    try:
+        p = urllib.parse.urlsplit(url)
+        port = p.port  # 数でない・範囲の外のポートは、ここで ValueError になる
+    except ValueError:
+        return "URL の形が違う"  # 1 つの壊れた URL で、ほかのフィードの取得を止めない
     if p.scheme not in ("http", "https"):
         return "http・https の URL ではない"
     host = (p.hostname or "").lower().rstrip(".")  # localhost. のような末尾の点も同じ名前
     if not host or host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
         return "手元・社内の名前の URL は開かない"
     try:
-        ips = {a[4][0] for a in socket.getaddrinfo(host, p.port or 443, proto=socket.IPPROTO_TCP)}
+        ips = {a[4][0] for a in socket.getaddrinfo(host, port or 443, proto=socket.IPPROTO_TCP)}
     except (OSError, UnicodeError):
         return ""  # 引けない名前は、開くときに落ちる（取れなかった先として次の回に取り戻す）
     return "" if all(ipaddress.ip_address(ip.split("%")[0]).is_global for ip in ips) else "手元・社内の IP アドレスの URL は開かない"
@@ -730,7 +737,11 @@ def add_misses(run, ms):
 
 def sites(reg, rows):
     """使われた項目の出典（public_url）のサイトのうち、まだ読む先にないもの: [(件数, ホスト)]。読む先の id と url のホスト（dropped も）は外す。"""
-    host = lambda u: (urllib.parse.urlsplit(u).hostname or "").lower().removeprefix("www.")
+    def host(u):
+        try:
+            return (urllib.parse.urlsplit(u).hostname or "").lower().removeprefix("www.")
+        except ValueError:
+            return ""
     known = {host(x) for sid, e in reg["sources"].items() for x in (sid.split(":", 1)[1], e.get("url", "")) if x.startswith("http")}
     n = Counter(host(i["public_url"]) for r in rows for i in r.get("items", [])
                 if i.get("used") and str(i.get("public_url", "")).startswith("http"))
@@ -1196,14 +1207,16 @@ def selftest():
         assert not check(rn) and next(r for r in rn["reads"] if r["source"] == "slack:A")["since"] and "urls" not in rn["items"][0], rn  # plan の始まりを null で消さない
         for k, spec in FIELDS.items():  # コードが読む欄が表にある（表の外の欄を読み始めたら、ここで気づく）
             assert NEED[k] in spec and all(t in OK for t in spec.values()), k
-        q(set_, "u", ["feed:file:///etc/hosts", "tier=follow"])
+        for bad in ("feed:https://example.com:bad/feed", "feed:http://[::1/f", "feed:file:///etc/hosts"):
+            q(set_, "u", [bad, "tier=follow"])
         q(plan, "u", {})
         q(feeds, "u", str(Path(d) / "f.json"))
         got = json.loads((Path(d) / "f.json").read_text())
-        assert got["reads"][0]["ok"] is False and not got["candidates"], got  # http・https でないフィードは開かない
+        assert len(got["reads"]) == 3 and not any(r["ok"] for r in got["reads"]) and not got["candidates"], got  # 形の違う URL と http・https でないフィードは開かず、ほかの先も続けて読む
         assert check({"id": "x", "discovered": [{"source": "slack:Z", "created": "Oct 24"}]}) and check({"id": "x", "since": "yesterday"})
         assert md_urls("[a](https://w/Foo_(bar)) と [b](https://x/2)。 https://x/3]") == {canon("https://w/Foo_(bar)"), canon("https://x/2"), canon("https://x/3")}
         assert canon("https://github.com/o/r/blob/x?ref=v1") != canon("https://github.com/o/r/blob/x?ref=v2")  # ref は版を指すので残す
+        assert canon(" http://[::1/f ") == "http://[::1/f" and not sites({"sources": {}}, [{"items": [{"used": True, "public_url": "http://[::1/f"}] * 2}])
         assert canon("https://w.slack.com/archives/C1/p2?cid=C1") == canon("https://w.slack.com/archives/C1/p2")
         (Path(d) / "list.json").write_text("[1, 2]")
         try:
