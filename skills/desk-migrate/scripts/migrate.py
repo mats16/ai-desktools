@@ -137,6 +137,8 @@ def move_scout(ws):
                     n += 1
                 srcs[scout_id(sid)] = e
             reg["sources"], reg["next_note"] = srcs, n
+            for done in reg.get("applied", {}).values():  # 当てた覚え書きの控え [位置, 先, 文] の先も替える（記録し直したときに、当てたと分かるように）
+                done["lessons"] = [[k[0], scout_id(k[1]), *k[2:]] if isinstance(k, list) and len(k) > 1 else k for k in done.get("lessons", [])]
             rows = []
             # ponytail: 前の読み手の反応（feedback・value 0）は手柄から外さずに捨てる。used を消すと「使われた済み」の印も消えるため。source-scout の記録は 3 日分しかない
             for r in lines:
@@ -1039,7 +1041,8 @@ def selftest():
         put("AGENTS.md", "スキル `source-scout`（`../source-scout/scripts/scout.py`）。記録は `.desk/scout/`。\n")
         put(".desk/scout/t/sources.json", json.dumps({"sources": {
             "slack:A": {"tier": "core", "mode": "filter", "notes": [{"id": "n1", "text": "x", "helpful": 1, "harmful": 0}]},
-            "gmail:label:news": {"tier": "muted", "mode": "search"}, "wiki:123": {"tier": "candidate"}}, "notes": [], "next_note": 2}))
+            "gmail:label:news": {"tier": "muted", "mode": "search"}, "wiki:123": {"tier": "candidate"}}, "notes": [], "next_note": 2,
+            "applied": {"2026-10-27T07:00+09:00": {"lessons": [[0, "gmail:label:news", "Skip digests"], [1, "*", "x"]], "votes": [[0, "n1", True]], "changes": []}}}))
         put(".desk/scout/t/runs.jsonl", json.dumps({"id": "2026-10-27T07:00+09:00", "until": "2026-10-27T07:00+09:00",
             "reads": [{"source": "gmail:label:news", "ok": True}], "items": [{"url": "https://x/1", "used": True, "value": 0, "seen_in": ["slack:A", "gmail:label:news"]}],
             "misses": [{"source": "slack:A", "url": "https://x/2"}], "feedback": [{"url": "https://x/1", "value": 0}]}) + "\n")
@@ -1056,6 +1059,7 @@ def selftest():
         reg = json.loads((ws / ".desk" / "crawl" / "t" / "sources.json").read_text())
         assert {k: v["tier"] for k, v in reg["sources"].items()} == {"slack:A": "follow", "gmail-search:label:news": "candidate", "wiki:123": "candidate"}, reg
         assert [n["id"] for n in reg["sources"]["slack:A"]["notes"]] == ["n1", "n2"] and "mode" not in reg["sources"]["slack:A"] and reg["next_note"] == 3
+        assert reg["applied"]["2026-10-27T07:00+09:00"]["lessons"] == [[0, "gmail-search:label:news", "Skip digests"], [1, "*", "x"]]  # 当てた控えの先も替える
         run = json.loads((ws / ".desk" / "crawl" / "t" / "runs.jsonl").read_text())
         assert run["items"][0] == {"url": "https://x/1", "used": True, "seen_in": ["slack:A", "gmail-search:label:news"]} and "misses" not in run and "feedback" not in run, run  # used は残す（使われた済みの印）
         assert not (ws / ".desk" / "crawl" / "t" / "plan.json").exists()
