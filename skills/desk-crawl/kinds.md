@@ -29,7 +29,7 @@ Name a new kind after the service, not after its role: a stream (a channel, a fo
 - Filter by date in the query (`after:<day before the window start>` for Slack, because `after:` excludes that day; `after:<epoch seconds> before:<epoch seconds>` for Gmail).
 - Open the thread or message of each hit before picking it; pick a Slack question only when someone who owns the product answered it.
 - Web search: most tools cannot limit results to a window. Open each hit and pick it only when the page's own date (published or updated) falls in the window; report the page, not the search result.
-- Gmail: group incident mails by their incident number and read only the latest follow-up. Skip personal notices, calendar invites, and external newsletters. Do not copy mail bodies; report the subject, the list it came to, the date, and a summary.
+- Gmail: group incident mails by their incident number and read only the latest follow-up. Skip personal notices, calendar invites, and external newsletters. Do not copy mail bodies; report the subject, the list it came to, the date, and a summary. Put the message `id` from `gmail_message_get` (not the `threadId`, because one thread holds several mails) in `ids` as `gmail:<id>`, because the link changes with the view it was opened in (`#inbox/<id>`, `#search/<query>/<id>`), and `merge` joins the same mail by this ID.
 
 ## Wiki and contact pages
 
@@ -37,7 +37,7 @@ Name a new kind after the service, not after its role: a stream (a channel, a fo
 
 ## Duplicates across sources
 
-- The same news often appears in several sources (a forward, a cross-post, a digest bot, a mail to a list, a public release note). Report it once per source you saw it in, with the same `url` when possible and the others in `urls`. `crawl.py merge` joins them by URL and keeps every source in `seen_in`, which is how the sources that only repeat others are found.
+- The same news often appears in several sources (a forward, a cross-post, a digest bot, a mail to a list, a public release note). Report it once per source you saw it in, with the same `url` when possible and the others in `urls`. `crawl.py merge` joins them by URL (mails by `ids`) and keeps every source in `seen_in`, which is how the sources that only repeat others are found.
 
 ## Finding a site's feed
 

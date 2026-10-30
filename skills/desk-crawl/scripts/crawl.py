@@ -160,7 +160,9 @@ def norm_title(t):
 
 
 def keys(item):
-    return {canon(u) for u in [item.get("url"), *item.get("urls", [])] if u}
+    """項目をまとめる鍵: URL と、子がツールから写した項目の ID（ids の gmail:<メールの ID>）。同じメールでも、見ていた所で
+    URL の # が #inbox/ID・#search/語/ID と変わるので、URL を読み解かずに ID でまとめる。"""
+    return {canon(u) for u in [item.get("url"), *item.get("urls", [])] if u} | set(item.get("ids", []))
 
 
 def refs(item):
@@ -617,6 +619,8 @@ def merge(topic, files, out):
                 for other in [*hits[1:], c]:
                     hit["seen_in"] = sorted(set(hit["seen_in"]) | set(other.get("seen_in", [])))
                     hit["urls"] = sorted((set(hit.get("urls", [])) | {other.get("url")} | set(other.get("urls", []))) - {hit.get("url"), None})
+                    if ids := sorted(set(hit.get("ids", [])) | set(other.get("ids", []))):
+                        hit["ids"] = ids
                     if other.get("origin") and not hit.get("origin"):
                         hit["origin"] = other["origin"]
                 run["items"] = [i for i in run["items"] if all(i is not h for h in hits[1:])]
@@ -690,10 +694,10 @@ def is_sid(v):
 FIELDS = {  # 回の記録（と子の返事）の欄の型。コードが読む欄は全部ここに書き、check はここだけで確かめる（欄ごとに書き足すと漏れるため）
     "reads": {"source": "sid", "name": "str", "ok": "bool", "since": "time", "until": "time", "scanned": "int", "picked": "int",
               "explore": "bool", "more": "bool", "error": "str"},
-    "items": {"url": "url", "urls": "strs", "title": "str", "public_url": "str", "seen_in": "sids", "origin": "sid", "used": "bool",
+    "items": {"url": "url", "urls": "strs", "ids": "ids", "title": "str", "public_url": "str", "seen_in": "sids", "origin": "sid", "used": "bool",
               "summary": "str", "published": "str", "dup": "str", "similar": "str", "note": "str"},
     "discovered": {"source": "sid", "name": "str", "via": "str", "created": "day", "why": "str"},
-    "misses": {"url": "url", "urls": "strs", "source": "sid", "title": "str", "why": "str"},
+    "misses": {"url": "url", "urls": "strs", "ids": "ids", "source": "sid", "title": "str", "why": "str"},
     "lessons": {"source": "sid*", "text": "text"},
     "votes": {"note": "str", "helpful": "bool"}}
 NEED = {"reads": "source", "items": "url", "discovered": "source", "misses": "url", "lessons": "text", "votes": "note"}
@@ -702,7 +706,8 @@ OK = {"sid": (is_sid, "<kind>:<ref>"), "sid*": (lambda v: v == "*" or is_sid(v),
       "bool": (lambda v: isinstance(v, bool), "true・false"), "int": (lambda v: isinstance(v, int) and not isinstance(v, bool) and v >= 0, "0 以上の整数"),
       "time": (lambda v: isinstance(v, str) and not bad_date(v), "ISO の日時"), "day": (lambda v: isinstance(v, str) and not bad_date(v, day_only=True), "YYYY-MM-DD"),
       "strs": (lambda v: isinstance(v, list) and all(isinstance(x, str) for x in v), "文字列のリスト"),
-      "sids": (lambda v: isinstance(v, list) and all(is_sid(x) for x in v), "<kind>:<ref> のリスト")}
+      "sids": (lambda v: isinstance(v, list) and all(is_sid(x) for x in v), "<kind>:<ref> のリスト"),
+      "ids": (lambda v: isinstance(v, list) and all(isinstance(x, str) and re.fullmatch(r"gmail:[\w-]+", x) for x in v), "gmail:<メールの ID> のリスト")}
 
 
 def check(run):
@@ -1178,6 +1183,22 @@ def selftest():
         q(plan, "rn", {"since": "2026-10-27T07:00+09:00", "until": "2026-10-28T07:00+09:00"})
         out = q(merge, "rn", [str(Path(d) / "cr.json")], str(Path(d) / "runr2.json"))
         assert "［使われた済み 2026-10-27］Xero" in out and "］Graph" not in out, out
+        # Gmail: 同じメールは、見ていた所で # が変わっても、子が写したメールの ID（ids）で 1 つにする。ID の違うメールは別のまま
+        g, gs = "https://mail.google.com/mail/u/0/#", ["gmail-search:label:x"]
+        q(set_, "gm", [gs[0], "tier=follow"])
+        q(plan, "gm", {"since": "2026-10-26T07:00+09:00", "until": "2026-10-27T07:00+09:00"})
+        (Path(d) / "cg.json").write_text(json.dumps({"reads": [{"source": gs[0], "ok": True}], "candidates": [
+            {"title": "A", "url": g + "inbox/X", "ids": ["gmail:X"], "seen_in": gs}, {"title": "B", "url": g + "inbox/Y", "ids": ["gmail:Y"], "seen_in": gs},
+            {"title": "A", "url": g + "search/label%3Ax/X", "ids": ["gmail:X"], "seen_in": gs}]}))
+        q(merge, "gm", [str(Path(d) / "cg.json")], str(Path(d) / "rung.json"))
+        assert [(i["title"], i.get("urls")) for i in json.loads((Path(d) / "rung.json").read_text())["items"]] == [("A", [g + "search/label%3Ax/X"]), ("B", None)]
+        (Path(d) / "dg.md").write_text(f"[A]({g}search/label%3Ax/X)\n")
+        q(record, "gm", str(Path(d) / "rung.json"), [str(Path(d) / "dg.md")])
+        assert [i["used"] for i in runs("gm")[-1]["items"]] == [True, False]
+        q(plan, "gm", {"since": "2026-10-27T07:00+09:00", "until": "2026-10-28T07:00+09:00"})  # 次の回に別の所から見えても、使われた済み
+        (Path(d) / "cg2.json").write_text(json.dumps({"reads": [{"source": gs[0], "ok": True}], "candidates": [{"title": "A", "url": g + "all/X", "ids": ["gmail:X"], "seen_in": gs}]}))
+        assert "［使われた済み 2026-10-27］A" in q(merge, "gm", [str(Path(d) / "cg2.json")], str(Path(d) / "rung2.json"))
+        assert all(check({"id": "r", "items": [{"url": "https://x", "seen_in": gs, "ids": [i]}]}) for i in ("", "gmail:", " gmail:X", "gmail: ", "gmail:X ", "https://x/y"))
         # 写す: follow の先と覚え書きを、ほかの話題に写す（成績は写さない）
         (Path(d) / "export.json").write_text(q(sources, "t", True))
         q(set_, "t2", ["--from", str(Path(d) / "export.json")])
