@@ -36,6 +36,7 @@ Return one JSON object, and nothing else:
 ```json
 {"reads": [{"source": "<id>", "name": "<name>", "ok": true, "since": "<start you used>", "until": "{until}", "scanned": 12, "picked": 2}],
  "candidates": [{"title": "<one line: what changed, for whom, conditions>", "url": "<link to the post or page>", "urls": ["<other links to the same news>"],
+                 "ids": ["gmail:<message id>"],
                  "seen_in": ["<every source id in this group where you saw it>"], "origin": "<source id of the original post, if it is outside this group>",
                  "public_url": "<public docs, blog, or release note URL, if any>", "published": "<ISO time>", "summary": "<2-3 sentences, with stage and dates in the source's words>"}],
  "discovered": [{"source": "<kind>:<ref>", "name": "<name>", "via": "forward|mention|search|thread|watch|wiki", "created": "<YYYY-MM-DD if shown>", "why": "<one line>"}],
@@ -44,6 +45,7 @@ Return one JSON object, and nothing else:
 ```
 
 - `reads`: one entry per source in your group. If a source fails (timeout, no access, tool error), set `"ok": false` and `"error"`; do not guess its content.
+- `ids`: for a mail, the message `id` that the mail tool returns (not the `threadId`), as `gmail:<id>`. Leave it out for other kinds. The same mail has a different link in each view, so `merge` joins mails by this ID, not by the link.
 - `lessons`: only new and concrete ones (a marker, a noise pattern, a pagination or tool fact). Do not restate the notes above.
 - `votes`: for a note above that clearly helped (`true`) or misled you (`false`) this time, such as a note or marker that would have made you skip an item you picked anyway. Leave out notes that did not matter.
 - Copy titles, stages, and dates in the original language of the source.
