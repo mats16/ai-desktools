@@ -41,6 +41,7 @@ RULE_TEXT = re.compile(r"skills/.+\.md$")  # 決まりと手順の文（子の�
 CHANGED_ID = re.compile(r"\[((?:ws-)?[a-z][\w-]*?-\d{3})\]")
 SKIP = shutil.ignore_patterns(".git", "docs", "tests", "sandbox", "__pycache__")  # 子に渡すプラグインの写し。docs/fixtures の「見るところ」（答えの基準）を子に見せない
 SELECT = Path(__file__).resolve().parents[1] / "prompt_select.md"
+UNATTENDED = "\n\n人のいない実行なので、確かめたいことがあっても聞かずに、依頼に書いてあることから決めて最後まで書く。決めたことは最後の返事に書く。"  # 確かめの決まり（deck-flow-003）をそのまま守って止まる子がいた（2026-10-30、GPT）
 REPLAY = ("desk-tools のスキル（deck-practices と slides-build）に従い、{folder}/{outline} の構成で、スライドを JSON のページで書き直してください。"
           "構成はもう決まっています。聞き手への確認、構成案のレビュー、代表の 3 枚のレビュー、/deck-review はせず、Google で組むことも画像を取ることもしないでください。"
           "{folder}/build/ に deck.json と各ページの JSON を書き、slides.py lint deck.json の要修正を 0 にしたところで止めてください。")
@@ -315,7 +316,8 @@ def claude_meta(out, plugin):
 def write_one(w, tmp, plugins, task, side, agent, model, timeout, homes, names):
     ws = tmp / task["id"] / names[side]  # 版の名前をパスに出さない（成果物に書かれたパスから、選ぶ役が A・B を見分けないように）
     setup_ws(w, plugins[side], ws, task)
-    out, err, end, secs = child(writer_cmd(agent, plugins[side], ws, task["prompt"], model), ws, {"CODEX_HOME": str(homes[side])} if side in homes else {}, timeout)
+    prompt = task["prompt"] + ("" if task["folder"] else UNATTENDED)  # 再演の依頼（REPLAY）は自分で確認をしないと言っている  # 書く役にだけ渡す（選ぶ役の task.md は依頼文のまま）
+    out, err, end, secs = child(writer_cmd(agent, plugins[side], ws, prompt, model), ws, {"CODEX_HOME": str(homes[side])} if side in homes else {}, timeout)
     log = f"$ 終わり方: {end}、{secs:.0f} 秒\n{out}\n--- stderr\n{err}"  # 記録に書くのは、選ぶ役が終わってから（probe）
     cost, warn = claude_meta(out, plugins[side]) if agent == "claude" else (None, "")
     want = ws / task["folder"] / "build" if task["folder"] else None
@@ -768,6 +770,14 @@ def selftest():
         assert got == ["Customers/acme/brief_202610/references.md", "Customers/acme/brief_202610/research/a.md", "Customers/acme/brief_202610/構成案.md",
                        "Customers/acme/brief_202610/構成案_v2.md", "Customers/acme/memory.md", "Customers/acme/profile.md", "themes/slides/internal.json"], got
         assert str(calls[0][1]).endswith("desk-init/scripts/init.py")
+        seen, saved = [], {k: globals()[k] for k in ("setup_ws", "child", "writer_cmd")}  # 人のいない実行の 1 文は書く役にだけ渡し、選ぶ役が読む依頼文には入れない
+        globals().update(setup_ws=lambda *a: None, writer_cmd=lambda agent, plug, ws, prompt, model: [prompt], child=lambda cmd, *a: (seen.append(cmd[0]), ("", "", "ok", 0))[1])
+        try:
+            for tk in ({"id": "fixture-02", "label": "試し 02-gantt", "prompt": "ガントを書いて", "folder": None}, t):
+                write_one(w, Path(d), {"head": Path("/p")}, tk, "head", "pi", None, 1, {}, {"head": "h"})
+        finally:
+            globals().update(saved)
+        assert seen == ["ガントを書いて" + UNATTENDED, t["prompt"]], seen
         (deck / "build" / "deck.json").unlink()
         assert stops(lambda: replay_task(w, str(deck)), "JSON のスライドだけ")
     assert SKIP(".", ["docs", "tests", "skills", ".git", "hooks"]) == {"docs", "tests", ".git"}  # 子に渡す写しに、試しの見るところとテストの期待を入れない

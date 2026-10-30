@@ -31,7 +31,7 @@ In `sandbox/`, pass the plugin with `--plugin-dir` instead of installing it.
 claude --plugin-dir ..
 ```
 
-- At startup, the `path` of the plugin in `plugins` points to the worktree, and the 17 `desk-tools:` skills load. Check with the following (it prints the worktree path and the 17 names):
+- At startup, the `path` of the plugin in `plugins` points to the worktree, and the 19 `desk-tools:` skills load. Check with the following (it prints the worktree path and the 19 names):
 
   ```sh
   claude --plugin-dir .. -p ok --model haiku --max-turns 1 --output-format stream-json --verbose 2>/dev/null \
@@ -69,9 +69,9 @@ pi                                     # the first time, save trust with /trust 
   | python3 -c "import json,os,sys; r=os.path.realpath('..'); e=next(e for e in map(json.loads, sys.stdin) if e.get('command')=='get_commands'); print(sorted(c['name'] for c in e['data']['commands'] if c.get('sourceInfo',{}).get('path','').startswith(r)))"
 ```
 
-The last command prints the 17 skills loaded from the worktree.
+The last command prints the 19 skills loaded from the worktree.
 
-- The worktree is added to `.pi/settings.json` as `../..` (relative to `.pi/`), and its 17 skills and `extensions/rules.ts` load. `pi -p` children (desk-dreaming's `run.sh pi`, review requests) read the same. Verified by starting `pi -p` in `sandbox/`: slides-build's `SKILL.md` appears with the worktree path, and reading `../skills/slides-build/visual.md` appends `sandbox/rules/slides-build/visual.md` (with the `rules/` form of 2026-10-27; the `recipes/` form is verified in "Check that recipes are appended").
+- The worktree is added to `.pi/settings.json` as `../..` (relative to `.pi/`), and its 19 skills and `extensions/rules.ts` load. `pi -p` children (desk-dreaming's `run.sh pi`, review requests) read the same. Verified by starting `pi -p` in `sandbox/`: slides-build's `SKILL.md` appears with the worktree path, and reading `../skills/slides-build/visual.md` appends `sandbox/rules/slides-build/visual.md` (with the `rules/` form of 2026-10-27; the `recipes/` form is verified in "Check that recipes are appended").
 - Save trust by opening interactive pi in `sandbox/` and running `/trust`. `pi -p` children can't ask, so do this first. A decision saved for a parent folder applies to its subfolders too: with the home folder trusted, the package loaded in `pi -p` and `--mode rpc` without `--approve`. Trusting the whole folder that holds the worktrees (`~/.t3/worktrees` for T3 Code) stops the prompts, but it also silently loads the extensions of any other repository placed there later (「project trust」 in [pi.md](pi.md)).
 - If another skill has the same name, the package's skill loses (「同じ名前のスキルがあるとき」 in [pi.md](pi.md)). Check that `sourceInfo.path` in `get_commands` points to the worktree.
 

@@ -14,7 +14,7 @@ import desk  # noqa: E402  ワークスペースの探し方
 ROOT = str(f[1]) if (f := desk.locate()) else os.getcwd()  # ワークスペース（今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace）
 AREAS = ("customers", "internal", "research", ".agents")
 RULE = re.compile(r"skills/([\w-]+/[\w./-]+\.(?:md|py|sh))|(AGENTS\.md|references_index\.md)|(?<![\w-])((?:recipes/[\w./-]+/RECIPE|rules/[\w-]+/[\w./-]+)\.md)")  # 最後はワークスペースのレシピ（recipes/ と前の版の rules/ を付けたまま数え、プラグインのファイルと分ける）
-TABLE = ("deck-practices/SKILL.md", "deck-practices/start.md", "slides-build/SKILL.md", "slides-build/pages.md", "slides-build/workflow.md", "slides-build/visual.md",
+TABLE = ("deck-practices/SKILL.md", "deck-practices/start.md", "deck-writing/SKILL.md", "deck-design/SKILL.md", "slides-build/SKILL.md", "slides-build/pages.md", "slides-build/workflow.md", "slides-build/visual.md",
          "slides-build/commands.md", "slides-build/lint.md", "deck-practices/content.md", "docs-build/SKILL.md", "docs-build/visual.md", "docs-build/lint.md",
          "deck-build/slides.md", "deck-practices/visual.md", "doc-build/SKILL.md", "deck-practices/visual_doc.md", "doc-build/docx.md", "deck-build/docx.md",
          "office-jp/slides.md", "office-jp/docx.md")  # 2026-10-07 に pptx.md から slides.md へ。office-jp は 2026-10-08 に deck-build と改名した。

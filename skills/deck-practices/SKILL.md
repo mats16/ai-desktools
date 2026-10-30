@@ -5,7 +5,7 @@ description: Read first when making or editing materials (decks and documents). 
 
 # Practices for making materials
 
-Open this first when making or editing materials. It builds on 「いい資料の考え方」 in the root `AGENTS.md` (the user's iron rules and the six things that hold for every material), and holds the workflow and the files to read in each situation. [deck-flow-001] Workspace rules (`AGENTS.md`, the recipes in `recipes/` that the hook shows, and the customer's `memory.md`) take precedence over the plugin's skills. When they conflict, follow the workspace. Points the user has not decided yet are marked 「要判断」 in each file.
+Open this first when making or editing materials, and open `../deck-writing/SKILL.md` (the brief and the axes for content and wording) and `../deck-design/SKILL.md` (the axes for how pages look) right after it. They decide what the rules leave open. This file builds on them and on 「いい資料の考え方」 in the root `AGENTS.md`, and holds the workflow and the files to read in each situation. [deck-flow-001] Workspace rules (`AGENTS.md`, the recipes in `recipes/` that the hook shows, and the customer's `memory.md`) take precedence over the plugin's skills. When they conflict, follow the workspace. Points the user has not decided yet are marked 「要判断」 in each file.
 
 ## Overall flow
 
@@ -64,7 +64,7 @@ Do not wait for skills to be called automatically; open the following file when 
 
 | Situation | File to open |
 |---|---|
-| Making or editing a material (first) | `deck-practices/SKILL.md` (this file) |
+| Making or editing a material (first) | `deck-practices/SKILL.md` (this file), then `deck-writing/SKILL.md` and `deck-design/SKILL.md` |
 | Creating or refreshing a customer profile | `customer-profile/SKILL.md` (business, organization, technical setup, engineers' preferences; how it differs from memory) |
 | Gathering sources | `deck-practices/materials.md` (how to use search, meeting records, and internal chat; the `references.md` ledger) |
 | Reusing pages of internal decks | `slides-build/reuse.md` (deciding among the four stages, exporting Google Slides and page images) |

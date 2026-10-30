@@ -62,8 +62,8 @@ cd <ワークスペース> && (printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"
 
 | フォルダ | 出たスキル | hook |
 |---|---|---|
-| ワークスペース（信頼した） | `desk-tools:` の 17 個 | `sed -n 1,3p ../skills/slides-build/visual.md` のあとと、`$desk-tools:desk-doctor` で呼んだときに、ワークスペースの決まりの目印が差し込まれた（2026-10-27 の `rules/` の形で） |
-| ワークスペースのサブフォルダ | 17 個（親の `.codex/config.toml` も読まれる） | |
+| ワークスペース（信頼した） | `desk-tools:` の 19 個 | `sed -n 1,3p ../skills/slides-build/visual.md` のあとと、`$desk-tools:desk-doctor` で呼んだときに、ワークスペースの決まりの目印が差し込まれた（2026-10-27 の `rules/` の形で） |
+| ワークスペースのサブフォルダ | 19 個（親の `.codex/config.toml` も読まれる） | |
 | `/tmp` | 0 | |
 
 ## ワークスペースを作る

@@ -25,7 +25,7 @@ STEPS = ("gather", "build")  # frontmatter の step の値。書かなければ�
 TRIGGERS = {  # プラグインのファイル（<スキル>/<ファイル>）→ そのファイルを開いたときに出すレシピの種類。make は step のないもの（資料を作るどの作業でも）
     "gather": ("deck-practices/materials.md", "deck-practices/start.md", "customer-profile/*", "desk-crawl/*", "deck-research/*"),
     "build": ("slides-build/*", "docs-build/*", "vids-build/*", "vids-voice/*", "slides-template/*"),
-    "make": ("deck-practices/*", "slides-build/*", "docs-build/*", "deck-review/*", "deck-comments/*", "vids-build/*", "vids-voice/*", "slides-template/*")}
+    "make": ("deck-practices/*", "deck-writing/*", "deck-design/*", "slides-build/*", "docs-build/*", "deck-review/*", "deck-comments/*", "vids-build/*", "vids-voice/*", "slides-template/*")}
 
 
 def loads(text, where):
