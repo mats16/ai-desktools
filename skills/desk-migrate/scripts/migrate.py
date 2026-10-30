@@ -55,7 +55,8 @@ SPLIT = {  # 中身を場面ごとに分けたプラグインのファイル。�
     "desk-dreaming/run.md": "desk-dreaming/run.md・prompt_propose.md（4 の a〜d の案の出し方。2026-10-25）",
     "slides-template/SKILL.md": "slides-template/SKILL.md・create.md・dark.md・fonts.md",
     "vids-build/SKILL.md": "vids-build/SKILL.md・avatars.md",
-    "deck-practices/content.md": "deck-practices/content.md・content_customer.md・content_internal.md・content_explain.md（§1 の資料の種類ごとの決まり）"}
+    "deck-practices/content.md": "deck-practices/content.md・content_customer.md・content_internal.md・content_explain.md（§1 の資料の種類ごとの決まり）、deck-writing/SKILL.md（§0 のどの資料でも同じこと。2026-10-30）",
+    "slides-build/visual.md": "slides-build/visual.md、deck-design/SKILL.md（§3・§4 の色と形のベストプラクティスと、§6 の slides-visual-048・049。2026-10-30）"}
 B = "A-Za-z0-9_-"  # ID とスキルの名前の前後の区切り（和文は続けて書いてもよいので、英数字だけを見る）
 DREAMING = re.compile(rf"(?<![{B}])(?<!\.desk/)dreaming(?![{B}])(?!/(?:last_run|log|backup)\b)")  # 2026-10-25 より前のスキルの名前。記録のフォルダ .desk/dreaming/（中の last_run・log・backup）は替えない
 PATHS = [  # 本文の中のパスとスキルの名前（決まりの ID は先に替えるので、deck-build-005 などはもう残っていない）

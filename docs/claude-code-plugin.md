@@ -45,7 +45,7 @@ for d in <ワークスペース> /tmp; do
   (cd $d && claude plugin list --json) | python3 -c "import json,sys; [print(p['id'], p['scope'], p['enabled']) for p in json.load(sys.stdin) if p['id']=='desk-tools@desk-tools']"
 done
 
-# 会話に読み込まれるスキル: ワークスペースでは desk-tools:* の 17 個、ほかのフォルダでは 0
+# 会話に読み込まれるスキル: ワークスペースでは desk-tools:* の 19 個、ほかのフォルダでは 0
 cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-format stream-json --verbose \
   | python3 -c "import json,sys; e=next(e for e in map(json.loads, sys.stdin) if e.get('subtype')=='init'); print(sorted(s for s in e['skills'] if s.startswith('desk-tools:')))"
 ```
@@ -54,7 +54,7 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 
 | フォルダ | `plugin list` の enabled | 読み込まれたスキル |
 |---|---|---|
-| `~/adf-plugin-test`（入れたフォルダ） | true | `desk-tools:` の 17 個（customer-profile、deck-comments、deck-practices、deck-research、deck-review、docs-build、desk-crawl、desk-dreaming、desk-doctor、desk-init、desk-kaizen、desk-migrate、desk-recipes、slides-build、slides-template、vids-build、vids-voice） |
+| `~/adf-plugin-test`（入れたフォルダ） | true | `desk-tools:` の 19 個（customer-profile、deck-comments、deck-design、deck-practices、deck-research、deck-review、deck-writing、docs-build、desk-crawl、desk-dreaming、desk-doctor、desk-init、desk-kaizen、desk-migrate、desk-recipes、slides-build、slides-template、vids-build、vids-voice） |
 | `~/Documents` | false | `.agents/skills` の 6 つ（`desk-tools:` が付かない。プラグインのものではない） |
 | `/tmp` | false | なし |
 | `~/adf-plugin-test/Internal`（入れたフォルダのサブフォルダ） | false | なし |

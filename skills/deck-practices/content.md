@@ -1,6 +1,6 @@
 # Content: the outline and writing one page
 
-Read this before writing the outline. §0 covers what is the same for every material (the user's iron rule and six principles; a detailed version of 「いい資料の考え方」 in AGENTS.md). §1 onward covers what differs by material type, in forms you can check while making the material. It also applies to documents (Google Docs). The look of documents is in `../docs-build/visual.md`.
+Read this before writing the outline. What is the same for every material (the brief, the user's iron rule, the six principles, and the other writing axes) is in `../deck-writing/SKILL.md`; read it first. §1 onward covers what differs by material type, in forms you can check while making the material. It also applies to documents (Google Docs). The look of documents is in `../docs-build/visual.md`.
 
 ## Contents
 
@@ -16,14 +16,7 @@ Read this before writing the outline. §0 covers what is the same for every mate
 
 ## 0. Same for every material
 
-鉄則は「営業色を出さずに、お客様の目線で情報を整理するところから入る。課題や問題意識について目線をそろえることは、提案の中身より重要」。これを、作りながら確かめられる形に直したのがこの節。顧客向けの提案だけでなく、社内向けの資料にも、顧客も来るコミュニティ向けの技術資料にも当てはめる。AGENTS.md の「いい資料の考え方」は、この節の要点（どの会話でも見えるように、そちらにも置いてある）。
-
-1. **主役は聞き手。** 聞き手の状況と問いから始め、自社や機能の紹介から始めない。見出しの主語は、聞き手の業務・データ・判断・つまずきにする。製品は、問いに答える手段としてあとで出す。
-2. **問いを先にそろえる。** 中身に入る前に、なぜこの話なのか、何が問題なのかを聞き手と共有する。問いは聞き手が実際に持っているものを拾い、出典を控える（顧客なら会議の記録と社内のチャット、社内ならチャットに来る質問、コミュニティなら GitHub の Issue やよくある質問、自分たちで試した経験）。こちらの見立てには「仮説」と書く。聞き手が言っていないことを、言ったように書かない。
-3. **課題は影響まで書く。煽らない。** 「何に困っているか」だけでなく、それで何が起きるか（時間、コスト、リスク、逃す機会）まで書く。変える価値があるかどうかは、影響を見て決まる。数字は出典のあるものだけを使う。「このままでは〜」「乗り遅れる」のように不安をあおる言い方はしない。決めかねている相手には逆効果になる。
-4. **聞き手の見方をなぞるだけにしない。** 聞き手の目線に立つことは、聞き手の言い分を繰り返すことではない。聞き手がまだ持っていない見方（論点の整理、比べ方、見落としやすいリスク）を足すのが SA の仕事。ただし、その見方が特定の製品でしか答えられない形になってはいけない。
-5. **公平に書く。** 他社の製品や OSS、今の仕組みでできることは、できると書く。重なるところは重なると言う。自社の製品の向かないところや、プレビューのところも書く。問いと課題を整理したページは、結論が自社の製品にならなかったとしても聞き手の役に立つ内容にする。売るための前振りに見えたら逆効果。
-6. **見解ははっきり言う。** 選択肢を並べて終わらせない。推奨か使い分け（「〜なら A、〜なら B」）を、理由と一緒に書く。比べる軸と選択肢は絞る（情報を増やすより、判断を整理する手伝いのほうが役に立つ）。
+Moved to `../deck-writing/SKILL.md` ("The brief" and deck-writing-004), so that the maker and the reviewer read the same axes.
 
 ## 1. What changes by material type
 
