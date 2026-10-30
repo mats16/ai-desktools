@@ -106,9 +106,10 @@ def write_json(p, data):
 
 
 def no_null(v):
-    """JSON の null の欄を外す。子は書かない欄を null で返すことがあり、読む側の .get(欄, 既定) は null を既定にしないため（記録には null を入れない）。"""
+    """JSON の null と空の文字列の欄を外す。子は書かない欄を null や ""（created・origin・public_url など）で返すことがあり、
+    読む側の .get(欄, 既定) は null を既定にせず、形の確かめは "" を日付として止めるため（記録には null も "" も入れない）。"""
     if isinstance(v, dict):
-        return {k: no_null(x) for k, x in v.items() if x is not None}
+        return {k: no_null(x) for k, x in v.items() if x is not None and x != ""}
     return [no_null(x) for x in v] if isinstance(v, list) else v
 
 
@@ -141,14 +142,17 @@ def kind(sid):
 
 
 def canon(url):
-    """同じ項目の URL を 1 つにそろえる。追跡の引数・#・末尾の / を外し、ホストを小文字にする（Slack の thread_ts などほかの引数は残す）。"""
+    """同じ項目の URL を 1 つにそろえる。追跡の引数・末尾の / を外し、ホストを小文字にする（Slack の thread_ts などほかの引数は残す）。
+    # は、リリースノートのように 1 つのページに並ぶ項目を分けるので残す。外すのは Slack と、項目を指さないもの（#top・#content・#:~:text=）だけ。"""
     try:
         p = urllib.parse.urlsplit(url.strip())
     except ValueError:  # 子の返事やフィードの壊れた URL（http://[::1 など）1 つで、まとめ全体を止めない
         return url.strip()
     slack = p.netloc.lower().endswith(".slack.com")  # Slack のリンクの cid（チャンネル）はパスと同じなので外す
     q = [(k, v) for k, v in urllib.parse.parse_qsl(p.query, keep_blank_values=True) if not TRACKING.match(k) and not (slack and k == "cid")]
-    return urllib.parse.urlunsplit((p.scheme.lower(), p.netloc.lower(), p.path.rstrip("/") or "/", urllib.parse.urlencode(sorted(q)), ""))
+    frag = p.fragment.split(":~:")[0]  # :~:text= は開いたときに語を光らせるだけ（#見出し:~:text= なら見出しを残す）
+    frag = "" if slack or frag in ("top", "content") else frag
+    return urllib.parse.urlunsplit((p.scheme.lower(), p.netloc.lower(), p.path.rstrip("/") or "/", urllib.parse.urlencode(sorted(q)), frag))
 
 
 def norm_title(t):
@@ -959,6 +963,9 @@ def selftest():
     import tempfile
     global ROOT
     assert canon("https://Ex.com/a/?utm_source=x&b=2#top") == "https://ex.com/a?b=2"
+    assert canon("https://ex.com/rn#a") != canon("https://ex.com/rn#b") and canon("https://ex.com/rn#a:~:text=x") == "https://ex.com/rn#a"
+    assert canon("https://ex.com/a#:~:text=foo") == canon("https://ex.com/a#content") == "https://ex.com/a" and canon("https://x.slack.com/a#b") == "https://x.slack.com/a"
+    assert no_null({"a": "", "b": {"c": "", "d": 0, "e": False, "f": []}, "g": [""]}) == {"b": {"d": 0, "e": False, "f": []}, "g": [""]}
     assert canon("https://x.slack.com/archives/C1/p2?thread_ts=1.2") == "https://x.slack.com/archives/C1/p2?thread_ts=1.2"
     run = {"id": "r", "items": [{"url": "https://a", "used": True, "seen_in": ["s:1"]},
                                 {"url": "https://b", "used": True, "seen_in": ["s:1", "s:2"]}, {"url": "https://c", "seen_in": ["s:3"]}],
@@ -1156,6 +1163,21 @@ def selftest():
         q(record, "pub", str(Path(d) / "runp2.json"), [str(Path(d) / "dp2.md")])
         q(record, "pub", str(Path(d) / "runp2.json"))  # 出力なしで記録し直しても、共にする public_url で B を使われたにしない
         assert [i["used"] for i in runs("pub")[-1]["items"]] == [True, False], runs("pub")[-1]["items"]
+        # 1 つのページに並ぶ項目（リリースノート）: # の違う URL は別の項目のまま。使われた済みは、使った項目だけに付く。子が "" で返した欄は外す
+        q(set_, "rn", ["slack:R", "tier=follow"])
+        q(plan, "rn", {"since": "2026-10-26T07:00+09:00", "until": "2026-10-27T07:00+09:00"})
+        (Path(d) / "cr.json").write_text(json.dumps({"reads": [{"source": "slack:R", "ok": True}], "candidates": [
+            {"title": "Xero", "url": "https://docs.example.com/rn/october#xero", "origin": "", "seen_in": ["slack:R"]},
+            {"title": "Graph", "url": "https://docs.example.com/rn/october#graph", "public_url": "", "seen_in": ["slack:R"]}],
+            "discovered": [{"source": "slack:S", "created": "", "why": "x"}]}))
+        q(merge, "rn", [str(Path(d) / "cr.json")], str(Path(d) / "runr.json"))
+        assert [i["title"] for i in json.loads((Path(d) / "runr.json").read_text())["items"]] == ["Xero", "Graph"]
+        (Path(d) / "dr.md").write_text("[Xero](https://docs.example.com/rn/october#xero)\n")
+        q(record, "rn", str(Path(d) / "runr.json"), [str(Path(d) / "dr.md")])
+        assert [i["used"] for i in runs("rn")[-1]["items"]] == [True, False]
+        q(plan, "rn", {"since": "2026-10-27T07:00+09:00", "until": "2026-10-28T07:00+09:00"})
+        out = q(merge, "rn", [str(Path(d) / "cr.json")], str(Path(d) / "runr2.json"))
+        assert "［使われた済み 2026-10-27］Xero" in out and "］Graph" not in out, out
         # 写す: follow の先と覚え書きを、ほかの話題に写す（成績は写さない）
         (Path(d) / "export.json").write_text(q(sources, "t", True))
         q(set_, "t2", ["--from", str(Path(d) / "export.json")])
