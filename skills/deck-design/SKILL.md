@@ -43,4 +43,4 @@ This file gives knowledge, not recipes. Decide each page from the principles and
 ## How to use this file
 
 - **Maker (parent and page-writing children):** before choosing a page's form, write its one sentence and think of more than one way to show it (principle 1). Before handing the page back, look at it as a first-time reader would, for about three seconds (principle 6).
-- **Reviewer:** judge each page by the principles. When a page's point does not come across at a glance because of one of the practices above, return 「直す」 with that practice's ID (such as deck-design-002) in the rule column and the fix you would make. When it reads well despite a practice, leave it; when you are unsure, return 「聞く」.
+- **Reviewer:** judge each page by the principles. When a page's point does not come across at a glance because of one of the practices above, return 「直す」 with the fix you would make, ending with that practice's ID (such as 「（deck-design-002）」); the parent moves it to the 「決まり」 column. When it reads well despite a practice, leave it; when you are unsure, return 「聞く」.

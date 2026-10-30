@@ -36,4 +36,4 @@ This file decides what the reader must grasp, which relationships must be seen, 
 ## How to use the axes
 
 - **Maker (parent and page-writing children):** before writing a page, write the one sentence it says and what the reader must grasp first (axis 1). Before handing it back, read it as a first-time reader of the stated audience.
-- **Reviewer:** judge every aspect in the review request by the axes here and in deck-design, starting with axis 1, because it is what the user corrects most and reviewers flag least. When a finding comes from an axis rather than a rule, put the axis ID (such as deck-writing-002) in the rule column.
+- **Reviewer:** judge every aspect in the review request by the axes here and in deck-design, starting with axis 1, because it is what the user corrects most and reviewers flag least. When a finding comes from an axis rather than a rule, end the proposed fix with the axis ID (such as 「（deck-writing-002）」); the parent moves it to the 「決まり」 column.
