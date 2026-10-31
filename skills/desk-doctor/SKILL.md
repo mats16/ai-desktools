@@ -1,6 +1,6 @@
 ---
 name: desk-doctor
-description: Check the prerequisites for running AI Desk Tools. Looks at Python and uv, which settings file and workspace are used (desk.toml in the workspace, or ~/.desk.toml), AGENTS.md, overlapping skills, Google authentication (a token in an environment variable or a credentials JSON), whether templates and Drive folders are reachable, and the MCP servers for gathering material, and prints how to fix each problem. Use after desk-init, in a new environment, on 401 or 403, when 「desk.toml が見つからない」 appears, or when asked 「環境を確かめて」 or 「doctor して」.
+description: Check the prerequisites for running AI Desk Tools. Looks at Python and uv, which settings file and workspace are used (desk.toml in the workspace, or ~/.desk.toml), an AGENTS.md left from the old template, overlapping skills, Google authentication (a token in an environment variable or a credentials JSON), whether templates and Drive folders are reachable, and the MCP servers for gathering material, and prints how to fix each problem. Use after desk-init, in a new environment, on 401 or 403, when 「desk.toml が見つからない」 appears, or when asked 「環境を確かめて」 or 「doctor して」.
 ---
 
 # Check the prerequisites
@@ -18,7 +18,8 @@ Prints one item per line as 「OK」, 「要修正」, or 「要確認」. Exits
 | Item | What to do on `要修正` or `要確認` |
 |---|---|
 | Python 3.11 or later, uv | Install them. Without uv, the image measurements (`box_pad.py`, `doc_layout.py`, `sheet.py`) and lint's phrase-break check (BudouX) do not run |
-| `desk.toml`, `AGENTS.md` (`CLAUDE.md`, `references_index.md`, `drive_folders.md`) | Place them with desk-init (a hand-written `references_index.md` from before 2026-10-29 is split by desk-migrate) |
+| `desk.toml` (`references_index.md`, `drive_folders.md`) | Place them with desk-init (a hand-written `references_index.md` from before 2026-10-29 is split by desk-migrate) |
+| 「前の雛形の AGENTS.md」 | `AGENTS.md` looks like the copy that desk-init placed until 2026-10-31 (more than half of the template's section headings are still there, even if the title was changed). The plugin no longer routes rules to it, but agents still load it into every conversation, so its rules apply to work they were not written for. Move it with the user as "Move an AGENTS.md from the old template" in desk-migrate says. A file the owner wrote, and the template's `CLAUDE.md`, are not reported |
 | 「設定」, 「ワークスペース」 | Always `OK`: the settings file and the workspace in use. The first `desk.toml` found walking up from the current folder, else `~/.desk.toml` (the path in `DESK_CONFIG` if set) and its `workspace` |
 | 「個人の設定」 | `~/.desk.toml` cannot be read, has no `workspace`, or its folder does not exist. Fix the file. `要修正` when this workspace uses it; `要確認` when this workspace has its own `desk.toml` (conversations opened in other folders stop) |
 | 「設定が 2 つ」 | The workspace in `~/.desk.toml`, or a folder above it, has `desk.toml`, so conversations read different settings inside and outside it. Ask the user which to keep: merge the values into `~/.desk.toml` and move that `desk.toml` to `.desk/migrate/` (step 2 of "Move the settings to `~/.desk.toml`" in `../desk-migrate/SKILL.md`; `to-user` refuses because `~/.desk.toml` exists), or delete `~/.desk.toml` |
@@ -30,7 +31,7 @@ Prints one item per line as 「OK」, 「要修正」, or 「要確認」. Exits
 | `slides.themes` (the format of an earlier version) | Move the theme table to the workspace's `themes/slides/<name>.json` (`kind: theme`; write the colors under `colors` with the same names, and do not write `url`), move `url` to 「<名前> = "<url>"」 in `[slides.templates]`, and delete the table. Names that have a template can also be copied with `slides.py theme <url>` (templates from before 2026-10-16 lack the colors not stored in the theme, `copyright`, `mono`, and `description`, so copy those from the table). Before moving, ask the user where to keep the history left in the table's comments (JSON cannot hold comments) |
 | `themes/slides/<name>.json`, theme files, `slides.default_theme` | For invalid values, fix the reported location and check with `slides.py lint <file>`. For a theme that has a template but no file, copy it with `slides.py theme <URL>` |
 | Theme descriptions | A theme without `description` cannot be chosen per material by the agent. Write what the theme is and which materials and audience it is for (`slides-build` → themes) |
-| `review.*`, the plan review and post-delivery fixes in AGENTS.md | Fix `review.*` to values within the template's range (`"ai"`, `"human"`, 1 to 3). If AGENTS.md still contains the earlier template's 「人がレビューするかも選んでもらう」 or 「ユーザーに返す前に、スキル `deck-review` で全体をレビューする」, show it to the user and then replace it with the current template text (follow `[review] plan_reviewer`; newly created materials use `deck-review`, and after delivery use `deck-workflow` → requests after delivery) (it is a workspace rule, so do not change it silently) |
+| `review.*` | Fix `review.*` to values within the template's range (`"ai"`, `"human"`, 1 to 3) |
 | Google authentication | Have the user run the printed command (`gcloud auth application-default login --scopes=…`). How to get a token is in the comments of `[google]` in `desk.toml` |
 | Templates and Drive folders | Anything that cannot be opened has a wrong URL or is not shared. Ask the owner to share it, or fix the URL |
 

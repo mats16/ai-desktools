@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """決まりの台帳。修正の指示（指摘）、決まりの変更の提案・適用・却下、判断待ち、レビューの結果、ワークスペースの決まりのファイルの版を、ワークスペースの .desk/ledger.jsonl に 1 件 1 行で足していく。
 プラグインの決まりの本文には ID（slides-visual-<番号> を角括弧で囲む。接頭辞は何についての決まりか〔TOPICS〕で、置き場所が変わっても変えない）と短い理由だけを書き、日付・原文・どの資料か・ユーザーが決めたかは、ここに ID でつなぐ。
-ワークスペースの決まり（AGENTS.md・recipes/ のレシピ・顧客の memory.md）には ID を書かない。指摘はファイルにつなぎ、ファイルが変わるたびに版（P-ID。前と後の全文と、取り込んだ指摘）を残す。
+ワークスペースの決まり（recipes/ のレシピ・顧客の memory.md）には ID を書かない。指摘はファイルにつなぎ、ファイルが変わるたびに版（P-ID。前と後の全文と、取り込んだ指摘）を残す。
 決まりの置き場所と戻し方は ../skills/desk-feedback/routing.md。ワークスペース（探し方は desk.py）で回す。標準ライブラリだけ。
 usage:
   ledger.py add --deck <資料のフォルダ> --quote <ユーザーの言葉> [--fix <直した箇所>] [--to <決まりの ID・ファイル・未・戻さない>] [--check lint|レビュー|なし] [--session <会話 ID>] [--at <言われた時刻（UTC）>] [--decided] [--plan AI|人] [--scope 資料|顧客|環境|知見] [--once]
@@ -42,7 +42,7 @@ usage:
   ledger.py review --deck <資料のフォルダ> --table <指摘の表のファイル>   deck-review の指摘の表から、決まりの列のある行の結果を取り込む（同じ行は 2 度数えず、ラウンドをまたぐ同じ行はあとのラウンドの結果）
   ledger.py --selftest
 台帳の原文には顧客のことが入る。.desk/ から外（Issue・チャット）に写さない。
-add と review は、そのときのハーネス（プラグインと、ワークスペースの AGENTS.md・recipes/）の指紋も残す。指紋ごとの決まりの文の控えは .desk/harness/<指紋>.json（effects が読む）。
+add と review は、そのときのハーネス（プラグインと、ワークスペースの recipes/）の指紋も残す。指紋ごとの決まりの文の控えは .desk/harness/<指紋>.json（effects が読む）。
 desk-migrate がワークスペースの決まりの ID を外したときの、ID → ファイルの対応は migrated の記録に残し、前の記録の ID はそのファイルとして読む（台帳の前の行は書き換えない）。"""
 import argparse, difflib, fnmatch, hashlib, json, os, re, sys, tempfile, time
 from collections import Counter
@@ -81,7 +81,6 @@ TOPICS = {  # 決まりの ID の主題（何についての決まりか）。ID
     "vids-voice": "動画の読み上げの台本（スピーカーノート）", "vids-voice-ja": "日本語の読み上げの台本", "vids-voice-en": "英語の読み上げの台本",
     "vids-video": "動画を作る・差し替える", "desk-dreaming": "定期の整理", "desk-crawl": "定期の集めで、どの先をいつ読むかを決め、学ぶ"}
 PLAN_RULE = "deck-flow-004"  # 構成案の AI レビューの頼み方。これを見直すかの判断待ちに答えたら、構成の見逃しをその答えのあとから数え直す
-AGENTS_MAX = 20000  # ワークスペースの AGENTS.md のバイト数の上限（desk-dreaming/run.md の 4h。Codex は 32 KiB で切り、Claude Code は毎回すべて読む）
 HARNESS = ("skills", "lib", "hooks", "extensions")  # 指紋に入れるプラグインのフォルダ（リポジトリの根元から）
 OVERRIDE = re.compile(r"[（(]([^（）()\n]*?)\s*より優先")  # ワークスペースの決まりの「…（slides-visual-012 より優先）」。括弧の中の ID を全部取る
 PLUGIN_ID = re.compile(r"(?<![\w-])(?!ws-)[a-z][\w-]*?-\d{3}")
@@ -104,8 +103,16 @@ def records(ws):
     return [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()] if p.exists() else []
 
 
-def write(ws, rec, number=None):
-    """1 行足す。number=("correction", "c-", 4) なら、鍵をかけたまま次の番号を rec["id"] にする（同時に書く会話で番号が重ならないように）。"""
+LINKS = {"correction": "to", "route": "to", "review": "rule", "question": "rule"}  # 指摘・レビューの行・判断待ちを決まりにつなぐ欄
+
+
+def write(ws, rec, number=None, restore=False):
+    """1 行足す。number=("correction", "c-", 4) なら、鍵をかけたまま次の番号を rec["id"] にする（同時に書く会話で番号が重ならないように）。
+    持ち主の AGENTS.md・CLAUDE.md（owner_file）につなぐ行（LINKS の欄）と、--src のある AGENTS.md・CLAUDE.md への提案は書かない。add・route・提案・review・ask は、どれもここを通る。
+    restore は、提案を戻して、指摘を前の戻し先に戻すとき（2026-10-31 より前に AGENTS.md につないだ指摘も、記録のとおり戻す）。"""
+    field = LINKS.get(rec.get("kind"))
+    if not restore and (field and owner_file(rec.get(field, ""), ws) or rec.get("kind") == "proposal" and rec.get("src") and owner_file(rec.get("file", ""), ws)):
+        sys.exit(f"{rec.get(field) if field else rec['file']} {OWNER}" + ("（--src を付けた提案は、当てると指摘がそこにつながる）" if not field else ""))
     p = path(ws)
     p.parent.mkdir(parents=True, exist_ok=True)
     rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **rec}
@@ -162,12 +169,33 @@ def linked(to, ws=None):
     return bool(re.fullmatch(ID, to) or to in NO_RULE or one and not re.search(rf"(?<![\w-]){ANY_ID}(?![\w-])", path.group(2) or ""))
 
 
+OWNER = "は持ち主のファイルで、プラグインは決まりを戻さない。資料づくりの決まりは recipes/<名前>/RECIPE.md に戻す（desk-feedback/routing.md の「Workspace rules」）"
+
+
+def owner_file(f, ws=None):
+    """ワークスペースの直下の AGENTS.md・CLAUDE.md か。指摘の戻し先にしない。recipes/../AGENTS.md・絶対パスも同じファイルとして見る。
+    大文字と小文字は見ない（macOS では同じファイル）。
+    shortcut: 書き方だけを見る。リンクでワークスペースの外を指す AGENTS.md・前後の空白・前の版の ID の読み替え（migrated）は見ない。スキルはもうそこへ戻さないので、変な書き方で戻す道が実際に出たら、ファイルの同一性（os.path.samefile）で比べる"""
+    p = Path(key(f))
+    if p.is_absolute():
+        if not ws:
+            return False
+        try:
+            p = p.resolve().relative_to(Path(ws).resolve())
+        except ValueError:  # ワークスペースの外
+            return False
+    p = Path(os.path.normpath(p))
+    return len(p.parts) == 1 and p.name.lower() in ("agents.md", "claude.md")
+
+
 def to_arg(s):
-    """add と route の --to。決まりに結び付かない書き方は止める。"""
+    """add と route の --to。決まりに結び付かない書き方と、持ち主のファイルは止める。"""
+    if owner_file(s, (f := desk.locate()) and f[1]):
+        raise argparse.ArgumentTypeError(f"{s} {OWNER}")
     if linked(s, (f := desk.locate()) and f[1]):
         return s
     raise argparse.ArgumentTypeError(f"戻し先はプラグインの決まりの ID・ファイル・未・戻さない のどれか 1 つ: {s}（ワークスペースの決まりは ID でなく、そのファイル〔recipes/<名前>/RECIPE.md・"
-                                     "AGENTS.md・Customers/<顧客>/memory.md〕にする。ID とファイルを並べると決まりに結び付かない。"
+                                     "Customers/<顧客>/memory.md〕にする。ID とファイルを並べると決まりに結び付かない。"
                                      "点検に下ろした決まりも、その決まりの ID かファイルにする。その資料だけの直しは 戻さない にし、理由は --fix に書く）")
 
 
@@ -177,17 +205,18 @@ def key(to):
 
 
 def rule_file(f):
-    """台帳が版を残すワークスペースの決まりのファイルか（AGENTS.md、recipes/ の RECIPE.md と checks.py〔テンプレートの templates/ の下は除く〕、顧客の memory.md）。
-    前の版の rules/ の .md と .py（README.md を除く）も、desk-migrate で移すまで同じに扱う（台帳の前の記録と、移す前のワークスペース）。"""
+    """台帳が版を残すワークスペースの決まりのファイルか（recipes/ の RECIPE.md と checks.py〔テンプレートの templates/ の下は除く〕、顧客の memory.md）。
+    前の版の rules/ の .md と .py（README.md を除く）も、desk-migrate で移すまで同じに扱う（台帳の前の記録と、移す前のワークスペース）。
+    AGENTS.md は、2026-10-31 までの雛形の写しでも決まりのファイルにしない（版を残さず、戻し先にもしない。前に戻した指摘は記録として残る）。"""
     p = Path(f)
-    return (f == "AGENTS.md" or len(p.parts) == 3 and p.parts[0] == "Customers" and p.name == "memory.md"
+    return (len(p.parts) == 3 and p.parts[0] == "Customers" and p.name == "memory.md"
             or p.parts[:1] == (desk.RECIPES,) and p.name in (desk.RECIPE, "checks.py") and "templates" not in p.parts[2:]
             or p.parts[:1] == ("rules",) and p.suffix in (".md", ".py") and p.name != "README.md" and "templates" not in p.parts)
 
 
 def rule_files(ws):
     """今あるワークスペースの決まりのファイル（ワークスペースからのパス）。"""
-    fs = [ws / "AGENTS.md", *(ws / desk.RECIPES).rglob("*"), *(ws / "rules").rglob("*"), *(ws / "Customers").glob("*/memory.md")]
+    fs = [*(ws / desk.RECIPES).rglob("*"), *(ws / "rules").rglob("*"), *(ws / "Customers").glob("*/memory.md")]
     return sorted(r for f in fs if f.is_file() and rule_file(r := f.relative_to(ws).as_posix()))
 
 
@@ -195,7 +224,7 @@ def ws_rules_arg(s):
     """--replaces はワークスペースの決まりのファイルを , でつないだもの。"""
     fs = [key(x) for x in s.split(",") if x]
     if not fs or not all(map(rule_file, fs)):
-        raise argparse.ArgumentTypeError(f"ワークスペースの決まりのファイルを , でつなぐ（recipes/visual/RECIPE.md,AGENTS.md など）: {s}")
+        raise argparse.ArgumentTypeError(f"ワークスペースの決まりのファイルを , でつなぐ（recipes/visual/RECIPE.md,recipes/cxo/RECIPE.md など）: {s}")
     return fs
 
 
@@ -665,9 +694,9 @@ def items(text):
 
 
 def auto_ok(ws, a):
-    """--auto で当ててよいか。会話の指摘を出典にせず、AGENTS.md・recipes/ の RECIPE.md で、箇条書きの項目を丸ごと（字下げした続きの行も）消すだけで
-    （見出し・前置き・空行・ほかの項目の一部は 1 行も消さない）、消す項目と丸ごと同じ項目が、そのファイルが出るどの場面にも残るもの。残るのは、AGENTS.md（どの会話にも出る）にあるか、
-    そのレシピを出すプラグインの md（step の作業のファイル。desk.TRIGGERS）の、どれにもあるとき（どれかを開くたびに出るので、1 つにあるだけでは、ほかの場面で失われる。資料ごとに選ぶレシピと AGENTS.md から消すときは、残る先がない）。
+    """--auto で当ててよいか。会話の指摘を出典にせず、recipes/ の RECIPE.md で、箇条書きの項目を丸ごと（字下げした続きの行も）消すだけで
+    （見出し・前置き・空行・ほかの項目の一部は 1 行も消さない）、消す項目と丸ごと同じ項目が、そのファイルが出るどの場面にも残るもの。残るのは、
+    そのレシピを出すプラグインの md（step の作業のファイル。desk.TRIGGERS）の、どれにもあるとき（どれかを開くたびに出るので、1 つにあるだけでは、ほかの場面で失われる。資料ごとに選ぶレシピから消すときは、残る先がない）。
     文の中の引用（「次は使わない：『…』」）、コードの囲みの中の例、出る場面の違うファイルは数えない。
     ユーザーが決めた指摘・答えた判断待ち・「手で直した」版・「組み直し」の版・まだ版にしていない直しのあるファイルは止める（ID がないので、どの項目かを見分けられない）。
     ユーザーが戻した・却下した提案が消そうとした項目も止める。人を通さずに新しい文が決まりに入らないようにする（desk-dreaming-001）。
@@ -682,7 +711,7 @@ def auto_ok(ws, a):
     "ユーザーが決めた" in a.old and no("ユーザーが決めたと書いた文")
     f = target(ws, a.file)
     name = f.relative_to(ws).as_posix()
-    name == "AGENTS.md" or f.is_relative_to(ws / desk.RECIPES) and f.name == desk.RECIPE or no("変更先が AGENTS.md・recipes/ の RECIPE.md でない")
+    f.is_relative_to(ws / desk.RECIPES) and f.name == desk.RECIPE or no("変更先が recipes/ の RECIPE.md でない")
     text = read(ws, name)
     text.count(a.old) == 1 or no(f"今の文が {a.file} に 1 か所でない")
     out = text.replace(a.old, a.new)
@@ -702,13 +731,12 @@ def auto_ok(ws, a):
     whole = set().union(*(spans[h] for h in heads)) if heads else set()
     gone and whole == gone or no("箇条書きの項目を丸ごと消すだけでない（見出し・前置き・空行・項目の一部だけを消す）。下の決まりの効く範囲や項目の中身が変わるので人が見る")
     gone_items = [plain("\n".join(src[k] for k in sorted(spans[h]))) for h in heads]
-    k = "material" if name == "AGENTS.md" else desk.kind(desk.front(text))
+    k = desk.kind(desk.front(text))
     globs = [] if k == "material" else list(desk.TRIGGERS[k])  # このレシピが出る作業の、プラグインのファイル
     same = [f for f in sorted(PLUGIN.rglob("*.md")) if any(fnmatch.fnmatchcase(f.relative_to(PLUGIN).as_posix(), g) for g in globs)]
     scenes = [items(f.read_text(encoding="utf-8", errors="ignore")) for f in same]  # このファイルが出る場面ごとの、プラグインの項目
-    agents = items(read(ws, "AGENTS.md")) if name != "AGENTS.md" else set()
-    lone = [x for x in gone_items if not x or not (x in agents or scenes and all(x in sc for sc in scenes))]
-    lone and no("消す項目と丸ごと同じ項目が、このファイルが出るどの場面にも残るとは言えない（AGENTS.md にあるか、このレシピを出す作業のプラグインの md のどれにもあるときだけ通す）。"
+    lone = [x for x in gone_items if not x or not (scenes and all(x in sc for sc in scenes))]
+    lone and no("消す項目と丸ごと同じ項目が、このファイルが出るどの場面にも残るとは言えない（このレシピを出す作業のプラグインの md のどれにもあるときだけ通す）。"
                 "文の中の引用・例・出る場面の違うファイルは数えない")
     cs, ps, qs, _ = state(ws)
     any(c.get("decided") and c["to"] == name for c in cs.values()) and no(f"ユーザーが決めた指摘が {name} につながっている")
@@ -789,14 +817,11 @@ def apply(ws, ids):
 
 def gate(ws, f, before, after):
     """当てたあとの文の検査。止める理由の一覧（Harness² が、直した候補のハーネスを検査し、通らなければ理由を添えて 1 回だけ出し直させるのにならう）。
-    AGENTS.md とレシピ（recipes/ の RECIPE.md）を上限より大きくしない（小さくする提案は通す）。
     レシピは、frontmatter の description をなくさない（新しいレシピにも書く。ないと hook が出さない。前の版の frontmatter のないファイルを直すときは見ない）。
     レシピの step は gather・build のどれか（書かなければ、資料を作るどの作業でも）。前の版の paths は書かない（hook はもう読まない）。
     ワークスペースのファイルに [ID] を新しく書き入れない（ID はプラグインの決まりだけ。プラグインの決まりを指すときは角括弧なし）。
     新しいレシピを、スキルの名前のフォルダ（recipes/slides-build/ など）に作らない（目的ごとのレシピにする。desk-feedback/recipes.md の §2）。"""
-    bad, n = [], len(after.encode())
-    if f == ws / "AGENTS.md" and n > AGENTS_MAX and n > len(before.encode()):
-        bad.append(f"AGENTS.md が {n:,} バイトになる（{AGENTS_MAX:,} まで。作るときだけ要るものは recipes/ のレシピへ）")
+    bad = []
     rel = f.relative_to(ws)
     if rel.parts[0] == desk.RECIPES and f.name == desk.RECIPE and "templates" not in rel.parts[2:-1]:
         meta = desk.front(after)
@@ -819,6 +844,9 @@ def close(ws, p, kind, **extra):
     """提案を当てた・Issue にした出来事を書き、出典の指摘をその決まりにつなぐ。戻すときのために、前の戻し先を残す。"""
     cs = state(ws)[0]
     write(ws, {"kind": kind, "ref": p["id"], "prev": {c: cs[c]["to"] for c in p["src"] if c in cs}, **extra})
+    if p["src"] and owner_file(p["rule"] or p["file"], ws):  # 2026-10-31 より前に出した AGENTS.md への提案も、当てて指摘はつながない
+        print(f"{p['id']}: {p['file']} {OWNER}。出典の指摘（{', '.join(p['src'])}）はつながずに、前の戻し先のまま。レシピへは ledger.py route <c-ID> <レシピ> でつなぐ", file=sys.stderr)
+        return
     for c in p["src"]:
         write(ws, {"kind": "route", "ref": c, "to": p["rule"] or p["file"], "via": p["id"]})
 
@@ -828,7 +856,7 @@ def reopen(ws, p):
     cs = state(ws)[0]
     for c, to in p.get("prev", {}).items():
         if cs.get(c, {}).get("to") == (p["rule"] or p["file"]):
-            write(ws, {"kind": "route", "ref": c, "to": to})
+            write(ws, {"kind": "route", "ref": c, "to": to}, restore=True)
 
 
 def undo(ws, i):
@@ -844,7 +872,7 @@ def undo(ws, i):
     if text.count(new) != 1 or p.get("full") and text != new:
         sys.exit(f"{i}: 当てた文が {p['file']} に {text.count(new)} か所ある{'（全体を作り直した版は、そのあとファイルが変わると戻せない）' if p.get('full') else ''}。"
                  "手で直されたので、snapshot.sh restore か手で戻す")
-    back = text.replace(new, p["old"], 1)  # 前にあった文に戻すので、gate は見ない（AGENTS.md を縮めた提案や、desk-migrate が ID を外した版も戻せるように）
+    back = text.replace(new, p["old"], 1)  # 前にあった文に戻すので、gate は見ない（desk-migrate が ID を外した版も戻せるように）
     f.write_text(back, encoding="utf-8")
     write(ws, {"kind": "undone", "ref": i, "after": back})
     reopen(ws, p)
@@ -963,6 +991,9 @@ def review(ws, deck, table):
             if not k.startswith("lint:") and text_of(k) is None:
                 wrong.append(f"{cells[0]} {k} は、その ID の決まり・そのファイルが見つからない")
                 continue
+            if owner_file(k, ws):
+                wrong.append(f"{cells[0]} {k} {OWNER}")
+                continue
             keys.append(key(k))
         phrases = {key(c): q for c, q in cited if c not in bad}
         if not keys:
@@ -996,7 +1027,7 @@ def sha8(text):
 
 
 def fingerprint(ws, plugin=PLUGIN):
-    """いまのハーネスの指紋（<プラグインの 8 字>-<ワークスペースの 8 字>）。プラグインは HARNESS のフォルダ、ワークスペースは AGENTS.md と recipes/ の中身から。
+    """いまのハーネスの指紋（<プラグインの 8 字>-<ワークスペースの 8 字>）。プラグインは HARNESS のフォルダ、ワークスペースは recipes/ の中身（移す前の前の版の rules/ も）から。
     初めて見る指紋なら、プラグインの決まりの ID ごとに書いてあるファイルと文のハッシュを、ワークスペースの決まりのファイルごとに全文のハッシュを、
     .desk/harness/<指紋>.json に控える（effects が、どの資料をどの文・どの版で作ったかを見る。v は控えの形。2 からファイルごと）。
     ponytail: 控えは指紋が変わるたびに 1 つ増える（数十 KB）。重くなったら、どの資料からも指されない控えを消す"""
@@ -1009,7 +1040,7 @@ def fingerprint(ws, plugin=PLUGIN):
         for f in fs:
             h.update(f"{f.relative_to(base)}\0".encode() + f.read_bytes() + b"\0")
         return h.hexdigest()[:8]
-    mine, theirs = files([root / d for d in HARNESS]), files([ws / "AGENTS.md", ws / desk.RECIPES, *[ws / "rules"] * (ws / "rules").is_dir()])  # 前の版の rules/ は、移すまで数える
+    mine, theirs = files([root / d for d in HARNESS]), files([ws / desk.RECIPES, *[ws / "rules"] * (ws / "rules").is_dir()])  # 前の版の rules/ は、移すまで数える
     fp = f"{digest(mine, root)}-{digest(theirs, ws)}"
     snap = ws / ".desk" / "harness" / f"{fp}.json"
     if not snap.exists():
@@ -1162,7 +1193,7 @@ def main(argv):
     elif a.cmd == "effects":
         effects(ws)
     elif a.cmd == "next":
-        a.prefix.startswith("ws-") and sys.exit("ワークスペースの決まりには ID を付けない。指摘の戻し先は、そのファイル（--to recipes/<名前>/RECIPE.md・AGENTS.md・Customers/<顧客>/memory.md）")
+        a.prefix.startswith("ws-") and sys.exit("ワークスペースの決まりには ID を付けない。指摘の戻し先は、そのファイル（--to recipes/<名前>/RECIPE.md・Customers/<顧客>/memory.md）")
         known(a.prefix) or sys.exit(f"主題の表にない接頭辞: {a.prefix}。TOPICS（ledger.py topics）から選ぶ。新しい主題が要るなら、先に TOPICS に足す（../skills/desk-feedback/routing.md の「Rule IDs」）")
         print(next_id(ws, a.prefix))
     elif a.cmd == "where":
@@ -1264,6 +1295,18 @@ def selftest():
             assert next_id(ws, "deck-brand") != "deck-brand-001" and "deck-brand-003" in rule_texts() and where("deck-brand-003")[0].startswith("../lib/brand.py:")  # lib/ に書いた決まりの ID も数える（2026-10-31 に skills/ から移した）
             assert "ID を付けない" in fails(["next", "ws-slides-visual"]) and "--rule はプラグインへの提案" in fails(["propose", "--file", V, "--new", "x", "--rule", "slides-visual-099", "--why", "y"])
             fails(["add", "--deck", ".", "--quote", "x", "--to", "ws-slides-visual-001"], 2)  # ワークスペースの ID は戻し先にしない
+            (ws / "AGENTS.md").write_text("# 自分のメモ\n")
+            for to in ("AGENTS.md", "./agents.md", "Claude.md", "recipes/../AGENTS.md", str(ws / "AGENTS.md")):  # 持ち主のファイルには戻さない（書き方を変えても）
+                fails(["add", "--deck", ".", "--quote", "x", "--to", to], 2)
+            for f in ("AGENTS.md", "recipes/../AGENTS.md", str(ws / "AGENTS.md")):  # 当てると指摘が AGENTS.md につながる
+                assert "--src" in fails(["propose", "--file", f, "--new", "x", "--why", "y", "--src", "c-0001"]), f
+            for rec in ({"kind": "review", "rule": "./Agents.md"}, {"kind": "question", "rule": "CLAUDE.md"}, {"kind": "route", "ref": "c-0001", "to": "recipes/../AGENTS.md"}):
+                try:  # どの道から来ても、書くところで止める
+                    write(ws, rec)
+                    raise AssertionError(rec)
+                except SystemExit:
+                    pass
+            (ws / "AGENTS.md").unlink()
             # 足す提案を当て、出典の指摘をファイルにつなぐ。当てる前に、台帳に版のないファイルは「初めの版」にする
             with quiet():
                 main(["propose", "--file", "./" + V, "--new", "- 収まらない表は 2 枚に分ける。", "--why", "表の分け方", "--src", "c-0001"])
@@ -1511,6 +1554,19 @@ def selftest():
             for bad in ("rules/a.md ws-a-003", "rules/x.md ws-x-001・rules/slides-build/checks.py", "ws-a-001・ws-a-002", "この資料"):
                 fails(["add", "--deck", ".", "--quote", "x", "--to", bad], 2)
             selftest_auto(ws, quiet)
+            c1 = "c-0001"
+            write(ws, {"kind": "route", "ref": c1, "to": "AGENTS.md"}, restore=True)  # 2026-10-31 より前に AGENTS.md につないだ指摘
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                close(ws, {"id": "P9999", "rule": "", "file": "AGENTS.md", "src": [c1]}, "applied")  # 前に出した AGENTS.md への提案を当てても、指摘はつながない（前の戻し先のまま。知らせる）
+            assert c1 in err.getvalue()
+            assert state(ws)[0][c1]["to"] == "AGENTS.md"
+            with quiet():  # AGENTS.md からレシピへ移す提案を当てて戻すと、指摘は前の AGENTS.md に戻る（記録のとおり）
+                main(["propose", "--file", "recipes/moved/RECIPE.md", "--new", "---\ndescription: 移した\n---\n- 移した決まり。", "--why", "移す", "--src", c1])
+                pid = list(state(ws)[1])[-1]
+                main(["apply", pid])
+                assert state(ws)[0][c1]["to"] == "recipes/moved/RECIPE.md"
+                main(["undo", pid])
+            assert state(ws)[0][c1]["to"] == "AGENTS.md"
             selftest_review(ws, quiet)
             # プラグインのファイルは変更先にしない
             try:
@@ -1526,9 +1582,20 @@ def selftest():
 
 
 def selftest_auto(ws, quiet):
-    """--auto: 会話を出典にしない片付けで、箇条書きの項目を丸ごと消すだけ・消す文がプラグインか AGENTS.md にもあるものを、出してすぐ当てる。ほかは台帳に書かずに止める。"""
+    """--auto: 会話を出典にしない片付けで、箇条書きの項目を丸ごと消すだけ・消す文が、そのレシピが出る作業のプラグインの md のどれにもあるものを、出してすぐ当てる。ほかは台帳に書かずに止める。"""
+    g = globals()
+    real_plugin, g["PLUGIN"] = PLUGIN, ws / ".plug" / "skills"  # 試しのプラグイン: 作る作業（make）と組む作業（build）の両方に出る md を 2 本
+    for f, extra in (("slides-build/pages.md", ""), ("deck-design/slides.md", "- Neon colors on dark backgrounds, gradients\n")):
+        (g["PLUGIN"] / f).parent.mkdir(parents=True, exist_ok=True)
+        (g["PLUGIN"] / f).write_text("- 本文は 16pt。\n- 表は分ける。続きの行。\n- 次の指示は使わない：「表は左から読む。」\n```\n- 図は右から読む。\n```\n- 会社名や製品名を替えてもそのまま使える文\n" + extra, encoding="utf-8")
+    try:
+        selftest_auto_in(ws, quiet)
+    finally:
+        g["PLUGIN"] = real_plugin
+
+
+def selftest_auto_in(ws, quiet):
     a, A = ws / "recipes" / "a" / "RECIPE.md", "recipes/a/RECIPE.md"
-    (ws / "AGENTS.md").write_text("- 本文は 16pt。\n- 表は分ける。続きの行。\n", encoding="utf-8")  # 同じ文がどの会話にも出る AGENTS.md にある
     with quiet():  # 台帳の提案で作ったファイル（手で作ったファイルは「手で直した」版になり、--auto にしない）
         for f, text in ((A, "---\ndescription: 試し\n---\n## 表\n- 本文は 16pt。\n- 表は分ける。\n  続きの行。\n- ここにしかない。"),
                         ("recipes/b/RECIPE.md", "---\ndescription: 試し\n---\n- 次は使わない:\n  - 本文は 16pt。\n- 表は左から読む。")):
@@ -1593,7 +1660,6 @@ def selftest_auto(ws, quiet):
         main(["add", "--deck", ".", "--quote", "ファイルで決めた", "--decided", "--to", "./recipes/a/RECIPE.md（見出しの下）"])
     assert "ユーザーが決めた指摘" in fails(["propose", "--auto", "--file", "./recipes/a/RECIPE.md", "--why", "片付け", "--kind", "重なり"] + moved)  # パスの書き方を変えても同じファイル
     # 丸ごと同じ項目だけを数える。否定の文の中の引用、コードの囲みの中の例、レシピが出る作業のファイルの一部にしかないものは数えない
-    (ws / "AGENTS.md").write_text("- 次の指示は使わない：「表は左から読む。」\n```\n- 図は右から読む。\n```\n- 会社名や製品名を替えてもそのまま使える文\n", encoding="utf-8")
     with quiet():
         main(["propose", "--file", "recipes/q2/RECIPE.md", "--new", "---\ndescription: 試し\nstep: build\n---\n## 表\n- 表は左から読む。\n- 図は右から読む。\n- Neon colors on dark backgrounds, gradients\n- 会社名や製品名を替えてもそのまま使える文\n- 残す。", "--why", "試しを作る"])
         main(["apply", list(state(ws)[1])[-1]])
@@ -1605,10 +1671,9 @@ def selftest_auto(ws, quiet):
     assert "どの場面にも残る" in fails(q2 + ["--old", "- 図は右から読む。\n- Neon", "--new", "- Neon"])  # コードの囲みの中の例
     for f, st in (("recipes/q3/RECIPE.md", ""), ("recipes/q4/RECIPE.md", "step: build\n"), ("recipes/q5/RECIPE.md", "per_material: true\n")):  # 出る作業のファイルの一部（deck-design/slides.md）にしかない。資料ごとに選ぶレシピは残る先がない
         assert "どの場面にも残るとは言えない" in fails(["propose", "--auto", "--file", f, "--why", "片付け", "--kind", "重なり", "--old", f"試し\n{st}---\n- Neon colors on dark backgrounds, gradients\n", "--new", f"試し\n{st}---\n"]), f
-    with quiet():  # AGENTS.md（どの会話にも出る）に、丸ごと同じ項目がある
+    with quiet():  # 組む作業のプラグインの md のどれにも、丸ごと同じ項目がある
         main(q2 + ["--old", "gradients\n- 会社名や製品名を替えてもそのまま使える文\n", "--new", "gradients\n"])
     assert "- 会社名や製品名を替えてもそのまま使える文" not in (ws / "recipes" / "q2" / "RECIPE.md").read_text(encoding="utf-8")
-    (ws / "AGENTS.md").unlink()
 
 
 def selftest_review(ws, quiet):
@@ -1709,7 +1774,10 @@ def selftest_effects(quiet):
         V = "rules/slides-build/visual.md"
         v, a = ws / V, plug / "deck-design" / "slides.md"
         v.write_text("- 表は分ける。\n")
-        (ws / "AGENTS.md").write_text("- 変えない。\n")
+        (ws / "AGENTS.md").write_text("# 自分のメモ\n- 変えない。\n")
+        fp_own = fingerprint(ws, plug)
+        assert "AGENTS.md" not in rule_files(ws) and "AGENTS.md" not in json.loads((ws / ".desk" / "harness" / f"{fp_own}.json").read_text())["rules"]  # 持ち主が書いた AGENTS.md は読まない
+        (ws / "AGENTS.md").write_text("".join(f"## {h}\n- 変えない。\n" for h in desk.AGENTS_TEMPLATE))  # 前の雛形の写しも数えない
         a.parent.mkdir(parents=True)
         a.write_text("- [slides-visual-900] 線は細く。\n- [slides-visual-901] 色は 2 つまで。\n")
         made = lambda deck, fp: write(ws, {"kind": "harness", "deck": deck, "fp": fp})
@@ -1723,7 +1791,7 @@ def selftest_effects(quiet):
         (a.parent / "example.py").unlink()
         doc = json.loads((ws / ".desk" / "harness" / f"{fp0}.json").read_text())
         snap = doc["rules"]
-        assert doc["v"] == 2 and snap["slides-visual-900"][0] == "skills/deck-design/slides.md" and snap[V] == [V, sha8("- 表は分ける。\n")] and "AGENTS.md" in snap
+        assert doc["v"] == 2 and snap["slides-visual-900"][0] == "skills/deck-design/slides.md" and snap[V] == [V, sha8("- 表は分ける。\n")] and "AGENTS.md" not in snap
         for deck in ("Internal/d1", "Internal/d2"):  # 前の文で作った 2 本。どちらも 900 の指摘が出た
             made(deck, fp0)
         said("Internal/d1", "slides-visual-900", fp0)
@@ -1796,9 +1864,7 @@ def selftest_effects(quiet):
         v = ws / V
         v.write_text("- 表は分ける。\n- 図は左から右。\n")
         (plug / "slides-build").mkdir(parents=True)
-        # 当てる前の検査: AGENTS.md を上限より大きくしない（小さくするのは通す）。ワークスペースのファイルに [ID] を書き入れない
-        big = "x" * (AGENTS_MAX + 1)
-        assert gate(ws, ws / "AGENTS.md", "", big) and not gate(ws, ws / "AGENTS.md", big + "x", big)
+        # 当てる前の検査: ワークスペースのファイルに [ID] を書き入れない
         x = ws / "recipes" / "x" / "RECIPE.md"
         assert any("[ws-…] は消す" in b for b in gate(ws, x, "", "- [ws-slides-visual-001] 写し\n")) and any("slides-visual-012 のように" in b for b in gate(ws, v, v.read_text(), v.read_text() + "- [slides-visual-012] 写し\n"))
         assert gate(ws, v, v.read_text(), v.read_text() + "- 足す（slides-visual-012 より優先）\n") == [] and gate(ws, v, "- [ws-a-001] 前から\n", "- [ws-a-001] 前から\n- 足す\n") == []  # 前からある ID は止めない
@@ -1867,13 +1933,13 @@ def selftest_effects(quiet):
                 for q in [p for p in state(ws)[1].values() if p["status"] == "未適用"]:
                     main(["withdraw", q["id"], "--reason", "試し"])
             locked.unlink()
-            big = ws / "AGENTS.md"  # 上限を超えた AGENTS.md を縮めた提案も、戻せる（戻すときは大きさを見ない）
-            big.write_text("- 残す。\n" + "あ" * 8000 + "\n- 移す。\n", encoding="utf-8")
+            big = ws / "AGENTS.md"  # 前の雛形の AGENTS.md は決まりのファイルでないが、レシピに移すときの縮める提案は当てて戻せる（desk-migrate の agents_md.md の 3）
+            big.write_text("".join(f"## {h}\n" for h in desk.AGENTS_TEMPLATE) + "- 残す。\n" + "あ" * 8000 + "\n- 移す。\n", encoding="utf-8")
             with quiet():
                 main(["propose", "--file", "AGENTS.md", "--old", "あ\n- 移す。\n", "--new", "あ\n", "--why", "縮める"])
                 main(["apply", "all"])
                 main(["undo", max(p["id"] for p in state(ws)[1].values() if p["file"] == "AGENTS.md" and p["why"] == "縮める")])
-            assert "- 移す。" in big.read_text() and versions(ws)["AGENTS.md"][0][1] == "初めの版"  # 当てる前に、手で書いた AGENTS.md を版にした
+            assert "- 移す。" in big.read_text() and "AGENTS.md" not in rule_files(ws)  # 戻せる。それでも決まりのファイルにはならない
             big.unlink()
             with quiet():
                 main(["propose", "--file", "rules/x.md", "--new", fm + "- [ws-slides-visual-001] 写し", "--why", "ID を書く"])

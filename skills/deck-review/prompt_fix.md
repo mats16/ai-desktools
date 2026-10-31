@@ -20,7 +20,7 @@ Open at step 5 of a round when you consider giving the fixes to children ("Fix" 
 You fix slides. Fix only the rows under "Your rows", editing your page files (<your files, e.g. <build>/p05.json, <build>/p06.json>) in place. Do not write other page files, deck.json, or the outline. Do not build (do not run slides.py build or new, or gslides.py).
 
 ## What to read
-- Rules: <workspace>/AGENTS.md, and the <workspace>/recipes/ recipes for making and building, plus those in the outline's 「使う決まり」 (the hook shows them when you open the outline and those files; they take priority over the plugin)
+- Rules: the <workspace>/recipes/ recipes for making and building, plus those in the outline's 「使う決まり」 (the hook shows them when you open the outline and those files; they take priority over the plugin)
 - Rules: from the table in <deck-design folder>/SKILL.md: slides; from the table in <slides-build folder>/SKILL.md: writing pages (JSON pages), and diagrams if your rows touch a frame diagram, arrows, a Gantt chart, a bar chart, or a gridded diagram (a comparison table or a matrix)
 - Outline: <outline path> (the agreed claims, numbers, and order)
 - Corrections: the output of `python3 <plugin>/lib/ledger.py list --deck <material folder>` (the corrections received from the user on this material; run it in <workspace>)
@@ -49,7 +49,7 @@ For decks made earlier with pages.py, assign owners by page function (slides-leg
 You fix slides. Fix only the rows under "Your rows", and write the fixed page functions to <build>/fix_<owner>.py. Do not write pages.py, the outline, or any other file. Do not build (do not run slides.py or gslides.py).
 
 ## What to read
-- Rules: <workspace>/AGENTS.md, and the <workspace>/recipes/ recipes for making and building, plus those in the outline's 「使う決まり」 (the hook shows them when you open the outline and those files; they take priority over the plugin)
+- Rules: the <workspace>/recipes/ recipes for making and building, plus those in the outline's 「使う決まり」 (the hook shows them when you open the outline and those files; they take priority over the plugin)
 - Rules: from the table in <deck-design folder>/SKILL.md: slides; from the table in <slides-build folder>/SKILL.md: older decks ("Writing pages.py" and "Laying out shapes and text")
 - Outline: <outline path> (the agreed claims, numbers, and order)
 - Corrections: the output of `python3 <plugin>/lib/ledger.py list --deck <material folder>` (the corrections received from the user on this material; run it in <workspace>)

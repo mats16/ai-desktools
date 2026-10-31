@@ -1,4 +1,4 @@
-# git で管理するのは、このワークスペースの決まり（テーマのファイルの themes/ と、自分の画像の assets/ を含む）と、調べ直しの記録（Research/deck_research/）だけ。資料（Customers/・Internal/・ほかの Research/）と台帳、スクリプトの記録（.desk/）、設定（desk.toml。人ごとの値で、~/.desk.toml に置くこともある）は入れない。
+# git で管理するのは、このワークスペースの決まり（レシピの recipes/、自分で置いた AGENTS.md・CLAUDE.md、テーマのファイルの themes/ と、自分の画像の assets/ を含む）と、調べ直しの記録（Research/deck_research/）だけ。資料（Customers/・Internal/・ほかの Research/）と台帳、スクリプトの記録（.desk/）、設定（desk.toml。人ごとの値で、~/.desk.toml に置くこともある）は入れない。
 /*
 !/.gitignore
 !/AGENTS.md

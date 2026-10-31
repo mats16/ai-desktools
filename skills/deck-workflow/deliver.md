@@ -14,7 +14,7 @@ Put the final report in one message. Include:
 - The `/deck-review` findings table and the count per round (step 7 of `deck-review`)
 - The list of questions for the user: the items set to 「聞く」 along the way (plan-review findings that change the audience, the question, or the claim; proposals that change claims, numbers, or order; proposals to add, delete, or split pages; things the rules do not decide; what child agents returned). Pages split because they did not fit are also asked about here (deck-flow-010)
 - The key points of the three-representative-pages log (up to 3 lines; slides-flow-009)
-- Which correction was routed to which rule (「修正の指示」 in AGENTS.md)
+- Which correction was routed to which rule (`desk-feedback` → recording a correction)
 - What the source check changed, and the rows still 「照合中」 or `確かめられない` (deck-flow-019)
 - If notes or a video were asked for: what step 7 of `vids-voice` lists, and the Vids URL (deck-flow-022)
 

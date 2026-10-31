@@ -9,7 +9,7 @@ DESK_CONFIG を空にすると 2 を飛ばす（selftest と開発の worktree�
 ワークスペースの決まり（レシピ。recipes/ の下の <名前>/RECIPE.md で、frontmatter に description のあるもの）の探し方と、どの作業で出すか（triggers）も、ここに置く（rules・front・kind）。
 usage: desk.py              ワークスペースのパスを出す（なければ exit 1）
        desk.py --selftest"""
-import fnmatch, json, os, sys, tempfile
+import fnmatch, json, os, re, sys, tempfile
 from pathlib import Path
 
 try:
@@ -21,9 +21,10 @@ NAME, OLD = "desk.toml", "factory.toml"  # OLD は 2026-10-25 より前の設定
 RULE_MAX = 3800  # 決まりの 1 ファイルの字数の上限。hook が memory と並べて出すとき、決まりに回す半分（4,499 字）から、入りきらないものを挙げる添え書き（NOTE の 500 字）と見出し（パスが 79 字までなら 199 字まで）を引いても、最初のファイルが丸ごと入る（desk-feedback/routing.md の「Workspace rules」）
 TARGETS, AUDIENCES = ("slides", "docs", "vids"), ("顧客向け", "社内向け", "コミュニティ向け")  # frontmatter の targets・audience の値（audience は deck-content-039 の資料の種類）
 RECIPES, RECIPE = "recipes", "RECIPE.md"  # ワークスペースの決まりのフォルダと、決まりを書くファイル（recipes/<名前>/RECIPE.md。2026-10-29 に rules/<名前>.md から替えた）
+AGENTS_TEMPLATE = ("決まりの優先", "基本方針", "いい資料の考え方", "資料を作る・直すとき", "修正の指示", "調べもの", "社外秘と顧客の情報", "書き方", "フォルダの置き方")  # 2026-10-31 までの desk-init の AGENTS.md の節（## か ###。題を書き替えた写しにも残る）
 STEPS = ("gather", "build")  # frontmatter の step の値。書かなければ、資料を作るどの作業でも出す（per_material: true は、資料ごとに選ぶ）
 TRIGGERS = {  # プラグインのファイル（<スキル>/<ファイル>）→ そのファイルを開いたときに出すレシピの種類。make は step のないもの（資料を作るどの作業でも）
-    "gather": ("deck-workflow/materials.md", "deck-workflow/start.md", "customer-profile/*", "desk-crawl/*", "desk-research/*"),
+    "gather": ("deck-workflow/materials.md", "deck-workflow/start.md", "deck-workflow/research.md", "customer-profile/*", "desk-crawl/*", "desk-research/*"),
     "build": ("slides-build/*", "docs-build/*", "vids-build/*", "vids-voice/*", "deck-design/slides.md", "deck-design/docs.md", "deck-workflow/slides_steps.md", "deck-workflow/prompt_pages.md", "deck-workflow/reuse.md"),
     "make": ("deck-workflow/*", "deck-writing/*", "deck-design/*", "deck-review/*", "desk-feedback/SKILL.md", "desk-feedback/routing.md", "slides-build/*", "docs-build/*", "vids-build/*", "vids-voice/*")}
 
@@ -184,6 +185,17 @@ def with_workspace(text, ws):
     return out
 
 
+def old_agents(ws):
+    """ワークスペースの AGENTS.md が、2026-10-31 までの desk-init の雛形の写しか（その節の見出しが半分より多く残る）。
+    desk-doctor が、レシピに移すよう知らせるための目安（台帳は AGENTS.md を決まりのファイルにしない）。持ち主が書いた AGENTS.md は、プラグインは読まない。"""
+    try:
+        text = (Path(ws) / "AGENTS.md").read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+    text = re.sub(r"(?ms)^(```|~~~).*?^\1[^\n]*$", "", text)  # コードの囲みの中の見出しは数えない（引いただけのもの）
+    heads = {m.group(1).strip() for m in re.finditer(r"(?m)^#{2,3}\s+(.+?)\s*$", text)}
+    return len(heads & set(AGENTS_TEMPLATE)) > len(AGENTS_TEMPLATE) // 2
+
 def selftest():
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp).resolve()
@@ -191,6 +203,14 @@ def selftest():
         for d in (sand / "sub", ws / "Customers", other, conf.parent):
             d.mkdir(parents=True)
         os.environ["DESK_CONFIG"] = str(conf)
+        assert not old_agents(ws)  # ない
+        (ws / "AGENTS.md").write_text("# 自分の決まり\n## 書き方\n- 敬体。\n前は「## 決まりの優先」があった。\n")
+        assert not old_agents(ws)  # 節が 1 つ同じ・見出しを文の中で引いただけ
+        (ws / "AGENTS.md").write_text("# 題を替えた\n" + "".join(f"## {h}\n" for h in AGENTS_TEMPLATE[:5]))
+        assert old_agents(ws)  # 題を書き替えた写しも、節で見つける
+        (ws / "AGENTS.md").write_text("# 自分の決まり\n```md\n" + "".join(f"## {h}\n" for h in AGENTS_TEMPLATE) + "```\n")
+        assert not old_agents(ws)  # コードの囲みの中で引いただけ
+        (ws / "AGENTS.md").unlink()
         assert locate(other) is None  # 3: どちらもない
         conf.write_text(with_workspace("[drive]\ndesk = \"u\"\n", ws))
         assert locate(other) == locate(ws / "Customers") == (conf, ws)  # 2: ほかのフォルダでも、ワークスペースの中でも

@@ -1,6 +1,6 @@
 # Gathering materials
 
-Read this when gathering internal materials and customer information (steps 3 and 4 in [start.md](start.md), and 「調べもの」 in AGENTS.md). Handle confidential information as 「社外秘と顧客の情報」 in AGENTS.md says. Record what you read in `references.md` in the material's folder (see "Ledger" below).
+Read this when gathering internal materials and customer information (steps 3 and 4 in [start.md](start.md), and [research.md](research.md)). Handle confidential information as 「社外秘と顧客の情報」 in `deck-writing` says. Record what you read in `references.md` in the material's folder (see "Ledger" below).
 
 - [deck-sources-001] **Do not stall waiting on slow tools.** Two rules for waiting:
   - [deck-sources-002] **One command runs at most 5 minutes.** Set the limit with the tool's `timeout` (the argument of pi's bash or Claude Code's Bash). macOS has no `timeout` command. When a command hits the limit, do not rerun the same command. Narrow the scope (period, path, `git clone --depth 1`, only the needed files through the GitHub API) or postpone it.
@@ -23,7 +23,7 @@ The tools are listed by role in the settings `desk.toml` under `[sources]` (`sea
   - [deck-sources-004] When a colleague pastes comments from another company or the customer (a transcription such as 「いただいた問い合わせの内容もシェアします」), confirm whose words they are before interpreting them. Do not read a transcription as the colleague's own remark, and do not add your own reading such as 「聞き違い」. For words whose meaning you do not know (such as 「ブロック ID」), write that you do not know, and add them to what needs checking.
   - [deck-sources-005] When a link the tools cannot read (such as a separate workspace shared with the customer) is given as background for the request, ask the user to paste its text in your first reply. Until it arrives, do not fix the audience and the questions in the outline. When it arrives, copy the projects, teams, and areas the customer wrote into the top of the outline (if you proceed without reading the text, information about the project under consideration is lost).
 - **Customer ledger** (`crm`): deals, owners, and basic customer information.
-- **Usage and consumption** (`usage`): note each number with its source (which table, which period, which unit). Usage amounts are internal information, so do not write them in customer-facing materials (「社外秘と顧客の情報」 in AGENTS.md).
+- **Usage and consumption** (`usage`): note each number with its source (which table, which period, which unit). Usage amounts are internal information, so do not write them in customer-facing materials (「社外秘と顧客の情報」 in `deck-writing`).
 
 ## Ledger (references.md and the 「出典の表」)
 

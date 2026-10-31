@@ -5,7 +5,7 @@ description: Use when re-researching best practices for making materials (the co
 
 # Ongoing research on best practices for making materials
 
-Research results go into the knowledge skills `deck-writing` (content and wording) and `deck-design` (how pages look), `deck-workflow` and `deck-review` (how the work and the review run), `slides-build` (how to write for the Slides API, and the machine-checkable rules in `scripts/lint.py`), `docs-build` (how to write for the Docs API), and the root `AGENTS.md` (policy always needed). This skill holds how to research. What has been researched so far (`state.md`, `log/`) differs per user and contains internal information, so it lives in the workspace's `Research/deck_research/` (moved out of the plugin on 2026-10-12; create it if missing).
+Research results go into the knowledge skills `deck-writing` (content and wording) and `deck-design` (how pages look), `deck-workflow` and `deck-review` (how the work and the review run), `slides-build` (how to write for the Slides API, and the machine-checkable rules in `scripts/lint.py`), and `docs-build` (how to write for the Docs API). This skill holds how to research. What has been researched so far (`state.md`, `log/`) differs per user and contains internal information, so it lives in the workspace's `Research/deck_research/` (moved out of the plugin on 2026-10-12; create it if missing).
 
 ## What is kept
 
@@ -29,7 +29,7 @@ Research results go into the knowledge skills `deck-writing` (content and wordin
    [deck-research-001] Japanese-language posts are higher quality for material content, and English-language posts are more plentiful for the mechanisms (skills, instructions) (an assessment; the first run also found this).
 3. [deck-research-002] **Run one subagent per theme in parallel.** Run them in the background at the same time. Pass the main agent's model and reasoning effort explicitly (deck-agents-008 in `deck-workflow` → child agents). Use the prompt template below. Have them write the full report in `log/` and return only the key points here (saves conversation context and survives compaction).
 4. **Read the reports and compare with state.md.** Exclude what was already adopted or passed over; pick only what is new or changed since last time.
-5. **Decide where each finding goes.** Changes go into the plugin's `skills/` as an Issue through the skill `desk-kaizen` (edits to `sources.md` go into the same Issue's proposed change; `log/` and `state.md` stay in the workspace and do not go into the Issue). Put in only findings that hold for anyone; things specific to one person or organization become proposals to the workspace `AGENTS.md` or `rules/` ("Workspace rules" in `desk-feedback` → routing and rule IDs). Things that must always be followed and can be checked by machine → `lint.py`. Things needed only while making → `deck-writing` (content) or `deck-design` (look), or `slides-build` (writing pages and the other files in its table) or `docs-build` (how to write for the Slides API and Docs API). Things needed in every conversation → `AGENTS.md` (keep it short; do not put in what is needed only when making materials; up to 20,000 bytes; step 4h of `desk-dreaming` → running). When the same failure happens twice, add it to the instructions (`Research/deck_research/log/20261006_en_skills_instructions.md` 1-17). **Ask the user before applying anything that conflicts with a policy or value in AGENTS.md.**
+5. **Decide where each finding goes.** Changes go into the plugin's `skills/` as an Issue through the skill `desk-kaizen` (edits to `sources.md` go into the same Issue's proposed change; `log/` and `state.md` stay in the workspace and do not go into the Issue). Put in only findings that hold for anyone; things specific to one person or organization become proposals to the workspace's recipes (`recipes/`; "Workspace rules" in `desk-feedback` → routing and rule IDs). Things that must always be followed and can be checked by machine → `lint.py`. Things needed only while making → `deck-writing` (content) or `deck-design` (look), or `slides-build` (writing pages and the other files in its table) or `docs-build` (how to write for the Slides API and Docs API). When the same failure happens twice, add it to the instructions (`Research/deck_research/log/20261006_en_skills_instructions.md` 1-17). **Ask the user before applying anything that conflicts with a workspace recipe or a value in `desk.toml`.**
 6. **Update state.md and sources.md.** Also add new sources, search terms that missed, and access tips.
 
 ## Research rules
@@ -51,7 +51,6 @@ You are the researcher. Today is <YYYY-MM-DD>.
 
 ## Background
 <the person in [user] profile of desk.toml (company and role)> has Claude Code make materials (Google Slides and Google Docs). Read these first.
-- <workspace>/AGENTS.md
 - The skills under <plugin>/skills/: `deck-writing` (its SKILL.md, then content from its table), `deck-design` (its SKILL.md, then slides and documents), `deck-workflow` (its SKILL.md), and `deck-review` (its SKILL.md, then asking, and verifying and fixing findings)
 - <workspace>/Research/deck_research/state.md and <plugin>/skills/desk-research/sources.md
 
@@ -64,8 +63,8 @@ You are the researcher. Today is <YYYY-MM-DD>.
 
 ## Output
 Write the full report with Write to <workspace>/Research/deck_research/log/<YYYYMMDD>_<topic>.md (2500 words or fewer).
-1. 「新しい知見」 (not in AGENTS.md, deck-writing, deck-design, or state.md): for each item, 「ルール（指示・チェックとして書ける形）」「なぜ」「出典（著者・タイトル・URL・日付）」「確度」「どう確かめるか」
-2. 「AGENTS.md・deck-writing・deck-design と食い違う・補強する点」
+1. 「新しい知見」 (not in deck-writing, deck-design, or state.md): for each item, 「ルール（指示・チェックとして書ける形）」「なぜ」「出典（著者・タイトル・URL・日付）」「確度」「どう確かめるか」
+2. 「deck-writing・deck-design と食い違う・補強する点」
 3. 「情報源（継続調査用）」: 「よかった情報源」「効いた検索語」「外れ」「アクセスのコツ」
 
 Make your final reply only the file path and the 5 most important findings (one line each).

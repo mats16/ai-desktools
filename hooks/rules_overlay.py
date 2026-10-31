@@ -31,7 +31,7 @@ MEMORY_FROM = re.compile(r"(?:^|/)(?:構成案[^/]*|社内メモ_[^/]*|reference
 RULE_PATH = r"recipes/[\w./-]+?/RECIPE\.md"  # 「使う決まり」に書くレシピのパス
 USE = re.compile(r"(?m)^[ \t]*(?:[-*][ \t]*)?\**使う決まり\**[ \t]*[:：]\**(.*)$")  # 構成案の頭の「使う決まり」の行（- **使う決まり:** recipes/a/RECIPE.md、recipes/b/RECIPE.md）
 INDEX, START, STALE, LEGACY = "recipes/*/RECIPE.md", "deck-workflow/start.md", "recipes/（使う決まりの確かめ）", "rules/（前の版）"  # 選ぶ一覧の見出しのパス（ファイルではない）、資料を作り始めるときに開くファイル（ここで一覧を出す）、「使う決まり」の名前の知らせと、前の版の rules/ の知らせ（ファイルではない）
-RESEARCH = re.compile(r"(?<![\w.-])(?:Research/|references_index\.md)")  # 調べもの（AGENTS.md の「調べもの」）。step: gather のレシピを出す
+RESEARCH = re.compile(r"(?<![\w.-])(?:Research/|references_index\.md)")  # 調べもの（deck-workflow の research.md）。step: gather のレシピを出す
 COMMAND = re.compile(rf"<command-name>/desk-tools:({NAMES})</command-name>")  # Claude Code の記録で、ユーザーが打った /desk-tools:<スキル>
 CALL = re.compile(rf"(?:^\s*/|(?<![\w$/.-])\$)desk-tools:({NAMES})(?![\w-])", re.ASCII)  # プロンプトで呼んだスキル（Claude Code の / は頭だけ、Codex の $ はどこでも。和文は続けて書いても呼んだことになる）
 PUNCT = "();<>|&`"  # コマンドの区切り
@@ -243,7 +243,7 @@ def overlays(cwd, text, is_path=False, seen=(), key=None, output=""):
         refs += [r for r in printed(output, rule_lines(ws)) if r not in refs]  # レシピにプラグインの文を写していても、レシピを読んだのを出し直さない
     docs = decks(ws, cwd, text, is_path)
     kinds = set().union(*map(desk.triggers, refs)) | ({"make"} if docs else set())  # 資料のファイル（ページを書く子・レビューの子も構成案を読む）でも、step のないものを出す
-    if ".md" in text and RESEARCH.search(text):  # 調べものでも、材料を集めるレシピを出す。.md のないコマンドでは Claude Code と pi が hook を起こさないので、Codex もそろえる（雛形の「調べもの」は references_index.md と一緒に探す）
+    if ".md" in text and RESEARCH.search(text):  # 調べものでも、材料を集めるレシピを出す。.md のないコマンドでは Claude Code と pi が hook を起こさないので、Codex もそろえる（deck-workflow の research.md は references_index.md と一緒に探す）
         kinds.add("gather")
     files = desk.rules(ws) if kinds else []  # ワークスペースの中でも、たいていの道具の呼び出しはここで終わる（recipes/ も会話の記録も読まない）
     mems = list(dict.fromkeys(m for p in docs if (m := memory(ws, p)) and m.is_file()))
@@ -468,7 +468,7 @@ def selftest():
             (Path(t) / "x" / "a.md").write_text("ひとつめの、ほかのファイルにない長い行がここにある。\nふたつめの、ほかのファイルにない長い行がここにある。")
             (Path(t) / "x" / ".#a.md").symlink_to(Path(t) / "nowhere"), (Path(t) / "x" / "._a.md").write_bytes(b"\x00\x05\x16\x07\xff\xfe" * 20)
             assert sorted(set(plugin_lines(Path(t)).values())) == ["x/a.md"]
-        assert printed((PLUGIN / "desk-init" / "templates" / "AGENTS.md").read_text(encoding="utf-8")) == []  # ワークスペースの AGENTS.md（雛形の写し）を読んでも、雛形を読んだことにしない
+        assert printed((PLUGIN / "desk-init" / "templates" / "recipes" / "README.md").read_text(encoding="utf-8")) == []  # ワークスペースの recipes/README.md（雛形の写し）を読んでも、雛形を読んだことにしない
         assert printed("\n".join(f.read_text(encoding="utf-8") for f in (PLUGIN / "slides-build" / "samples" / "json").glob("*.json"))) == []  # 見本の JSON は、pages.md のコードの囲みの例と同じ行でも数えない
         assert overlays(ws, f"cat {ws}/recipes/slides-build/x.md") == ""  # プラグインにない名前のワークスペースのファイルは、プラグインのファイルでない（前の版の rules/slides-build/visual.md のように同じ名前なら、作業のレシピを出す）
         mk = overlays(ws, "/plug/skills/deck-writing/content.md")

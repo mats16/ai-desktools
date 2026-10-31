@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """usage: init.py [<ワークスペース>] [--user]   （--selftest で自己確認）
-ワークスペースに、決まり（AGENTS.md・CLAUDE.md・recipes/）、設定（desk.toml）、索引（references_index.md。refs.py が台帳から作り直す）と Drive の置き場所（drive_folders.md）の雛形と、資料のフォルダを置く。
+ワークスペースに、決まり（recipes/。AGENTS.md・CLAUDE.md は置かない）、設定（desk.toml）、索引（references_index.md。refs.py が台帳から作り直す）と Drive の置き場所（drive_folders.md）の雛形と、資料のフォルダを置く。
 --user: 設定はワークスペースに置かず、個人の設定（~/.desk.toml。DESK_CONFIG があればそのパス）に置き、頭の workspace にワークスペースを書く。
 あるファイルは上書きしない（置いたもの・残したものを出す）。標準ライブラリだけ。ワークスペースを省くと、今いるフォルダ。"""
 import os, sys, tempfile, tomllib
@@ -53,15 +53,16 @@ def selftest():
     with tempfile.TemporaryDirectory() as tmp:
         local = Path(tmp, "local")
         local.mkdir()
-        (local / "AGENTS.md").write_text("mine")
+        (local / "drive_folders.md").write_text("mine")
         out = init(local)
-        assert (local / "AGENTS.md").read_text() == "mine" and any("残した" in o and "AGENTS.md" in o for o in out)
+        assert (local / "drive_folders.md").read_text() == "mine" and any("残した" in o and "drive_folders.md" in o for o in out)
+        assert not (local / "AGENTS.md").exists() and not (local / "CLAUDE.md").exists()  # 置くかは持ち主が決める
         assert (local / "desk.toml").is_file() and (local / "recipes" / "README.md").is_file() and (local / "Customers").is_dir()
         assert all("残した" in o for o in init(local))  # 2 回目は何も上書きしない
         ws, conf = Path(tmp, "ws").resolve(), Path(tmp, "home", ".desk.toml")
         os.environ["DESK_CONFIG"] = str(conf)
         out = init(ws, user=True)  # 設定は個人の設定に置き、ワークスペースには置かない
-        assert not (ws / "desk.toml").exists() and (ws / "AGENTS.md").is_file() and desk.locate(ws) == (conf, ws)
+        assert not (ws / "desk.toml").exists() and (ws / "recipes" / "README.md").is_file() and desk.locate(ws) == (conf, ws)
         assert f"置いた: {conf}（workspace = {ws}）" in out and tomllib.loads(conf.read_text())["slides"]["default_theme"] == "visual"
         assert f"残した（もうある）: {conf}（workspace = {ws}）" in init(ws, user=True)  # もうあれば上書きしない
         for at, points in ((ws, ws), (Path(tmp), ws), (Path(tmp, "later"), Path(tmp, "later", "Documents"))):  # --user なしで、既定のワークスペースか、その上に desk.toml を置かない（まだないフォルダを指していても）

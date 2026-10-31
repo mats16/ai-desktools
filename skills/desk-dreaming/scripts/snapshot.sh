@@ -1,6 +1,6 @@
 #!/bin/sh
 # usage: cd <ワークスペース> && snapshot.sh save | diff <tar.gz> | restore <tar.gz>
-# 定期の整理の前に、指示（AGENTS.md・CLAUDE.md・recipes/。移す前の前の版の rules/ も）、顧客の memory（Customers/*/memory.md）、索引、調べ直しの記録（Research/deck_research/）、Claude Code のメモリを固めて残す。
+# 定期の整理の前に、決まり（recipes/。移す前の前の版の rules/ と、ワークスペースの AGENTS.md・CLAUDE.md も。あれば）、顧客の memory（Customers/*/memory.md）、索引、調べ直しの記録（Research/deck_research/）、Claude Code のメモリを固めて残す。
 # diff はその写しから後の変更を出し、restore はその写しに戻す（写しのあとに足したファイルは消さない）。
 # 写しはワークスペースの .desk/dreaming/backup/。lint の記録（.desk/lint_runs.jsonl）は、戻すと消えるので入れない。
 set -eu
