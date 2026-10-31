@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 sys.dont_write_bytecode = True  # scripts/ に __pycache__ を残さない
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "deck-practices", "scripts"))  # gapi・brand・textlint（ドキュメントと共有する部品）
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))  # gapi・brand・textlint（ドキュメントと共有する部品）
 import gapi, lint, textlint
 from slides import STAMP, page_numbers, revision
 from gapi import DRIVE, PPTX, SLIDES, batch, file_id, folder_id, request, run, slide_ids, thumbnail, trash

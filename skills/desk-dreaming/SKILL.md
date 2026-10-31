@@ -1,11 +1,11 @@
 ---
 name: desk-dreaming
-description: Periodically tidies this folder's instructions (AGENTS.md), rules, and skills from conversation logs and the rule ledger (modeled on Devin's Dreaming). Rule changes drawn from conversations become proposals that wait for the user's reply. Safe cleanups (rebuilding the index, overlaps, stale text, broken paths) are applied directly and reported. Once a month it also reruns the deck-research survey. A scheduler calls it with the one line in prompt.txt. Also read it when the user says 「整理して」「desk-dreaming して」「提案を適用して」「推奨どおり」.
+description: Periodically tidies this folder's instructions (AGENTS.md), rules, and skills from conversation logs and the rule ledger (modeled on Devin's Dreaming). Rule changes drawn from conversations become proposals that wait for the user's reply. Safe cleanups (rebuilding the index, overlaps, stale text, broken paths) are applied directly and reported. Once a month it also reruns the desk-research survey. A scheduler calls it with the one line in prompt.txt. Also read it when the user says 「整理して」「desk-dreaming して」「提案を適用して」「推奨どおり」.
 ---
 
 # Scheduled cleanup (desk-dreaming)
 
-Corrections are written back into rules on the spot, in the conversation that makes the material (「修正の指示」 in AGENTS.md and `deck-practices/rules.md`). This skill picks up what those conversations missed and tidies the rules themselves. Following Devin's Dreaming (Cognition, 2026-10-05. `https://devin.ai/blog/memory-and-dreaming`, spec at `https://github.com/AgentMemoryRepo/agentmemoryrepo`), it looks at two things.
+Corrections are written back into rules on the spot, in the conversation that makes the material (「修正の指示」 in AGENTS.md and `desk-feedback` → routing and rule IDs). This skill picks up what those conversations missed and tidies the rules themselves. Following Devin's Dreaming (Cognition, 2026-10-05. `https://devin.ai/blog/memory-and-dreaming`, spec at `https://github.com/AgentMemoryRepo/agentmemoryrepo`), it looks at two things.
 
 - **Add:** Review conversations and find instructions that are not yet rules, and instructions that repeat across conversations.
 - **Tidy:** Merge overlaps into one place, delete stale text, and settle conflicts by their source. Keep sources and preferences the user stated explicitly.
@@ -16,11 +16,11 @@ Corrections are written back into rules on the spot, in the conversation that ma
 
 | Situation | Open |
 |---|---|
-| A scheduled run (the one line in `prompt.txt`), or the user says 「整理して」「desk-dreaming して」 | [run.md](run.md) (rules for running, the steps, the report format) |
-| Step 4 of a run: the request for the two child agents that draft proposal candidates (INV and DOM; desk-dreaming-002) | [prompt_propose.md](prompt_propose.md) |
-| Step 4j of a run: the request for the child agent that checks a rewritten rule file against the user's decisions (desk-dreaming-004) | [prompt_decided.md](prompt_decided.md) |
-| The user replies to a report (「適用」「推奨どおり」「推奨どおり、P0002 は却下」, answers to pending questions, or choices) | [apply.md](apply.md) |
-| Registering the run with a scheduler | [schedule.md](schedule.md) |
+| **Running:** a scheduled run (the one line in `prompt.txt`), or the user says 「整理して」「desk-dreaming して」 | [run.md](run.md) (rules for running, the steps, the report format) |
+| **The propose prompt:** step 4 of a run, the request for the two child agents that draft proposal candidates (INV and DOM; desk-dreaming-002) | [prompt_propose.md](prompt_propose.md) |
+| **The decided-check prompt:** step 4j of a run, the request for the child agent that checks a rewritten rule file against the user's decisions (desk-dreaming-004) | [prompt_decided.md](prompt_decided.md) |
+| **Applying proposals:** the user replies to a report (「適用」「推奨どおり」「推奨どおり、P0002 は却下」, answers to pending questions, or choices) | [apply.md](apply.md) |
+| **Scheduling:** registering the run with a scheduler | [schedule.md](schedule.md) |
 
 ## Files
 
@@ -33,7 +33,7 @@ Corrections are written back into rules on the spot, in the conversation that ma
 | `scripts/sessions.py` | Extracts user messages, opened rule files, and tool errors from conversations since the last run (has `--selftest`) |
 | `scripts/snapshot.sh` | Freezes a copy before changes (`save`), shows the diff since then (`diff`), restores it (`restore`) |
 | `scripts/run.sh` | Runs with `claude` or `codex` from launchd or cron |
-| `../deck-practices/scripts/ledger.py` | The rule ledger (`$R/.desk/ledger.jsonl`). Findings, sources per plugin rule ID and workspace rule file, the versions of each workspace rule file, and records of proposals, applies, rejections, and undos (has `--selftest`) |
+| `../../lib/ledger.py` | The rule ledger (`$R/.desk/ledger.jsonl`). Findings, sources per plugin rule ID and workspace rule file, the versions of each workspace rule file, and records of proposals, applies, rejections, and undos (has `--selftest`) |
 | `$R/.desk/dreaming/last_run` | When the last cleanup finished (UTC). Everything from here down lives in the workspace (anything inside the plugin is lost on reinstall) |
 | `$R/.desk/dreaming/log/<YYYYMMDD>.md` | The report (only for runs that found something). Proposal contents and status are in the rule ledger |
 | `$R/.desk/dreaming/backup/` | Copies taken before changes (`snapshot.sh` keeps only the newest 8) |

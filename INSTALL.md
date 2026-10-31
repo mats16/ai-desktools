@@ -79,7 +79,7 @@ pi install -l git:github.com/mats16/ai-desktools
 
 ## 4. ワークスペースを作る
 
-1. `<プラグイン>/skills/desk-init/SKILL.md` を開き、その手順に従う。「このスキルのフォルダ」は `<プラグイン>/skills/desk-init`、ほかのスキルのフォルダは `<プラグイン>/skills/<スキル>`。手順の 1（場所と設定の置き場所）は、ここの 1 で聞いたので飛ばす。設定はワークスペースの直下の `desk.toml` に置く（`init.py <ワークスペース>`。プラグインをワークスペースだけに入れるので、`--user` は付けない）。3 の `[drive] shared_themes` は、ここの 1 の 2 で聞いた値を書く。`[feedback.google_comments] watch_hours` は、ここの 1 の 4 で選んだ時間を書く（見張らないなら雛形の 0 のまま）。`[desk] default_language` は、ここの 1 の 5 で選んだ言語を書く（日本語なら雛形の `ja` のまま）。3 の `[slides] default_theme`（既定のテンプレート）は、テンプレートを作り、共有のテーマを `slides.py theme <url>` で写したあとで、`<プラグイン>/skills/slides-template/SKILL.md` の「Choosing the default theme」に従って選択式で聞く（1 では聞かない。何を選べるかは、そろってから分かる）。
+1. `<プラグイン>/skills/desk-init/SKILL.md` を開き、その手順に従う。「このスキルのフォルダ」は `<プラグイン>/skills/desk-init`、ほかのスキルのフォルダは `<プラグイン>/skills/<スキル>`。手順の 1（場所と設定の置き場所）は、ここの 1 で聞いたので飛ばす。設定はワークスペースの直下の `desk.toml` に置く（`init.py <ワークスペース>`。プラグインをワークスペースだけに入れるので、`--user` は付けない）。3 の `[drive] shared_themes` は、ここの 1 の 2 で聞いた値を書く。`[feedback.google_comments] watch_hours` は、ここの 1 の 4 で選んだ時間を書く（見張らないなら雛形の 0 のまま）。`[desk] default_language` は、ここの 1 の 5 で選んだ言語を書く（日本語なら雛形の `ja` のまま）。3 の `[slides] default_theme`（既定のテンプレート）は、テンプレートを作り、共有のテーマを `slides.py theme <url>` で写したあとで、`<プラグイン>/skills/slides-build/template.md` の「Choosing the default theme」に従って選択式で聞く（1 では聞かない。何を選べるかは、そろってから分かる）。
 2. desk-init の最後の手順（6 の「Check」）は、`<プラグイン>/skills/desk-doctor/SKILL.md` を開いて従う。要修正が 0 になるまで直す。Google のログインのように、ユーザーが回すものが残ったら、回してもらってから doctor をもう一度回す。
 
 ## 5. 定期の整理を登録する
@@ -107,7 +107,7 @@ pi install -l git:github.com/mats16/ai-desktools
   - Claude Code: `cd <ワークスペース> && claude`。スキルは `/desk-tools:slides-build` のように呼ぶ。
   - Codex: `cd <ワークスペース> && codex`。初めてはフォルダを信頼し、`/hooks` で `desk-tools` の hook を信頼する。スキルは `$desk-tools:slides-build` のように呼ぶ。
   - pi: `cd <ワークスペース> && pi`。初めては `/trust` で信頼を保存する（保存しないと、パッケージのスキルが出ない。desk-dreaming の定期の回も読めない）。スキルは `/skill:slides-build` のように呼ぶ。
-- 最初の資料は「〇〇向けの提案のスライドを作って」のように頼めばよい（スキル `deck-practices` から始まる）。
+- 最初の資料は「〇〇向けの提案のスライドを作って」のように頼めばよい（スキル `deck-workflow` から始まる）。
 
 ## うまくいかないとき
 

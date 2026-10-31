@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """usage: lint.py <deck.json> [--talk]   Google Slides（Slides API の presentations.get の JSON。gslides.py check が書き出して呼ぶ）
-       python3 lint.py --selftest で自己確認、--stats で要確認の残り方（規則ごと。../../deck-practices/scripts/textlint.py --stats と同じ）
+       python3 lint.py --selftest で自己確認、--stats で要確認の残り方（規則ごと。../../../lib/textlint.py --stats と同じ）
 --talk は LT など話す資料（聞き手が初めて聞く中身を短く話すもの）。1 枚の本文の字数も見る。
 書いたルールのうち、機械で見られるものを数える。本文の表記の決まり・出典の照合・記録はドキュメントと同じ textlint.py。ドキュメントは docs-build の doc_lint.py。
 標準ライブラリだけで動く。要修正（HARD）が 1 つでもあれば exit 1。要確認（WARN）は 1 件ずつ見て、直すか、残す理由を言えるようにする。
-ルールの出典は ../visual.md・../../deck-practices/ と、ワークスペースの Research/deck_research/log/。pptx を読んでいた版は Archive/pptx_pipeline_20261007/。"""
+ルールの出典は ../../deck-design/slides.md・../../deck-writing/ と、ワークスペースの Research/deck_research/log/。pptx を読んでいた版は Archive/pptx_pipeline_20261007/。"""
 import itertools, json, math, os, re, subprocess, sys
 from collections import Counter, defaultdict
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "deck-practices", "scripts"))  # ドキュメントと共有する部品
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))  # ドキュメントと共有する部品
 import textlint  # noqa: E402
 from brand import COPYRIGHT_FOOTER  # noqa: E402
 from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, contrast, facts_hit,  # noqa: E402
@@ -26,9 +26,9 @@ SLIDE_ONLY = {"スライドに です・ます": re.compile(r"(です|ます|で
 
 
 BODY_LINES = "本文が 8 行を超える見込み"
-TALK_MAX = 125  # [slides-lint-002] 話す資料の 1 枚の本文の目安。5 行 × 1 行 25 字（Research/deck_research/log/20261006_jp_content.md の 1-13、visual.md の 2）
+TALK_MAX = 125  # [slides-lint-002] 話す資料の 1 枚の本文の目安。5 行 × 1 行 25 字（Research/deck_research/log/20261006_jp_content.md の 1-13、deck-design の slides.md の 2）
 TALK = f"話す資料で本文が {TALK_MAX} 字を超える"
-# [slides-lint-003] 章の扉（濃紺の地）。本編が長いのに扉がないと、テーマの切り替わりが唐突になる。扉の間が 1 枚だけなら細切れ（visual.md の 1）
+# [slides-lint-003] 章の扉（濃紺の地）。本編が長いのに扉がないと、テーマの切り替わりが唐突になる。扉の間が 1 枚だけなら細切れ（deck-design の slides.md の 1）
 DIVIDER_MIN = 12
 NO_DIVIDER = f"{DIVIDER_MIN} 枚を超えるのに章の扉がない"
 SHORT_CH = "扉のあとが 1 枚だけの章"
@@ -36,28 +36,28 @@ NO_COVER = "1 枚目が表紙（濃紺の地）でない"
 ARROW_MID = "横向きの矢印が、両側の箱の上下の中央にない"
 LINE_GRID = "格子を線で組んでいる（標準の表にできないか）"
 NO_SOURCE = "数字に出典の行がない"
-TWO_LINES = "見出しかリードが 2 行の見込み"  # 見出しは 1 行、リードは 1 文（visual.md の 1）
-BULLET_PERIOD = "箇条書きの句点の混在"  # content.md の 6。名前は Docs の規則と同じ（箇条書きのリストごと）
-HEAD_CLAIMS, CLAIM_MAX = "言い切りの見出しが多い", 3  # 言い切りは判断を頼むページと数字の結論のページの 2〜3 枚だけ（../../deck-practices/scripts/textlint.py の deck-lint-023。content.md の 4）
+TWO_LINES = "見出しかリードが 2 行の見込み"  # 見出しは 1 行、リードは 1 文（deck-design の slides.md の 1）
+BULLET_PERIOD = "箇条書きの句点の混在"  # deck-writing の content.md の 6。名前は Docs の規則と同じ（箇条書きのリストごと）
+HEAD_CLAIMS, CLAIM_MAX = "言い切りの見出しが多い", 3  # 言い切りは判断を頼むページと数字の結論のページの 2〜3 枚だけ（../../../lib/textlint.py の deck-lint-023。deck-writing の content.md の 4）
 CLAIM_END = re.compile(r"[るうくすつむぶぐただい]$")  # 読点があり、動詞・形容詞らしい仮名で終わるものを言い切りの見込みにする。「N つ」で終わる名詞句は除く。形態素解析は入れない
 # [slides-lint-004] 空きと結論バンド。目安は、空いて見えたページを拾う値にした
 EMPTY_BELOW = "本文の下が空いている"
 EMPTY_BOX = "箱の中の下が空いている"
 EMPTY_HOLE = "本文の中ほどが空いている"  # [slides-lint-005] 要素と要素の間・結論バンドの上・本文の上の大きな空き。中身より大きい箱やページの中の穴を、レビューより先に出す
-PAD_NG = "塗りの箱の端と文字の間が 1 字分より狭い"  # visual.md の 4
-NUM_NO_UNIT = "大きな数字に単位がない"  # [slides-lint-006] visual.md の 2。数字だけの段落は何の数か分からない
-PHRASE_BREAK = "自動の折り返しが文節の途中に入る見込み"  # [slides-lint-024] ../visual.md の slides-visual-013。Google Slides は和文を 1 字ずつ折り返す。レビューで直した改行でいちばん多かった
+PAD_NG = "塗りの箱の端と文字の間が 1 字分より狭い"  # deck-design の slides.md の 4
+NUM_NO_UNIT = "大きな数字に単位がない"  # [slides-lint-006] deck-design の slides.md の 2。数字だけの段落は何の数か分からない
+PHRASE_BREAK = "自動の折り返しが文節の途中に入る見込み"  # [slides-lint-024] ../../deck-design/slides.md の slides-visual-013。Google Slides は和文を 1 字ずつ折り返す。レビューで直した改行でいちばん多かった
 NO_HEAD = "、。，．）」』】〕・ー!?！？：；"  # 行頭に来ない字（禁則で前の行に戻るので、見込みの位置で折れない）
-OPEN_HEAD = "手の改行のあとの行頭に全角の開き括弧"  # [slides-lint-007] visual.md の 2 の「改行」。行頭の「（」「「」は半字下がって見え、左端がそろわない
+OPEN_HEAD = "手の改行のあとの行頭に全角の開き括弧"  # [slides-lint-007] deck-design の slides.md の 2 の「改行」。行頭の「（」「「」は半字下がって見え、左端がそろわない
 TEXT_OVER = "文字が枠の下からはみ出し、下の文字に重なる見込み"  # [slides-lint-025] 枠の高さを決め打ちにした見出しが折り返したとき（2026-10-19。カードの太字の見出しを Regular の字幅で見込み、2 行目が本文に重なった）
-COL_SHIFT = "隣り合う列の箱の上端か下端がずれている"  # [slides-lint-008] visual.md の 4。片方の列にだけ小見出しを置くと、箱の上下がそろわない
+COL_SHIFT = "隣り合う列の箱の上端か下端がずれている"  # [slides-lint-008] deck-design の slides.md の 4。片方の列にだけ小見出しを置くと、箱の上下がそろわない
 BIG_NUM_PT, COL_TOL, COL_MAX, NEST = 28, 0.03 * EMU, 1.0 * EMU, 0.25 * EMU  # 大きな数字の大きさ。列のずれは 0.03〜1.0 in を出す（それより大きいのは中身の量の違いとみなす）
 DASH_ROUND = "点線の角丸が Google 標準の丸み"  # api.md。中のカード（半径 0.1 in）と曲率が合わない。JSON の box の dash にする（2026-10-08）
-CODE_NOT_MONO = f"濃紺の地のコードが等幅の {MONO_DEFAULT} でない"  # [slides-lint-009] visual.md の 2。pages.py に残った古いコードの箱の部品で、等幅にならなかった（レビューでも見落としやすい）
+CODE_NOT_MONO = f"濃紺の地のコードが等幅の {MONO_DEFAULT} でない"  # [slides-lint-009] deck-design の slides.md の 2。pages.py に残った古いコードの箱の部品で、等幅にならなかった（レビューでも見落としやすい）
 CODE_LINE = re.compile(r"\s*(SELECT|UPDATE|INSERT|DELETE|CREATE|ALTER|WITH|FROM|WHERE|SET|ANALYZE|GROUP BY|ORDER BY|import|def|pip|uv|curl|psql|python3?|databricks)(?=[\s(;]|$)")  # コードの行の頭（URL の databricks.com などは数えない）
-BLOCK_ON_NAVY = "濃紺の箱の上に NAVY_BLOCK の箱"  # [slides-lint-010] visual.md の 1。地との差が小さく、群の境が見えない。本文ページでは淡色（PANEL・CARD）にする。扉（濃紺の地）は見ない
-STAGE_NG = "提供ステージの札の塗りが言葉と合わない"  # [slides-lint-011] visual.md の 1。Public Preview（本番で使える）を Beta・Private Preview の黄と分ける
-MANY_BANDS = "結論バンドが本文の 3 分の 1 を超える"  # [slides-lint-012] visual.md の 1「要るページにだけ」
+BLOCK_ON_NAVY = "濃紺の箱の上に NAVY_BLOCK の箱"  # [slides-lint-010] deck-design の slides.md の 1。地との差が小さく、群の境が見えない。本文ページでは淡色（PANEL・CARD）にする。扉（濃紺の地）は見ない
+STAGE_NG = "提供ステージの札の塗りが言葉と合わない"  # [slides-lint-011] deck-design の slides.md の 1。Public Preview（本番で使える）を Beta・Private Preview の黄と分ける
+MANY_BANDS = "結論バンドが本文の 3 分の 1 を超える"  # [slides-lint-012] deck-design の slides.md の 1「要るページにだけ」
 GAP_BELOW, GAP_BOX = 1.0 * EMU, 0.6 * EMU  # 本文の下（本文の領域 5 in の 2 割）と、箱の中の文字より下
 GAP_HOLE, GAP_TOP = 0.65 * EMU, 1.0 * EMU  # 要素の間の穴と、本文の上の空き
 THIN = 0.05 * EMU  # これより細い四角は線として数える（四角で罫線や軸を引いても、格子と矢印の確かめから漏れないように）
@@ -67,7 +67,7 @@ PAGE_ONLY = {NO_SOURCE, NOT_IN_FACTS, NO_LINK, TALK, TWO_LINES, HEAD_PERIOD, HEA
 ESTIMATE = {TWO_LINES, BODY_LINES, PHRASE_BREAK, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, TEXT_OVER}  # 字幅と行の高さの見積もりから出す指摘。Google が描いた画像で確定する（ほかは JSON で決まる）
 HARD_NAMES = textlint.HARD_NAMES | {COPYRIGHT_NG}
 INS = INSET * 72  # 文字の枠の内側の余白（pt）。Slides API の既定は 0.1 in で、変えられない
-BODY_TOP, BODY_BOTTOM = Y_BODY_NOLEAD * EMU, BAND_BOTTOM * EMU  # 本文の領域（visual.md の 1 の配置）
+BODY_TOP, BODY_BOTTOM = Y_BODY_NOLEAD * EMU, BAND_BOTTOM * EMU  # 本文の領域（deck-design の slides.md の 1 の配置）
 FOOT_TOP = (Y_FOOT - 0.13) * EMU  # これより下はフッター（出典の行 6.68 in とフッター 7.08 in の間）
 
 
@@ -371,7 +371,7 @@ def page_holes(els, scheme):
     return out
 
 
-def tight_pad(sh, b, box):  # [slides-lint-014] 塗りの箱に左寄せ・右寄せで置いた文字と、箱の端の間が 1 字分（文字の大きさ）より狭い（visual.md の 4。pptx から作り直した札の余白は、枠の内側の余白 0.1 in のままになりやすい）
+def tight_pad(sh, b, box):  # [slides-lint-014] 塗りの箱に左寄せ・右寄せで置いた文字と、箱の端の間が 1 字分（文字の大きさ）より狭い（deck-design の slides.md の 4。pptx から作り直した札の余白は、枠の内側の余白 0.1 in のままになりやすい）
     ps = [x for x in paras(sh.get("text")) if ptext(x).strip()]
     if not box or not ps or ps[0][0].get("alignment", "START") not in ("START", "END"):
         return None
@@ -486,7 +486,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
     ワークスペースの点検（ページをまたいで見るものがありうる）は絞らない。"""
     titles, sizes, pairs, chars, dark, foot_secret, bands, claims, wraps = [], Counter(), defaultdict(list), [], [], [], [], [], []
     global MONO
-    font, MONO = deck_font(p), deck_mono(p)  # 会社のテンプレートは会社の書体（slides-template）。等幅はデッキのテーマの mono
+    font, MONO = deck_font(p), deck_mono(p)  # 会社のテンプレートは会社の書体（template.md）。等幅はデッキのテーマの mono
     use_font(font)  # 字幅の見積もり（行数・折り返し）もデッキの書体のもの
     card = deck_card(p)  # カードの地。デッキのテーマの CARD（書かなければ白）
     for i, s in enumerate(p.get("slides", []), 1):
@@ -586,7 +586,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                             r.hits[COPYRIGHT_NG if copyright_footer else f"{MIN_PT}pt 未満の文字"].append(f"p{i}: {sz:g}pt「{txt[:20]}」")
                         col, ground = hexof(st.get("foregroundColor"), scheme), f or under
                         if col and ground:
-                            large = sz >= 18 or (sz >= 11 and st.get("bold"))  # 太字は本文の 11pt から大きな文字（WCAG の 14pt より下げた。visual.md の 3）
+                            large = sz >= 18 or (sz >= 11 and st.get("bold"))  # 太字は本文の 11pt から大きな文字（WCAG の 14pt より下げた。deck-design の slides.md の 3）
                             pairs[(col, ground, 3.0 if large else 4.5)].append(txt)
                         if sz > best[0] and not re.fullmatch(r"[\d\s.]+", txt):
                             best = (sz, e, b)
@@ -655,7 +655,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
             if t.strip():
                 r.scan(f"p{i} のノート", t, HARD)
 
-    if dark and not dark[0] and not reuse:  # [slides-lint-018] どの資料にも表紙を付ける（visual.md の 1）
+    if dark and not dark[0] and not reuse:  # [slides-lint-018] どの資料にも表紙を付ける（deck-design の slides.md の 1）
         r.hits[NO_COVER].append("p1 が濃紺の地でない。表紙を付ける（定例の資料も）")
     divs = [i for i, d in enumerate(dark, 1) if d and i > 1]  # 1 枚目（表紙）は扉に数えない
     if len(dark) > DIVIDER_MIN and not divs:
@@ -665,9 +665,9 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
             r.hits[SHORT_CH].append(f"p{a} の扉のあとが {f'p{a + 1} だけ' if b - a == 2 else '1 枚もない'}。前後の章とまとめる")
     body_pages = dark.count(False)
     if not reuse and len(bands) > max(1, body_pages / 3):
-        r.hits[MANY_BANDS].append(f"本文 {body_pages} 枚中 {len(bands)} 枚（{', '.join(f'p{k}' for k in bands)}）。見出しかリードで言い切れているページからは外す（visual.md の 1）")
+        r.hits[MANY_BANDS].append(f"本文 {body_pages} 枚中 {len(bands)} 枚（{', '.join(f'p{k}' for k in bands)}）。見出しかリードで言い切れているページからは外す（deck-design の slides.md の 1）")
     if len(claims) > CLAIM_MAX:
-        r.hits[HEAD_CLAIMS].append(f"{len(claims)} 枚（{', '.join(f'p{k}' for k in claims)}）。名詞句にし、言い切りは判断を頼むページと数字の結論のページの 2〜3 枚に絞る（content.md の 4）")
+        r.hits[HEAD_CLAIMS].append(f"{len(claims)} 枚（{', '.join(f'p{k}' for k in claims)}）。名詞句にし、言い切りは判断を頼むページと数字の結論のページの 2〜3 枚に絞る（deck-writing の content.md の 4）")
     if only is not None:  # 選んだページの指摘だけを残す（デッキ全体の規則 DECK_WIDE と、p<番号> で始まらない指摘は残す）。文節の点検（uv を呼ぶ）も、そのページだけにする
         on = lambda h: hit_page(h) is None or hit_page(h) in only
         wraps = [w for w in wraps if on(w[0])]
@@ -859,7 +859,7 @@ def selftest():
     oat = rgb("F9F7F4")
     assert len(run(deck([(NAVY, [title()]), (oat, [title(), shape(1, size=36, text=["55"])])]))[0].hits[NUM_NO_UNIT]) == 1
     assert not run(deck([(NAVY, [title()]), (oat, [title(), shape(1, size=36, text=["55 モデル"])])]))[0].hits[NUM_NO_UNIT]
-    # 手の改行のあとの行頭の全角の開き括弧（visual.md の 2）。括弧の後で改行したものは出さない
+    # 手の改行のあとの行頭の全角の開き括弧（deck-design の slides.md の 2）。括弧の後で改行したものは出さない
     assert len(run(deck([(NAVY, [title()]), (oat, [title(), shape(1, text=["表と同じ権限\v（Unity Catalog）"])])]))[0].hits[OPEN_HEAD]) == 1
     assert not run(deck([(NAVY, [title()]), (oat, [title(), shape(1, text=["表と同じ権限（Unity\vCatalog）"])])]))[0].hits[OPEN_HEAD]
     # 自動の折り返しが文節の途中に入る見込み（slides-visual-013）。数え方は slides.py の wrap_lines と同じ。文節は BudouX の結果を差し替えて試す
@@ -944,7 +944,7 @@ def selftest():
     assert len(res.hits["社外秘の表示"]) == 1 and "2 ページ" in res.hits["社外秘の表示"][0]
     res = run(deck([(NAVY, [title("あ" * 40), shape(1, y=1.2, w=12, size=12, text=["い" * 80])])]))[0]
     assert len(res.hits[TWO_LINES]) == 2
-    # 見出しの句点と、1 つの枠の箇条書きの句点の混在（content.md の 6）。箇条書きでない段落は数えない
+    # 見出しの句点と、1 つの枠の箇条書きの句点の混在（deck-writing の content.md の 6）。箇条書きでない段落は数えない
     def bulleted(ts):
         e = shape(1, text=ts)
         for te in e["shape"]["text"]["textElements"]:

@@ -19,21 +19,21 @@ usage（資料の build/ で。deck.json か pages.py は今いるフォルダ�
   slides.py schema [--brief]   JSON のページの書く形の JSON Schema を出す（--brief は型・キー・色の早見表）
   slides.py stats   JSON のページの形の外の書き方（raw）を、キーごとに使った資料の数で出す（ワークスペースの .desk/spec_raw.jsonl。形に足す候補）
   slides.py upgrade <ファイル>...   JSON のページの raw のうち、形のキーで書けるものを書き換える
-  slides.py themes   テーマの名前・説明・テンプレートがあるか・既定か。資料ごとに選ぶ（../../deck-practices/start.md の 5）。
+  slides.py themes   テーマの名前・説明・テンプレートがあるか・既定か。資料ごとに選ぶ（../../deck-workflow/start.md の 5）。
                      [drive] shared_themes と [drive] desk の下の Themes の、[slides.templates] にないテンプレートも候補に出す
   slides.py theme <URL か ID> [<名前>] [--force]   テンプレートかデッキが持つテーマ（マスターの配色・書体・目印）を、ワークスペースの themes/slides/<名前>.json に書く。
                      テンプレートなら [slides.templates] にも書く（共有テーマを使い始めるとき、画面で直した色を戻すとき）
   slides.py merge <ファイル>...   pages.py の資料で、子が別のファイルに書いたページの関数を pages.py に合わせる（組まない。../../deck-review/prompt_fix.md）
   slides.py --selftest
 テンプレートの管理は template.py。色は下の「色の役割」の名前で渡す。役割の名前はテーマの色（マスターの配色）を指すので、テンプレートを替えると色が変わる。
-見た目の決まりは ../visual.md の 1。"""
+見た目の決まりは ../../deck-design/slides.md の 1。"""
 import ast, atexit, contextlib, decimal, functools, hashlib, importlib, inspect, io, itertools, json, math, os, re, shutil, subprocess, sys, tempfile, time, tomllib, types, urllib.error, urllib.parse, urllib.request
 from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # build/ と scripts/ に __pycache__ を残さない
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "deck-practices", "scripts"))  # ドキュメントと共有する部品（gapi・brand・textlint）
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))  # ドキュメントと共有する部品（gapi・brand・textlint）
 import brand, gapi
 from gapi import (DRIVE, GSLIDES, PPTX, SLIDES, batch, carry, delete, config, config_path, file_id, folder_id, png, request, run, slide_ids, thumbnail,
                   trash, u16, upload)
@@ -43,9 +43,9 @@ from brand import (ASCII_BOLD_EM, ASCII_EM, BRAND_COPYRIGHT, COMPANY, COPYRIGHT_
 # ---- テンプレート。ID・置き場所・既定のテーマは人ごとに違うので、設定（ワークスペースの desk.toml か ~/.desk.toml）の [slides] に置く（作り方は template.py） ----
 BLANK = "Content E - Blank"  # テンプレートに残した、置き物のないレイアウト。ページ番号の枠だけを持つ
 
-# ---- 版面（visual.md の 1。上端は in） ----
+# ---- 版面（deck-design の slides.md の 1。上端は in） ----
 MONO = MONO_DEFAULT  # 組むデッキの等幅の書体。テーマの mono があればそれ（use_theme）
-MONO_EM = 0.586  # Cascadia Mono の英数字の幅（em。hmtx で測った。2026-10-09）。テーマで等幅の書体を替えても、この幅で見込む（ずれる。slides-template の fonts.md）
+MONO_EM = 0.586  # Cascadia Mono の英数字の幅（em。hmtx で測った。2026-10-09）。テーマで等幅の書体を替えても、この幅で見込む（ずれる。template_fonts.md）
 EMU = 914400
 INSET = 0.1  # 文字の枠の内側の余白（API で変えられない）。枠をこの分だけ外に出し、文字の端を箱の端にそろえる
 PAD = 0.08   # 箱と、その上に重ねる文字の枠の間（INSET と合わせて、枠と文字の間が 1 字分ほどになる）
@@ -61,7 +61,7 @@ BAND_BOTTOM, Y_SRC, Y_FOOT = 6.60, 6.68, 7.08  # 結論バンドの下端、出�
 COPYRIGHT = BRAND_COPYRIGHT  # 組むデッキの著作権表示。テーマの copyright があればそれ（use_theme）
 # 結論バンドの内側の余白（in）。枠と文字の間は 1 字分より大きめに取る（見た目 1-8。13pt の 1 字は 0.18 in）。左右は pptx 版と同じ 18pt
 BAND_PAD_X, BAND_PAD_Y = 0.25, 0.2
-# [slides-component-001] 正円の番号の直径（in）と数字（pt）。medium・large は数字の高さが円の 4 割ほど。small は周りの 11pt の文字に合わせて 11pt（11pt の太字なので、赤に白の 3.62:1 で届く。visual.md の 3 の slides-visual-039）
+# [slides-component-001] 正円の番号の直径（in）と数字（pt）。medium・large は数字の高さが円の 4 割ほど。small は周りの 11pt の文字に合わせて 11pt（11pt の太字なので、赤に白の 3.62:1 で届く。deck-design の slides.md の 3 の slides-visual-039）
 NUM = {"small": (0.3, 11), "medium": (0.36, 14), "large": (0.48, 18)}  # 図の中の印／カードと手順（既定）／大きな段
 NUM_SHAPES = ("ellipse", "round_rectangle")  # 番号の形。角丸は高さを円の直径にし、幅を数字に合わせる（num_w）
 # カードの箱の角（Deck.card の corner）。round は CORNER_RADIUS、square は四角、pill は短い辺の半分の丸み（組んだ大きさで決めるので、h が変わってもピルのまま）。
@@ -71,7 +71,7 @@ PILL_MAX = 1.2  # ピルのカードの短い辺の上限（in）。これより
 # [slides-component-002] 赤（RED）の線の太さ（pt）。強調の囲みは実線でも点線でも 2pt（強調のための線なので、細くしない）。ほかの枠線は 0.75pt
 EMPH_PT = 2
 
-# ---- 色の役割（visual.md の 1）。テーマの色の枠の名前 ----
+# ---- 色の役割（deck-design の slides.md の 1）。テーマの色の枠の名前 ----
 NAVY, BG, RED_ON_NAVY, PANEL = "DARK1", "LIGHT1", "DARK2", "LIGHT2"  # 表紙・扉の地、結論バンド、表の見出しの行、コードの箱／本文の地／濃紺の上の赤／パネル
 NAVY_BLOCK, GA, RED_TEXT, PREVIEW = "ACCENT1", "ACCENT2", "ACCENT3", "ACCENT4"  # 扉の中のブロック／GA の札／18pt 未満の赤の文字／Beta・Preview の札
 SUB, OSS, RED = "ACCENT5", "ACCENT6", "HYPERLINK"  # 補助の文字とフッター／OSS の札／赤のアクセント（塗りと 18pt 以上の文字）
@@ -80,7 +80,7 @@ RED_SOFT, STAGE_TEXT, DECOR = "FFECE8", "0B2026", "6B8089"  # 淡い赤／札の
 # TEXT・RULE と上の 3 色は既定の値。テーマのファイルの colors に同じ名前で書くと、そのテーマのデッキでは paint とアイコンが置き換える（use_theme）。
 # pages.py には名前（か既定の 6 桁）で書く。マスターの配色に枠が残っていない（12 の枠をすべて使う）ので、組むときに置き換える
 FIXED = {"TEXT": TEXT, "RULE": RULE, "RED_SOFT": RED_SOFT, "STAGE_TEXT": STAGE_TEXT, "DECOR": DECOR}
-# 名前で引く役割（名前 → 書かないときの色）。既定は今の色（役割の枠か、上の色）と同じで、暗い本文のテーマ（../../slides-template/dark.md）が分けて書く。
+# 名前で引く役割（名前 → 書かないときの色）。既定は今の色（役割の枠か、上の色）と同じで、暗い本文のテーマ（../template_dark.md）が分けて書く。
 # 既定の値を WHITE や NAVY と共有するので、FIXED のように値では置き換えない。pages.py には名前で書く
 NAMED = {"HEAD": NAVY, "CARD": WHITE, "SUB_ON_NAVY": RULE, "ON_RED": WHITE}
 HEAD, CARD, SUB_ON_NAVY, ON_RED = NAMED  # 本文のページの見出しの文字／カードと表のセルの地／濃紺の上の補足の文字とフッター／RED の塗りの上の文字
@@ -107,11 +107,11 @@ VARIANTS = {}  # 組んでいるデッキの {"cover"・"section": {番号: (文
 TONES = {"dark": (WHITE, RED_ON_NAVY, DECOR, SUB_ON_NAVY), "accent": (WHITE, NAVY, NAVY, NAVY), "light": (HEAD, RED_TEXT, DECOR, SUB)}
 _SWAP = {}  # 組んでいるデッキの、FIXED の既定の値 → テーマの値（use_theme が決める）
 _NAMED = {}  # 組んでいるデッキの、テーマが書いた NAMED の値（use_theme が決める）
-# 提供ステージの札の塗り（visual.md の 1）。本番で使える Public Preview は、Beta・Private Preview（本番向けではない）の黄と分け、GA の緑を 4 割にした色（2026-10-09）
+# 提供ステージの札の塗り（deck-design の slides.md の 1）。本番で使える Public Preview は、Beta・Private Preview（本番向けではない）の黄と分け、GA の緑を 4 割にした色（2026-10-09）
 PUBLIC_PREVIEW = "99DDC7"
 STAGE_FILL = {"GA": GA, "Public Preview": PUBLIC_PREVIEW, "Beta": PREVIEW, "Private Preview": PREVIEW, "OSS": OSS}  # 札の文字は OSS だけ WHITE、ほかは STAGE_TEXT
 SLOTS = ("DARK1", "LIGHT1", "DARK2", "LIGHT2", "ACCENT1", "ACCENT2", "ACCENT3", "ACCENT4", "ACCENT5", "ACCENT6", "HYPERLINK", "FOLLOWED_HYPERLINK")
-# テーマのファイルに書く役割の名前 → テーマの枠（visual.md の 1）。FOLLOWED_HYPERLINK は役割がなく、どのテーマも同じ色
+# テーマのファイルに書く役割の名前 → テーマの枠（deck-design の slides.md の 1）。FOLLOWED_HYPERLINK は役割がなく、どのテーマも同じ色
 ROLE = {"NAVY": NAVY, "BG": BG, "RED_ON_NAVY": RED_ON_NAVY, "PANEL": PANEL, "NAVY_BLOCK": NAVY_BLOCK, "GA": GA, "RED_TEXT": RED_TEXT, "PREVIEW": PREVIEW,
         "SUB": SUB, "OSS": OSS, "RED": RED}
 FOLLOWED = "954F72"
@@ -417,7 +417,7 @@ def run_style(st, color):
 
 
 def thumb_url(src, page):
-    """ほかの Google Slides のページの画像（1600 × 900）の URL。d.image に渡すとページをそのまま貼れる（reuse.md の段階 1）。30 分で切れる。"""
+    """ほかの Google Slides のページの画像（1600 × 900）の URL。d.image に渡すとページをそのまま貼れる（deck-workflow の reuse.md の段階 1）。30 分で切れる。"""
     pid = file_id(src)
     return thumbnail(pid, slide_ids(pid)[int(page) - 1])["contentUrl"]
 
@@ -586,14 +586,14 @@ class Deck:
              dash=False, weight=None, mono=False, wide=False):
         """parts は文字列か、(文字列, {"bold":…, "color":…, "size":…, "link":…}) の並び。改行は \\n（段落を分ける）、\\v は段落の中の改行。
         link は URL か、ページ番号（int。Appendix の出典のページなど）。リンクの文字は周りの色のまま下線を付ける。
-        spacing（行間、%）を省くと、2 行以上の見込みなら 125、1 行なら 100（visual.md の 2）。基準（size）の 2 倍以上の文字の段落
+        spacing（行間、%）を省くと、2 行以上の見込みなら 125、1 行なら 100（deck-design の slides.md の 2）。基準（size）の 2 倍以上の文字の段落
         （大きな数字）は、spacing によらず 100 にする（125 だと、Google の行送りでは数字と説明が離れて見えた。2026-10-08）。
         edge=True で、文字の端を (x, y)・幅 w・高さ h にそろえる（塗りのない文字。枠を INSET だけ外に出す。legacy.md の「Laying out shapes and text」）。
         pad（in）は、塗りか枠線のある文字の、左寄せ・右寄せのときの箱の端と文字の間。省くと 1 字分（枠でいちばん小さい文字の大きさ。lint と同じ測り方）。
-        枠の内側の余白は 0.1 in で変えられず 1 字分に足りないので、文字の枠を内に縮める（visual.md の 4。lint が見る）。中央寄せには効かない。
+        枠の内側の余白は 0.1 in で変えられず 1 字分に足りないので、文字の枠を内に縮める（deck-design の slides.md の 4。lint が見る）。中央寄せには効かない。
         gap（pt）は段落の間の空き（最後の段落には付けない。付けると上下の中央が上にずれる）。
         改行を含む part は、その行が枠に収まるかを見て、収まらない見込みなら警告する（fit=False で見ない）。
-        mono=True で、英数字を等幅の MONO にする（コードの箱・コマンドだけの札。visual.md の 2）。
+        mono=True で、英数字を等幅の MONO にする（コードの箱・コマンドだけの札。deck-design の slides.md の 2）。
         wide=True で、楕円でない図形も、楕円と同じく文字の枠を図形より広げる（角丸の番号。Deck.num）。"""
         parts = [parts] if isinstance(parts, str) else parts
         full = "".join(p if isinstance(p, str) else p[0] for p in parts)
@@ -770,11 +770,11 @@ class Deck:
               valign="middle", borders="rows"):
         """rows は行の並びで、セルは文字列か、parts の並び（d.text と同じ書式。改行は \\n）か、dict。header は見出しの行の数（True は 1）。
         見出しの行は濃紺に白の太字、1 列目は HEAD の太字（first_col）、行は 1 行おきに PANEL（zebra）、ほかは CARD。align は列ごとの "left"・"center"・"right" の並び（金額は右）、
-        valign はセルの上下の寄せ（top・middle・bottom）。罫線は borders で、rows は横の罫線だけを RULE で引き（visual.md の 5。既定）、grid は縦横と外枠、none は引かない。
+        valign はセルの上下の寄せ（top・middle・bottom）。罫線は borders で、rows は横の罫線だけを RULE で引き（deck-design の slides.md の 5。既定）、grid は縦横と外枠、none は引かない。
         dict のセルは text（文字列か parts）と、colspan・rowspan（右と下へ結合する数。覆う位置にはセルを書かない。HTML と同じ）、fill（そのセルの塗り）、
         align・valign（そのセルの寄せ）、color（文字の色。濃い fill なら WHITE などを渡す）、bullets（箇条書き）。
         行は文字に合わせて伸びる（row_h は最小）。戻りは表の下端の見込み（in。下に置く要素の位置に使う）。
-        mono_cols の列は、見出しの行を除いて英数字を等幅の MONO にする（コマンドの一覧など。visual.md の 2）。
+        mono_cols の列は、見出しの行を除いて英数字を等幅の MONO にする（コマンドの一覧など。deck-design の slides.md の 2）。
         row_h は行ごとの並びでもよい。fills は (行, 列, 色) の並び（0 始まり。行か列が None ならその列か行の全部）で、1 行おきの塗りの上に塗る（行か列の強調）。
         vlines は (始めの列, 列の数) で、見出しの行の下のその列の左右と間に縦の罫線を引く（ガントの月の区切り。線の図形で引くと lint の格子に出る）。"""
         t, nr, nc, nh = self.oid(), len(rows), len(widths), int(header)
@@ -844,7 +844,7 @@ class Deck:
         return y + table_h(widths, rows, size, hs, header, mono_cols, first_col)
 
     def arrow(self, sid, x1, y1, x2, y2, color=SUB, head=True, dash=False, weight=1.25, link=None, bent=False):
-        """細い線。横の矢印は、両側の箱の上下の中央に引く（visual.md の 4。lint が見る）。dash で点線（「できるが手間」などの意味）、weight は太さ（pt）。
+        """細い線。横の矢印は、両側の箱の上下の中央に引く（deck-design の slides.md の 4。lint が見る）。dash で点線（「できるが手間」などの意味）、weight は太さ（pt）。
         link は (始めの図形の ID, 辺, 終わりの図形の ID, 辺) で、線を四角の図形の辺の中央（接続点）につなぐ（画面で箱を動かしても付いてくる）。辺は top・left・bottom・right。
         (x1, y1)・(x2, y2) はその接続点に置く（Google がつないだ点に引き直す）。bent は折れ線（両端をつないだときだけ。つないだ辺に合わせて、横・縦・横、縦・横・縦、1 回だけ折れる形に Google が引く）。
         [slides-component-024] 2026-10-16 の sandbox で、つないだ線の形、グループの中の図形につなげること、つないでいない折れ線は形が崩れることを確かめた。
@@ -887,7 +887,7 @@ class Deck:
             sys.exit(f"アイコンの色は役割の名前か 6 桁で渡す: {name} に {color!r}")
         return self.image(sid, iconify(name, color) if ":" in name else render_icon(name, color), x, y, size, size, alt=name)
 
-    # ---- 1 枚の型（visual.md の 1） ----
+    # ---- 1 枚の型（deck-design の slides.md の 1） ----
     def page(self, title, lead=None, kicker=None):
         sid = self.slide()
         if kicker:
@@ -1017,7 +1017,7 @@ B_GROUP, B_GAP, B_SEG, B_KEY, B_KEY_GAP = 0.8, 0.04, 0.02, 0.14, 0.24
 B_VMAX = 1e15  # series の数の上限。4 つ足しても float の整数が丸まらない（2**53 ≈ 9e15）
 B_DRAW = 1e-4  # これより低い棒・段は描かない（解いた形は 4 桁に丸めるので、0 の高さの図形になる）
 B_SERIES = (("NAVY", "WHITE"), ("OSS", "WHITE"), ("GA", "STAGE_TEXT"), ("SUB", "WHITE"))
-TABLE_BORDERS = ("rows", "grid", "none")  # 表の罫線: 横の罫線だけ（既定。visual.md の 5）、縦横と外枠、なし
+TABLE_BORDERS = ("rows", "grid", "none")  # 表の罫線: 横の罫線だけ（既定。deck-design の slides.md の 5）、縦横と外枠、なし
 SITE = {"top": 0, "left": 1, "bottom": 2, "right": 3}  # 四角の図形の辺 → Slides API の接続点の番号（Deck.arrow の link）
 CONNECT = ("text", "label", "card", "stat", "code", "box")  # 矢印をつなげる部品（SpecPage.place が、四角の枠が箱と同じ大きさのものだけを選ぶ）
 # キーの型。s 文字列、md 記法つきの文字（spec_md）、n 数、i 整数、b 真偽、c 色、els 部品の並び、pt ID か [x, y]、ほかは SPEC_OK
@@ -1042,7 +1042,7 @@ SPEC_EL = {  # type → (要るキー, 書けるキー)
     "arrow": ({"from": "pt", "to": "pt"}, {"color": "c", "head": "b", "dash": "b", "weight": "p", "route": ("straight", "bent"), "label": "md",
                          "label_side": ("top", "bottom", "left", "right"), "offset": "f"}),  # label は線の札、label_side はその置き場所、offset は線を横（縦）にずらす in
     "gantt": ({"cols": "cols", "rows": "grows"}, {"today": "p"}),  # 予定表（slides-pages-010）
-    "bars": ({"items": "bitems"}, {"unit": "s", "horizontal": "b", "hot": "ints", "tentative": "btent", "line": "bline", "threshold": "bthr", "series": "bseries", "stack": "b"}),  # 棒グラフ（visual.md の 5）。折れ線と直線を重ねられる。series で 2〜4 系列（束ねるか積み上げる）。tentative は確定していない数（点線の枠）
+    "bars": ({"items": "bitems"}, {"unit": "s", "horizontal": "b", "hot": "ints", "tentative": "btent", "line": "bline", "threshold": "bthr", "series": "bseries", "stack": "b"}),  # 棒グラフ（deck-design の slides.md の 5）。折れ線と直線を重ねられる。series で 2〜4 系列（束ねるか積み上げる）。tentative は確定していない数（点線の枠）
     "row": ({"items": "kids"}, {"gap": "n", "widths": "nums", "arrows": "b"}),
     "stack": ({"items": "kids"}, {"gap": "n"}),
     "grid": ({"items": "kids", "cols": "pi"}, {"gap": "n"}),
@@ -1071,7 +1071,7 @@ SPEC_PAGE = {
 }
 SPEC_DECK = ({"name": "s", "pages": "pages"}, {"theme": "s", "authorNotes": "strs"})  # theme はいちばん上のデッキのファイルのもの（slides.py themes の名前）。authorNotes はどこにも組まない（ページの authorNotes と同じ）
 # テーマのファイル（read_theme）。colors は役割の名前（ROLE）・テーマに入れない色（FIXED）・名前で引く役割（NAMED）→ 6 桁。cover・section は
-# 会社のテンプレートから残す表紙・扉のレイアウトの名前の並び（template.py が文字の幅 w と地の明るさ tone を測って書き込む。../../slides-template/SKILL.md）
+# 会社のテンプレートから残す表紙・扉のレイアウトの名前の並び（template.py が文字の幅 w と地の明るさ tone を測って書き込む。../template.md）
 SPEC_THEME = ({}, {"description": "s", "font": "s", "mono": "s", "copyright": "s", "colors": "colors", "cover": "layouts", "section": "layouts"})
 # raw に書いた Deck の引数のうち、形のキーで書けるもの（type, 引数 → 形のキー）。lint が知らせ、slides.py upgrade が書き換える。形に足したらここにも足す
 # 同じ名前で同じ意味のもの（数え始めや単位の違う mono_cols・hot・fills・widths と、stat の size・color〔数字の大きさと色〕は入れない。2026-10-16 のレビュー）
@@ -1585,7 +1585,7 @@ class SpecPage:
             top += rh
 
     def bars(self, e, x, y, w, h, loc):
-        """[slides-component-026] 棒グラフ（visual.md の 5）。1 系列は凡例と目盛りを置かず、棒の端に数字を書く（直接のラベル）。棒は NAVY、hot の棒は RED と赤の数字。
+        """[slides-component-026] 棒グラフ（deck-design の slides.md の 5）。1 系列は凡例と目盛りを置かず、棒の端に数字を書く（直接のラベル）。棒は NAVY、hot の棒は RED と赤の数字。
         縦の棒（既定）は、下に名前、棒の上に数字、下端に基準の線。横の棒（horizontal）は、左に名前、棒の右に数字、左端に基準の線。
         line（縦の棒だけ）は、棒の上の段に、棒と別の目盛りで SUB の折れ線を引き、点の上に数字を書く。何の数か（label）は段の左上。
         折れ線は棒と違い 0 から始めず、いちばん小さい数を段の下、いちばん大きい数を段の上にする（段が低いので、0 からだと動きが見えない。数は点に書く）。
@@ -2074,7 +2074,7 @@ class SpecPage:
 
     def lone_text(self):
         """塗りの箱の中に、ほかの部品がなく、塗りのない文字が 1 つだけ入っていたら止める（札は図形と文字を 1 つにする。角丸と箱の端と文字の間がそろう。
-        visual.md の 4。2026-10-16 の sandbox で、構成図の箱を box と text を重ねて組んでいた）。見出しとカードを入れた囲みは、ほかの部品が入るので通る。"""
+        deck-design の slides.md の 4。2026-10-16 の sandbox で、構成図の箱を box と text を重ねて組んでいた）。見出しとカードを入れた囲みは、ほかの部品が入るので通る。"""
         for kind, loc, r, filled, _, _ in self.placed:
             if filled and len(ins := [p for p in self.placed if p[1] != loc and rect_in(p[2], r)]) == 1 and ins[0][4]:
                 sys.exit(f"{ins[0][1]}（text）: {loc} の塗りの箱の中に、文字だけを重ねた。塗りの箱と文字は、1 つの label か、fill のある text にする（アイコンも置くなら印のあるカード）")
@@ -2107,7 +2107,7 @@ class SpecPage:
             self.warns.append(f"{loc}（card）: ピルの短い辺が {min(w, h):.2f} in で {PILL_MAX} in より大きく、半円が文字にかかる見込み。"
                               "背の高いカードと同じ行に置かない、文字を減らす、corner を外すのどれかにする")
         if e.get("shape") == "rectangle" and (fill or kind == "label"):
-            self.warns.append(f"{loc}: 塗りの箱を四角（shape: rectangle）にした。塗りの箱は、書かなければ角丸（visual.md の 4）。四角にする理由がなければ shape を外す")
+            self.warns.append(f"{loc}: 塗りの箱を四角（shape: rectangle）にした。塗りの箱は、書かなければ角丸（deck-design の slides.md の 4）。四角にする理由がなければ shape を外す")
         if kind in ("text", "label"):
             s, bul = spec_bullets(e["text"], f"{loc}（text）") if kind == "text" else (e["text"], False)
             parts = spec_md(s, emph, loc)
@@ -2186,7 +2186,7 @@ class SpecPage:
                 hs = [[self.measure(t, self.slot_w(t, cw), loc) for t in c] for c, cw in zip(cols, ws)]
                 if any(max(h[i] for h in hs) - min(h[i] for h in hs) > 0.03 for i in range(len(shapes[0]) - 1)):  # 最後の段は上端がそろえばよい
                     self.warns.append(f"{loc}（row）: 同じ形の stack を並べたが、段の高さがそろわず、下の段の上端がずれる。段の順に grid（cols: {len(cols)}）に並べる"
-                                      "（grid は行ごとに高さをそろえる。../visual.md の slides-visual-024）")
+                                      "（grid は行ごとに高さをそろえる。../../deck-design/slides.md の slides-visual-024）")
         it, cy, k = iter(ws), y, 0
         for row in self.rows_of(e):
             cw = [next(it) for _ in row]
@@ -2292,7 +2292,7 @@ class SpecPage:
                 return v if v in self.ids or "." not in v else v.rsplit(".", 1)[0]
             ends = Counter((k, eid(a[k])) for a, *_ in self.arrows for k in ("from", "to") if isinstance(a[k], str))
             if ends["from", fa] == 1 and ends["to", fb] == 1:  # fa から出る線も fb に入る線も 1 本だけ  # 2026-10-20、ワークスペースの決まりから（避けて回した 1 本の線は、どこからどこへの流れかが読みにくい）
-                self.warns.append(f"{loc}: 枝分かれでも合流でもない 1 本の流れを折れ線（bent）にした。つなぐ 2 つの箱を同じ行か同じ列に置き直し、まっすぐ引く（../visual.md の slides-visual-043）")
+                self.warns.append(f"{loc}: 枝分かれでも合流でもない 1 本の流れを折れ線（bent）にした。つなぐ 2 つの箱を同じ行か同じ列に置き直し、まっすぐ引く（../../deck-design/slides.md の slides-visual-043）")
         if boxed and route == "straight" and not sided and abs(x1 - x2) > 0.01 and abs(y1 - y2) > 0.01:  # ずらした線（offset）も、両端の箱の中央からずらすので同じ  # 2026-10-16 の依頼文の試しで、枝の 1 本だけ直線にして斜めになった
             self.warns.append(f"{loc}: 矢印が斜めになる。枝分かれなら、どの枝も \"route\": \"bent\" にする（中央が同じ高さの枝はまっすぐ引かれる）か、両端の箱の高さをそろえる")
         self.emit("arrow", loc, e, x1=x1, y1=y1, x2=x2, y2=y2, color=spec_color(e.get("color", "SUB")), head=e.get("head", True), dash=e.get("dash", False), weight=e.get("weight", 1.25),
@@ -2341,7 +2341,7 @@ class SpecPage:
             if kind == "box" and e.get("shape") != "ellipse":
                 for l2, k2, b in edged:
                     if l2 != l1 and rect_in(b, a) and (gap := min(b[0] - a[0], a[0] + a[2] - b[0] - b[2], b[1] - a[1], a[1] + a[3] - b[1] - b[3])) < BOX_IN - 0.005:
-                        self.warns.append(f"{l2}（{k2}）が囲みの {l1} の辺から {max(gap, 0):.2f} in。中の部品を細くするか間を詰めて、4 辺から {BOX_IN} in 以上内側に置く（../visual.md の slides-visual-044）")
+                        self.warns.append(f"{l2}（{k2}）が囲みの {l1} の辺から {max(gap, 0):.2f} in。中の部品を細くするか間を詰めて、4 辺から {BOX_IN} in 以上内側に置く（../../deck-design/slides.md の slides-visual-044）")
         for loc, pts, _, ends, lab in self.lines:
             for l2, k2, r in rs:
                 if l2 not in ends and not point_in(pts[0], r) and not point_in(pts[-1], r) and any(seg_hits(p, q, r) for p, q in zip(pts, pts[1:])):
@@ -2489,7 +2489,7 @@ def spec_unit(kind, k):
 
 def spec_brief():
     """書く形の早見表（slides.py schema --brief）。SPEC_EL・SPEC_PAGE・SPEC_DECK と型の説明から作るので、形と食い違わない。* は要るキー。
-    pom の llm.txt にならい、ページを書く子が JSON Schema の全文の代わりに読む（prompt_pages.md）。"""
+    pom の llm.txt にならい、ページを書く子が JSON Schema の全文の代わりに読む（deck-workflow の prompt_pages.md）。"""
     short = {"s": "文字", "md": "記法", "n": "数", "f": "正か負の数", "p": "正の数", "i": "整数", "pi": "1 以上", "b": "真偽", "c": "色", "els": "部品の並び", "kids": "部品の並び",
              "w": '正の数か "fit"', "nh": "正の数か行ごとの並び", "ints": "1 からの番号の並び", "nums": "比の並び", "ns": "文字か整数", "hn": "真偽か行の数", "rows": "行の並び。セルは記法か {…}", "strs": "文字の並び", "litems": "項目の並び。記法か {…}", "pt": "id（id.辺）か [x, y]"}
     def keys(schema, kind=""):
@@ -3503,7 +3503,7 @@ def cmd_themes():
 
 def need_theme(theme):
     """new で、テンプレートのあるテーマが 2 つ以上あるのに --theme がなければ、一覧を出して止める。資料ごとに description でテーマを選ばせる
-    （Agent Skills でスキルの一覧が毎回出るのと同じ役目。deck-practices/start.md の 5）。desk-kaizen の検証で組む仮の資料は止めない。"""
+    （Agent Skills でスキルの一覧が毎回出るのと同じ役目。deck-workflow/start.md の 5）。desk-kaizen の検証で組む仮の資料は止めない。"""
     if theme is None and len(templates()) >= 2 and not os.environ.get("DESK_VERIFY"):
         cmd_themes()
         sys.exit("テーマを選んでから組む。上の description と、資料の種類・聞き手を突き合わせて、slides.py new <フォルダ> <名前> --theme <名前> で渡す"

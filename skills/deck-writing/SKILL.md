@@ -1,11 +1,11 @@
 ---
 name: deck-writing
-description: The brief and the writing axes for materials (decks, documents) - what a good material does, the user's iron rule, and four axes for what the rules leave open in content and wording (what the reader must grasp, which relationships must be seen, how far to claim, which words, what this audience needs). Read before writing an outline or pages, before reviewing, and when a choice of content or wording is not decided by a rule. How things look is in deck-design. deck-practices opens both first; child agents that write pages or review get both paths.
+description: The brief and the writing axes for materials (decks, documents) - what a good material does, the user's iron rule, and four axes for what the rules leave open in content and wording (what the reader must grasp, which relationships must be seen, how far to claim, which words, what this audience needs). Read before writing an outline or pages, before reviewing, and when a choice of content or wording is not decided by a rule. Also holds what changes by material type (customer-facing, internal, explaining), headings, the content of one page, wording and 「文体」, and how to cite sources. How things look is in deck-design. deck-workflow opens both first; child agents that write pages or review get both.
 ---
 
 # The brief and the writing axes
 
-This file holds the brief that every material serves, and the axes for content and wording. How a page looks (hierarchy, emphasis, color, composition) is in `../deck-design/SKILL.md`. The rules in the other skills decide what can be counted and what the user decided; decide what they leave open with these axes. Do not turn an axis into a fixed pattern ("always add a diagram"), because a pattern applied to every page stops serving the page.
+This skill holds the brief that every material serves, the axes for content and wording, and the knowledge for content by material type. This file is the brief and the axes. How a page looks (hierarchy, emphasis, color, composition) is in `deck-design`. The rules in the other skills decide what can be counted and what the user decided; decide what they leave open with these axes. Do not turn an axis into a fixed pattern ("always add a diagram"), because a pattern applied to every page stops serving the page.
 
 Order when things conflict: the workspace rules (`AGENTS.md`, `recipes/`, the customer's `memory.md`) → the user decisions written as rules in the other skills → these axes. The outline's 「書き方の決め」 is the parent's decision, not the user's: write it from these axes, and when a line of it pulls against an axis, follow the line and write the conflict under 「親に返すこと」 (children) or fix the line (parent).
 
@@ -37,3 +37,12 @@ This file decides what the reader must grasp, which relationships must be seen, 
 
 - **Maker (parent and page-writing children):** before writing a page, write the one sentence it says and what the reader must grasp first (axis 1). Before handing it back, read it as a first-time reader of the stated audience.
 - **Reviewer:** judge every aspect in the review request by the axes here and in deck-design, starting with axis 1, because it is what the user corrects most and reviewers flag least. When a finding comes from an axis rather than a rule, end the proposed fix with the axis ID (such as 「（deck-writing-002）」); the parent moves it to the 「決まり」 column.
+
+## Files
+
+| Situation | File |
+|---|---|
+| **Content:** writing the outline or a page: what changes by material type, the depth of alignment, order of work, headings, the content of one page, wording and 「文体」, checks for the outline and the finish, sources | [content.md](content.md) |
+| **Customer-facing materials:** proposals and explanations for a customer (the material type that [content.md](content.md) §1 names) | [content_customer.md](content_customer.md) |
+| **Internal materials** | [content_internal.md](content_internal.md) |
+| **Explaining materials:** tools, mechanisms, research, releases, and usage guides | [content_explain.md](content_explain.md) |

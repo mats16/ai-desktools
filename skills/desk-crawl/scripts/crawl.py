@@ -27,7 +27,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "deck-practices" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
 import desk  # noqa: E402  ワークスペースの探し方
 
 PROMPT = Path(__file__).resolve().parents[1] / "prompt_collect.md"

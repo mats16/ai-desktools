@@ -10,7 +10,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 JS = HERE / "vids_client.js"
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(HERE.parents[1] / "deck-practices" / "scripts"))  # gapi.py（desk.toml の [vids] browser）
+sys.path.insert(0, str(HERE.parents[2] / "lib"))  # gapi.py（desk.toml の [vids] browser）
 import gapi  # noqa: E402
 
 

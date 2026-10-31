@@ -35,7 +35,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(HERE.parents[1] / "slides-build" / "scripts"))  # lint.py（ノートの文字）
-sys.path.insert(0, str(HERE.parents[1] / "deck-practices" / "scripts"))  # gapi.py
+sys.path.insert(0, str(HERE.parents[2] / "lib"))  # gapi.py
 import gapi, lint  # noqa: E402
 # Vids に書く後ろ側。いまは Chrome のタブの中から内部 API を呼ぶ（vids_internal.py）。公開の API が出たら、同じ関数（check_closed・build・
 # fill_and_inspect・inspect・Lost）を持つ vids_api.py を書き、この 1 行を差し替える

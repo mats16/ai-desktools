@@ -5,7 +5,7 @@
 # 写しはワークスペースの .desk/dreaming/backup/。lint の記録（.desk/lint_runs.jsonl）は、戻すと消えるので入れない。
 set -eu
 # ワークスペース: 今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace（desk.py）。リンクをたどった実際のパスで、Claude Code がメモリに使うものと同じ
-ROOT=$(python3 "$(dirname "$0")/../../deck-practices/scripts/desk.py") || exit 2
+ROOT=$(python3 "$(dirname "$0")/../../../lib/desk.py") || exit 2
 MEM=$HOME/.claude/projects/$(printf %s "$ROOT" | tr '/._' '---')/memory
 DIR=$ROOT/.desk/dreaming/backup
 CMD=${1:-} ARG=${2:-}

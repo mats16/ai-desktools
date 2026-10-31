@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""プラグインの改善を、過去の資料で確かめてから Issue にする（手順は ../SKILL.md）。ワークスペース（探し方は ../../deck-practices/scripts/desk.py）で回す。
+"""プラグインの改善を、過去の資料で確かめてから Issue にする（手順は ../SKILL.md）。ワークスペース（探し方は ../../../lib/desk.py）で回す。
 usage:
   kaizen.py start   <名前>                          元のリポジトリ（plugin.json の repository）を clone して kaizen/<名前> のブランチを作る。前の版（main）も写す
   kaizen.py lint    <名前> <資料の URL ...>          いまの資料の JSON に、前の版と変えた版の lint をかけて比べる
@@ -18,12 +18,12 @@ from functools import cached_property
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "deck-practices" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
 import gapi
 
 SECTIONS = ("## 変えること", "## 理由", "## 背景", "## 過去資料での検証", "## 影響", "## 迷ったところ")
 MAX_BODY = 60000  # GitHub の Issue の本文は 65536 字まで
-DESIGN = re.compile(r"skills/((slides|docs)-build/visual\.md|slides-build/(scripts/(slides|template|box_pad)\.py|assets/)|docs-build/scripts/(docs|doc_layout)\.py|deck-practices/scripts/brand\.py)")  # 見た目が変わりうるファイル
+DESIGN = re.compile(r"skills/(deck-design/(slides|docs)\.md|slides-build/(scripts/(slides|template|box_pad)\.py|assets/)|docs-build/scripts/(docs|doc_layout)\.py)|lib/brand\.py")  # 見た目が変わりうるファイル
 URL_ID = re.compile(r"https://docs\.google\.com/(?:presentation|document)/d/([\w-]+)")
 COUNT = re.compile(r"^== (要修正|要確認)[^:]*: (\d+)(?:（[^）]*）)? ==$", re.M)  # 「== 要確認: 16（うち見積もり 11。画像で確定する） ==」も
 HIT = re.compile(r"^\[(.+?)\] (.*)$", re.M)
@@ -42,7 +42,7 @@ CHANGED_ID = re.compile(r"\[((?:ws-)?[a-z][\w-]*?-\d{3})\]")
 SKIP = shutil.ignore_patterns(".git", "docs", "tests", "sandbox", "__pycache__")  # 子に渡すプラグインの写し。docs/fixtures の「見るところ」（答えの基準）を子に見せない
 SELECT = Path(__file__).resolve().parents[1] / "prompt_select.md"
 UNATTENDED = "\n\n人のいない実行なので、確かめたいことがあっても聞かずに、依頼に書いてあることから決めて最後まで書く。決めたことは最後の返事に書く。"  # 確かめの決まり（deck-flow-003）をそのまま守って止まる子がいた（2026-10-30、GPT）
-REPLAY = ("desk-tools のスキル（deck-practices と slides-build）に従い、{folder}/{outline} の構成で、スライドを JSON のページで書き直してください。"
+REPLAY = ("desk-tools のスキル（deck-workflow と slides-build）に従い、{folder}/{outline} の構成で、スライドを JSON のページで書き直してください。"
           "構成はもう決まっています。聞き手への確認、構成案のレビュー、代表の 3 枚のレビュー、/deck-review はせず、Google で組むことも画像を取ることもしないでください。"
           "{folder}/build/ に deck.json と各ページの JSON を書き、slides.py lint deck.json の要修正を 0 にしたところで止めてください。")
 
@@ -184,7 +184,7 @@ def rebuild(w, folders, pages=None, keep=False):
                 continue  # 選んでいないページと、前後で同じ画像のページ
             num = re.sub(r"\D", "", label)  # f-string の中の \ は Python 3.12 から
             out = img / f"deck{num}_p{page}.png"  # エージェントが読み書きするファイルは英数字の名前
-            sh("uv", "run", "-q", w.scripts("head", "deck-practices") / "sheet.py", out, shots["base"][n], shots["head"][n], "--cols", "2", "--width", "800")
+            sh("uv", "run", "-q", w.repo / "lib" / "sheet.py", out, shots["base"][n], shots["head"][n], "--cols", "2", "--width", "800")
             changed.append((page, out))
         detail, public = report(label, "スライド" if slides else "ドキュメント", *compare(*outs), title=str(folder))
         pics = "変わったページ: " + (", ".join(f"p{p}" for p, _ in changed) or "なし") + "（左が前の版、右が変えた版）\n\n" + "".join(f"<!-- img:{o.name} -->\n" for _, o in changed)
@@ -665,11 +665,11 @@ def selftest():
     assert "Acme" in detail and "Acme" not in public and "✅" not in public  # Issue には資料の名前も本文も出さない
     body = "\n".join(SECTIONS)
     assert check_body(body, ["skills/slides-build/scripts/lint.py"], "x", []) == []
-    assert len(check_body(body, ["skills/slides-build/visual.md"], "x", [])) == 2  # 見た目なのに画像がない。決まりの文なのに走らせていない
+    assert len(check_body(body, ["skills/deck-design/slides.md"], "x", [])) == 2  # 見た目なのに画像がない。決まりの文なのに走らせていない
     probe_ok = f"{PROBE}（claude、モデル: x、変えた版 abc1234）\n\n- 比べた依頼: 2 本（両方が出し切って lint が回ったもの）\n- 見立て: 効いた\n"
-    assert len(check_body(body, ["skills/slides-build/visual.md"], probe_ok, [], "abc1234")) == 1  # 画像がないだけ
-    assert len(check_body(body, ["skills/slides-build/visual.md"], probe_ok, [], "def5678")) == 2  # 前の commit の probe は数えない
-    assert len(check_body(body, ["skills/slides-build/visual.md"], probe_ok.replace("2 本", "0 本").replace("効いた", "害が出た（変えた版だけ出し切れなかった: 試し）"), [], "abc1234")) == 2  # 比べた依頼がなければ数えない
+    assert len(check_body(body, ["skills/deck-design/slides.md"], probe_ok, [], "abc1234")) == 1  # 画像がないだけ
+    assert len(check_body(body, ["skills/deck-design/slides.md"], probe_ok, [], "def5678")) == 2  # 前の commit の probe は数えない
+    assert len(check_body(body, ["skills/deck-design/slides.md"], probe_ok.replace("2 本", "0 本").replace("効いた", "害が出た（変えた版だけ出し切れなかった: 試し）"), [], "abc1234")) == 2  # 比べた依頼がなければ数えない
     assert COUNT.findall("== 要修正: 0 ==\n== 要確認: 16（うち見積もり 11。画像で確定する） ==\n") == [("要修正", "0"), ("要確認", "16")]
     assert len(check_body("## 理由", ["skills/slides-build/scripts/lint.py"], "", [])) == 6  # 節が 5 つと、検証がない
     assert check_body(body + "\n検証しない理由: 文の直しだけ", ["skills/desk-dreaming/SKILL.md"], "", []) == []

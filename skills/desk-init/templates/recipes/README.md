@@ -1,6 +1,6 @@
 # recipes/
 
-このワークスペースだけの決まり（レシピ）と、それが使うテンプレート・点検。プラグインより優先する（`deck-practices/rules.md` の「Workspace rules」）。分け方・書き方・組み直し方は `desk-recipes/SKILL.md`。
+このワークスペースだけの決まり（レシピ）と、それが使うテンプレート・点検。プラグインより優先する（スキル `desk-feedback` の `routing.md` の「Workspace rules」）。分け方・書き方・組み直し方は、スキル `desk-feedback` の `recipes.md`。
 
 ## レシピ: `recipes/<名前>/RECIPE.md`
 
@@ -25,7 +25,7 @@ per_material: true
   - `step: gather`: 材料を集めるときだけ要る知識（社内の検索の道具、情報源）。資料の材料集めのほか、ただの調べもの（`Research/`・`references_index.md` を使い、`.md` の名前が入るコマンド。雛形の AGENTS.md の「調べもの」の探し方）でも出す。`step: build`: 組むときだけ要る知識（ロゴやアイコンの取り先、テーマの手順、API の落とし穴）。
 - 1 つの `RECIPE.md` は 3,800 字まで（顧客の memory と並べても、最初のレシピは途中で切れない。入りきらないものは、hook がパスを挙げる）。超えそうなら、もっと狭い目的で分ける。
 - プラグインの決まりを上書きするときは、上書きする決まりの ID を角括弧なしで `- 〜は〜にする（slides-visual-012 より優先。<短い理由>）。` の形で書く（ID のない節なら「プラグインの〇〇の節より優先」）。
-- 決まりは 1 項目ずつ箇条書きにし、ID は付けない（`- 〜のときは〜する（<短い理由>）。`）。日付とユーザーの言葉（原文）は本文に書かず、決まりの台帳（`.desk/ledger.jsonl`）に、このレシピへの指摘として残す。直してから戻し先にこのレシピを書く（`ledger.py route <c-ID> recipes/<名前>/RECIPE.md`）と、台帳が直す前と後の全文を版として残す（`ledger.py why recipes/<名前>/RECIPE.md` で見る。`deck-practices/rules.md` の「Routing corrections」）。
+- 決まりは 1 項目ずつ箇条書きにし、ID は付けない（`- 〜のときは〜する（<短い理由>）。`）。日付とユーザーの言葉（原文）は本文に書かず、決まりの台帳（`.desk/ledger.jsonl`）に、このレシピへの指摘として残す。直してから戻し先にこのレシピを書く（`ledger.py route <c-ID> recipes/<名前>/RECIPE.md`）と、台帳が直す前と後の全文を版として残す（`ledger.py why recipes/<名前>/RECIPE.md` で見る。スキル `desk-feedback` の `routing.md` の「Routing corrections」）。
 
 ## テンプレート: `recipes/<名前>/templates/<テンプレートの名前>/doc.md`
 
@@ -60,4 +60,4 @@ def doc(doc, r):
 
 ## 顧客の memory: `Customers/<顧客>/memory.md`
 
-顧客ごとの好みは、ここではなく顧客のフォルダに置く（`deck-practices/rules.md` の「Customer memory」）。その顧客の資料を開くと、hook が続けて出す。
+顧客ごとの好みは、ここではなく顧客のフォルダに置く（スキル `desk-feedback` の「Customer memory」）。その顧客の資料を開くと、hook が続けて出す。

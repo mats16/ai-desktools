@@ -8,13 +8,13 @@ AI Desk Tools（プラグイン）で、スライドとドキュメントを作�
 
 - **このワークスペースの決まりが、プラグインのスキルより優先する。** ワークスペースの決まりは、このファイルと、`recipes/` のレシピ（`recipes/<名前>/RECIPE.md`。頭の frontmatter に、いつ使うかを書く。hook が要る場面で出す）と、顧客の `memory.md`。食い違うときは、こちらに従う。ワークスペースの決まりどうしが食い違うときは、条件が狭いほうに従い（顧客の memory、場面や資料の種類を絞ったレシピ、どの資料にも効くレシピの順）、同じ狭さなら聞く。
 - **このワークスペースは、やり取りで育てる 1 つのプロダクト。** 修正の指示は、決まり（このファイルと `recipes/`）と点検（レシピのフォルダの `checks.py`）に戻す。プラグインの入った場所は書き換えない（入れ直すと消える）。
-- **大元を直すべきものは Issue にする。** ほかの人にも効くものは、desk-dreaming が「プラグインに上げる」提案にし、スキル `desk-kaizen` で過去の資料で確かめてから Issue を出す（スキル `deck-practices` の `rules.md` の「Workspace rules」）。
+- **大元を直すべきものは Issue にする。** ほかの人にも効くものは、desk-dreaming が「プラグインに上げる」提案にし、スキル `desk-kaizen` で過去の資料で確かめてから Issue を出す（スキル `desk-feedback` の `routing.md` の「Workspace rules」）。
 
 ## 基本方針
 
 - **資料は、設定（`desk.toml`）の `[desk] default_language` の言語で作る**（書かなければ日本語）。ほかの言語でと言われたときだけ、その言語にする（本文、スピーカーノート、ファイル名まで）。
 - **車輪の再発明をしない。** 作る前に社内の既存資料を探して、使えるものは積極的に流用する。ページや図だけでなく、メッセージング（製品の位置づけ、言い回し、用語の訳）も社内の資料にそろえる。
-- **顧客の情報は、会議の記録と社内のチャットから取る。** 顧客との会議のほか、営業との事前の打ち合わせも、相手と経緯を知るのに役に立つ（道具の使い方は `deck-practices` の `materials.md`）。
+- **顧客の情報は、会議の記録と社内のチャットから取る。** 顧客との会議のほか、営業との事前の打ち合わせも、相手と経緯を知るのに役に立つ（道具の使い方はスキル `deck-workflow` の `materials.md`）。
 - **スライドは Google Slides を Slides API で、ドキュメントは Google Docs を Docs API で直接組む。** スライドは `slides-build` の `slides.py`、ドキュメントは `docs-build` の `docs.py` で組む。pptx・docx は作らない。Word が要るときは Google Docs から書き出す。
 - **納品は Google Drive の URL で渡し、確認を頼む。** PDF は作らない（`slides-build` の SKILL.md の「Deliverables」）。
 - **決まりのファイル（スキルの md、`recipes/` のレシピ、この AGENTS.md）は、1 本ずつ全文を読む（読む道具があればそれで、なければ 1 回に 1 本だけ表示する）。** 1 回の呼び出しで何本もまとめて読まない（スクリプトの中から何本も読む、`cat a.md b.md` など）。まとめると出力が途中で切れ、後ろのファイルの決まりが届かない。出力が切れたら続きを読む。資料のデータの加工は、まとめて扱ってよい。
@@ -35,17 +35,17 @@ AI Desk Tools（プラグイン）で、スライドとドキュメントを作�
 
 ## 資料を作る・直すとき
 
-「〇〇の資料を作って」「このページを直して」と言われたら、作業に入る前にスキル `deck-practices` の SKILL.md を開き、「Overall flow」の順に、「Where each step is」の表のファイルを開いて進める（スライドもドキュメントも同じ）。場面ごとに開くファイルは、同じ SKILL.md の「What to read when」の表。開く前から、次の 2 つは守る。
+「〇〇の資料を作って」「このページを直して」と言われたら、作業に入る前にスキル `deck-workflow` の SKILL.md を開き、「Overall flow」の順に、「Where each step is」の表のファイルを開いて進める（スライドもドキュメントも同じ）。場面ごとに開くファイルは、同じ SKILL.md の「What to read when」の表。開く前から、次の 2 つは守る。
 
 - 作り始める前に、資料の種類・聞き手・聞き手の問い・読んだあと聞き手ができることをユーザーに確かめる（依頼から書けても確かめる）。
-- 新しく作った資料は、ユーザーに返す前に、スキル `deck-review` で全体をレビューする。返したあとの直しと問いは、`deck-practices/revise.md`（Requests after delivery）で、どこまで確かめるかを決める。
+- 新しく作った資料は、ユーザーに返す前に、スキル `deck-review` で全体をレビューする。返したあとの直しと問いは、スキル `deck-workflow` の `revise.md`（Requests after delivery）で、どこまで確かめるかを決める。
 
 ### 修正の指示
 
-作っている途中にユーザーがチャットで出した修正の指示は、その資料を直すだけで終わらせない。次の資料でも同じことを言われないよう、その場でワークスペースの決まり（このファイルか `recipes/`）に戻す。戻す先・確かめ方・聞いてから戻すものは `deck-practices/rules.md`。取りこぼしは、定期の整理（スキル `desk-dreaming`）が会話の記録から拾う。
+作っている途中にユーザーがチャットで出した修正の指示は、その資料を直すだけで終わらせない。次の資料でも同じことを言われないよう、その場でワークスペースの決まり（このファイルか `recipes/`）に戻す。戻す先・確かめ方・聞いてから戻すものは、スキル `desk-feedback`。取りこぼしは、定期の整理（スキル `desk-dreaming`）が会話の記録から拾う。
 
-- **受けたらすぐ決まりの台帳に書く。** `python3 <スキル deck-practices のフォルダ>/scripts/ledger.py add --deck <資料のフォルダ> --quote "<ユーザーの言葉（できるだけ原文）>" --fix "<直した箇所>" --to <戻し先> --check <lint・レビュー・なし>`。ユーザーがはっきり決めたこと（案から選んだ、言い切った）には `--decided` を付ける。台帳はこのワークスペースの `.desk/ledger.jsonl`（顧客のことが入るので、外に写さない）。会話はコンパクションで要約になり、指示が落ちることがある。
-- **直したら、その場で戻す。** 片付けまで待たない。決まりのファイルを直してから（レシピは、先にスキル `desk-recipes` を開いて、その書き方で）、戻し先にそのファイルを書く（`ledger.py route <c-ID> <ファイル>`。台帳が、直す前と後の全文を版として残す）。決まりの文には ID を付けず、日付と原文は決まりの台帳に残す（`deck-practices/rules.md` の「Routing corrections」）。報告の最後に、どの指示をどの決まりに戻したかを書く。
+- **受けたらすぐ決まりの台帳に書く。** `python3 <プラグインのフォルダ>/lib/ledger.py add --deck <資料のフォルダ> --quote "<ユーザーの言葉（できるだけ原文）>" --fix "<直した箇所>" --to <戻し先> --check <lint・レビュー・なし>`。ユーザーがはっきり決めたこと（案から選んだ、言い切った）には `--decided` を付ける。台帳はこのワークスペースの `.desk/ledger.jsonl`（顧客のことが入るので、外に写さない）。会話はコンパクションで要約になり、指示が落ちることがある。
+- **直したら、その場で戻す。** 片付けまで待たない。決まりのファイルを直してから（レシピは、先にスキル `desk-feedback` の `recipes.md` を開いて、その書き方で）、戻し先にそのファイルを書く（`ledger.py route <c-ID> <ファイル>`。台帳が、直す前と後の全文を版として残す）。決まりの文には ID を付けず、日付と原文は決まりの台帳に残す（スキル `desk-feedback` の `routing.md` の「Routing corrections」）。報告の最後に、どの指示をどの決まりに戻したかを書く。
 - **エージェントのメモリに書いて済ませない。** 資料づくりの決まりは、ここか `recipes/` に、顧客ごとの好みは顧客の `memory.md` に、顧客のことは顧客の `profile.md` に書く。エージェントのメモリはほかのエージェントから見えない。
 
 ## 調べもの
@@ -54,8 +54,8 @@ AI Desk Tools（プラグイン）で、スライドとドキュメントを作�
 
 - 先に `grep -rln <語> Research/ references_index.md` で前の調査と、前に使った出典を探す。あれば読み、足りないところだけ調べて同じファイルに足す（末尾の「更新」に日付と変わったこと）。
 - 書くこと: 依頼（ユーザーの言葉のまま）、結論（冒頭に数行）、根拠と出典（URL と確かめた日）、確かめたことと推測の区別、未確認のこと。社外秘が入るなら冒頭に【社内】と書く。
-- **書いたら・足したら、Google Drive に写す。** `python3 <スキル deck-practices のフォルダ>/scripts/drive_put.py research Research/<内容>_<YYYYMMDD>.md`。Google Docs に変えて、`desk.toml` の `drive.desk` の下の `Research`（なければ作る）に上げる。同じ名前があれば上書きし、URL は変わらない。初めて上げたら、`drive_folders.md` の `Research` の行（なければ足す）の下に `- 上げた: Research/<内容>_<YYYYMMDD>.md → [<YYYYMMDD>_<内容>](URL)（初めて上げた日）` を足す。写しは控えと、人がブラウザで読むためのもの。元はこのフォルダの md で、探すのも読むのもこちらでする。Drive の写しは直さず、コメントも付けない（上げ直すと、直しは消え、コメントは付け先を失う）。
-- ある資料のための調べものは、`Research/` ではなく、その資料のフォルダ（`references.md`・`社内メモ_*.md`）に書く。出典は `refs.py add` で `references.md` に 1 行ずつ足し、ページに出す事実は構成案の「出典の表」に、出典の ID と一緒に書く（deck-practices の materials.md の "Ledger"）。全体の索引 `references_index.md` は、`refs.py` が各フォルダの `references.md` から作り直すので、手で書かない。資料に結びつかない調べもので、ほかの資料にも使えそうな出典は `refs.py add Research <URL> --use <何に使えるか>` で足す（`Research/references.md`）。
+- **書いたら・足したら、Google Drive に写す。** `python3 <スキル deck-workflow のフォルダ>/scripts/drive_put.py research Research/<内容>_<YYYYMMDD>.md`。Google Docs に変えて、`desk.toml` の `drive.desk` の下の `Research`（なければ作る）に上げる。同じ名前があれば上書きし、URL は変わらない。初めて上げたら、`drive_folders.md` の `Research` の行（なければ足す）の下に `- 上げた: Research/<内容>_<YYYYMMDD>.md → [<YYYYMMDD>_<内容>](URL)（初めて上げた日）` を足す。写しは控えと、人がブラウザで読むためのもの。元はこのフォルダの md で、探すのも読むのもこちらでする。Drive の写しは直さず、コメントも付けない（上げ直すと、直しは消え、コメントは付け先を失う）。
+- ある資料のための調べものは、`Research/` ではなく、その資料のフォルダ（`references.md`・`社内メモ_*.md`）に書く。出典は `refs.py add` で `references.md` に 1 行ずつ足し、ページに出す事実は構成案の「出典の表」に、出典の ID と一緒に書く（スキル `deck-workflow` の `materials.md` の "Ledger"）。全体の索引 `references_index.md` は、`refs.py` が各フォルダの `references.md` から作り直すので、手で書かない。資料に結びつかない調べもので、ほかの資料にも使えそうな出典は `refs.py add Research <URL> --use <何に使えるか>` で足す（`Research/references.md`）。
 
 ## 社外秘と顧客の情報
 
@@ -70,17 +70,17 @@ AI Desk Tools（プラグイン）で、スライドとドキュメントを作�
 - 和文と英数字の間に半角スペースを入れる（`2026 年 10 月`、`3 つの問い`）。
 - 製品名・機能名は英語の正式名のまま書く。訳語や言い回しは、資料と同じ言語の社内の資料と、公式のドキュメントのその言語の版に合わせる。
 - 数字と固有名詞には出典を付ける。口頭で聞いた数字は推測のことがあるので、裏付けてから使う。
-- 資料の文体と出典の付け方は `deck-practices/content.md` の 6。
+- 資料の文体と出典の付け方は、スキル `deck-writing` の `content.md` の 6。
 
 ## フォルダの置き方
 
 ```
-Customers/<顧客>/<内容>_<YYYYMM か YYYYMMDD>/   … 顧客向けの資料。1 本につき 1 フォルダ（中の形と名前の付け方は deck-practices/SKILL.md の 1）
-Customers/<顧客>/memory.md                        … その顧客の資料への好み（どう作るか）（deck-practices/rules.md の「Customer memory」）
+Customers/<顧客>/<内容>_<YYYYMM か YYYYMMDD>/   … 顧客向けの資料。1 本につき 1 フォルダ（中の形と名前の付け方は deck-workflow/SKILL.md の 1）
+Customers/<顧客>/memory.md                        … その顧客の資料への好み（どう作るか）（スキル `desk-feedback` の「Customer memory」）
 Customers/<顧客>/profile.md                       … その顧客の事業・組織・技術の構成・エンジニアの好み（customer-profile）
 Internal/<内容>_<YYYYMM か YYYYMMDD>/           … 社内向けの資料（中の形は顧客向けと同じ）
 Research/<内容>_<YYYYMMDD>.md                    … 調べもの
-Research/deck_research/                           … deck-research の調べ直しの記録（state.md・log/）
+Research/deck_research/                           … desk-research の調べ直しの記録（state.md・log/）
 recipes/<名前>/RECIPE.md                         … このワークスペースの決まり（レシピ。頭の frontmatter に、いつ使うかと、出す場面を書く。recipes/README.md）
 recipes/<名前>/templates/・checks.py             … そのレシピが使うドキュメントのテンプレートと点検（点検はスライドとドキュメントの lint が読み込む）
 themes/slides/<名前>.json                         … スライドのテーマ（色・書体・表紙と扉のレイアウト。テンプレートの URL は desk.toml の [slides.templates]）

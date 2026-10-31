@@ -1,6 +1,6 @@
 # Document templates
 
-Open when the workspace has a document template (`recipes/<recipe>/templates/<name>/doc.md`) and you write from it, or when you make or fix a template. Read it together with [SKILL.md](SKILL.md) (doc.md format) and [visual.md](visual.md). `K=<docs-build folder>/scripts`.
+Open when the workspace has a document template (`recipes/<recipe>/templates/<name>/doc.md`) and you write from it, or when you make or fix a template. Read it together with [SKILL.md](SKILL.md) (doc.md format) and `deck-design` → documents. `K=<docs-build folder>/scripts`.
 
 The source of truth for a template's structure is the workspace's `recipes/<recipe>/templates/<name>/doc.md` (it is a company's document format, so it is not in the plugin. If there is no template, write doc.md from scratch). Keep it in the folder of the recipe for that kind of document, and write in its `RECIPE.md` when to use which template; template names are unique across `recipes/`, because `docs.py init <name>` finds them by name, and the URL of the built sample is in `[docs.templates]` in `desk.toml`. `docs.py init <name>` copies from here.
 
