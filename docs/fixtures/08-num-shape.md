@@ -1,6 +1,6 @@
 # 08 角丸の番号を書く
 
-角丸の札の番号を、`label` で代用せずに `shape` で書けるかを見る。2026-10-20 に `num`・`list`・`card` に `shape` と、`list` に `digits` を足したとき（README の「決めたこと」）、「01」の札を `label` と座標で書いたページから作った。
+角丸の札の番号を、`label` で代用せずに `shape` で書けるかを見る。2026-10-20 に `num`・`list`・`card` に `shape` と、`list` に `digits` を足したとき（`docs/decisions.md`）、「01」の札を `label` と座標で書いたページから作った。
 
 ## 依頼文
 

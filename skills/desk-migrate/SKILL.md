@@ -50,7 +50,7 @@ When desk-doctor reports 「前の雛形の AGENTS.md」, open [agents_md.md](ag
 
 ## Move the settings to `~/.desk.toml`
 
-Only when the user installs the plugin for the whole user, or asks for it (2026-10-25 in 「決めたこと」 in README). A workspace with its own `desk.toml` keeps working as it is, so do not suggest this otherwise.
+Only when the user installs the plugin for the whole user, or asks for it (2026-10-25 in `docs/decisions.md`). A workspace with its own `desk.toml` keeps working as it is, so do not suggest this otherwise.
 
 1. Run `to-user` in the workspace. It writes `~/.desk.toml` (the path in `DESK_CONFIG` if set) from the workspace's `desk.toml` with `workspace = "<workspace>"` added at the top, and moves the old file to `.desk/migrate/desk.toml`. Relay its line as it is.
 2. 「移していない（… がもうある）」: `~/.desk.toml` already exists. Show both to the user, merge the values they choose into `~/.desk.toml` (keep `workspace`), then move the workspace's `desk.toml` to `.desk/migrate/` by hand, because the two are never merged when read.

@@ -48,7 +48,7 @@ cd ~ && pi list                   # User packages にだけ出る（ここに de
 
 ## 同じ名前のスキルがあるとき
 
-パッケージのスキルは、pi の中でいちばん優先が低い。同じ名前のスキルがほかにあると、そちらが勝ち、パッケージのものは読まれない（pi は名前がぶつかると優先の高いものを残して警告を出す）。勝つのは、ワークスペースか親の `.agents/skills/`（git のリポジトリならその根元まで）、`.pi/skills/`、ユーザーの `~/.agents/skills/`・`~/.pi/agent/skills/`、settings.json の `skills` に書いたもの。前から `.agents/skills/slides-build` などを置いていたフォルダに入れると、古いスキルのまま動く。移すときは `.agents/skills/` の同じ名前のものを外す（README の「残っている課題」の「Documents を移す」）。`desk-doctor` の「スキルの重なり」が見るのはワークスペースの直下の `.agents/skills/`・`.claude/skills/` だけなので、ほかの場所のものは、上の `get_commands` を grep なしで回し、スキルの `sourceInfo.path` と `scope` で出どころを見る。
+パッケージのスキルは、pi の中でいちばん優先が低い。同じ名前のスキルがほかにあると、そちらが勝ち、パッケージのものは読まれない（pi は名前がぶつかると優先の高いものを残して警告を出す）。勝つのは、ワークスペースか親の `.agents/skills/`（git のリポジトリならその根元まで）、`.pi/skills/`、ユーザーの `~/.agents/skills/`・`~/.pi/agent/skills/`、settings.json の `skills` に書いたもの。前から `.agents/skills/slides-build` などを置いていたフォルダに入れると、古いスキルのまま動く。移すときは `.agents/skills/` の同じ名前のものを外す（`docs/todo.md` の「Documents を移す」）。`desk-doctor` の「スキルの重なり」が見るのはワークスペースの直下の `.agents/skills/`・`.claude/skills/` だけなので、ほかの場所のものは、上の `get_commands` を grep なしで回し、スキルの `sourceInfo.path` と `scope` で出どころを見る。
 
 ## 外す
 
