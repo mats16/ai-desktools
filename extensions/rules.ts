@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "..", "hooks", "rules_overlay.py");
 const PART = /(?:^|\n)## (?:ワークスペースの決まり(?:の一覧)?|顧客の memory): /;  // 足したものの頭（rules_overlay.py の見出しの形）
 const TYPE = "desk-tools-rules";  // /skill:<名前> のときに足すメッセージ
+const BLOCKED = "決まりのファイル（スキルの md、recipes/ のレシピ、AGENTS.md）は、codemode からでなく read で 1 本ずつ全文を読んでください。まとめて読むと出力が約 40,000 字で切れ、後ろのファイルの決まりが届きません（GPT・Fable で起きた）。直接の read なら、このファイルも読めます。";
 
 export default function (pi: any) {
   let turn = "";  // このターンに足したもの。pi は同じメッセージの道具を並べて動かし、互いの結果はまだ文脈に載っていない
@@ -27,6 +28,15 @@ export default function (pi: any) {
     return context;
   }
 
+  pi.on("tool_call", (ev: any, ctx: any) => {  // codemode などの入れ子の read で決まりのファイルを読むのを止め、read で 1 本ずつ読ませる（mats16/ai-desktools#38）
+    if (ev.toolName !== "read" || !ev.parentToolCallId) return;
+    const path = String(ev.input?.path ?? "");
+    if (!/\.md\s*$/i.test(path)) return;  // md でなければ python3 を起こさない
+    const r = spawnSync("python3", [SCRIPT, "pi-rule"], { input: JSON.stringify({ cwd: ctx.cwd ?? process.cwd(), path }), encoding: "utf8", timeout: 5000 });
+    let rule = false;
+    try { rule = JSON.parse(r.stdout || "{}").rule === true; } catch {}  // 決まりのファイルかは、実際の場所で rules_overlay.py が決める（プラグインの skills/、ワークスペースの AGENTS.md・recipes/）。python3 が動かないときは止めない（迷ったら読ませる）
+    if (rule) return { block: true, reason: BLOCKED };
+  });
   pi.on("turn_start", () => { turn = ""; });  // 前のターンの結果は、もう文脈に載っている
   pi.on("before_agent_start", (ev: any, ctx: any) => {  // /skill:<名前> で呼んだスキルは、読む道具を通らずに SKILL.md が入る（<skill name=… location=…> に広げてから呼ばれる）
     turn = "";  // 新しい実行の頭（止めた実行の残りは、その前のコンパクションで消えていることがある）

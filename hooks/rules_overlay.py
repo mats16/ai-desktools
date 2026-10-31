@@ -397,8 +397,27 @@ def cut(parts, limit, ws):
     return "\n\n".join(out) + note, {p for p, _ in items[:k]}
 
 
+def rule_file(cwd, path):
+    """path（cwd から）が決まりのファイルか: このプラグインの skills/ の下の md、ワークスペースの AGENTS.md・recipes/ の下の RECIPE.md。
+    パスの書き方（~、..、別名、区切り、大文字と小文字）で迷わないよう、名前の形でなく実際の場所で決める（mats16/ai-desktools#38。extensions/rules.ts が codemode の中の read を止めるのに使う）。"""
+    try:
+        p = (Path(cwd) / Path(str(path).strip().removeprefix("@")).expanduser()).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return False
+    if p.suffix.lower() != ".md" or not p.is_file():
+        return False
+    same = lambda a, b: b.exists() and os.path.samefile(a, b)  # 同じファイルかはファイルシステムに聞く（macOS・Windows は大文字と小文字を分けない）
+    if any(same(q, PLUGIN) for q in p.parents):
+        return True
+    ws = workspace(cwd)
+    return bool(ws) and (same(p, Path(ws) / "AGENTS.md") or (same(p, p.parent / desk.RECIPE) and any(same(q, Path(ws) / desk.RECIPES) for q in p.parents)))
+
+
 def main(mode):
     ev = json.load(sys.stdin)
+    if mode == "pi-rule":
+        print(json.dumps({"rule": rule_file(ev.get("cwd", "."), ev.get("path", ""))}))
+        return
     if mode == "pi":
         print(json.dumps({"context": overlays(ev.get("cwd", "."), ev.get("text", ""), is_path=bool(ev.get("isPath")), seen=set(HEAD.findall(ev.get("seen", ""))), output=ev.get("output", ""))}, ensure_ascii=False))
         return
@@ -426,6 +445,23 @@ def main(mode):
 def selftest():
     os.environ["DESK_CONFIG"] = ""  # 手元の ~/.desk.toml に左右されない
     os.environ.pop("CLAUDE_PROJECT_DIR", None)
+    with tempfile.TemporaryDirectory() as ws, tempfile.TemporaryDirectory() as other:  # 決まりのファイルは実際の場所で決める（名前の形でなく）
+        (Path(ws) / "desk.toml").write_text("")
+        (Path(ws) / "recipes" / "a").mkdir(parents=True)
+        for f in ("AGENTS.md", "recipes/a/RECIPE.md", "recipes/a/notes.md", "構成案.md"):
+            (Path(ws) / f).write_text("x")
+        (Path(other) / "AGENTS.md").write_text("x")
+        (Path(other) / "skills" / "x").mkdir(parents=True)
+        (Path(other) / "skills" / "x" / "SKILL.md").write_text("x")
+        assert rule_file(ws, "AGENTS.md") and rule_file(ws, "./recipes/a/RECIPE.md") and rule_file(ws + "/recipes", "../AGENTS.md")
+        assert rule_file(ws, str(PLUGIN / "deck-design" / "SKILL.md")) and rule_file(ws, "@" + str(PLUGIN / "slides-build" / "assets" / "README.md"))
+        assert not rule_file(ws, "構成案.md") and not rule_file(ws, "recipes/a/notes.md") and not rule_file(ws, str(PLUGIN / "deck-design" / "x.json"))
+        assert not rule_file(other, "AGENTS.md") and not rule_file(other, "skills/x/SKILL.md")  # ワークスペースの外とほかのリポジトリは止めない
+        if (Path(ws) / "agents.md").exists():  # 大文字と小文字を分けないファイルシステムでは、綴りを変えても同じファイル
+            assert rule_file(ws, "agents.md") and rule_file(ws, "Recipes/a/recipe.md")
+        else:  # 分けるファイルシステムでは、recipe.md は RECIPE.md と別のファイルで、決まりではない
+            (Path(ws) / "recipes" / "a" / "recipe.md").write_text("x")
+            assert not rule_file(ws, "recipes/a/recipe.md")
     with tempfile.TemporaryDirectory() as ws:
         (Path(ws) / "desk.toml").write_text("")
         r = Path(ws) / "recipes"
