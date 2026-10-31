@@ -15,7 +15,7 @@ FONT = "Noto Sans JP"  # Google Fonts の名前。Noto Sans CJK JP と字形・�
 JP_FONTS = {FONT, "Noto Serif JP", "BIZ UDPGothic", "BIZ UDGothic", "BIZ UDPMincho", "M PLUS 1p", "M PLUS 2", "M PLUS Rounded 1c", "Zen Kaku Gothic New",
             "Zen Maru Gothic", "Sawarabi Gothic", "Kosugi Maru", "IBM Plex Sans JP", "LINE Seed JP", "Murecho", "Shippori Mincho", "Zen Old Mincho", "Klee One"}
 MONO_DEFAULT = "Cascadia Mono"  # コードの箱・コマンドの等幅の書体の既定（Google Fonts。Windows Terminal の既定でリガチャがない。deck-design の slides.md の 2）。和文の字形がないので、ASCII の続きにだけ付ける（mono_reqs）
-LIGATURE_MONO = {"JetBrains Mono", "Fira Code", "Cascadia Code"}  # Google Fonts の版にリガチャがあり、Google Slides が描く（2026-10-09。deck-design の slides.md の 2）。テーマの mono に書けない
+LIGATURE_MONO = {"JetBrains Mono", "Fira Code", "Cascadia Code"}  # Google Fonts のバージョンにリガチャがあり、Google Slides が描く（2026-10-09。deck-design の slides.md の 2）。テーマの mono に書けない
 
 # [deck-brand-003] 英数字と記号の幅（em）。Noto Sans CJK JP Regular の実測（2026-10-08）。前は英数字を一律 0.57 にしていて、大文字の多い行を
 # 2.52 in と見込み、2.56 in の枠に収まるとしたが、実際は 2.57 in で Google が最後の 1 字を折り返した
@@ -24,7 +24,7 @@ ASCII_EM = dict(zip(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXY
     .56, .47, .95, .61, .66, .64, .69, .59, .55, .69, .73, .29, .54, .65, .54, .81, .72, .74, .63, .74, .64, .60, .60, .72, .57, .88, .57, .53, .60, .34,
     .39, .34, .56, .56, .61, .56, .62, .51, .62, .55, .33, .56, .61, .28, .28, .55, .28, .93, .61, .61, .62, .62, .39, .47, .38, .61, .52, .80, .50, .52,
     .47, .34, .27, .34, .56)))
-# DM Sans の英数字と記号の幅（em）。Google Fonts の版（opsz・wght の可変）の opsz 14・wght 400 の hmtx。Google Slides は字の大きさによらずこの版で描く
+# DM Sans の英数字と記号の幅（em）。Google Fonts のバージョン（opsz・wght の可変）の opsz 14・wght 400 の hmtx。Google Slides は字の大きさによらずこのバージョンで描く
 # （2026-10-15 に 12・18・30pt で描いて測り、見込みとのずれは 1% 以内。opsz 9 の既定の値では「1」が 1 割広い）。和文の字はなく、Google が別のゴシックで描く（1 字 0.92 em ほど。1 で見込む）
 DM_SANS_EM = dict(zip(ASCII_EM, (
     .27, .25, .29, .80, .58, .79, .73, .16, .37, .37, .48, .55, .18, .54, .20, .39, .68, .31, .58, .59, .61, .61, .63, .53, .61, .63, .20, .23, .55, .55,

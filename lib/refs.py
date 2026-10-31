@@ -38,10 +38,10 @@ INTERNAL = re.compile(r"docs\.google\.com|drive\.google\.com|slack\.com|teams\.m
                       r"force\.com|salesforce\.com|glean|notion\.so")  # 社内の道具の URL（社外は「不可」にする）
 HEAD = ("# 出典の台帳\n\n社内の URL と会議の ID が入る。納品物に写さない。書き方は deck-workflow の materials.md の \"Ledger\"。"
         "足すときは `refs.py add`、読み直したら `refs.py seen`。\n\n")
-ID_RUN = re.compile(r"^\s*([SF]\d+(?:\s*[・,、÷×/*+＋−-]\s*[SF]\d+)*)")  # 出典の列の頭の ID の並び（「S3 の Regions の表」「F4÷F5」）。頭だけを読む（「Amazon S3」を ID にしない）
+ID_RUN = re.compile(r"^\s*([SF]\d+(?:\s*[・,、÷×/*+＋−-]\s*[SF]\d+)*)")  # 出典の列の先頭の ID の並び（「S3 の Regions の表」「F4÷F5」）。頭だけを読む（「Amazon S3」を ID にしない）
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 INDEX, INDEX_DIRS = "references_index.md", ("Customers", "Internal", "Research")  # 全体の索引と、台帳を探すフォルダ
-INDEX_NOTE = "`refs.py index` が"  # 作った索引の頭の印。ないものは手で書いた前の形（2026-10-29 まで）で、上書きしない
+INDEX_NOTE = "`refs.py index` が"  # 作った索引の先頭の印。ないものは手で書いた前の形（2026-10-29 まで）で、上書きしない
 LINE_MAX, PLACES_MAX = 200, 3  # 索引の 1 行の字数（URL までは切らない。末尾のフォルダを除く）と、並べるフォルダの数。前の索引は「使った」が伸び続け、広い語の grep が 10 万字を超えた
 URL = re.compile(r"https?://(?:[^\s()|<>\[\]」（）、。]|\([^\s()|<>\[\]」（）、。]*\))+")  # 対の括弧は URL のうち（…/Foo_(bar)）。リンクを閉じる「)」と、和文の括弧・句読点で切る（索引の行の末尾の「（フォルダ）」も入れない）
 MTG = re.compile(r"(?<!\w)mtg_\w+")  # 会議の ID（Dahlia）
@@ -84,7 +84,7 @@ def sources(text):
 
 
 def outline(folder):
-    """資料のフォルダのいちばん新しい構成案（構成案_v3.md > 構成案_v2.md > 構成案.md。同じ版なら更新の新しいほう）。この形のものがなければ、ほかの
+    """資料のフォルダのいちばん新しい構成案（構成案_v3.md > 構成案_v2.md > 構成案.md。同じバージョンなら更新の新しいほう）。この形のものがなければ、ほかの
     構成案*.md（構成案_GoogleSlides.md など）から選ぶ（構成案_メモ.md のようなファイルに、正の構成案が負けない）。なければ None。"""
     all_ = list(Path(folder).glob("構成案*.md"))
     cands = [p for p in all_ if re.fullmatch(r"構成案(_v\d+)?\.md", p.name)] or all_
@@ -93,7 +93,7 @@ def outline(folder):
 
 
 def fact_section(folder):
-    """「出典の表」の節の (ファイル, 行, 節の頭の行, 節の終わりの行)。構成案になければ references.md（構成案のない資料）。なければ None。"""
+    """「出典の表」の節の (ファイル, 行, 節の先頭の行, 節の終わりの行)。構成案になければ references.md（構成案のない資料）。なければ None。"""
     for f in (outline(folder), Path(folder) / "references.md"):
         if not (f and f.is_file()):
             continue
@@ -330,7 +330,7 @@ def check(folder, fetch_now=False, days=14, today=None, fetcher=None):
         if state(r["確認"]) == "?":
             errs.append(f"{f}: 確認「{r['確認']}」は 未・済・照合済 のどれか（見立ては -）")
         if r["種類"] != "見立て" and not ids(r["出典"], "[SF]"):
-            errs.append(f"{f}: 出典の頭に S<番号>（計算は使った F<番号>）を書く: 「{r['出典']}」")
+            errs.append(f"{f}: 出典の先頭に S<番号>（計算は使った F<番号>）を書く: 「{r['出典']}」")
         if bad := [s for s in ids(r["出典"]) if s not in src]:
             errs.append(f"{f}: references.md にない出典 {', '.join(bad)}")
         if bad := [x for x in ids(r["出典"], "F") if x not in all_f]:
@@ -458,7 +458,7 @@ def generated(p):
 
 
 def edited(p, sig, text):
-    """索引に、前に書いた者が書いていない行があるか。sig（前に書いた索引の sha256）があればバイトで比べる。なければ（雛形・前の版の写し）、
+    """索引に、前に書いた者が書いていない行があるか。sig（前に書いた索引の sha256）があればバイトで比べる。なければ（雛形・前のバージョンの写し）、
     作り直す text にない行があるかで見る（件数と日付の行は除く。雛形の「0 件（まだ出典がない）」も）。"""
     if sig.is_file():
         return hashlib.sha256(p.read_bytes()).hexdigest() != sig.read_text().strip()
@@ -536,7 +536,7 @@ def selftest():
         (d / "build").mkdir()
         (d / "build" / "README_data.md").write_text("| 1,200 件 | data.json |\n")
         (d.parent / "outside.md").write_text("| 9,999 件 |\n")
-        (d / "構成案.md").write_text("# 構成案\n\n古い版\n")
+        (d / "構成案.md").write_text("# 構成案\n\n古いバージョン\n")
         (d / "構成案_v2.md").write_text(
             "# 構成案\n\n## 出典の表\n\n`build/README_data.md` の数字も出典の表とする（`../outside.md` は読まない）。\n\n| ID | 言うこと | 種類 | 出典 | 確認 |\n|---|---|---|---|---|\n"
             "| F1 | 東京リージョンで使える | 提供 | S1 の Regions の表 | 済 |\n| F2 | 3.2 倍 | 計算 | F3÷F4（48÷15） | 済 |\n| F3 | 48 件 | 数字 | S3 の 12:30 ごろ | 済 |\n"
@@ -564,7 +564,7 @@ def selftest():
                                            + "".join(f"| S1 | {n} | https://ex.com/{n} | 公式 | 2026-10-01 | 2026-10-01 | 可 |  |\n" for n in "ab"))
         with contextlib.redirect_stdout(io.StringIO()) as dup_out:
             assert check(dup, today="2026-10-21") == 1 and "ID「S1」が重なる" in dup_out.getvalue()  # 同じ S の ID の 2 行（辞書にすると前の行が消える）
-        assert all(s in o for s in ("references.md にない出典 S9", "ID「F1」が重なる", "種類「推測」", "確認「確認済み」", "出典の頭に S<番号>", "出典の表にない F7"))
+        assert all(s in o for s in ("references.md にない出典 S9", "ID「F1」が重なる", "種類「推測」", "確認「確認済み」", "出典の先頭に S<番号>", "出典の表にない F7"))
         (d / "構成案_v2.md").write_text("## 出典の表\n\n| 値 | 出典 | 確認 |\n|---|---|---|\n| 会話 688 | README_data.md | 済（計算） |\n| PR 204 | gh | 未確認 |\n")
         assert [(r["ID"], r["言うこと"], state(r["確認"])) for r in facts(d)] == [("行1", "会話 688", "済"), ("行2", "PR 204", "未")]  # 前の形の表も読む
         with contextlib.redirect_stdout(out := io.StringIO()):
@@ -609,7 +609,7 @@ def selftest():
             index(ws, today="2026-10-29")
         assert not err.getvalue() and len(list((ws / ".desk").glob("references_index_*.md"))) == 1  # 直していなければ控えない
         assert hashlib.sha256((ws / INDEX).read_bytes()).hexdigest() == (ws / ".desk" / "index.sha256").read_text().strip()  # 書いたバイトと sig が合う（CRLF にしない）
-        (ws / ".desk" / "index.sha256").unlink()  # sig のない索引（雛形・前の版の写し）でも、手で足した行は控える
+        (ws / ".desk" / "index.sha256").unlink()  # sig のない索引（雛形・前のバージョンの写し）でも、手で足した行は控える
         tpl = Path(__file__).resolve().parents[1] / "skills" / "desk-init" / "templates" / INDEX
         (ws / INDEX).write_text(tpl.read_text() + "- [手で](https://hand.example.com)\n")
         with contextlib.redirect_stderr(err := io.StringIO()):

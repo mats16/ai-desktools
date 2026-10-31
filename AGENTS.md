@@ -26,7 +26,7 @@ The 17 skills fall into six groups by what they hold (2026-10-31 in `docs/decisi
 | Path | Contents |
 | --- | --- |
 | `skills/<skill>/` | `SKILL.md`, per-situation files linked from its table, `scripts/`. All three agents read them |
-| `lib/` | Code shared by several skills and the hook: `desk.py` (workspace and settings lookup, recipes, `TRIGGERS`), `gapi.py` (Google APIs), `brand.py` (fonts, colors, copyright), `textlint.py` (text rules shared by slides and documents), `sheet.py` (contact sheets), `ledger.py` (the rule ledger), `refs.py` (the sources ledger). Not a skill |
+| `lib/` | Code shared by several skills and the hook: `desk.py` (workspace and settings lookup, recipes, `TRIGGERS`), `gapi.py` (Google APIs), `brand.py` (fonts, colors, copyright), `textlint.py` (text rules shared by slides and documents), `yomiyasu/` (nanaism/yomiyasu's `skills/yomiyasu` at 2.5.0, added with `git subtree --squash`; `textlint.py` reads its lint, and `deck-review` its diff. Don't edit inside it. To update, split `skills/yomiyasu` at the new commit in a clone of upstream and run `git subtree pull --prefix lib/yomiyasu <clone> <split branch> --squash`, then the selftests), `sheet.py` (contact sheets), `ledger.py` (the rule ledger), `refs.py` (the sources ledger). Not a skill |
 | `hooks/` | `rules_overlay.py` (appends the workspace's recipes, `recipes/<name>/RECIPE.md`) and `hooks.json`, which calls it from Claude Code and Codex |
 | `extensions/rules.ts` | The pi extension. Calls `rules_overlay.py` |
 | `.claude-plugin/`, `package.json` | Plugin and marketplace definitions (Codex reads these too); the pi package |
@@ -64,7 +64,7 @@ Find the owner first, and change it there only. To find where a plugin rule is w
 - Keep the body of each `SKILL.md` within 5,000 tokens, because after compaction Claude Code re-attaches only the first 5,000 tokens of each invoked skill. Move sections needed only in some situations (conditional steps, failure handling, steps used by a separate call) into a file linked directly from the table in `SKILL.md`. Don't create files reachable only from other files, because nested files tend to be read only in part.
 - Record user decisions in `docs/decisions.md`, with the date and the user's own words, verbatim. Record deferred work in `docs/todo.md`.
 - Write PR bodies with the sections of `.github/pull_request_template.md`. Paste the commands you ran and their output as-is. In 「レビューで見てほしいところ」, list file:line locations and the judgments you are unsure of, because reviewers, human and AI, start reading there.
-- 日本語で書くところは、平易な和文で、言い切りの「〜する」。漢語やカタカナ語より、やさしい言い方を選ぶ（「検証」より「確かめる」、「ルール」より「決まり」）。例外: `/deck-review` を回す単位は「ラウンド」（`docs/decisions.md` の 2026-10-19）。
+- 日本語で書くところは、平易な和文で、言い切りの「〜する」。漢語やカタカナ語より、やさしい言い方を選ぶ（「検証」より「確かめる」、「ルール」より「決まり」）。ただし、動詞を 1 語だけ名詞にして「の」で受けない（「結果の確かめ」ではなく「結果を確かめる」か「結果の確認」）。英語の短い語を漢字 1 字に直訳しない（「版」ではなく「バージョン」、Drive のものは「リビジョン」。「頭」ではなく「先頭」「行頭」）。漢語を避けて和語にひらくと出やすく、モデルがスクリプトのメッセージから資料にも写すため（`docs/decisions.md` の 2026-11-01。yomiyasu の lint で拾える）。例外: `/deck-review` を回す単位は「ラウンド」（`docs/decisions.md` の 2026-10-19）。
 
 ## Verify changes
 
@@ -90,7 +90,7 @@ Write instructions that AI reads in English. Write what people read, and rules t
 - **Japanese:**
   - Rules about Japanese text (style, notation, terms and translations, spacing between Japanese and Latin text, punctuation, line-break positions, full-width character counts).
   - Rules that involve the nuance of making materials (how to phrase claims and headings, tone toward customers, how the audience takes it, the flow of the story, what to say and not say).
-  - Examples, user quotes, and strings copied verbatim (file names such as `構成案.md`, section names written in the outline such as 「書き方の決め」, the lint labels `要修正` and `要確認`, ledger values, column names of tables read by scripts or people, the 「要判断」 mark).
+  - Examples, user quotes, and strings copied verbatim (file names such as `構成案.md`, section names written in the outline such as 「書き方の取り決め」, the lint labels `要修正` and `要確認`, ledger values, column names of tables read by scripts or people, the 「要判断」 mark).
   - Output formats shown to users or in Issues (the desk-dreaming report, Issue bodies, the skeleton of profile.md, doc.md examples).
   - What people read: README.md, the install guides in `docs/` (`claude-code-plugin.md`, `codex-plugin.md`, `pi.md`), `docs/decisions.md` and `docs/todo.md`, the prompts in `docs/fixtures/`, `skills/desk-init/templates/` (workspace owners edit them), and PR, Issue, and commit bodies. Script messages and comments also stay in Japanese for now (`docs/todo.md`).
 - Decide per rule (one bullet) by its main point. When unsure, keep Japanese. Don't mix languages within one sentence. Inside an English sentence, put Japanese examples, values, and section names in 「」 or backticks (write `「社外秘と顧客の情報」 in deck-writing`, not `deck-writing の「社外秘と顧客の情報」`). Only source tags (such as （見た目 1-7）) and proper nouns (people, books, companies, typefaces) can go unquoted.

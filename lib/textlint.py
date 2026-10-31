@@ -4,7 +4,7 @@
 ドキュメントは docs-build の doc_lint.py が読む。標準ライブラリだけ。
 usage: python3 textlint.py --stats   要確認の残り方（規則ごと。desk-dreaming/run.md の 5）
        python3 textlint.py --selftest"""
-import copy, hashlib, json, os, re, sys, time, unicodedata
+import copy, functools, hashlib, json, os, re, sys, time, unicodedata
 from collections import defaultdict
 
 sys.dont_write_bytecode = True
@@ -30,6 +30,24 @@ WARN = {
     "要確認・TBD": re.compile(r"要確認|TBD"),
     "社外秘の表示": re.compile(r"Internal Only|Internal Use|Confidential|社外秘|社内限り", re.I),
 }
+# [deck-lint-027] 言い回しの要確認は、yomiyasu の lint の規則のうち、資料 53 本で当たりの多かったものだけ（2026-11-01。deck-writing の content.md の deck-content-065）。
+# 外したもの: 読点（pause_comma。本文の文の読点にも出て空振りが多い。スライドの見出しと 1 行の箇条は slide_comma が見る）、空疎な語（slop_vocabulary。「台帳」にも出る。WARN の空疎な言い回しで見る）、
+# 「〜ではなく」（negative_parallelism。比べるページでは普通）、カタカナ語、Markdown の書式（太字・箇条の多さ。ページの JSON には当たらない）
+SLIDE_COMMA = "見出しと箇条の間の読点"
+YOMI = {"renyo_noun": "動詞を名詞にした語", "calque": "直訳の語", "translated_term": "直訳の語", "metaphor_verb": "たとえの動詞", "slide_comma": SLIDE_COMMA}  # slide_comma は doc_type が slides のときだけ出る
+YOMI_NAMES = list(dict.fromkeys(YOMI.values()))
+
+
+@functools.cache
+def yomiyasu():
+    """yomiyasu の yomiyasu_lint.py をパスで読む（git subtree で 2.5.0 を取り込んだもの。中は直さず、git subtree pull で入れ替える）。"""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("yomiyasu_lint", os.path.join(os.path.dirname(os.path.abspath(__file__)), "yomiyasu", "scripts", "yomiyasu_lint.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 NUM = re.compile(r"\d[\d,.]*\s?(%|％|倍|億|万|兆|円|ドル|USD|ms|TB|GB|PB|K\b|M\b)|[$＄]\s?\d")  # 統計らしい数字だけ（「2 時間」「3 社」は数えない）
 URL = re.compile(r"https?://\S+")
 
@@ -110,6 +128,19 @@ class Report:
             m = rx.search(text)
             if m:
                 self.hits[name].append(f"{where}: 「{text[max(0, m.start() - 12):m.end() + 12].strip()}」")
+
+    def wording(self, where, text, slides=True, one_line=False):
+        """yomiyasu の lint（yomiyasu/ に subtree で取り込んだもの）の候補のうち、YOMI の規則だけを要確認に足す（deck-lint-027）。
+        見出しと箇条の間の読点は、1 行に収まる段落（one_line。スライドの lint が折り返しの見込みで決める）だけ。本文の文の読点は残してよいため。"""
+        text = re.sub(r"\s+", " ", URL.sub("", text)).strip()  # 段落の中の改行（\v）も 1 行の指摘にする
+        if not re.search(f"[{JA}]", text) or re.match(r"(出典|Sources?)\s*[:：]", text, re.I):  # 出典の行は元の題を写すので見ない
+            return
+        for f in yomiyasu().lint_text(text, doc_type="slides" if slides else None)["findings"]:
+            if (name := YOMI.get(f["rule"])) and (one_line or name != SLIDE_COMMA):
+                m = re.search(r"当たった言い方: (.+?)）の候補|直訳「(.+?)」", f["message"])  # translated_term だけ「英語の直訳「版」（version）」の形
+                said = (m and (m.group(1) or m.group(2)) or "").strip("「」")
+                at = text.find(said.split("、")[0].strip("「」")) if said else -1
+                self.hits[name].append(f"{where}: 「{text[max(0, at - 12):at + len(said) + 12].strip() if at >= 0 else text[:30]}」" + (f"（{said}）" if said else ""))
 
     def show(self, names, title):
         n, est = sum(len(self.hits[k]) for k in names), sum(len(self.hits[k]) for k in names if k in self.estimate)
@@ -207,6 +238,18 @@ def selftest():
     assert not WARN["和欧間のスペース抜け"].search("Apps・Lakebase")
     assert WARN["英語の大文字ラベル"].search("KEY POINTS") and not WARN["英語の大文字ラベル"].search("F9F7F4")  # 色の値はラベルでない
     assert HARD["差し替えの仮ページ"].search("差し替え：紹介資料 p.10") and "差し替えの仮ページ" not in WARN
+    w = Report()  # 言い回し（yomiyasu）: 名前は YOMI の名前。見出しの読点はスライドだけ。英字だけの文と、残す読点（条件）は出さない
+    for t in ("4 つの構成の比べ", "前の版のファイルを書き換える", "Run the build"):
+        w.wording("p1", t)
+    for t in ("費用は、コンピュートの CU 時間で見積もる", "急ぎなら、電話で連絡する"):
+        w.wording("p1", t, one_line=True)
+    w.wording("p3", "監査ログは、すべての操作を記録し、あとから誰が何をしたかを追えるようにする。保存の期間は 1 年")  # 折り返す本文の読点は出さない
+    w.wording("p4", "結果を受け取る。\v今回の比べをする", one_line=True)
+    w.wording("段落 1", "費用は、コンピュートの CU 時間で見積もる", slides=False)
+    w.wording("p2", "出典: 前の版の仕組みの比べ（https://example.com）")
+    assert {k: len(v) for k, v in w.hits.items() if v} == {"動詞を名詞にした語": 2, "直訳の語": 1, SLIDE_COMMA: 1}, dict(w.hits)
+    assert "\v" not in w.hits["動詞を名詞にした語"][1] and w.hits["動詞を名詞にした語"][1].startswith("p4: ")
+    assert w.hits["動詞を名詞にした語"][0] == "p1: 「4 つの構成の比べ」（の比べ）" and "（版）" in w.hits["直訳の語"][0]
     # 記録と集計: ページがずれても同じ指摘は同じもの。最後の確認で消えたものは残ったに数えない。要修正は記録しない
     with tempfile.TemporaryDirectory() as tmp:
         log, a, b = os.path.join(tmp, "runs.jsonl"), Report(), Report()

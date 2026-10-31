@@ -4,13 +4,13 @@
 - step: gather は材料を集めるとき（TRIGGERS の gather のファイルと、ワークスペースの Research/・references_index.md。資料の references.md はレビューや照合の子も開くので入れない）、step: build は組むとき（TRIGGERS の build）に出す。
   読んだかは、読んだパスとコマンドに書いた <スキル>/<ファイル> の文字と、道具の出力に出たそのファイルの行で見る（スキルのフォルダへ cd して名前だけで開いても）。
 - 顧客の資料（Customers/ と Internal/ の下）の 構成案*.md・社内メモ_*.md・references.md が読まれたら、その顧客の Customers/<顧客>/memory.md（資料への好み。どう作るか）と、
-  構成案の頭の「使う決まり」に書いたレシピ（per_material: true の、資料ごとに選ぶもの）を出す。構成案に「使う決まり」の行がなければ、選ぶ一覧（パスと description）を出す。
+  構成案の先頭の「使う決まり」に書いたレシピ（per_material: true の、資料ごとに選ぶもの）を出す。構成案に「使う決まり」の行がなければ、選ぶ一覧（パスと description）を出す。
   資料を作り始めるとき（deck-workflow/start.md が読まれたとき）にも、一覧を出す。レシピのフォルダのほかのファイル（テンプレートなど）は、名前だけを添える。
 /desk-tools:<スキル>（Claude Code）・$desk-tools:<スキル>（Codex）で呼んだスキルは、道具を使わずに SKILL.md が入るので、プロンプトから拾って、その SKILL.md を読んだときと同じものを出す。
 Claude Code は自動のコンパクションのあと、呼んだスキルの SKILL.md を付け直すので、SessionStart（compact）でそれに当たるものを出し直す（Codex はスキルも差し込みも消すので、出し直さない）。
-並べて呼んだ道具の hook は同時に走り、会話の記録にまだ互いの差し込みがないので、同じターンで出したものは印のファイルで知らせ合う（pi は拡張がそのターンに足したものを覚える）。
+並べて呼んだ道具の hook は同時に走り、会話の記録にまだ互いの差し込みがないので、同じターンで出したものは目印のファイルで知らせ合う（pi は拡張がそのターンに足したものを覚える）。
 同じ会話で出したもののうち、まだモデルに見えている（コンパクションで消えていない）ものは出し直さない。Claude Code と Codex は hook に渡る会話の記録（transcript_path）の、最後のコンパクションのあとを見る。pi は拡張が、モデルに見えている道具の結果を渡す。Codex は差し込みを記録に developer のメッセージで残し、コンパクションで消す（2026-10-25 に確かめた）。
-前の版の rules/ が残っていれば、中身は出さず、desk-migrate で移すよう知らせる。
+前のバージョンの rules/ が残っていれば、中身は出さず、desk-migrate で移すよう知らせる。
 決まりの形と出し方は skills/desk-feedback/routing.md の「Workspace rules」。Claude Code と Codex は hooks.json の PostToolUse（Read・Bash・Skill。Claude Code は if で、.md に触れる Read・Bash だけ）・UserPromptSubmit・SessionStart（compact）、pi は extensions/rules.ts から呼ぶ。
 usage: rules_overlay.py claude   （標準入力に Claude Code か Codex の hook の JSON）
        rules_overlay.py pi       （標準入力に {"cwd", "text", "isPath", "seen", "output"}。isPath は text が読んだファイルのパスのとき。seen は今の文脈に残る、前に出したもの。output は道具の出力。出力は {"context": …}）
@@ -29,26 +29,26 @@ NAMES = "|".join(map(re.escape, SKILLS))  # スキルの名前のどれか（REF
 REF = re.compile(rf"(?<![\w-])({NAMES})/([\w./-]+\.md)")  # スキルの名前で始まるパス（前のフォルダは問わない）
 MEMORY_FROM = re.compile(r"(?:^|/)(?:構成案[^/]*|社内メモ_[^/]*|references)\.md$")  # 資料を始めるときとコンパクションのあとに読むもの（組む途中に何度も開く build/ は入れない）
 RULE_PATH = r"recipes/[\w./-]+?/RECIPE\.md"  # 「使う決まり」に書くレシピのパス
-USE = re.compile(r"(?m)^[ \t]*(?:[-*][ \t]*)?\**使う決まり\**[ \t]*[:：]\**(.*)$")  # 構成案の頭の「使う決まり」の行（- **使う決まり:** recipes/a/RECIPE.md、recipes/b/RECIPE.md）
-INDEX, START, STALE, LEGACY = "recipes/*/RECIPE.md", "deck-workflow/start.md", "recipes/（使う決まりの確かめ）", "rules/（前の版）"  # 選ぶ一覧の見出しのパス（ファイルではない）、資料を作り始めるときに開くファイル（ここで一覧を出す）、「使う決まり」の名前の知らせと、前の版の rules/ の知らせ（ファイルではない）
+USE = re.compile(r"(?m)^[ \t]*(?:[-*][ \t]*)?\**使う決まり\**[ \t]*[:：]\**(.*)$")  # 構成案の先頭の「使う決まり」の行（- **使う決まり:** recipes/a/RECIPE.md、recipes/b/RECIPE.md）
+INDEX, START, STALE, LEGACY = "recipes/*/RECIPE.md", "deck-workflow/start.md", "recipes/（使う決まりの確認）", "rules/（前のバージョン）"  # 選ぶ一覧の見出しのパス（ファイルではない）、資料を作り始めるときに開くファイル（ここで一覧を出す）、「使う決まり」の名前の知らせと、前のバージョンの rules/ の知らせ（ファイルではない）
 RESEARCH = re.compile(r"(?<![\w.-])(?:Research/|references_index\.md)")  # 調べもの（deck-workflow の research.md）。step: gather のレシピを出す
 COMMAND = re.compile(rf"<command-name>/desk-tools:({NAMES})</command-name>")  # Claude Code の記録で、ユーザーが打った /desk-tools:<スキル>
 CALL = re.compile(rf"(?:^\s*/|(?<![\w$/.-])\$)desk-tools:({NAMES})(?![\w-])", re.ASCII)  # プロンプトで呼んだスキル（Claude Code の / は頭だけ、Codex の $ はどこでも。和文は続けて書いても呼んだことになる）
 PUNCT = "();<>|&`"  # コマンドの区切り
 HEAD = re.compile(r'## (?:ワークスペースの決まり(?:の一覧)?|顧客の memory): ([^`"\\\n]+?\.md)(?=\\|\n|$)')  # 出したものの見出し。会話の記録では改行が \n（hook の出力の写しでは \\n）になる
 CUT_BY_HOST = ("<persisted-output>", "<truncated-output>", "persist-to-disk failed", "writing it to disk failed")  # Claude Code が 1 万字を超える差し込みを、頭だけにして渡した印（ファイルに逃がした・書けずに切った）
-COMPACTED = (b'"subtype":"compact_boundary"', b'"type":"compacted"')  # コンパクションの印（Claude Code・Codex の会話の記録）
+COMPACTED = (b'"subtype":"compact_boundary"', b'"type":"compacted"')  # コンパクションの目印（Claude Code・Codex の会話の記録）
 LIMIT = 9000  # 1 回に差し込む字数の上限（決まりと memory の合計。切ったときの添え書きも含む）。Claude Code は 1 万字を超える差し込みをファイルに逃がし、頭の 2,000 字だけを見せる（Codex は hooks.json の additionalContextLimit で逃がさない）
 NOTE = 500  # 切ったときの添え書きの字数の上限（切ったほうの字数に含める）
 LINE, KEY = 24, 48  # 出力でプラグインのファイルを見分ける行の字数の下限と、比べる頭の字数（cut -c で切った行も合う）
 COPIED = "desk-init/templates/"  # ワークスペースへ写す雛形（写しを読んでも、プラグインのファイルを読んだことにしない）
-NUMBERED = re.compile(r"^(?:[^\s:]*\.md[:-])?\s*\d+(?:[:\t-]|→)\s?|^[^\s:]*\.md[:-]")  # 出力の行の頭の、grep -n・cat -n・Read の行番号と grep のファイルの名前
+NUMBERED = re.compile(r"^(?:[^\s:]*\.md[:-])?\s*\d+(?:[:\t-]|→)\s?|^[^\s:]*\.md[:-]")  # 出力の行頭の、grep -n・cat -n・Read の行番号と grep のファイルの名前
 
 
 def workspace(cwd):
     """スクリプトが cwd で使うワークスペース（desk.locate）。cwd がその中になければ（プラグインのフォルダなど）、会話を開いたフォルダ（Claude Code の CLAUDE_PROJECT_DIR）から探したもの。
     Claude Code は会話の中で cd した先を cwd に渡すので、プラグインのフォルダへ cd したあとも、開いたワークスペースを見つける（2026-10-27 に資料を作る会話で見つけた）。
-    前の版のワークスペース（factory.toml）の中では、どこへも進まない（desk.locate と同じ）。個人の設定が読めなくても止めない（スクリプトが止めて知らせる）。"""
+    前のバージョンのワークスペース（factory.toml）の中では、どこへも進まない（desk.locate と同じ）。個人の設定が読めなくても止めない（スクリプトが止めて知らせる）。"""
     def find(d):
         try:
             return desk.locate(d)
@@ -120,7 +120,7 @@ def index(ws, files):
     """資料ごとに選ぶレシピ（per_material: true のもの）の一覧。"""
     rows = [f"- {p.relative_to(ws)}（{'・'.join(desk.listed(m, 'targets')) or '全部'}、{'・'.join(desk.listed(m, 'audience')) or '全部'}）: {m['description']}" for p, m in files]
     return (f"## ワークスペースの決まりの一覧: {INDEX}\n\n資料ごとに選ぶレシピ（frontmatter に per_material: true のもの。行は「パス（作るもの、資料の種類）: いつ使うか」）。"
-            "この資料に合うものを選び、構成案の頭に「- **使う決まり:** recipes/a/RECIPE.md、recipes/b/RECIPE.md」（合うものがなければ「なし」）と書いて、構成案を開き直す。"
+            "この資料に合うものを選び、構成案の先頭に「- **使う決まり:** recipes/a/RECIPE.md、recipes/b/RECIPE.md」（合うものがなければ「なし」）と書いて、構成案を開き直す。"
             "構成案を開くたびに hook が中身を出す（desk-feedback/routing.md の「Workspace rules」）。\n\n" + "\n".join(rows))
 
 
@@ -170,7 +170,7 @@ def shown(raw):
 
 
 def keys(text):
-    """text の、見分けに使う行（LINE 字以上）の頭 KEY 字。コードの囲みの中は外す（見本の JSON や、それをまねた資料にも同じ行がある。囲みは、開いた ``` の長さ以上の ``` だけの行で閉じる）。"""
+    """text の、見分けに使う行（LINE 字以上）の先頭 KEY 字。コードの囲みの中は外す（見本の JSON や、それをまねた資料にも同じ行がある。囲みは、開いた ``` の長さ以上の ``` だけの行で閉じる）。"""
     fence = ""
     for line in text.splitlines():
         s = line.strip()
@@ -209,7 +209,7 @@ def printed(output, own=()):
 
 
 def rule_lines(ws):
-    """ワークスペースの recipes/ の下の .md の、比べる行の頭 KEY 字（コードの囲みの中も。写したプラグインの文がどこにあっても数えないため）。読めないものは飛ばす（desk.rules と同じ）。"""
+    """ワークスペースの recipes/ の下の .md の、比べる行頭 KEY 字（コードの囲みの中も。写したプラグインの文がどこにあっても数えないため）。読めないものは飛ばす（desk.rules と同じ）。"""
     own = set()
     for f in (ws / desk.RECIPES).rglob("*.md"):
         try:
@@ -258,12 +258,12 @@ def overlays(cwd, text, is_path=False, seen=(), key=None, output=""):
     for p in picked:
         want[p] = block(p)
     if stale:  # 見出しが HEAD に合わないので、見えているものとして外さない（直すまで、構成案を開くたびに出す）
-        want[ws / STALE] = (f"## 構成案の「使う決まり」の確かめ\n\n「使う決まり」の {'・'.join(stale)} は、レシピにない（名前が変わったか、消えたか、frontmatter の description がない。"
+        want[ws / STALE] = (f"## 構成案の「使う決まり」の確認\n\n「使う決まり」の {'・'.join(stale)} は、レシピにない（名前が変わったか、消えたか、frontmatter の description がない。"
                             f"書き方は「- **使う決まり:** recipes/a/RECIPE.md、recipes/b/RECIPE.md」）。ワークスペースの決まりの一覧（{INDEX}）から選び直して、構成案を直す。")
     if free and (START in refs or None in picks or stale):
         want[ws / INDEX] = index(ws, free)
-    if kinds and (ws / "rules").is_dir() and any((ws / "rules").rglob("*.md")):  # 前の版のまま（hook はもう読まない）。直すまで、資料を作る作業（材料集め・組む・資料のファイル）のたびに知らせる
-        want[ws / LEGACY] = (f"## 前の版の rules/\n\n{ws}/rules/ は前の版の決まりの置き場所で、もう出さない（2026-10-29 から recipes/<名前>/RECIPE.md）。"
+    if kinds and (ws / "rules").is_dir() and any((ws / "rules").rglob("*.md")):  # 前のバージョンのまま（hook はもう読まない）。直すまで、資料を作る作業（材料集め・組む・資料のファイル）のたびに知らせる
+        want[ws / LEGACY] = (f"## 前のバージョンの rules/\n\n{ws}/rules/ は前のバージョンの決まりの置き場所で、もう出さない（2026-10-29 から recipes/<名前>/RECIPE.md）。"
                              "desk-migrate の SKILL.md を開いて、recipes/ に移す。")
     for p, m in files:
         if desk.kind(m) in kinds:
@@ -409,7 +409,7 @@ def main(mode):
     key = (lambda: (log, f"{turn}@{compacted(raw())}")) if log and turn else None  # コンパクションのあとは別の印にする（SessionStart の起きない子の会話でも）
     if event == "SessionStart":  # コンパクションのあと（hooks.json の matcher が compact）。作業で出すレシピがなければ、会話の記録を読まない
         ws = workspace(cwd)
-        ctx = overlays(cwd, skill_md(invoked(raw()))) if ws and any(desk.kind(m) != "material" for _, m in desk.rules(ws)) else ""  # 記録にはまだ今のコンパクションの印がない（前の部分が見える）ので、seen では外さない
+        ctx = overlays(cwd, skill_md(invoked(raw()))) if ws and any(desk.kind(m) != "material" for _, m in desk.rules(ws)) else ""  # 記録にはまだ今のコンパクションの目印がない（前の部分が見える）ので、seen では外さない
     elif event == "UserPromptSubmit":
         ctx = called(cwd, ev.get("prompt", ""), seen, key)
     elif ev.get("tool_name") == "Skill":
@@ -443,7 +443,7 @@ def selftest():
         assert "16pt" in overlays("/", "/plug/skills/deck-design/slides.md")  # 会話の中でワークスペースの外（プラグインのフォルダ）へ cd したあと
         with tempfile.TemporaryDirectory() as old:
             (Path(old) / "factory.toml").write_text("")
-            assert overlays(old, "/plug/skills/deck-design/slides.md") == ""  # 前の版のワークスペースの中へ cd したときは、開いたフォルダのワークスペースへも進まない
+            assert overlays(old, "/plug/skills/deck-design/slides.md") == ""  # 前のバージョンのワークスペースの中へ cd したときは、開いたフォルダのワークスペースへも進まない
         del os.environ["CLAUDE_PROJECT_DIR"]
         assert overlays("/", "/plug/skills/deck-design/slides.md") == ""
         assert "16pt" in overlays(ws, "sed -n 1,40p deck-design/slides.md")  # Bash で読んだとき
@@ -470,7 +470,7 @@ def selftest():
             assert sorted(set(plugin_lines(Path(t)).values())) == ["x/a.md"]
         assert printed((PLUGIN / "desk-init" / "templates" / "recipes" / "README.md").read_text(encoding="utf-8")) == []  # ワークスペースの recipes/README.md（雛形の写し）を読んでも、雛形を読んだことにしない
         assert printed("\n".join(f.read_text(encoding="utf-8") for f in (PLUGIN / "slides-build" / "samples" / "json").glob("*.json"))) == []  # 見本の JSON は、pages.md のコードの囲みの例と同じ行でも数えない
-        assert overlays(ws, f"cat {ws}/recipes/slides-build/x.md") == ""  # プラグインにない名前のワークスペースのファイルは、プラグインのファイルでない（前の版の rules/slides-build/visual.md のように同じ名前なら、作業のレシピを出す）
+        assert overlays(ws, f"cat {ws}/recipes/slides-build/x.md") == ""  # プラグインにない名前のワークスペースのファイルは、プラグインのファイルでない（前のバージョンの rules/slides-build/visual.md のように同じ名前なら、作業のレシピを出す）
         mk = overlays(ws, "/plug/skills/deck-writing/content.md")
         assert "最初に聞くこと" in mk and "16pt" not in mk and overlays(ws, "/plug/skills/desk-doctor/SKILL.md") == ""  # step のないものは資料づくりのどの作業でも。資料づくりの外では出さない
         assert overlays(ws, "ls", seen=lambda: 1 / 0) == "" and "16pt" in overlays(ws, "deck-design/slides.md", seen=set)  # 出すものがなければ、会話の記録を読まない
@@ -641,7 +641,7 @@ def selftest():
         (Path(ws) / "rules").mkdir()
         (Path(ws) / "rules" / "old.md").write_text("---\ndescription: 前の形\n---\n- 前の決まり")
         legacy = overlays(ws, "/plug/skills/deck-workflow/start.md")
-        assert "desk-migrate" in legacy and "前の決まり" not in legacy and "desk-migrate" in overlays(ws, "slides-build/pages.md") and "desk-migrate" not in overlays(ws, "desk-doctor/SKILL.md")  # 前の版の rules/ は出さず、資料を作る作業のたびに知らせる（スキルを直に呼んで組むときも）
+        assert "desk-migrate" in legacy and "前の決まり" not in legacy and "desk-migrate" in overlays(ws, "slides-build/pages.md") and "desk-migrate" not in overlays(ws, "desk-doctor/SKILL.md")  # 前のバージョンの rules/ は出さず、資料を作る作業のたびに知らせる（スキルを直に呼んで組むときも）
         shutil.rmtree(Path(ws) / "rules")
         put("customer", "---\ndescription: 顧客向けの資料\naudience: [顧客向け]\nper_material: true\n---\n- 顧客の言葉で書く")
         put("update", "---\ndescription: 製品のアップデートをまとめるとき\ntargets: [slides]\nper_material: true\n---\n- 効くものだけ選ぶ")
@@ -684,7 +684,7 @@ def selftest():
         for line, word in (("- **使う決まり:** customer.md", "customer.md は"), ("- **使う決まり:**", "（空） は"), ("- **使う決まり:** recipes/mid/RECIPE.md、b.md、rule/c.md", "b.md・rule/c.md は"),
                            ("- 使う決まり: /Users/x/決まり.md", "/Users/x/決まり.md は"), ("- 使う決まり: rules/mid.md", "rules/mid.md は")):
             outline.write_text(line + "\n")
-            assert word in overlays(ws, str(outline), is_path=True), line  # レシピのパスのない行（前の版の rules/ も）は、「なし」と同じにしない
+            assert word in overlays(ws, str(outline), is_path=True), line  # レシピのパスのない行（前のバージョンの rules/ も）は、「なし」と同じにしない
         for x in [*r.glob("free*"), r / "bigp", r / "big", r / "mid"]:
             shutil.rmtree(x)
         internal = Path(ws) / "Internal" / "lt_202610"

@@ -14,7 +14,7 @@ from brand import FONT, MONO_DEFAULT  # noqa: E402
 from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, facts_hit, load_facts,  # noqa: E402
                       not_in_facts, workspace_checks)  # load_facts は docs.py が doc_lint から引く
 
-FIG_HEAD, TAB_HEAD = r"図 ?\d+|Figure \d+\.", r"表 ?\d+|Table \d+\."  # 図表の題の頭（docs.py が付ける）。英語は「Table 3 shows …」の文と分けるため「.」まで見る
+FIG_HEAD, TAB_HEAD = r"図 ?\d+|Figure \d+\.", r"表 ?\d+|Table \d+\."  # 図表の題の先頭（docs.py が付ける）。英語は「Table 3 shows …」の文と分けるため「.」まで見る
 DOC_MIN_PT = 9  # ドキュメントの文字の下限（下回ると要確認）。図表の題・出典・表の中・フッターが 9pt（deck-design/docs.md の 1）
 SENTENCE_MAX, PARA_SENT_MAX, LINE_MAX = 100, 8, 40  # 一文の字数（textlint の sentence-length の既定）、1 段落の文の数（3〜8 文。木下・倉島・サイボウズ）、
 # 1 行の字数（jlreq・デジタル庁）。deck-design/docs.md の 1・3
@@ -135,6 +135,8 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
             continue
         empty = 0
         r.scan(where, text, {**HARD, **WARN})
+        if "borderLeft" not in p["paragraphStyle"] and "shading" not in p["paragraphStyle"]:  # 引用（元のまま）とコードは見ない
+            r.wording(where, text, slides=False)
         if re.match(r"(出典|Sources?)[：:]", text, re.I) and not links_of(p):
             r.hits[NO_LINK].append(f"{where}: 「{text[:24]}」")
         sec_link |= bool(links_of(p))
@@ -213,7 +215,7 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
         for where, text, rs in items:
             if rs and rs[0].get("textStyle", {}).get("bold") and re.match(r"\s*[:：]", text[len(rs[0]["content"]):] or "") or \
                     (rs and rs[0].get("textStyle", {}).get("bold") and rs[0]["content"].rstrip().endswith((":", "："))):
-                r.hits["太字とコロンで始まる箇条書き"].append(f"{where}: 「{text[:20]}」。項目の頭のラベルをやめ、文で書くか表にする")
+                r.hits["太字とコロンで始まる箇条書き"].append(f"{where}: 「{text[:20]}」。項目の先頭のラベルをやめ、文で書くか表にする")
     if desu and dearu:
         few, many = sorted((desu, dearu), key=len)
         kind = "です・ます" if few is desu else "だ・である"
@@ -224,7 +226,7 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
     print("\n".join(firsts) or "（見出しも本文もない）")
     print(f"\n== 本文の字数: {body} 字（見出し・表・図表の題・出典・引用を除く）、1 行 約 {per_line:.0f} 字 ==")
     hard = r.show(list(HARD) + [FONT_NG, MONO_NG, A4_NG, UTM_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
-    r.show(list(WARN) + [f"{DOC_MIN_PT}pt 未満の文字", NOT_IN_FACTS, NO_LINK] + list(DOC_ONLY), "要確認")
+    r.show(list(WARN) + textlint.YOMI_NAMES + [f"{DOC_MIN_PT}pt 未満の文字", NOT_IN_FACTS, NO_LINK] + list(DOC_ONLY), "要確認")
     hard += workspace_checks("doc", doc, r)
     return hard
 HARD_NAMES = textlint.HARD_NAMES | {A4_NG, UTM_NG}
@@ -238,7 +240,7 @@ def selftest():
     globals()["theme_pages"] = lambda: []  # 回す場所の desk.toml のテーマ（用紙）に左右されない
     globals()["workspace_checks"] = lambda *a: 0  # 回す場所のワークスペースの checks.py にも左右されない
     import contextlib, io
-    assert re.match(TAB_HEAD, "Table 1. 比べる") and re.match(FIG_HEAD, "図 2　流れ") and not re.match(TAB_HEAD, "Table 3 shows the result")  # 英語の文の頭は題でない
+    assert re.match(TAB_HEAD, "Table 1. 比べる") and re.match(FIG_HEAD, "図 2　流れ") and not re.match(TAB_HEAD, "Table 3 shows the result")  # 英語の文頭は題でない
     # Google Docs: わざと欠陥を入れた文書で、規則がそれぞれ拾うか
     def gp(text, style="NORMAL_TEXT", bullet=None, **st):
         p = {"elements": [{"textRun": {"content": text + "\n", "textStyle": st}}], "paragraphStyle": {"namedStyleType": style}}
@@ -296,7 +298,7 @@ def selftest():
         lint_gdoc(gdoc, g := Report())
     globals()["theme_pages"] = lambda: []
     assert g.hits["1 行の字数が多い"] and not g.hits["用紙が A4 でない"]
-    gdoc["documentStyle"]["pageSize"]["width"]["magnitude"], gdoc["documentStyle"]["pageSize"]["height"]["magnitude"] = 612, 792  # あとの試しは Letter のまま
+    gdoc["documentStyle"]["pageSize"]["width"]["magnitude"], gdoc["documentStyle"]["pageSize"]["height"]["magnitude"] = 612, 792  # あとのテストは Letter のまま
     with contextlib.redirect_stdout(io.StringIO()):
         lint_gdoc(gdoc, g := Report(), template=True)
     assert not g.hits["冒頭に要旨がない"]  # テンプレートから書いた文書は、節の順をテンプレートが決める

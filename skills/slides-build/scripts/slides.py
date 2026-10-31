@@ -5,11 +5,11 @@
 usage（資料の build/ で。deck.json か pages.py は今いるフォルダのもの）:
   slides.py new <Drive のフォルダの URL か ID> <Drive 上の名前> [--theme <テーマ>]   テンプレートを複製して組む（テンプレートは desk.toml の [slides.templates] の <テーマ>。
                                           組む前にマスターをテーマのファイルの値にそろえる。build も同じ）
-  slides.py plan <URL か ID> [<ファイル>...]   build が書くもの（マスターのテーマの違い・作り直すページ・選んでいないので残すページ・消す枚数・並べ替え・画面での直し）を出す。書かない
+  slides.py plan <URL か ID> [<ファイル>...]   build が書くもの（マスターのテーマの違い・作り直すページ・選んでいないので残すページ・消す枚数・並べ替え・画面での修正）を出す。書かない
   slides.py build <URL か ID> [<ファイル>...] [--force]   組み直す（中身の変わったページだけを作り直し、順をそろえる。URL は変わらない）。JSON のページ・デッキのファイルを渡すと、
                                           そのページだけを作り直し、ほかのページは前のまま残す（テーマはいつもそろえる）。前に組んだあとに画面で直されているか、
                                           未解決のコメントがあれば止まる。直しをページの JSON（前の資料は pages.py）に入れてから --force で組み直す（--force は全ページ〔ファイルを渡せばそのページ〕を作り直す）。
-                                          作り直したページを /tmp/slides_<ID の頭 8 字>/changed.json に、工程ごとの秒を標準エラーに出す
+                                          作り直したページを /tmp/slides_<ID の先頭 8 字>/changed.json に、工程ごとの秒を標準エラーに出す
   slides.py lint [<ファイル>] [<URL か ID>] [--pages 3,5 | --all] [--talk]   組まずに、組む要求を手元で presentations.get の形にして lint をかける（テストの unit。
                                           直すたびに回す）。既定は前に回したときから変わったページ（と要修正が残ったページ。テーマか規則が変わったら全ページ）。テーマはテーマのファイルから読み、Google を読まない
                                           （URL はテーマのファイルがないデッキだけに要る）。テーマのファイル（kind theme）を渡すと、形と役割の組のコントラストを見る
@@ -425,7 +425,7 @@ _RUN = [0]
 
 
 def new_run():
-    """Deck の ID の頭。ミリ秒の時刻で、同じプロセスの中でも繰り返さない。build は前に組んだページを残すので、その ID とぶつけない
+    """Deck の ID の先頭。ミリ秒の時刻で、同じプロセスの中でも繰り返さない。build は前に組んだページを残すので、その ID とぶつけない
     （前の秒の下 5 けたは 27.8 時間ごとに同じ値になり、残したページの ID と同じ ID を作ると batchUpdate が止まる）。"""
     _RUN[0] = max(time.time_ns() // 1_000_000, _RUN[0] + 1)
     return f"r{_RUN[0]}"
@@ -984,7 +984,7 @@ def make_deck(make, name):
 # ---- JSON のページ（Deck.spec。../pages.md の slides-pages-034） ----
 # 書く形（LLM が書く。並べ方と意味だけ）→ 解く（spec_page。並べ方・記法・ID・既定の値・画像のパス）→ 解いた形（d.resolved。in の絶対位置で、
 # Deck のメソッドの引数をすべて持つ。slides.py resolve が出す）→ 要求（Deck）。
-# 形の版は k8s にならい、ファイルの頭の apiVersion と kind で持つ。上げるのは、キーの意味が変わるときだけ（足すときは上げない。../pages.md の slides-pages-035）
+# 形のバージョンは k8s にならい、ファイルの先頭の apiVersion と kind で持つ。上げるのは、キーの意味が変わるときだけ（足すときは上げない。../pages.md の slides-pages-035）
 API_VERSION = "slides/v1"
 KINDS = ("deck", "page", "component", "theme")
 COLOR_NAMES = ("NAVY", "BG", "RED_ON_NAVY", "PANEL", "NAVY_BLOCK", "GA", "RED_TEXT", "PREVIEW", "SUB", "OSS", "RED", "WHITE", "PUBLIC_PREVIEW",
@@ -992,7 +992,7 @@ COLOR_NAMES = ("NAVY", "BG", "RED_ON_NAVY", "PANEL", "NAVY_BLOCK", "GA", "RED_TE
 ON_FILL = {"NAVY": ("WHITE", "RED_ON_NAVY"), "NAVY_BLOCK": ("WHITE", "RED_ON_NAVY"), "RED": ("ON_RED", "ON_RED"), "OSS": ("WHITE", "WHITE")}  # 濃い塗り → (文字の色, ***強調*** の色)。ほかの地は TEXT・RED_TEXT
 ALIGN = {"left": "START", "center": "CENTER", "right": "END"}
 VALIGN = {"top": "TOP", "middle": "MIDDLE", "bottom": "BOTTOM"}
-# 図形の形（Slides API の shapeType を小文字に）。過去の資料で使った形と、矢羽根の段の頭（home_plate）だけ。ほかは使われたら足す（slides-pages-035）
+# 図形の形（Slides API の shapeType を小文字に）。過去の資料で使った形と、矢羽根の段の先頭（home_plate）だけ。ほかは使われたら足す（slides-pages-035）
 SHAPES = {k.lower(): k for k in ("RECTANGLE", "ROUND_RECTANGLE", "ELLIPSE", "CHEVRON", "HOME_PLATE", "FOLDED_CORNER", "CAN")}
 GAP_BODY, GAP, GAP_ARROW, ARROW_PAD = 0.3, 0.24, 0.6, 0.08  # 本文の部品の間、stack・row・grid の間、arrows の row の間、矢印と箱の間（in）
 BOX_IN, EDGED = 0.08, ("card", "box", "label", "code", "stat", "table")  # 囲み（box）の辺と中の部品の間の下限（in。slides-visual-044）、縁の見える部品（塗りか枠線のある text も）
@@ -1887,7 +1887,7 @@ class SpecPage:
         out = []
         for i, it in enumerate(e["items"]):
             it = it if isinstance(it, dict) else {}
-            m = next((k for k in ("icon", "num", "image") if k in it), None)  # 印が 2 つ以上の項目は check が止めている
+            m = next((k for k in ("icon", "num", "image") if k in it), None)  # マークが 2 つ以上の項目は check が止めている
             kind, v = (m, it[m]) if m else ("icon", e["icon"]) if "icon" in e else ("num", e.get("start", 1) + i)
             out.append((kind, f"{v:0{e['digits']}d}" if kind == "num" and isinstance(v, int) and "digits" in e else v))
         return out
@@ -2292,7 +2292,7 @@ class SpecPage:
             ends = Counter((k, eid(a[k])) for a, *_ in self.arrows for k in ("from", "to") if isinstance(a[k], str))
             if ends["from", fa] == 1 and ends["to", fb] == 1:  # fa から出る線も fb に入る線も 1 本だけ  # 2026-10-20、ワークスペースの決まりから（避けて回した 1 本の線は、どこからどこへの流れかが読みにくい）
                 self.warns.append(f"{loc}: 枝分かれでも合流でもない 1 本の流れを折れ線（bent）にした。つなぐ 2 つの箱を同じ行か同じ列に置き直し、まっすぐ引く（../../deck-design/slides.md の slides-visual-043）")
-        if boxed and route == "straight" and not sided and abs(x1 - x2) > 0.01 and abs(y1 - y2) > 0.01:  # ずらした線（offset）も、両端の箱の中央からずらすので同じ  # 2026-10-16 の依頼文の試しで、枝の 1 本だけ直線にして斜めになった
+        if boxed and route == "straight" and not sided and abs(x1 - x2) > 0.01 and abs(y1 - y2) > 0.01:  # ずらした線（offset）も、両端の箱の中央からずらすので同じ  # 2026-10-16 の依頼文のテストで、枝の 1 本だけ直線にして斜めになった
             self.warns.append(f"{loc}: 矢印が斜めになる。枝分かれなら、どの枝も \"route\": \"bent\" にする（中央が同じ高さの枝はまっすぐ引かれる）か、両端の箱の高さをそろえる")
         self.emit("arrow", loc, e, x1=x1, y1=y1, x2=x2, y2=y2, color=spec_color(e.get("color", "SUB")), head=e.get("head", True), dash=e.get("dash", False), weight=e.get("weight", 1.25),
                   **({"link": [a, sites[0], b, sites[1]], "bent": bent or elbow} if a and b else {}))
@@ -2357,7 +2357,7 @@ class SpecPage:
 def spec_files(src, base=None, where=None, file=False):
     """src（ファイルのパス、dict、そのどちらかの並び）から (ページ, 画像のパスの起点, 場所, 名前) を順に出す。デッキのページのファイルは、デッキのファイルのあるフォルダから読む。
     名前はページのファイル名（拡張子なし。[名前](#p12) のリンク先）で、ファイルでないページは None。
-    ファイルの頭には apiVersion と kind（deck・page・component）が要る。Python から渡した dict は、書いていなければ中身から kind を決める。"""
+    ファイルの先頭には apiVersion と kind（deck・page・component）が要る。Python から渡した dict は、書いていなければ中身から kind を決める。"""
     base = base or Path.cwd()
     if isinstance(src, (str, Path)):
         path, where = base / src, where or str(src)
@@ -2373,7 +2373,7 @@ def spec_files(src, base=None, where=None, file=False):
             yield from spec_files(p, base, None if isinstance(p, str) else f"{where}[{i}]")
         return
     if not isinstance(src, dict):
-        sys.exit(f'{where}: ファイルの頭は {{"apiVersion": "{API_VERSION}", "kind": "deck"・"page"・"component", …}}')
+        sys.exit(f'{where}: ファイルの先頭は {{"apiVersion": "{API_VERSION}", "kind": "deck"・"page"・"component", …}}')
     if file or "apiVersion" in src or "kind" in src:
         if (v := src.get("apiVersion")) != API_VERSION:
             sys.exit(f'{where}: ' + (f'apiVersion がない（頭に "apiVersion": "{API_VERSION}" を書く）' if v is None else
@@ -2445,7 +2445,7 @@ def spec_page(d, p, base, loc, name=None):
 
 
 def spec_where(deck):
-    """lint の指摘（「p3: …「文」…」）が引いている文から、JSON の部品の場所を引く（lint.Report.where）。ponytail: 文の頭の 12 字で探す。文を引かない指摘には付かない。
+    """lint の指摘（「p3: …「文」…」）が引いている文から、JSON の部品の場所を引く（lint.Report.where）。ponytail: 文頭の 12 字で探す。文を引かない指摘には付かない。
     同じ文で始まる部品が 2 つ以上なら、候補をすべて出す"""
     def where(hit):
         n, q = re.match(r"p(\d+)", hit), re.search(r"「(.+?)」", hit)
@@ -2499,7 +2499,7 @@ def spec_brief():
             out.append(f"{k}{'*' if k in need else ''}（{ty}{'。' + u if (u := spec_unit(kind, k)) else ''}）")
         return " ".join(out)
     lines = [f"# {API_VERSION} の早見表（全部は slides.py schema。見本は samples/json/。* は要るキー）",
-             f'ファイルの頭: {{"apiVersion": "{API_VERSION}", "kind": "deck"・"page"・"component"}}。deck は 1 ページ 1 ファイルを pages に並べる',
+             f'ファイルの先頭: {{"apiVersion": "{API_VERSION}", "kind": "deck"・"page"・"component"}}。deck は 1 ページ 1 ファイルを pages に並べる',
              f"色: {'・'.join(COLOR_NAMES)}（役割の名前だけ。値はテーマが決める。文字の色は塗りと地から決まる）",
              "記法: **太字** ***赤の太字*** {32:文字}（32pt） [名前](URL) [名前](#p12)（p12.json のページ） <br>（段落の中の改行）。\\n で段落、どの段落も「- 」で始めると箇条書き", "",
              "## デッキ", "deck: " + keys(SPEC_DECK), "", "## ページ（type。省くと page）"]
@@ -2512,7 +2512,7 @@ def spec_brief():
 
 
 def spec_schema():
-    """書く形の JSON Schema（slides.py schema が出す）。SPEC_EL・SPEC_PAGE・SPEC_DECK から作る。structured outputs やエディタの確かめに渡す。"""
+    """書く形の JSON Schema（slides.py schema が出す）。SPEC_EL・SPEC_PAGE・SPEC_DECK から作る。structured outputs やエディタの確認に渡す。"""
     md = ("記法: **太字** ***赤の太字*** {32:文字}（32pt） [名前](URL) [名前](#p12) <br>（段落の中の改行）。太字・赤・大きさの中に書式を入れられる（**{32:48}**）。"
           "\\n で段落、どの段落も「- 」で始めると箇条書き。`コード` は ` を外して本文の書体のまま")
     color = {"enum": list(COLOR_NAMES), "description": "役割の名前。値はテーマのファイルが決める（6 桁は書けない）"}
@@ -2598,7 +2598,7 @@ def spec_promoted(kind, k):
     return SPEC_PROMOTED.get((kind, k))
 
 
-DECK_ENUM = {"START": "left", "CENTER": "center", "END": "right", "TOP": "top", "MIDDLE": "middle", "BOTTOM": "bottom"}  # Deck の揃えの値 → 形の値
+DECK_ENUM = {"START": "left", "CENTER": "center", "END": "right", "TOP": "top", "MIDDLE": "middle", "BOTTOM": "bottom"}  # Deck の配置の値 → 形の値
 
 
 def spec_from_deck(kind, key, v):
@@ -2670,7 +2670,7 @@ def spec_stats(path=None):
 def spec_upgrade(paths):
     """JSON のページのファイルの raw のうち、形のキーで書けるもの（spec_promoted）を、そのキーに書き換える。書き換えた数を返す。
     書き換えたファイルは、JSON を整え直して書く（手で付けた改行の位置は残らない。標準ライブラリだけで書き方を保つと、JSON の書き換えの仕組みが要る）。
-    形の版（apiVersion）を上げたときの書き換えも、ここに足す（slides-pages-035）。"""
+    形のバージョン（apiVersion）を上げたときの書き換えも、ここに足す（slides-pages-035）。"""
     total = 0
     for path in paths:
         try:
@@ -2706,11 +2706,11 @@ def spec_upgrade(paths):
     return total
 
 
-STAMP = "slides_py_revision"  # 組んだときの版（revision）を、Drive のファイルの appProperties に残す
+STAMP = "slides_py_revision"  # 組んだときのリビジョン（revision）を、Drive のファイルの appProperties に残す
 
 
 def revision(pid):
-    """Drive の版の一覧の最後の ID。中身を直すと進み、コメント・返信・解決と appProperties の書き込みでは進まない。presentations の revisionId は
+    """Drive のリビジョンの一覧の最後の ID。中身を直すと進み、コメント・返信・解決と appProperties の書き込みでは進まない。presentations の revisionId は
     コメントを付けても返信しても解決しても進み、comments.py reply --resolve のあとの build が画面で直されたと取り違えるので使わない（2026-10-19 に確かめた）。"""
     last, page = None, None
     while True:  # 古い順に並ぶ
@@ -2794,7 +2794,7 @@ def read_theme(path):
     except (OSError, json.JSONDecodeError) as e:
         sys.exit(f"{path}: 読めない（{e}）")
     if not isinstance(o, dict) or o.get("apiVersion") != API_VERSION or o.get("kind") != "theme":
-        sys.exit(f'{path}: ファイルの頭は {{"apiVersion": "{API_VERSION}", "kind": "theme", …}}')
+        sys.exit(f'{path}: ファイルの先頭は {{"apiVersion": "{API_VERSION}", "kind": "theme", …}}')
     o = {k: v for k, v in o.items() if k not in ("apiVersion", "kind")}
     spec_check(o, SPEC_THEME, f"{path}（theme）")
     t = {k: v for k, v in o.items() if k != "colors"} | {k: v.upper() for k, v in o.get("colors", {}).items()}
@@ -2930,7 +2930,7 @@ def templates():
 
 
 def set_template(text, name, url):
-    """desk.toml の文字列の [slides.templates] の name の行を url にする（なければ表の頭に足し、表もなければファイルの最後に足す）。コメントと並びはそのまま。"""
+    """desk.toml の文字列の [slides.templates] の name の行を url にする（なければ表の先頭に足し、表もなければファイルの最後に足す）。コメントと並びはそのまま。"""
     text = text if text.endswith("\n") else text + "\n"  # 見出しがファイルの最後の行でも見つける
     m = re.search(r"^\[slides\.templates\][^\n]*\n(.*?)(?=^\[|\Z)", text, re.S | re.M)
     if not m:
@@ -3173,8 +3173,8 @@ def page_key(name):
 
 def build_plan(pid, deck, force=False, theme=None, only=None):
     """[slides-component-016] build が送るもの（まだ送らない。slides.py plan はこれを出すだけ）。変わったページだけを作り直す。ページの ID の末尾に中身のハッシュ（pages_of）を付け、
-    デッキに同じハッシュのページがあれば残して並べ替えるだけにする。ハッシュのないページ（前の版の build で組んだもの、画面で足したもの）は消して作り直す。
-    force なら、全ページを作り直す（画面での直しも消す）。theme（(名前, テーマの表)）があれば、マスターとの違い（theme_diff）を出し、書いたあとの書体で組む。
+    デッキに同じハッシュのページがあれば残して並べ替えるだけにする。ハッシュのないページ（前のバージョンの build で組んだもの、画面で足したもの）は消して作り直す。
+    force なら、全ページを作り直す（画面での修正も消す）。theme（(名前, テーマの表)）があれば、マスターとの違い（theme_diff）を出し、書いたあとの書体で組む。
     only（ページの名前の集合）を渡すと、ほかのページは前に組んだスライドを残す（中身が変わっていても。そのページへのリンクを作り直すときと、前に組んでいないときは作る）。"""
     p = request("GET", f"{SLIDES}/{pid}?fields=slides(objectId),{DECK_FIELDS}")
     gapi.CLOCK.lap("GET")
@@ -3237,17 +3237,17 @@ def build_plan(pid, deck, force=False, theme=None, only=None):
 
 
 def build(pid, deck, force=False, theme=None, only=None):
-    """pid のプレゼンのページを、deck のページに置き換える（build_plan のとおりに送る）。force=False なら、先に guard で画面での直しとコメントを確かめる。
-    theme を渡すと、確かめたあとでマスターをその値にそろえる（先に書くと、自分の書いた版を画面での直しと取り違える）。"""
+    """pid のプレゼンのページを、deck のページに置き換える（build_plan のとおりに送る）。force=False なら、先に guard で画面での修正とコメントを確かめる。
+    theme を渡すと、確かめたあとでマスターをその値にそろえる（先に書くと、自分の書いたリビジョンを画面での修正と取り違える）。"""
     need_brand()
     if not force:
         gapi.guard(pid, revision(pid), STAMP, "ページのファイル（deck.json・pages.py）")
-        gapi.CLOCK.lap("画面の直しの確かめ")
+        gapi.CLOCK.lap("画面での修正の確認")
     x = build_plan(pid, deck, force, theme, only)
     ids, keep, body, old, moves, font = x.ids, x.keep, x.body, x.old, x.moves, x.font
     if x.themed:
         batch(pid, theme_reqs(*theme, *deck_parts(x.p)))
-        if not force:  # 自分の書き込みの版を残す（このあとページを組めずに止まっても、次の build が画面での直しと取り違えない）
+        if not force:  # 自分の書き込みのリビジョンを残す（このあとページを組めずに止まっても、次の build が画面での修正と取り違えない）
             gapi.stamp(pid, revision(pid), STAMP)
         if os.path.exists(shots := f"/tmp/slides_{pid[:8]}/shots.json"):  # ID の変わらないページも色が替わるので、gslides.py check が前の画像を使わずに全ページを取る
             os.remove(shots)
@@ -3275,7 +3275,7 @@ def build(pid, deck, force=False, theme=None, only=None):
         batch(pid, nreqs)
     gapi.CLOCK.lap("ノート（GET と batchUpdate）")
     gapi.stamp(pid, revision(pid), STAMP)
-    gapi.CLOCK.lap("版の記録")
+    gapi.CLOCK.lap("リビジョンの記録")
     d = f"/tmp/slides_{pid[:8]}"  # gslides.py check と同じフォルダ。画像は check が取り、同じファイルに画像のパスと指摘を足して書き直す
     os.makedirs(d, exist_ok=True)
     json.dump({"url": f"https://docs.google.com/presentation/d/{pid}/edit", "by": "build", "slides": len(deck.slides),
@@ -3307,7 +3307,7 @@ def chosen(files, deck, mark):
 
 
 def cmd_plan(pid, deck, theme, only):
-    """[slides-component-023] slides.py plan: build が送るもの（build_plan）と、画面での直し・コメント（あれば build は止まる）を出す。Google には書かない。
+    """[slides-component-023] slides.py plan: build が送るもの（build_plan）と、画面での修正・コメント（あれば build は止まる）を出す。Google には書かない。
     rebuild は作り直す・作るページ、frozen は中身が変わったが選んでいないので前のまま残すページ（番号はデッキの何枚目）。"""
     screen = gapi.guard(pid, revision(pid), STAMP, "pages.py", stop=False) or []
     x = build_plan(pid, deck, False, theme, only)
@@ -3936,7 +3936,7 @@ def selftest():
     except ValueError:
         pass
     t = make_deck(lambda d: d.source(d.page("t"), ["Databricks"]), "foot")
-    assert any(r.get("insertText", {}).get("text") == "出典: Databricks" for r in t.reqs)  # 出典の行の頭
+    assert any(r.get("insertText", {}).get("text") == "出典: Databricks" for r in t.reqs)  # 出典の行頭
     t = make_deck(lambda d: d.band(d.page("t"), "あ" * 120, "補足"), "foot")
     shapes = [r["createShape"]["elementProperties"] for r in t.reqs if "createShape" in r]
     assert any(e["size"]["height"]["magnitude"] > 1.0 * EMU for e in shapes)  # 2 行ならバンドが伸びる（1 行ずつなら 0.86 in）
@@ -4086,7 +4086,7 @@ def selftest():
             raise AssertionError(want)
         except SystemExit as e:
             assert want in str(e), str(e)
-    # [slides.templates] の行を書き換える（コメントと並びはそのまま）。なければ表の頭に足し、表もなければ最後に足す
+    # [slides.templates] の行を書き換える（コメントと並びはそのまま）。なければ表の先頭に足し、表もなければ最後に足す
     md = '# 設定\n[slides.templates]  # 注\nvisual = "a"  # 書き込む\nvisual2 = "z"\n\n[drive]\nx = 1\n'
     assert set_template(md, "visual", "b") == md.replace('"a"', '"b"') and '[slides.templates]  # 注\nacme = "c"\nvisual' in set_template(md, "acme", "c")
     assert set_template("[drive]\nx = 1\n", "company", "c").endswith('x = 1\n\n[slides.templates]\ncompany = "c"\n')
@@ -4406,7 +4406,7 @@ def selftest_spec():
         (Path(t) / "cover.json").write_text(json.dumps({**head, "kind": "page", "type": "cover", "title": "表紙", "kicker": "k", "speakerNotes": "[画像のページ](#p)"}))
         (Path(t) / "deck.json").write_text(json.dumps({**head, "kind": "deck", "name": "資料", "theme": "navy", "pages": ["pages_a.json", "cover.json"]}))
         for bad, want in [({"kind": "page", "title": "t"}, "apiVersion がない"), ({"apiVersion": "slides/v2", "kind": "page", "title": "t"}, "apiVersion 'slides/v2' は読めない"),
-                          ({**head, "kind": "Slide", "title": "t"}, "kind 'Slide' はない"), ([{"title": "t"}], "ファイルの頭は")]:
+                          ({**head, "kind": "Slide", "title": "t"}, "kind 'Slide' はない"), ([{"title": "t"}], "ファイルの先頭は")]:
             (Path(t) / "bad.json").write_text(json.dumps(bad))
             try:
                 make_deck(lambda x: x.spec(Path(t) / "bad.json"), "x")
@@ -4545,7 +4545,7 @@ def selftest_spec():
     _, lg = run({"title": "t", "body": [{"type": "row", "items": [{"type": "card", "image": "https://x/a.png", "head": "製品"}, {"type": "card", "num": 1, "head": "段"},
                                                                    {"type": "card", "num": 2, "head": "段", "text": "1 行の本文"}]}]})
     lc, heads = [e for e in lg if e["call"] == "card"], [e for e in lg if e["loc"].endswith(".head")]
-    assert len(lc) == len(heads) == 3 and all(near(t["y"] - c["y"], MARK_TOP) for t, c in zip(heads, lc))  # 見出しの上は、印が高さを決めるロゴのカードも、伸ばされたカードも同じ（PR のレビュー）
+    assert len(lc) == len(heads) == 3 and all(near(t["y"] - c["y"], MARK_TOP) for t, c in zip(heads, lc))  # 見出しの上は、マークが高さを決めるロゴのカードも、伸ばされたカードも同じ（PR のレビュー）
     _, lg = run({"title": "t", "body": [{"type": "row", "items": [{"type": "card", "num": 1, "head": "段", "text": "1 行の本文"},
                                                                    {"type": "card", "num": 2, "head": "段", "text": "長い本文が続く。" * 12}]}]})
     lc, nm = [e for e in lg if e["call"] == "card"], [e for e in lg if e["call"] == "num"]
@@ -4553,13 +4553,13 @@ def selftest_spec():
     _, lg = run({"title": "t", "body": [{"type": "row", "items": [{"type": "card", "num": 1, "head": "段", "text": "1 行の本文"},
                                                                    {"type": "card", "num": 2, "head": "段", "text": "本文<br>2 行目"}, {"type": "card", "num": 3}]}]})
     lc, nm = [e for e in lg if e["call"] == "card"], [e for e in lg if e["call"] == "num"]
-    assert near(nm[0]["cy"] - lc[0]["y"], nm[1]["cy"] - lc[1]["y"])  # 短い文字どうしでも、いちばん高いカードと印の高さがそろう（PR のレビュー）
-    assert near(nm[2]["cy"] - lc[2]["y"], MARK_IN + MARK / 2)  # 印だけのカードは、1 行目にそろえず、印の上を MARK_IN のままにする（PR のレビュー）
+    assert near(nm[0]["cy"] - lc[0]["y"], nm[1]["cy"] - lc[1]["y"])  # 短い文字どうしでも、いちばん高いカードとマークの高さがそろう（PR のレビュー）
+    assert near(nm[2]["cy"] - lc[2]["y"], MARK_IN + MARK / 2)  # マークだけのカードは、1 行目にそろえず、マークの上を MARK_IN のままにする（PR のレビュー）
     two = {"type": "card", "num": 1, "head": "段", "text": "本文<br>2 行目"}
     two["h"] = round(SpecPage(Path(".")).measure(two, 5, "c") + 0.005, 3)  # 中身の高さとほぼ同じ h（上寄せで、下はほとんど空かない）
     _, lg = run({"title": "t", "body": [{"type": "row", "w": 10, "items": [two, {"type": "card", "num": 2, "head": "段"}]}]})
     lc, nm = [e for e in lg if e["call"] == "card"], [e for e in lg if e["call"] == "num"]
-    assert near(nm[0]["cy"] - lc[0]["y"], nm[1]["cy"] - lc[1]["y"])  # h を書いたカードも、隣と印の高さがそろう（PR #76 のレビュー）
+    assert near(nm[0]["cy"] - lc[0]["y"], nm[1]["cy"] - lc[1]["y"])  # h を書いたカードも、隣とマークの高さがそろう（PR #76 のレビュー）
     card = {"type": "card", "num": 1, "head": "段", "text": "1 行の本文"}
     _, lg = run({"title": "t", "body": [{"type": "row", "items": [card, card, {"type": "text", "text": "x", "fill": "PANEL"}]}]})
     lc, nm = [e for e in lg if e["call"] == "card"], [e for e in lg if e["call"] == "num"]
@@ -4591,7 +4591,7 @@ def selftest_spec():
     assert near(li["y"] - lc["y"], MARK_IN) and near(lc["y"] + lc["h"] - li["y"] - li["h"], MARK_IN)  # 印だけのカードは、印の上下を MARK_IN にする
     _, lg = run({"title": "t", "body": [{"type": "card", "num": 1, "text": "{32:Revenue}\nDetails\nMore details", "w": 5}]})
     tx, nm = (next(e for e in lg if e["call"] == c) for c in ("text", "num"))
-    assert near(nm["cy"], tx["y"] + 32 * 1.2 / 72 / 2)  # 見出しのないカードは、本文の 1 行目の大きさで印をそろえる（PR #74 のレビュー）
+    assert near(nm["cy"], tx["y"] + 32 * 1.2 / 72 / 2)  # 見出しのないカードは、本文の 1 行目の大きさでマークをそろえる（PR #74 のレビュー）
     _, lg = run({"title": "t", "body": [{"type": "card", "image": "https://x/a.png", "align": "center"}]})
     lc, li = (next(e for e in lg if e["call"] == c) for c in ("card", "image"))
     assert near(li["y"] - lc["y"], MARK_IN) and near(lc["y"] + lc["h"] - li["y"] - li["h"], MARK_IN)  # 上に印を置くカードも同じ
@@ -4599,7 +4599,7 @@ def selftest_spec():
     need = SpecPage(Path(".")).measure(long, 4, "c", least=True)
     d, lg = run({"title": "t", "body": [long | {"h": round(need + 0.005, 3)}]})
     lc, li = (next(e for e in lg if e["call"] == c) for c in ("card", "image"))
-    assert not any("収まらない" in w for w in d.warnings) and li["y"] >= lc["y"] - 1e-9  # least の高さに縮めても、1 行目にそろえた印は枠の上から出ない（PR のレビュー）
+    assert not any("収まらない" in w for w in d.warnings) and li["y"] >= lc["y"] - 1e-9  # least の高さに縮めても、1 行目にそろえたマークは枠の上から出ない（PR のレビュー）
     globals()["iconify"], real_iconify = (lambda name, color=TEXT, w=512: f"https://x/{name}.png"), iconify  # アイコンの名前を問い合わせない
     try:
         d, els = run({"title": "t", "body": [{"type": "row", "items": [
@@ -4746,7 +4746,7 @@ def selftest_spec():
         mid(one, 0.6), mid(two, round(need - 0.04, 2)), mid(two, 0.6), {"type": "row", "items": [mid(two, 0.6), {"type": "card", "head": "高い", "text": two * 6}]},
         {"type": "text", "text": two * 3, "h": 0.2}, {"type": "text", "text": two * 3, "fill": "PANEL", "h": 0.2}, {"type": "stat", "value": "3", "label": "件", "h": 0.3},
         small | {"h": 0.3}, {"type": "card", "num": 1, "head": "見出し", "valign": "top", "w": 5, "h": 0.4},  # 上寄せの印のあるカードは、上の空きと印が収まるかも見る
-        {"type": "card", "head": "Heading", "text": "Body", "w": 5, "h": 0.9}]}]})  # 印のないカードの本文の枠は、下端の 0.1 in 上で終わる（PR #54 のレビュー）
+        {"type": "card", "head": "Heading", "text": "Body", "w": 5, "h": 0.9}]}]})  # マークのないカードの本文の枠は、下端の 0.1 in 上で終わる（PR #54 のレビュー）
     w = "\n".join(d.warnings)
     assert w.count("収まらない見込み") == 6 and "items[9]（card）" in w and "items[2]（card）: h 0.6 in では" in w and "items[3].items[0]（card）" in w and "items[5]（text）" in w and "items[6]（stat）" in w, w  # 塗りのない文字は見ない
     assert "items[8]（card）" in w and "items[7]" not in w, w
@@ -4764,7 +4764,7 @@ def selftest_spec():
     assert near(sp.measure({"type": "card", "text": "**MMMM** MMMMM **MMMM**"}, 1.36, "c"), CARD_DOWN + 0.1 + 3 * 11 * 1.2 * 1.25 / 72 + 2 * INSET + CARD_END)  # 太さの交ざる段落も語ごとに折り返す（3 語が 3 行。PR #69 のレビュー）
     assert run_lines([("あ" * 9, 11, False), (" Codex", 11, True)], 10 * 11 / 72) == 2 and run_lines([("a\nb", 11, False)], 1) == 2
     assert all_bold([(kj, {"bold": True})]) and not all_bold([(kj, {"bold": True}), "地の文"]) and all_bold(kj, True) and widest_em(f"**{kj}**") == em_width(kj, bold=True)
-    d, els = run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [  # 位置の確かめ（tangles）。囲みの中の線と、線の両端の部品は数えない
+    d, els = run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [  # 位置の確認（tangles）。囲みの中の線と、線の両端の部品は数えない
         {"type": "box", "x": 0, "y": 0, "w": 9, "h": 3, "fill": "PANEL"},
         {"type": "label", "id": "a", "text": "A", "x": 0.2, "y": 1, "w": 2, "h": 0.6}, {"type": "label", "id": "m", "text": "途中", "x": 3.5, "y": 1, "w": 1.2, "h": 0.6},
         {"type": "label", "id": "c", "text": "C", "x": 6, "y": 1, "w": 2, "h": 0.6}, {"type": "card", "head": "はみ出す", "x": 7, "y": 1.4, "w": 1.8},
@@ -5204,7 +5204,7 @@ def selftest_diff():
     # ページのハッシュ: 組むたびに変わる ID では変わらず、中身が変わったページと、そこへリンクするページだけが変わる
     _, h1, links, n1 = pages_of(d, json.loads(resolved(d, p)))
     e = make_deck(make("リード"), "t")
-    assert e.run != d.run  # 続けて作っても、ID の頭は別
+    assert e.run != d.run  # 続けて作っても、ID の先頭は別
     for bad_arg in ([], ["3,x"], ["3,"]):
         try:
             page_numbers(["--pages", *bad_arg])
@@ -5263,7 +5263,7 @@ def selftest_diff():
 
     revs = {"": {"revisions": [{"id": "1"}, {"id": "4"}], "nextPageToken": "t+1"}, "t%2B1": {"revisions": [{"id": "8"}], "nextPageToken": "t2"}, "t2": {}}
     globals()["request"] = lambda m, u, *a, **k: revs[u.partition("pageToken=")[2]]
-    assert revision("x") == "8"  # 版の一覧は古い順。最後のページの最後の ID（空のページが続いても前の ID）
+    assert revision("x") == "8"  # リビジョンの一覧は古い順。最後のページの最後の ID（空のページが続いても前の ID）
     globals().update(request=lambda m, u, *a, **k: {**p, "slides": [{"objectId": o, "slideProperties": {"notesPage": {"notesProperties": {"speakerNotesObjectId": o + "_sp"}, "pageElements": [
         {"objectId": o + "_sp", "shape": {"text": {"textElements": [{"paragraphMarker": {}}, {"textRun": {"content": notes.get(o + "_sp", "") + "\n"}}]}}}]}}} for o in live]},
                      batch=fake_batch, revision=lambda pid: "rev")
@@ -5439,7 +5439,7 @@ def selftest_diff():
                         raise AssertionError("別の場所のテーマのファイルを通した")
                     except SystemExit as e:
                         assert "デッキのテーマのファイルは" in str(e)
-                    # テーマを書いたあとでページを組めずに止まっても、次の build が自分の書き込みを画面での直しと取り違えない（書いたすぐあとに版を残す）
+                    # テーマを書いたあとでページを組めずに止まっても、次の build が自分の書き込みを画面での修正と取り違えない（書いたすぐあとにリビジョンを残す）
                     stamps, fb = [], globals()["batch"]
                     gapi.stamp = lambda *a: stamps.append(a)
 
@@ -5546,7 +5546,7 @@ def main():
         return out
     pid = new(a[1], a[2], src)
     try:
-        build(pid, deck, force=True, theme=own)  # 複製したばかりなので、画面での直しもコメントもない
+        build(pid, deck, force=True, theme=own)  # 複製したばかりなので、画面での修正もコメントもない
     except BaseException:  # 組めなかった複製を残さない。直してから new をやり直す（同じ名前の空のプレゼンが増えないように）
         trash(pid)
         print(f"組めなかったので、作った複製 {pid} をゴミ箱に移した", file=sys.stderr)

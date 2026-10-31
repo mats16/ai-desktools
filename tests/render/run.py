@@ -114,7 +114,7 @@ def main():
 
     n = bool(local) + bool(check)
     said = lambda rc: "要修正あり（出力の「== 要修正」）" if rc else "要修正なし"
-    lines = [f"# 見本を組んだ画像の確かめ（{time.strftime('%Y-%m-%d %H:%M')}）", "",
+    lines = [f"# 見本を組んだ画像の確認（{time.strftime('%Y-%m-%d %H:%M')}）", "",
              f"- 手元の lint: {said(local)}、組んだあとの lint（gslides.py check）: {said(check)}。要確認は画像で見る", ""]
     for i, p in enumerate(pages(), 1):
         lines += [f"## p{i} {p}", f"png: {png / f'p-{i:02d}.png'}", "", *[f"- {x}" for x in e[p]], ""]

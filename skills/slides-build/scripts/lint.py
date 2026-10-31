@@ -4,7 +4,7 @@
 --talk は LT など話す資料（聞き手が初めて聞く中身を短く話すもの）。1 枚の本文の字数も見る。
 書いたルールのうち、機械で見られるものを数える。本文の表記の決まり・出典の照合・記録はドキュメントと同じ textlint.py。ドキュメントは docs-build の doc_lint.py。
 標準ライブラリだけで動く。要修正（HARD）が 1 つでもあれば exit 1。要確認（WARN）は 1 件ずつ見て、直すか、残す理由を言えるようにする。
-ルールの出典は ../../deck-design/slides.md・../../deck-writing/ と、ワークスペースの Research/deck_research/log/。pptx を読んでいた版は Archive/pptx_pipeline_20261007/。"""
+ルールの出典は ../../deck-design/slides.md・../../deck-writing/ と、ワークスペースの Research/deck_research/log/。pptx を読んでいたバージョンは Archive/pptx_pipeline_20261007/。"""
 import itertools, json, math, os, re, subprocess, sys
 from collections import Counter, defaultdict
 
@@ -54,17 +54,17 @@ COL_SHIFT = "隣り合う列の箱の上端か下端がずれている"  # [slid
 BIG_NUM_PT, COL_TOL, COL_MAX, NEST = 28, 0.03 * EMU, 1.0 * EMU, 0.25 * EMU  # 大きな数字の大きさ。列のずれは 0.03〜1.0 in を出す（それより大きいのは中身の量の違いとみなす）
 DASH_ROUND = "点線の角丸が Google 標準の丸み"  # api.md。中のカード（半径 0.1 in）と曲率が合わない。JSON の box の dash にする（2026-10-08）
 CODE_NOT_MONO = f"濃紺の地のコードが等幅の {MONO_DEFAULT} でない"  # [slides-lint-009] deck-design の slides.md の 2。pages.py に残った古いコードの箱の部品で、等幅にならなかった（レビューでも見落としやすい）
-CODE_LINE = re.compile(r"\s*(SELECT|UPDATE|INSERT|DELETE|CREATE|ALTER|WITH|FROM|WHERE|SET|ANALYZE|GROUP BY|ORDER BY|import|def|pip|uv|curl|psql|python3?|databricks)(?=[\s(;]|$)")  # コードの行の頭（URL の databricks.com などは数えない）
+CODE_LINE = re.compile(r"\s*(SELECT|UPDATE|INSERT|DELETE|CREATE|ALTER|WITH|FROM|WHERE|SET|ANALYZE|GROUP BY|ORDER BY|import|def|pip|uv|curl|psql|python3?|databricks)(?=[\s(;]|$)")  # コードの行頭（URL の databricks.com などは数えない）
 BLOCK_ON_NAVY = "濃紺の箱の上に NAVY_BLOCK の箱"  # [slides-lint-010] deck-design の slides.md の 1。地との差が小さく、群の境が見えない。本文ページでは淡色（PANEL・CARD）にする。扉（濃紺の地）は見ない
 STAGE_NG = "提供ステージの札の塗りが言葉と合わない"  # [slides-lint-011] deck-design の slides.md の 1。Public Preview（本番で使える）を Beta・Private Preview の黄と分ける
 MANY_BANDS = "結論バンドが本文の 3 分の 1 を超える"  # [slides-lint-012] deck-design の slides.md の 1「要るページにだけ」
 GAP_BELOW, GAP_BOX = 1.0 * EMU, 0.6 * EMU  # 本文の下（本文の領域 5 in の 2 割）と、箱の中の文字より下
 GAP_HOLE, GAP_TOP = 0.65 * EMU, 1.0 * EMU  # 要素の間の穴と、本文の上の空き
-THIN = 0.05 * EMU  # これより細い四角は線として数える（四角で罫線や軸を引いても、格子と矢印の確かめから漏れないように）
+THIN = 0.05 * EMU  # これより細い四角は線として数える（四角で罫線や軸を引いても、格子と矢印の確認から漏れないように）
 MONO = MONO_DEFAULT  # 見ている資料の等幅の書体。lint_slides がデッキのテーマから入れ直す（is_mono などが読む。ponytail: 1 つずつ見る前提の大域の値）
 DECK_WIDE = {NO_COVER, NO_DIVIDER, SHORT_CH, MANY_BANDS, HEAD_CLAIMS}  # デッキ全体を見て出す規則。lint_slides の only で絞らない（ページの番号が付いていても、ほかのページで決まる）
 PAGE_ONLY = {NO_SOURCE, NOT_IN_FACTS, NO_LINK, TALK, TWO_LINES, HEAD_PERIOD, HEAD_POLITE, EMPTY_BELOW, EMPTY_HOLE}  # ページを見て出す規則。部品だけを見るときは出さない
-ESTIMATE = {TWO_LINES, BODY_LINES, PHRASE_BREAK, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, TEXT_OVER}  # 字幅と行の高さの見積もりから出す指摘。Google が描いた画像で確定する（ほかは JSON で決まる）
+ESTIMATE = {TWO_LINES, BODY_LINES, PHRASE_BREAK, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, TEXT_OVER, textlint.SLIDE_COMMA}  # 字幅と行の高さの見積もりから出す指摘。Google が描いた画像で確定する（ほかは JSON で決まる）
 HARD_NAMES = textlint.HARD_NAMES | {COPYRIGHT_NG}
 INS = INSET * 72  # 文字の枠の内側の余白（pt）。Slides API の既定は 0.1 in で、変えられない
 BODY_TOP, BODY_BOTTOM = Y_BODY_NOLEAD * EMU, BAND_BOTTOM * EMU  # 本文の領域（deck-design の slides.md の 1 の配置）
@@ -215,7 +215,7 @@ def est_lines(para, avail):
 
 
 def wrap_breaks(para, avail):
-    """段落を幅 avail（pt）で自動で折り返したときに、行の頭になる字の位置（段落の文字列の位置）の見込み。数え方は slides.py の wrap_lines と同じ
+    """段落を幅 avail（pt）で自動で折り返したときに、行頭になる字の位置（段落の文字列の位置）の見込み。数え方は slides.py の wrap_lines と同じ
     （和文は 1 字ずつ、英数字の語はまとめて次の行へ、1 行より長い語は字で折る）。run ごとの大きさを見る。文字の大きさの分からない run があれば []"""
     if any(size_of(st) is None for c, st in para[1] if c.strip()):
         return []
@@ -245,7 +245,7 @@ def segment(texts):
     code = "import sys, json, budoux; p = budoux.load_default_japanese_parser(); print(json.dumps([p.parse(t) for t in json.load(sys.stdin)]))"
     try:
         res = subprocess.run(["uv", "run", "-q", "--no-project", "--with", "budoux==0.9.3", "python", "-c", code], input=json.dumps(texts),
-                             capture_output=True, text=True, timeout=60)  # 版を固定して文節の分け方をそろえる。初めてだけ BudouX を取りにネットワークが要る
+                             capture_output=True, text=True, timeout=60)  # バージョンを固定して文節の分け方をそろえる。初めてだけ BudouX を取りにネットワークが要る
         segs = json.loads(res.stdout) if res.returncode == 0 else None
         if isinstance(segs, list) and len(segs) == len(texts) and all("".join(x) == t for x, t in zip(segs, texts)):
             return {t: set(itertools.accumulate(map(len, x))) for t, x in zip(texts, segs)}
@@ -468,7 +468,7 @@ def line_grid(lines):  # [slides-lint-017] 上端と長さが同じ縦線が 3 �
 
 
 def hit_page(h):
-    """指摘の頭のページの番号（「p3: …」「p3 の見出し: …」）。頭が p<番号> でない指摘（デッキ全体のもの）は None。"""
+    """指摘の先頭のページの番号（「p3: …」「p3 の見出し: …」）。頭が p<番号> でない指摘（デッキ全体のもの）は None。"""
     m = re.match(r"p(\d+)", h)
     return int(m.group(1)) if m else None
 
@@ -547,10 +547,16 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                     mono = all(st.get("fontFamily") == MONO for c, st in para[1] if c.strip())  # コードの行は大文字のラベル・数字の出典の検査から外す
                     r.scan(f"p{i}", t, {k: v for k, v in {**HARD, **WARN, **SLIDE_ONLY}.items() if not (footer and k == "社外秘の表示") and not (mono and k == "英語の大文字ラベル")})
                     raw = "".join(c for c, st in para[1] if st.get("fontFamily") != MONO)
+                    one_line = False  # 見出しと 1 行の箇条（折り返さない段落）。表のセルは幅を見積もらないので入れない
                     if "shape" in e and not footer and not mono and re.search(f"[{JA}]", t):  # 表のセルは列の幅を見積もりに通していないので見ない
                         avail = b[2] / EMU * 72 - 2 * INS - para[0].get("indentStart", {}).get("magnitude", 0)
-                        if avail > 0 and (bs := wrap_breaks(para, avail)):
-                            wraps.append((f"p{i}", "".join(c for c, _ in para[1]), bs))
+                        if avail > 0:
+                            bs = wrap_breaks(para, avail)
+                            one_line = est_lines(para, avail) == 1  # 大きさの分からない run があれば None（1 行とは数えない）
+                            if bs:
+                                wraps.append((f"p{i}", "".join(c for c, _ in para[1]), bs))
+                    if not footer and not mono:
+                        r.wording(f"p{i}", t, one_line=one_line)
                     if m := re.search(r"\v\s*[（「『]", raw):
                         r.hits[OPEN_HEAD].append(f"p{i}: 「{raw[max(0, m.start() - 12):m.end() + 12].replace(chr(11), '⏎')}」。括弧の前で改行せず、括弧の後か句読点で改行する")
                     if (f or under) == scheme.get("DARK1") and CODE_LINE.match(t) and any(st.get("fontFamily") != MONO and re.search("[A-Za-z]", c) for c, st in para[1]):
@@ -699,7 +705,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
     print(f"\n== 本文の字数（見出し・リード・出典・フッターを除く。話す資料は {TALK_MAX} 字まで） ==")
     print(" / ".join(chars))
     hard = r.show(list(HARD) + [COPYRIGHT_NG, FONT_NG, MONO_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
-    r.show(list(WARN) + list(SLIDE_ONLY) + [f"{MIN_PT}pt 未満の文字", NO_SOURCE, NOT_IN_FACTS, NO_LINK, BODY_LINES, TWO_LINES, HEAD_CLAIMS, BULLET_PERIOD, TALK, ARROW_MID, TEXT_OVER, LINE_GRID, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, PAD_NG, NUM_NO_UNIT, OPEN_HEAD, PHRASE_BREAK, COL_SHIFT, DASH_ROUND, STAGE_NG, CODE_NOT_MONO, BLOCK_ON_NAVY, MANY_BANDS, NO_COVER, NO_DIVIDER, SHORT_CH], "要確認")
+    r.show(list(WARN) + textlint.YOMI_NAMES + list(SLIDE_ONLY) + [f"{MIN_PT}pt 未満の文字", NO_SOURCE, NOT_IN_FACTS, NO_LINK, BODY_LINES, TWO_LINES, HEAD_CLAIMS, BULLET_PERIOD, TALK, ARROW_MID, TEXT_OVER, LINE_GRID, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, PAD_NG, NUM_NO_UNIT, OPEN_HEAD, PHRASE_BREAK, COL_SHIFT, DASH_ROUND, STAGE_NG, CODE_NOT_MONO, BLOCK_ON_NAVY, MANY_BANDS, NO_COVER, NO_DIVIDER, SHORT_CH], "要確認")
     hard += workspace_checks("slides", p, r)
     print("\n== 文字サイズ（pt: run の数） ==")
     print(", ".join(f"{k:g}: {v}" for k, v in sorted(sizes.items())))
@@ -865,7 +871,7 @@ def selftest():
     # 自動の折り返しが文節の途中に入る見込み（slides-visual-013）。数え方は slides.py の wrap_lines と同じ。文節は BudouX の結果を差し替えて試す
     pa = lambda *runs: ({}, [(c, {"fontSize": {"magnitude": sz}} if sz else {}) for c, sz in runs])
     t = "データを見る人と評価者がいる"
-    assert wrap_breaks(pa((t, 12)), 120) == [10] and wrap_breaks(pa((t, 12)), 200) == []  # 12pt で 10 字の幅。11 字目の「者」が次の行の頭
+    assert wrap_breaks(pa((t, 12)), 120) == [10] and wrap_breaks(pa((t, 12)), 200) == []  # 12pt で 10 字の幅。11 字目の「者」が次の行頭
     assert wrap_breaks(pa(("あいうえおかきくけ\vこさしすせそたちつてとな", 12)), 120) == [20]  # 手の改行で数え直す
     assert wrap_breaks(pa(("大きい", 24), ("あいうえおか", 12)), 120) == [7]  # run ごとの大きさ。24pt の 3 字で 6 字分
     assert wrap_breaks(pa(("あいう Databricks", 12)), 90) == [4] and wrap_breaks(pa(("あ abcdefghijklmnopqrstu", 12)), 60) == [9, 18]  # 英数字の語はまとめて送り、1 行より長い語は字で折る
@@ -875,7 +881,7 @@ def selftest():
     cuts = {t: {4, 6, 8, 12, 14}, "あいう Databricks": {4, 15}}  # 「データを／見る／人と／評価者が／いる」
     globals()["segment"] = lambda ts: {x: cuts.get(x, set()) for x in ts}
     assert len(mid_phrase([("p1", t, [10])])) == 1 and "評価／者がいる" in mid_phrase([("p1", t, [10])])[0]
-    assert mid_phrase([("p1", t, [8])]) == [] and mid_phrase([("p1", "あいう Databricks", [4])]) == []  # 文節の頭と、空白の後
+    assert mid_phrase([("p1", t, [8])]) == [] and mid_phrase([("p1", "あいう Databricks", [4])]) == []  # 文節の先頭と、空白の後
     assert mid_phrase([("p1", "見込みの位置、で", [6])]) == []  # 行頭に来ない字の前は、禁則で前の行に戻る
     wrapped = lambda **kw: shape(1, text=[t], **kw)  # 幅は 12pt で 10 字
     res, _, hard = run(deck([(NAVY, [title()]), (oat, [title(), wrapped()])]))
@@ -988,6 +994,11 @@ def selftest():
     assert len(mono(["source: samples.tpch.orders"], MONO).hits[NO_LINK]) == 0 and len(mono(["source: samples.tpch.orders"], FONT).hits[NO_LINK]) == 1
     assert len(mono(["SELECT"], MONO).hits["英語の大文字ラベル"]) == 0 and len(mono(["SELECT"], FONT).hits["英語の大文字ラベル"]) == 1
     assert len(mono(["x = 1"] * 10, MONO).hits[BODY_LINES]) == 0 and len(mono(["あ"] * 10, FONT).hits[BODY_LINES]) == 1
+    # 見出しと箇条の間の読点（deck-lint-027）: 1 行に収まる段落だけ。折り返す本文と、大きさの分からない run（プレースホルダーの継承）は 1 行と数えない
+    comma = lambda el: len(run(deck([(OAT, [title(), el])]))[0].hits[textlint.SLIDE_COMMA])
+    unsized = shape(1, y=2, text=["監査は、この 1 か所で確かめる"])
+    unsized["shape"]["text"]["textElements"][1]["textRun"]["style"].pop("fontSize")
+    assert comma(shape(1, y=2, w=6, text=["監査は、この 1 か所で確かめる"])) == 1 and comma(shape(1, y=2, w=1.5, text=["監査は、この 1 か所で確かめる"])) == 0 and comma(unsized) == 0
     band = {"objectId": "b", "shape": {"shapeType": "RECTANGLE", "shapeProperties": fill(NAVY)}, **box(0.6, 5.88, 12.13, 0.72)}
     assert len(run(deck([(OAT, [band])] * 3))[0].hits[MANY_BANDS]) == 1 and not run(deck([(OAT, [band]), (OAT, []), (OAT, [])]))[0].hits[MANY_BANDS]
     print("selftest ok")

@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "..", "hooks", "rules_overlay.py");
-const PART = /(?:^|\n)## (?:ワークスペースの決まり(?:の一覧)?|顧客の memory): /;  // 足したものの頭（rules_overlay.py の見出しの形）
+const PART = /(?:^|\n)## (?:ワークスペースの決まり(?:の一覧)?|顧客の memory): /;  // 足したものの先頭（rules_overlay.py の見出しの形）
 const TYPE = "desk-tools-rules";  // /skill:<名前> のときに足すメッセージ
 
 export default function (pi: any) {
@@ -29,7 +29,7 @@ export default function (pi: any) {
 
   pi.on("turn_start", () => { turn = ""; });  // 前のターンの結果は、もう文脈に載っている
   pi.on("before_agent_start", (ev: any, ctx: any) => {  // /skill:<名前> で呼んだスキルは、読む道具を通らずに SKILL.md が入る（<skill name=… location=…> に広げてから呼ばれる）
-    turn = "";  // 新しい実行の頭（止めた実行の残りは、その前のコンパクションで消えていることがある）
+    turn = "";  // 新しい実行の始まり（止めた実行の残りは、その前のコンパクションで消えていることがある）
     const m = /^<skill name="[^"]+" location="([^"]+)">/.exec(String(ev.prompt ?? ""));
     const context = m ? overlay(ctx, m[1], true) : "";
     if (context) return { message: { customType: TYPE, content: context, display: false } };

@@ -200,7 +200,7 @@ def audit(url):
 
 
 def specimen(theme, t, origin=()):
-    """テンプレートの見本のページ。テーマの色と部品を一通り、決まり（deck-design の slides.md）どおりの使い方で置く（色の確かめと、部品を直したときの確かめに使う）。
+    """テンプレートの見本のページ。テーマの色と部品を一通り、決まり（deck-design の slides.md）どおりの使い方で置く（色の確認と、部品を直したときの確認に使う）。
     origin は、色の早見表の出典の行に足す元のテンプレートの部品（template() が作る。合わせ直しでは元が分からないので書かない）。"""
     T = palette(t)
     use_theme(t)  # 固定の色と著作権表示はテーマの値（slides.py build がデッキのテーマから読むのと同じ）
@@ -437,7 +437,7 @@ def themes_folder():
 
 
 def publish(pid, theme, t):
-    """テンプレートの Drive の説明（テーマの description）とプロパティ（テーマの名前。共有テーマのフォルダで見分ける）を書く。前の版が書いた adf. の値は消す
+    """テンプレートの Drive の説明（テーマの description）とプロパティ（テーマの名前。共有テーマのフォルダで見分ける）を書く。前のバージョンが書いた adf. の値は消す
     （組むときの値は、今はマスターの目印にある）。"""
     old = request("GET", f"{DRIVE}/files/{pid}?supportsAllDrives=true&fields=properties").get("properties") or {}
     request("PATCH", f"{DRIVE}/files/{pid}?supportsAllDrives=true&fields=id", {"description": t.get("description", ""),
@@ -474,7 +474,7 @@ def template(name, from_base=False, base=""):
         m = measured(t, master, extras)
         batch(pid, styles(name, m, master, blank, extras))
         use_layouts(request("GET", f"{SLIDES}/{pid}?fields=layouts(objectId,pageElements(description))"))  # 見本の表紙・扉を、置き物に重ならない幅で組む
-        build(pid, specimen(name, m, origin), force=True)  # 直前に配色を変えているので、版の確かめはしない
+        build(pid, specimen(name, m, origin), force=True)  # 直前に配色を変えているので、リビジョンの確認はしない
         publish(pid, name, m)
         if m != t:  # 測った文字の幅と地の明るさ。プラグインの組み込みのファイルは書き換えず、いつもワークスペースのファイルに書く
             (ws := ws_themes()).mkdir(parents=True, exist_ok=True)
@@ -601,7 +601,7 @@ def main():
         sys.exit(__doc__)
     if a[1:] and a[1] != "--from-base" or len(a) > 3:
         sys.exit(__doc__)
-    pid = template(a[0], a[1:2] == ["--from-base"], a[2] if len(a) == 3 else "")  # 要るものの確かめは template() の頭、url を書くのは template() の中
+    pid = template(a[0], a[1:2] == ["--from-base"], a[2] if len(a) == 3 else "")  # 要るものの確認は template() の先頭、url を書くのは template() の中
     print(f"テンプレート {a[0]}: {pid}" + ("  （desk.toml の [slides.templates] に書いた）" if "--from-base" in a else ""))
 
 

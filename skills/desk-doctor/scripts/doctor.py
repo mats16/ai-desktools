@@ -12,7 +12,7 @@ sys.path.insert(0, str(SKILLS / "slides-build" / "scripts"))
 sys.path.insert(0, str(SKILLS / "docs-build" / "scripts"))
 sys.path.insert(0, str(SKILLS / "desk-migrate" / "scripts"))
 import desk  # noqa: E402  ワークスペースと設定のファイルの探し方
-import migrate  # noqa: E402  前の版のワークスペースか（desk-migrate）
+import migrate  # noqa: E402  前のバージョンのワークスペースか（desk-migrate）
 
 
 def check(ws, local=False):
@@ -33,7 +33,7 @@ def check(ws, local=False):
         return out
     if not found:
         if old := migrate.workspace(ws):  # factory.toml だけがある、2026-10-25 より前のワークスペース
-            ng("前の版のワークスペース", f"{old} は前の版（factory.toml・.factory/）。desk-migrate で desk.toml・.desk/ に移す")
+            ng("前のバージョンのワークスペース", f"{old} は前のバージョン（factory.toml・.factory/）。desk-migrate で desk.toml・.desk/ に移す")
         else:
             ng("desk.toml", desk.missing(ws))
         return out
@@ -63,12 +63,12 @@ def check(ws, local=False):
              "エージェントはどの会話にもスキルより強く読み込むので、資料を作らない作業にも効く。ワークスペースだけの決まりはレシピに移し、プラグインのスキルにある文は消す"
              "（desk-migrate の SKILL.md の「Move an AGENTS.md from the old template」）")
     if old := migrate.needs(root):  # 前の名前の rules/ は読まれず、前の ID は台帳とつながらない
-        ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの頭に frontmatter を置き、ワークスペースの決まりの ID を外し、2026-10-29 に rules/ を recipes/<名前>/RECIPE.md にし、source-scout を desk-crawl にし、索引の references_index.md を台帳から作るものにした）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
+        ng("前のバージョンのワークスペース", f"desk-migrate で今のバージョンへ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの先頭に frontmatter を置き、ワークスペースの決まりの ID を外し、2026-10-29 に rules/ を recipes/<名前>/RECIPE.md にし、source-scout を desk-crawl にし、索引の references_index.md を台帳から作るものにした）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
     odd, top = [], root / desk.RECIPES  # レシピの形と frontmatter（desk-feedback/routing.md の「Workspace rules」）
     for p, m in (rules := desk.rules(root)):
         rel = p.relative_to(root)
         if "paths" in m:
-            odd.append(f"{rel} に paths がある（前の版の書き方で、hook は読まない。材料を集めるときなら step: gather、組むときなら step: build、資料を作るどの作業でもなら書かない）")
+            odd.append(f"{rel} に paths がある（前のバージョンの書き方で、hook は読まない。材料を集めるときなら step: gather、組むときなら step: build、資料を作るどの作業でもなら書かない）")
         if m.get("step", "") not in ("", *desk.STEPS):
             odd.append(f"{rel} の step の {m['step']}（{'・'.join(desk.STEPS)} のどれか。資料を作るどの作業でも出すなら書かない）")
         if desk.kind(m) == "material" and m.get("step"):
@@ -85,7 +85,7 @@ def check(ws, local=False):
         rel = p.relative_to(root)
         inside = any((d / desk.RECIPE).is_file() for d in p.parents if d.is_relative_to(top) and d != top)
         if p.name == desk.RECIPE and p.parent != top and p not in have and "templates" not in p.relative_to(top).parts[1:]:
-            odd.append(f"{rel} の頭に frontmatter の description がない（ないと hook が出さない）")
+            odd.append(f"{rel} の先頭に frontmatter の description がない（ないと hook が出さない）")
         elif not inside and p != top / "README.md" and "templates" not in p.relative_to(top).parts[1:]:
             odd.append(f"{rel} はレシピでない（決まりは recipes/<名前>/RECIPE.md に書く。hook は出さない）")
     (warn if odd else ok)("ワークスペースの決まり", "、".join(odd) if odd else f"レシピ {len(rules)} 個")
@@ -138,7 +138,7 @@ def check(ws, local=False):
     if "base_template" in sl:  # 2026-10-14 までの書き方
         ng("slides の base", "slides.base_template を消す。元のテンプレートは desk.toml に持たず、template.py <テーマ> --from-base <元の URL> で渡す（渡さなければ白紙の pptx から作る）")
     if sl.get("template_folder"):  # 2026-10-12 までの書き方
-        warn("slides.template_folder", "プラグインは読まない。新しく作るテンプレートは [drive] desk の下の Themes に作る（前の版のスクリプトで動かさなくなったら消す）")
+        warn("slides.template_folder", "プラグインは読まない。新しく作るテンプレートは [drive] desk の下の Themes に作る（前のバージョンのスクリプトで動かさなくなったら消す）")
     (ok if temps.get(theme) else warn)("slides.templates", ", ".join(temps) if temps.get(theme) else
                                        f"既定のテーマ {theme} のテンプレートがない。template.py {theme} --from-base で作るか、共有のテーマ（slides.py themes）を slides.py theme <url> で写す")
     if bare := [n for n in temps if n not in files]:
@@ -240,7 +240,7 @@ def selftest():
         kinds = lambda: {n: k for k, n, _ in check(Path(tmp), local=True)}
         assert kinds()["desk.toml"] == "要修正"
         (Path(tmp) / "factory.toml").write_text("")
-        assert kinds()["前の版のワークスペース"] == "要修正"  # 2026-10-25 より前の名前
+        assert kinds()["前のバージョンのワークスペース"] == "要修正"  # 2026-10-25 より前の名前
         (Path(tmp) / "factory.toml").unlink()
         subprocess.run([sys.executable, str(SKILLS / "desk-init" / "scripts" / "init.py"), tmp], check=True, capture_output=True)
         (Path(tmp) / ".agents" / "skills" / "slides-build").mkdir(parents=True)
@@ -256,10 +256,10 @@ def selftest():
         (Path(tmp) / "Customers" / "acme" / "CLAUDE.md").rename(Path(tmp) / "Customers" / "acme" / "memory.md")
         assert "顧客の memory" not in kinds()
         agents = Path(tmp) / "AGENTS.md"
-        assert "前の雛形の AGENTS.md" not in kinds() and "前の版のワークスペース" not in kinds()  # 今の雛形は AGENTS.md を置かない
+        assert "前の雛形の AGENTS.md" not in kinds() and "前のバージョンのワークスペース" not in kinds()  # 今の雛形は AGENTS.md を置かない
         (Path(tmp) / "rules" / "deck-build").mkdir(parents=True)
         (Path(tmp) / "rules" / "deck-build" / "checks.py").write_text("x")
-        assert kinds()["前の版のワークスペース"] == "要修正"  # 前の版の rules/ が残っている
+        assert kinds()["前のバージョンのワークスペース"] == "要修正"  # 前のバージョンの rules/ が残っている
         shutil.rmtree(Path(tmp) / "rules")
         assert kinds()["ワークスペースの決まり"] == "OK"
         rx = Path(tmp) / "recipes" / "x"
@@ -279,7 +279,7 @@ def selftest():
         (Path(tmp) / "recipes" / "z").mkdir()
         (Path(tmp) / "recipes" / "z" / "RECIPE.md").write_text("- description がない\n")
         d = next(d for k, n, d in check(Path(tmp), local=True) if n == "ワークスペースの決まり")
-        assert "recipes/loose.md はレシピでない" in d and "recipes/RECIPE.md はレシピでない" in d and "スキルの名前のフォルダ（slides-build）" in d and "recipes/z/RECIPE.md の頭に frontmatter の description がない" in d, d
+        assert "recipes/loose.md はレシピでない" in d and "recipes/RECIPE.md はレシピでない" in d and "スキルの名前のフォルダ（slides-build）" in d and "recipes/z/RECIPE.md の先頭に frontmatter の description がない" in d, d
         shutil.rmtree(Path(tmp) / "recipes")
         agents.write_text("# 自分の決まり\n- 社内向けは敬体。\n")
         assert "前の雛形の AGENTS.md" not in kinds()  # 持ち主が書いたものには言わない

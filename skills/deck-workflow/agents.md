@@ -16,7 +16,7 @@ Open before you start any child agent (plan review, source check, three-page rev
     What to do while waiting:
     - Research child agent: the skeleton of the outline (the sections the research results do not change)
     - Plan-review child agent (5): the page JSON of the three representative pages (for decks that skip them, the whole)
-    - Three-page review child agent (6): the JSON of the remaining pages (for split decks, the draft of 「書き方の決め」 and the request texts; slides-flow-016 in 7)
+    - Three-page review child agent (6): the JSON of the remaining pages (for split decks, the draft of 「書き方の取り決め」 and the request texts; slides-flow-016 in 7)
     - Child agents writing the remaining pages (7): fixes to the three representative pages that affect only that page (step 3 of 6)
     - Source-check child agents (5, 9; deck-flow-019): nothing waits for them; continue the step you are on
     - `/deck-review` child agents (9): the records up to the previous round (the findings table, 「あと」 in the three-representative-pages log), `references.md`, the lint `要確認`, and fixes you found yourself

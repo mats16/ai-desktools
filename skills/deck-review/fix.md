@@ -30,4 +30,10 @@ One finding per row. The reviewer returns up to 「直し方の案」; you (the 
 ## Fix
 
 - [deck-review-005] **Fix.** Follow "What to fix" above. Fix the page JSON (pages.py for older decks; `build/doc.md` for documents) and the outline, and rebuild with `slides.py build <URL>` (`docs.py build <URL>` for documents).
+- [deck-review-018] **Check that the fixes kept the meaning.** Before putting in a round's fixes, copy the text of the material: `cp $D/deck.md $D/before.md` (documents: `cp $D/text.md $D/before.md`). After the rebuild and check in step 6, compare it with the new text. The command reads the diff's JSON and prints `meaning risks: <N>` and one line per risk (numbers, negations, who does what, hearsay, guesses and requests, and certainty that changed). Undo each change there that no finding asked for, or check it against the 「出典の表」, because wording fixes made one finding at a time can flip a negation or a number unnoticed, and lint compares only numbers with the table. If it prints a traceback instead, the check did not run: `JSONDecodeError` means the diff printed nothing (usually a missing `$D/before.md`; its error is above), and `KeyError` means the JSON changed with a newer yomiyasu (update this command). Fix the cause and run it again. The diff lists changes; it does not prove the meaning is the same. It takes under a second for a 70 KB deck.
+
+  ```sh
+  python3 $C/yomiyasu/scripts/yomiyasu_diff.py --no-words --json $D/before.md $D/deck.md | python3 -c 'import json, sys; rs = json.load(sys.stdin)["meaning_risks"]; print("meaning risks:", len(rs)); [print("-", r["kind"], "line", r["new_line"], ":", r["old"], "→", r["new"]) for r in rs]'   # documents: $D/text.md
+  ```
+
 - **Splitting the fixes among page owners (slides only).** When several pages need fixes, open [prompt_fix.md](prompt_fix.md) before fixing them yourself: it holds when to split and when not to, what the parent keeps, how to merge what returns (deck-review-011), and the prompt.
