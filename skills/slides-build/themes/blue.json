@@ -1,0 +1,24 @@
+{
+ "apiVersion": "slides/v1",
+ "kind": "theme",
+ "description": "白地の本文、濃い青の表紙と扉、淡い水色のパネル、オレンジの強調の明るいテーマ。明るく清潔な印象にしたい顧客向けの提案・説明。会社の色にそろえる資料には使わない（会社のテンプレートから作ったテーマを使う）",
+ "colors": {
+  "NAVY": "0C559B",
+  "BG": "FFFFFF",
+  "RED_ON_NAVY": "FFBB6F",
+  "PANEL": "EEF6FC",
+  "NAVY_BLOCK": "0063B2",
+  "GA": "00A972",
+  "RED_TEXT": "C53A00",
+  "PREVIEW": "FFAB00",
+  "SUB": "666666",
+  "OSS": "2272B4",
+  "RED": "E46F00",
+  "TEXT": "434343",
+  "HEAD": "0C559B",
+  "RULE": "D8DFE7",
+  "RED_SOFT": "FFECCC",
+  "STAGE_TEXT": "222222",
+  "DECOR": "77A8DD"
+ }
+}

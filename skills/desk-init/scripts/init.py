@@ -63,7 +63,7 @@ def selftest():
         os.environ["DESK_CONFIG"] = str(conf)
         out = init(ws, user=True)  # 設定は個人の設定に置き、ワークスペースには置かない
         assert not (ws / "desk.toml").exists() and (ws / "recipes" / "README.md").is_file() and desk.locate(ws) == (conf, ws)
-        assert f"置いた: {conf}（workspace = {ws}）" in out and tomllib.loads(conf.read_text())["slides"]["default_theme"] == "visual"
+        assert f"置いた: {conf}（workspace = {ws}）" in out and tomllib.loads(conf.read_text())["slides"]["default_theme"] == "navy"
         assert f"残した（もうある）: {conf}（workspace = {ws}）" in init(ws, user=True)  # もうあれば上書きしない
         for at, points in ((ws, ws), (Path(tmp), ws), (Path(tmp, "later"), Path(tmp, "later", "Documents"))):  # --user なしで、既定のワークスペースか、その上に desk.toml を置かない（まだないフォルダを指していても）
             conf.write_text(f'workspace = "{points}"\n')

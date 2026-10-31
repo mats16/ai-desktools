@@ -30,7 +30,7 @@ Slides are built directly in Google Slides with the Slides API (switched from pp
 K=<slides-build folder>/scripts   # the folder that holds this SKILL.md
 cd <folder>/build
 # Slides
-python3 $K/slides.py new <Drive folder URL> <YYYYMMDD_name>   # first build. Tell the user the printed URL right away (deck-drive-003 in `deck-workflow`). --theme <theme> (a name from slides.py themes) for company colors
+python3 $K/slides.py new <Drive folder URL> <YYYYMMDD_name>   # first build. Tell the user the printed URL right away (deck-drive-003 in `deck-workflow`). --theme <theme> (a name from slides.py themes) for a theme other than the default
 python3 $K/slides.py lint <URL>                                     # after every edit, lint locally without building (pages changed since the last run. "Three layers of checks" below)
 python3 $K/slides.py build <URL>                                    # build at checkpoints (rebuilds only changed pages. The URL does not change. Stops if someone edited in the UI. commands.md)
 python3 $K/gslides.py check <URL>                                   # after building. Images and lint of changed pages. Add --talk at the end for talks such as LTs. --all for images of every page
