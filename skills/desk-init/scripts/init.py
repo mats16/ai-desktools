@@ -21,7 +21,7 @@ def init(ws, user=False):
         if f := desk.local(ws):  # 両方あると、中で開くか外で開くかで設定が変わる（上のフォルダの desk.toml も、中では勝つ）
             sys.exit(f"{f[0]} がある（{ws} の中で開くと、こちらを読む）。" + ("個人の設定に移すなら desk-migrate の to-user で移す" if f[1] == ws else "そのワークスペースの外のフォルダにする"))
         if o := desk.old(ws):  # 移す前のワークスペースを指すと、記録が .factory/ と .desk/ に分かれる
-            sys.exit(f"{o} は前の版のワークスペース（factory.toml）。先に desk-migrate の apply で移し、そのあと to-user で個人の設定に移す")
+            sys.exit(f"{o} は前のバージョンのワークスペース（factory.toml）。先に desk-migrate の apply で移し、そのあと to-user で個人の設定に移す")
         if (have := desk.user()) and have[1] != ws:  # 個人の設定は 1 つ（読めなければ、desk.user が止める）
             sys.exit(f"{conf} はもう {have[1]} を指している（個人の設定は 1 つ）。このフォルダを使うなら、{conf} の workspace を書き替えるか、--user を付けずにこのフォルダに desk.toml を置く")
     else:  # ワークスペースに置く。既定のワークスペースか、その上に置くと、中で開いたときにこちらが勝つ
@@ -83,7 +83,7 @@ def selftest():
                 assert msg in str(e) and not Path(tmp, "ws2").exists(), e
         (Path(tmp, "old") / "factory.toml").parent.mkdir()
         (Path(tmp, "old") / "factory.toml").write_text("")
-        for at, msg in ((local, "to-user"), (local / "Customers" / "x", "外のフォルダ"), (Path(tmp, "old"), "desk-migrate")):  # ワークスペースか、その上に desk.toml がある、前の版のワークスペース
+        for at, msg in ((local, "to-user"), (local / "Customers" / "x", "外のフォルダ"), (Path(tmp, "old"), "desk-migrate")):  # ワークスペースか、その上に desk.toml がある、前のバージョンのワークスペース
             try:
                 init(at, user=True)
                 raise AssertionError(at)
@@ -98,6 +98,6 @@ if __name__ == "__main__":
         sys.exit(selftest())
     user = "--user" in a
     a = [x for x in a if x != "--user"]
-    if len(a) > 1 or a and a[0].startswith("-"):  # 前の版の --source などを、フォルダの名前と取り違えない
+    if len(a) > 1 or a and a[0].startswith("-"):  # 前のバージョンの --source などを、フォルダの名前と取り違えない
         sys.exit(__doc__)
     print("\n".join(init(a[0] if a else ".", user)))

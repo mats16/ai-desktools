@@ -236,7 +236,7 @@ def scenes_of(slides_id):
 def look(slides, image):
     """ページの見た目の印（ノートを除く）。ID（…ObjectId）と URL は外し、画像（contentUrl）は image(URL) が返す中身の印で比べる。
     slides-build の build は、ノートだけを直してもページを新しい ID で作り直し、手元の画像を組むたびに違う URL で入れる（slides.py の carry）。
-    contentUrl も 30 分で切れる一時 URL。どちらも、ID や URL のままでは、ノートの直しとページの直しを見分けられない。"""
+    contentUrl も 30 分で切れる一時 URL。どちらも、ID や URL のままでは、ノートの修正とページの修正を見分けられない。"""
     def strip(x):
         if isinstance(x, dict):
             return {k: image(v) if k == "contentUrl" else strip(v) for k, v in x.items()
@@ -490,7 +490,7 @@ def update(args):
         sys.exit("この Vids には元の Slides の控えがない（vids.py create で作ったものだけ更新できる。同じ Slides から create で作り直したら、前の Vids の控えは外してある）")
     slides_id, old = p[SLIDES_KEY], (p.get(VOICE_KEY, DEFAULT_VOICE), p.get(AVATAR_KEY))
     if PAGES_KEY in p and look_of(slides_id) != p[PAGES_KEY]:  # 印のない Vids（この印を残す前に作ったもの）は見ない
-        sys.exit("要修正: 動画を作ったあと、ページが変わった（足した・消した・並べ替えた・見た目を直した。前の会話での直しも）。"
+        sys.exit("要修正: 動画を作ったあと、ページが変わった（足した・消した・並べ替えた・見た目を直した。前の会話での修正も）。"
                  "動画はページに追従しないので、update しない。頼まれたら vids.py create で作り直す（同じ Vids の中身を消して組み直すなら --vids）")
     label, avatar = mode_of(args, *old)
     scenes = scenes_of(slides_id)

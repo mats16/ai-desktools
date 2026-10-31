@@ -2,7 +2,7 @@
 """ワークスペースと設定のファイルの探し方。スキルのスクリプトと hooks/rules_overlay.py（pi の拡張も）が、ここだけで探す（標準ライブラリだけ）。
 1. 今いるフォルダから上へ desk.toml を探す。見つかれば、そのフォルダがワークスペースで、その desk.toml だけを読む（workspace を書いても読まない）。
 2. なければ個人の設定（DESK_CONFIG のパス、なければ ~/.desk.toml）を読み、その workspace をワークスペースにする（資料・recipes/・.desk/ はそこに置く）。
-   上に前の版の factory.toml があれば、2 に進まない（移す前のワークスペースの中で、別のワークスペースに書かない）。workspace が前の版のワークスペースなら止める。
+   上に前のバージョンの factory.toml があれば、2 に進まない（移す前のワークスペースの中で、別のワークスペースに書かない）。workspace が前のバージョンのワークスペースなら止める。
 3. どちらもなければ None（呼ぶ側が止めて desk-init を案内する）。
 2 つを混ぜない（sandbox の desk.toml に書き忘れた [drive] が ~/.desk.toml から入ると、本番の Drive に書くため）。
 DESK_CONFIG を空にすると 2 を飛ばす（selftest と開発の worktree。~/.desk.toml の本番のワークスペースに戻らない）。
@@ -63,14 +63,14 @@ def pointed():
 
 
 def user():
-    """(個人の設定のファイル, その workspace)。ファイルがなければ None。読めない・workspace がない・そのフォルダがない・前の版のワークスペースのときは止める（黙ってほかへ移らない）。"""
+    """(個人の設定のファイル, その workspace)。ファイルがなければ None。読めない・workspace がない・そのフォルダがない・前のバージョンのワークスペースのときは止める（黙ってほかへ移らない）。"""
     if not (f := pointed()):
         return None
     p, ws = f
     if not ws.is_dir():
         sys.exit(f"{p} の workspace（{ws}）のフォルダがない。作るか、正しいパスに直す")
     if o := old(ws):  # 外から開いても、移す前のワークスペースに書かない（記録が .factory/ と .desk/ に分かれる）
-        sys.exit(f"{p} の workspace（{ws}）は、前の版のワークスペース（{o}/factory.toml）。先に {o} で desk-migrate の apply を回し、"
+        sys.exit(f"{p} の workspace（{ws}）は、前のバージョンのワークスペース（{o}/factory.toml）。先に {o} で desk-migrate の apply を回し、"
                  f"できた desk.toml の値を {p} に寄せてから、その desk.toml を .desk/migrate/ に移す（desk-migrate の SKILL.md の「Move the settings to `~/.desk.toml`」の 2）")
     return f
 
@@ -83,27 +83,27 @@ def local(start="."):
 
 
 def old(start="."):
-    """start から上へたどって最初の、前の版の factory.toml のフォルダ。なければ None。"""
+    """start から上へたどって最初の、前のバージョンの factory.toml のフォルダ。なければ None。"""
     d = Path(start).resolve()
     return next((x for x in (d, *d.parents) if (x / OLD).is_file()), None)
 
 
 def locate(start="."):
-    """(設定のファイル, ワークスペース)。なければ None（言葉は missing）。上に前の版の factory.toml があるときも None にして 2 に進まない
+    """(設定のファイル, ワークスペース)。なければ None（言葉は missing）。上に前のバージョンの factory.toml があるときも None にして 2 に進まない
     （移す前のワークスペースの中で、~/.desk.toml の別のワークスペースに書かない）。"""
     return local(start) or (None if old(start) else user())
 
 
 def missing(start="."):
-    """locate が None のときに止める言葉。前の版のワークスペースなら desk-migrate、なければ desk-init を案内する。"""
+    """locate が None のときに止める言葉。前のバージョンのワークスペースなら desk-migrate、なければ desk-init を案内する。"""
     if o := old(start):
-        return f"{o} は前の版のワークスペース（factory.toml）。desk-migrate で desk.toml に移す"
+        return f"{o} は前のバージョンのワークスペース（factory.toml）。desk-migrate で desk.toml に移す"
     looked = f"{u} もない" if (u := user_config()) else "DESK_CONFIG が空なので、個人の設定は読まない"
     return f"desk.toml が見つからない（今いるフォルダから上へ探した。{looked}）。desk-init で作る（ワークスペースの直下の desk.toml か、~/.desk.toml）"
 
 
 def front(text):
-    """md の頭の frontmatter（--- の行の間の「key: value」）。値は 1 行の文字、[a, b] の並び、続く「  - a」の行の並び。閉じていない・ないときは {}。"""
+    """md の先頭の frontmatter（--- の行の間の「key: value」）。値は 1 行の文字、[a, b] の並び、続く「  - a」の行の並び。閉じていない・ないときは {}。"""
     lines = text.lstrip("﻿").split("\n")
     if lines[0].strip() != "---":
         return {}
@@ -167,10 +167,10 @@ def rules(ws):
 
 
 def with_workspace(text, ws):
-    """設定の文字列の頭（頭のコメントのあと、最初の値か表の前）に workspace を足す（desk-init と desk-migrate が ~/.desk.toml を書くとき）。ホームの下は ~/ で書く。
+    """設定の文字列の先頭（頭のコメントのあと、最初の値か表の前）に workspace を足す（desk-init と desk-migrate が ~/.desk.toml を書くとき）。ホームの下は ~/ で書く。
     書けないときは止める（何も書かない）。"""
     if "workspace" in loads(text, "写す設定"):  # フォルダの desk.toml では読まない値。どちらを残すかは人が決める
-        sys.exit("写す設定の頭に workspace がもうある（フォルダの desk.toml では読まない値）。その行を消してから回す")
+        sys.exit("写す設定の先頭に workspace がもうある（フォルダの desk.toml では読まない値）。その行を消してから回す")
     ws = Path(ws).resolve()
     home = Path.home().resolve()
     value = "~/" + ws.relative_to(home).as_posix() if ws.is_relative_to(home) else str(ws)
@@ -181,7 +181,7 @@ def with_workspace(text, ws):
     i = next((i for i, x in enumerate(lines) if x.strip() and not x.lstrip().startswith("#")), len(lines))  # 最初の行の値か表。複数行の値の途中には入らない
     out = "".join(lines[:i]) + line + "".join(lines[i:])
     if loads(out, "書いたあとの設定").get("workspace") != value:  # 書いたあとも読める
-        sys.exit(f"workspace を書けない（{value}）。設定の頭に手で書く")
+        sys.exit(f"workspace を書けない（{value}）。設定の先頭に手で書く")
     return out
 
 
@@ -246,10 +246,10 @@ def selftest():
                 pass
         conf.write_text('workspace = "../Documents"\n')
         (other / OLD).write_text("")
-        assert locate(other) is None and locate(ws / "Customers") == (conf, ws) and "desk-migrate" in missing(other)  # 前の版のワークスペース（factory.toml）の中では、~/.desk.toml に進まない
+        assert locate(other) is None and locate(ws / "Customers") == (conf, ws) and "desk-migrate" in missing(other)  # 前のバージョンのワークスペース（factory.toml）の中では、~/.desk.toml に進まない
         conf.write_text(f'workspace = "{other}"\n')
         try:
-            locate(tmp)  # 外からも、前の版のワークスペースには解決しない
+            locate(tmp)  # 外からも、前のバージョンのワークスペースには解決しない
             raise AssertionError
         except SystemExit as e:
             assert "desk-migrate" in str(e), e

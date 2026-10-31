@@ -11,7 +11,7 @@ A correction is evidence. It says that something in the material did not work fo
 
 | Judgment (`--scope`) | What it looks like | Where it lives |
 |---|---|---|
-| 資料: this material only | It is about this page's wording, a number, or an order chosen for this audience; it would mean nothing in another material | The material itself, and the outline when it shapes several pages (「書き方の決め」). Ledger destination `戻さない` |
+| 資料: this material only | It is about this page's wording, a number, or an order chosen for this audience; it would mean nothing in another material | The material itself, and the outline when it shapes several pages (「書き方の取り決め」 (「書き方の決め」 in outlines written before 2026-11-01)). Ledger destination `戻さない` |
 | 顧客: this customer | It depends on who the audience is: honorifics, their stack, their position, their past decisions | `Customers/<customer>/memory.md` (preferences) or `profile.md` (facts) ("Customer memory" in [routing.md](routing.md)) |
 | 環境: this person or organization | It depends on this user's world: their tools, templates, brand, house style, internal processes, names, or a taste among good options | A workspace recipe ([recipes.md](recipes.md) §1) |
 | 知見: anyone's | A writing or design expert who knows nothing of this organization would agree, for a reason that holds for any audience | The workspace first, so it applies today; desk-dreaming proposes it to the plugin when the gist recurs for other customers (`desk-kaizen`) |

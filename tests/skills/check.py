@@ -3,13 +3,13 @@
 スキルの形を確かめる（AGENTS.md の「Rules for changes」）: SKILL.md の name がフォルダの名前、description が 1,000 字以内、
 本文が約 5,000 トークン以内（コンパクションのあと Claude Code が付け直すのは先頭の 5,000 トークン）、スキルのフォルダの直下の md がみな
 SKILL.md から指されている（ほかのファイルからしか届かないファイルは、一部だけ読まれやすい）、md がみな 50 KB・2,000 行未満（pi の read はそこで切れ、続きを読まないモデルがいる。mats16/ai-desktools#38）、
-md がほかのスキルの中のファイルを指さない（ほかのスキルは名前で呼び、その SKILL.md の表から開く。スキルで共有するコードは lib/。2026-10-31。前のパスを今のパスへ書き換える desk-migrate は除く）、「`<スキル>` → <場面>」で指した場面が、そのスキルの SKILL.md の表の太字の見出しか # の見出しにある、ほかのスキルのファイルを名前だけで指さない。desk-kaizen の open も、変える版でこれを回す。標準ライブラリだけ。"""
+md がほかのスキルの中のファイルを指さない（ほかのスキルは名前で呼び、その SKILL.md の表から開く。スキルで共有するコードは lib/。2026-10-31。前のパスを今のパスへ書き換える desk-migrate は除く）、「`<スキル>` → <場面>」で指した場面が、そのスキルの SKILL.md の表の太字の見出しか # の見出しにある、ほかのスキルのファイルを名前だけで指さない。desk-kaizen の open も、変えるバージョンでこれを回す。標準ライブラリだけ。"""
 import fnmatch, re, sys, tempfile
 from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parents[2] / "skills"
 MAX_TOKENS, MAX_DESC, MAX_BYTES, MAX_LINES = 5000, 1000, 50 * 1024, 2000
-OPEN = ("desk-migrate",)  # ほかのスキルのファイルを名前で書いてよいスキル（前の版のパスを今のパスへ書き換える表を持つ）
+OPEN = ("desk-migrate",)  # ほかのスキルのファイルを名前で書いてよいスキル（前のバージョンのパスを今のパスへ書き換える表を持つ）
 WORKSPACE_FILES = Path("desk-init", "templates")  # ワークスペースに写す雛形（ワークスペースのファイルなので、プラグインのパスを書いてよい）
 COMMON = {"SKILL.md", "README.md"}  # どのスキルにもある名前（名前だけで書いても、ほかのスキルのファイルとは言えない）
 GONE = {"visual.md", "visual_doc.md", "workflow.md", "rules.md"}  # 2026-10-31 の組み直しでなくなった名前（名前だけで残ると、どこも指さない。今の名前はスキルと場面で指す）
@@ -18,7 +18,7 @@ A = r"A-Za-z0-9_-"  # 名前の区切り（Python の \w は和文の字にも�
 
 
 def labels(text):
-    """SKILL.md の表の行の頭の太字（| **Writing pages:** …）と、# の見出し。ほかのスキルが「`<スキル>` → <場面>」で指す名前。行の中のほかの太字は見出しでない。"""
+    """SKILL.md の表の行頭の太字（| **Writing pages:** …）と、# の見出し。ほかのスキルが「`<スキル>` → <場面>」で指す名前。行の中のほかの太字は見出しでない。"""
     text = re.sub(r"\A---\n.*?\n---\n", "", text, flags=re.S)  # frontmatter の # の行は見出しでない
     text = re.sub(r"(?ms)^[ \t]*(`{3,}|~{3,})(?:.*?^[ \t]*\1|.*\Z)", "", text)  # 閉じていない囲みは終わりまで  # コードの囲み（``` と ~~~、字下げしたものも）の中の # の行は見出しでない
     return {m.group(1).strip().rstrip(":").lower() for m in re.finditer(r"(?m)^\|\s*\*\*([^*\n]+?)\*\*", text)} | {re.sub(r"^#+\s*", "", x).lower() for x in text.splitlines() if x.startswith("#")}
@@ -91,11 +91,11 @@ def problems(skills=SKILLS):
                 for ref in sorted(set(bare(files, name, text, f.relative_to(skills).is_relative_to(WORKSPACE_FILES)))):
                     out.append(f"{name}/{f.relative_to(s.parent)}: ほかのスキルのファイルを名前だけ（{ref}）で指している（どのスキルのものか分からない。スキルの名前と場面で指す）")
                 for ref in unknown_topics(heads, text):
-                    out.append(f"{name}/{f.relative_to(s.parent)}: {ref} の場面が、そのスキルの SKILL.md の表の見出しにない（表の行の頭に **<場面>:** を置くか、指す語を見出しにそろえる）")
+                    out.append(f"{name}/{f.relative_to(s.parent)}: {ref} の場面が、そのスキルの SKILL.md の表の見出しにない（表の行頭に **<場面>:** を置くか、指す語を見出しにそろえる）")
         t = s.read_text(encoding="utf-8")
         m = re.match(r"---\n(.*?)\n---\n", t, re.S)
         if not m:
-            out.append(f"{name}: SKILL.md の頭に frontmatter がない")
+            out.append(f"{name}: SKILL.md の先頭に frontmatter がない")
             continue
         head = dict(re.findall(r"^(\w+): *(.*)$", m.group(1), re.M))
         if desc := re.search(r"^description: *(.*)\n((?:[ \t]+.*\n?)*)", m.group(1) + "\n", re.M):  # 続きの行（字下げした行。> や | で折りたたんだものも）をつなぐ
@@ -128,7 +128,7 @@ def selftest():
         assert len(got) == 4 and got[0].startswith("a/deep.md") and "name が「c」" in got[1] and "description" in got[2] and "トークン" in got[3], got
         (root / "c").mkdir()
         (root / "c" / "SKILL.md").write_text("# 頭がない\n")
-        assert problems(root)[-1] == "c: SKILL.md の頭に frontmatter がない"
+        assert problems(root)[-1] == "c: SKILL.md の先頭に frontmatter がない"
         (root / "c" / "big.md").write_text("x" * MAX_BYTES)
         assert any(x.startswith("c/big.md: ") for x in problems(root))  # frontmatter がなくても大きさは見る
         (root / "c" / "big.md").write_bytes(b"\xff\xfe")
@@ -152,7 +152,7 @@ def selftest():
         assert any(x.startswith("d/ref/deep.md: ") for x in problems(root))  # スキルのフォルダの下の深い md も見る
         (root / "e").mkdir()
         (root / "e" / "SKILL.md").write_text("---\nname: e\ndescription: x\n---\n\nsee d/SKILL.md. `d` と `../d/SKILL.md`、d/SKILL.md、<d folder>/x、`../../lib/desk.py`、rules/d/x.md、./rules/d/x.md、$WS/rules/d/x.md、Customers/x/recipes/d/y.md\n")
-        assert not (_e := [x for x in problems(root) if x.startswith("e")]), _e  # スキルの名前、その SKILL.md、共有の lib/、ワークスペースの前の版の rules/ は指してよい
+        assert not (_e := [x for x in problems(root) if x.startswith("e")]), _e  # スキルの名前、その SKILL.md、共有の lib/、ワークスペースの前のバージョンの rules/ は指してよい
         (root / "e" / "SKILL.md").write_text("---\nname: e\ndescription: x\n---\n\n`../d/run.md` と skills/d/ref/deep.md、d/scripts/x.py、<plugin>/skills/d/a.md、~/p/skills/d/b.md、./d/c.md、<plugin>/d/e.md、$P/d/f.md、../d/、recipes/d/RECIPE.md\n")
         got = [x for x in problems(root) if x.startswith("e")]
         assert len(got) == 9 and all("ほかのスキルのファイル" in x for x in got) and any(" d/run.md " in x for x in got), got
@@ -166,7 +166,7 @@ def selftest():
         (root / "desk-init" / "SKILL.md").write_text("---\nname: desk-init\ndescription: x\n---\n")
         (root / "desk-init" / "templates" / "recipes" / "README.md").write_text("スキル `d` の `run.md`、<plugin>/skills/d/run.md、`f` → nothing、prompt_*.md\n")
         got = [x for x in problems(root) if x.startswith("desk-init")]
-        assert len(got) == 2 and any("`f` → nothing" in x for x in got) and any("（prompt_*.md）" in x for x in got), got  # 雛形はパスとスキルを名指しした名前を書いてよいが、場面と名前だけの点検はかける  # 見出しで始まるか、見出しの頭なら通す（f → pages は表にない）
+        assert len(got) == 2 and any("`f` → nothing" in x for x in got) and any("（prompt_*.md）" in x for x in got), got  # 雛形はパスとスキルを名指しした名前を書いてよいが、場面と名前だけの点検はかける  # 見出しで始まるか、見出しの先頭なら通す（f → pages は表にない）
         (root / "h").mkdir()
         (root / "h" / "SKILL.md").write_text("---\nname: h\ndescription: x\n---\n\nmy-rules/d/a.md、スキルd/run.md、run.md §2、`f` →writing pages、`f`→ bold、d/SKILL.md/x\n| `**bold**` | x |\n")
         got = sorted(x for x in problems(root) if x.startswith("h"))

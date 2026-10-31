@@ -13,7 +13,7 @@ import desk  # noqa: E402  ワークスペースの探し方
 
 ROOT = str(f[1]) if (f := desk.locate()) else os.getcwd()  # ワークスペース（今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace）
 AREAS = ("customers", "internal", "research", ".agents")
-RULE = re.compile(r"skills/([\w-]+/[\w./-]+\.(?:md|py|sh))|(AGENTS\.md|references_index\.md)|(?<![\w-])((?:recipes/[\w./-]+/RECIPE|rules/[\w-]+/[\w./-]+)\.md)")  # 最後はワークスペースのレシピ（recipes/ と前の版の rules/ を付けたまま数え、プラグインのファイルと分ける）
+RULE = re.compile(r"skills/([\w-]+/[\w./-]+\.(?:md|py|sh))|(AGENTS\.md|references_index\.md)|(?<![\w-])((?:recipes/[\w./-]+/RECIPE|rules/[\w-]+/[\w./-]+)\.md)")  # 最後はワークスペースのレシピ（recipes/ と前のバージョンの rules/ を付けたまま数え、プラグインのファイルと分ける）
 TABLE = ("deck-workflow/SKILL.md", "deck-workflow/start.md", "deck-writing/SKILL.md", "deck-design/SKILL.md", "slides-build/SKILL.md", "slides-build/pages.md", "deck-workflow/slides_steps.md", "deck-design/slides.md",
          "slides-build/commands.md", "slides-build/lint.md", "deck-writing/content.md", "docs-build/SKILL.md", "deck-design/docs.md", "docs-build/lint.md",
          "deck-build/slides.md", "deck-practices/visual.md", "doc-build/SKILL.md", "deck-practices/visual_doc.md", "doc-build/docx.md", "deck-build/docx.md",

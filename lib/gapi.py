@@ -34,7 +34,7 @@ UNSENT = (socket.gaierror, ConnectionRefusedError)
 
 def window_end(body, now=None):
     """429 の本文の ErrorInfo の window_start_time（分の枠の始まり。2026-10-15 の本文では epoch の秒の文字列。ISO 8601・ミリ秒も読む）から、枠が明ける時刻（epoch 秒）。なければ None。
-    上限は 1 人 1 分（quota_unit 1/min/{project}/{user}）の枠で数えるので、枠が明ければ通る（2026-10-15 に 429 の本文で確かめた。枠の始まりは分の頭にそろっていない）。"""
+    上限は 1 人 1 分（quota_unit 1/min/{project}/{user}）の枠で数えるので、枠が明ければ通る（2026-10-15 に 429 の本文で確かめた。枠の始まりは分の先頭にそろっていない）。"""
     m = re.search(r'"window_start_time"\s*:\s*"?([^",}]+)', body)
     if not m:
         return None
@@ -83,7 +83,7 @@ def find_config():
 
 
 def _found():
-    """find_config の結果。なければ止まる（前の版の factory.toml があれば desk-migrate、なければ desk-init を案内する）。"""
+    """find_config の結果。なければ止まる（前のバージョンの factory.toml があれば desk-migrate、なければ desk-init を案内する）。"""
     return find_config() or sys.exit(desk.missing())
 
 
@@ -109,7 +109,7 @@ def language():
 
 
 def source_head():
-    """出典の行の頭（slides.py・docs.py が、書いていなければ足す）。ja でなければ英語（lint はどちらも出典の行と見る）。"""
+    """出典の行頭（slides.py・docs.py が、書いていなければ足す）。ja でなければ英語（lint はどちらも出典の行と見る）。"""
     return "出典: " if language() == "ja" else "Source: "
 
 
@@ -250,8 +250,8 @@ def trash(fid):  # ゴミ箱に移す（30 日は戻せる）。共有ドライ�
 
 
 def guard(fid, rev, key, src, stop=True):
-    """前に組んだあとに画面で直されていたら（rev が key に残した版か指紋と違う）、または未解決のコメントがあれば、止める。
-    組み直すと画面での直しは消え、コメントは付け先を失う。src は直しを入れる先（pages.py・doc.md）。stop=False なら止めずに理由の並びを返す（slides.py plan）。"""
+    """前に組んだあとに画面で直されていたら（rev が key に残したリビジョンか指紋と違う）、または未解決のコメントがあれば、止める。
+    組み直すと画面での修正は消え、コメントは付け先を失う。src は直しを入れる先（pages.py・doc.md）。stop=False なら止めずに理由の並びを返す（slides.py plan）。"""
     last = request("GET", f"{DRIVE}/files/{fid}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(key)
     st = workspace() / ".desk" / "comments.json"  # 見張りの知らせ（deck-workflow の comments.py watch）は、直すコメントでないので数えない
     notice = {n["id"] for n in json.loads(st.read_text()).get("notice", {}).values()} if st.is_file() else set()
@@ -263,11 +263,11 @@ def guard(fid, rev, key, src, stop=True):
     if why and not stop:
         return why
     if why:
-        sys.exit("組み直すと、画面での直しが消え、コメントは付け先を失う: " + "、".join(why)
+        sys.exit("組み直すと、画面での修正が消え、コメントは付け先を失う: " + "、".join(why)
                  + f"。直しとコメントへの対応を {src} に入れてから、--force を付けて組み直す（コメントを全部見るのは deck-workflow の comments.py）")
 
 
-def stamp(fid, rev, key):  # 組んだときの版を、Drive のファイルの appProperties に残す（guard が比べる）
+def stamp(fid, rev, key):  # 組んだときのリビジョンを、Drive のファイルの appProperties に残す（guard が比べる）
     request("PATCH", f"{DRIVE}/files/{fid}?supportsAllDrives=true&fields=id", {"appProperties": {key: rev}})
 
 
@@ -279,18 +279,18 @@ def user():
     """この機械の使っている人の名前。手元の記録のファイルを人ごとに分ける（Linux の /tmp は人で共有する）。取れなければ "user"。"""
     try:
         return getpass.getuser()
-    except Exception:  # 環境変数も passwd もない（コンテナなど）。getpass は版によって OSError か KeyError を出す
+    except Exception:  # 環境変数も passwd もない（コンテナなど）。getpass はバージョンによって OSError か KeyError を出す
         return "user"
 
 
 THUMB_PER_MIN = 60  # ページの画像は 1 人 1 分 60 回まで（Slides API の expensive read。https://developers.google.com/workspace/slides/api/limits）
-THUMB_LOG = os.path.join(tempfile.gettempdir(), f"gapi_thumbnails_{user()}")  # この機械で画像を取った時刻。ほかの会話・子の確かめと上限を分け合う（上限は人ごとなので、ファイルも人ごと）
+THUMB_LOG = os.path.join(tempfile.gettempdir(), f"gapi_thumbnails_{user()}")  # この機械で画像を取った時刻。ほかの会話・子の確認と上限を分け合う（上限は人ごとなので、ファイルも人ごと）
 PACED = []  # 上限を見越して待った秒（pace が足す）
 
 
 def pace(path=THUMB_LOG, limit=THUMB_PER_MIN, window=61):
     """ページの画像を取る前に呼ぶ。この機械で直前の window 秒に limit 回取っていたら、空くまで待つ（超えると 429 で、分の枠が明けるまで止まる。
-    前の版の 5・15・30 秒の取り直しでは、2026-10-15 に 53 枚で測ると、最後の 6 枚が 52 秒ずつ待った）。ponytail: ほかの機械（CI など）で同じ人が取った分は数えない（429 の取り直しが拾う）"""
+    前のバージョンの 5・15・30 秒の取り直しでは、2026-10-15 に 53 枚で測ると、最後の 6 枚が 52 秒ずつ待った）。ponytail: ほかの機械（CI など）で同じ人が取った分は数えない（429 の取り直しが拾う）"""
     try:
         import fcntl
     except ImportError:  # Windows。見越さない（429 の取り直しが拾う）

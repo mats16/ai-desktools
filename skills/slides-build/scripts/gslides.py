@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Google Slides の決まった操作（作るのは slides.py。ここは確かめると流用）。
 usage:
-  gslides.py check  <URL か ID> [--talk] [--all | --pages 3,5]   組んだあとの確認。JSON・テキスト・lint と、前に取ったときから変わったページの画像を /tmp/slides_<ID の頭 8 字>/ に出し、
+  gslides.py check  <URL か ID> [--talk] [--all | --pages 3,5]   組んだあとの確認。JSON・テキスト・lint と、前に取ったときから変わったページの画像を /tmp/slides_<ID の先頭 8 字>/ に出し、
                    画像で箱の下の余白を測る（box_pad.py）。取ったページと指摘を changed.json に書く。--all で全ページの画像（/deck-review の前などの区切り）
   gslides.py pages  <URL か ID>                    ページ番号・objectId・最初の文字を一覧にする
   gslides.py thumb  <URL か ID> <ページ番号> <出力.png>   Google が描いたページの画像（1600 × 900）を保存する
@@ -80,7 +80,7 @@ def by_page(lines):
 
 
 def built(pid):
-    """今の版（slides.revision）。版の一覧は編集できる人しか読めないので、読めなければ None（組んだ版と比べて違うことにし、全ページを取る）。"""
+    """今のリビジョン（slides.revision）。リビジョンの一覧は編集できる人しか読めないので、読めなければ None（組んだリビジョンと比べて違うことにし、全ページを取る）。"""
     try:
         return revision(pid)
     except gapi.ApiError:
@@ -89,7 +89,7 @@ def built(pid):
 
 def cmd_check(src, *opts):
     """[slides-lint-028] 画像は、前に取ったときから変わったページだけを取る（テストの e2e。ページの objectId で見る。build が中身の変わったページだけを新しい ID で作る）。
-    前に組んだあとに画面で直されていたら（組んだときの版と今の版が違う）、全ページを取る。--all で全ページ、--pages 3,5 でそのページだけ。
+    前に組んだあとに画面で直されていたら（組んだときのリビジョンと今のリビジョンが違う）、全ページを取る。--all で全ページ、--pages 3,5 でそのページだけ。
     取ったページの番号・画像・そのページの lint と box_pad の指摘を changed.json に書く（親がページ担当の子に渡す。../SKILL.md の「Reading the results」）。"""
     pid = file_id(src)
     p = request("GET", f"{SLIDES}/{pid}")
@@ -128,7 +128,7 @@ def cmd_check(src, *opts):
             elif not prev:
                 why = "前に取った画像の記録がない"
             elif (now := built(pid)) is None or now != request("GET", f"{DRIVE}/files/{pid}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(STAMP):
-                why = "slides.py build で組んだ版でない（画面で直されたか、ほかの道具で変えた）"
+                why = "slides.py build で組んだリビジョンでない（画面で直されたか、ほかの道具で変えた）"
         if why:
             want = list(range(1, len(ids) + 1))
             for f in old:  # ページが減ったときに古い画像を残さない
@@ -137,7 +137,7 @@ def cmd_check(src, *opts):
             want, moved = reuse_shots(d, ids, prev)
         man = ids
     write_json(shots, [None if n in want else o for n, o in enumerate(man, 1)])  # 取り終えるまで、取るページの画像は記録に入れない
-    gapi.CLOCK.lap("版の確かめ")
+    gapi.CLOCK.lap("リビジョンの確認")
     with ThreadPoolExecutor(THREADS) as ex:
         list(ex.map(lambda n: save_thumb(pid, ids[n - 1], f"{d}/p-{n:02d}.png"), want))
     gapi.CLOCK.lap(f"画像 {len(want)} 枚")
@@ -275,7 +275,7 @@ def check_selftest():
             cmd_check(pid)
             assert json.load(open(f"{d}/changed.json"))["pages"] == []
             stamped = request
-            for req in (stamped, lambda m, u, *a, **k: {} if "/files/" in u else stamped(m, u)):  # 版の一覧を読めない（編集できない人）なら、組んだ版を残していなくても、止まらず全ページを取る
+            for req in (stamped, lambda m, u, *a, **k: {} if "/files/" in u else stamped(m, u)):  # リビジョンの一覧を読めない（編集できない人）なら、組んだリビジョンを残していなくても、止まらず全ページを取る
                 globals().update(revision=lambda pid: (_ for _ in ()).throw(gapi.ApiError("403")), request=req)
                 cmd_check(pid)
                 assert len(json.load(open(f"{d}/changed.json"))["pages"]) == 2

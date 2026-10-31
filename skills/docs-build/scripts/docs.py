@@ -8,8 +8,8 @@ usage（資料の build/ で。doc.md は今いるフォルダのもの）:
   docs.py new <Drive のフォルダの URL か ID> <Drive 上の名前>   空の Google Doc を作って組む
   docs.py build <URL か ID> [--force]   組み直す（本文をすべて入れ替える。URL は変わらない）。前に組んだあとに画面で直されているか、
                                         未解決のコメントがあれば止まる。直しを doc.md に入れてから --force で組み直す
-  docs.py check <URL か ID>   仕上げの確認。JSON・テキスト・lint・ページの画像（Drive が書き出した PDF）・画像でのレイアウトの確かめ（doc_layout.py）、
-                              doc.md と組んだ文書の照合、テンプレートとの照合、元のテンプレートとの骨組みの比較を /tmp/docs_<ID の頭 8 字>/ に出す
+  docs.py check <URL か ID>   仕上げの確認。JSON・テキスト・lint・ページの画像（Drive が書き出した PDF）・画像でのレイアウトの確認（doc_layout.py）、
+                              doc.md と組んだ文書の照合、テンプレートとの照合、元のテンプレートとの骨組みの比較を /tmp/docs_<ID の先頭 8 字>/ に出す
   docs.py export <URL か ID> <出力.docx か .pdf>   Word か PDF で書き出す（相手が Word を求めたときだけ。納品は Google Docs の URL）
   docs.py --selftest
 見た目の決まりは ../../deck-design/docs.md。書体・色・著作権表示はスライドと同じもの（../../../lib/brand.py）を使う。lint は doc_lint.py。"""
@@ -46,7 +46,7 @@ STYLES = {
     "HEADING_3": (11, True, NAVY, 12, 4, 75),
     "NORMAL_TEXT": (BODY_PT, False, TEXT, 0, 6, 100),
 }
-# テーマ: doc.md の頭に theme: <名前> と書くと、ワークスペースの themes/docs/<名前>.json の版面・名前付きスタイル・色・書体に入れ替える（from_md・load_theme）。
+# テーマ: doc.md の先頭に theme: <名前> と書くと、ワークスペースの themes/docs/<名前>.json の版面・名前付きスタイル・色・書体に入れ替える（from_md・load_theme）。
 # 会社の文書のテンプレートに合わせるもの（docs-build の ../themes.md の docs-write-010）なので、プラグインには持たない
 TABLE_HEAD = (NAVY, WHITE)  # 表の見出しの行の地と文字の色
 SCALE = 1  # 図の幅は、本文の幅 150 mm で書く。テーマで本文の幅が変わったら、この比で広げる（表は Doc.table が本文の幅に合わせる）
@@ -133,7 +133,7 @@ class Doc:
 
     def __init__(self, name):
         self.name, self.blocks, self.warnings, self.fig, self.tab = name, [], [], 0, 0
-        self.meta = {}  # doc.md の頭（from_md）
+        self.meta = {}  # doc.md の先頭（from_md）
 
     def warn(self, msg):
         msg = f"[塊 {len(self.blocks)}] {msg}"
@@ -240,9 +240,9 @@ class Doc:
         self.blocks.append(("break",))
 
 
-# [docs-write-011] mermaid の図は、手元の mermaid-cli（npx で版を固定して取ってくる）で描く。URL から図を作るサービス（mermaid.ink など）には、図の中身が
+# [docs-write-011] mermaid の図は、手元の mermaid-cli（npx でバージョンを固定して取ってくる）で描く。URL から図を作るサービス（mermaid.ink など）には、図の中身が
 # 第三者に渡るので渡さない（../../slides-build/assets/README.md）。色はテーマの colors、書体はテーマの FONT、文字は本文と同じ大きさ。書体は手元に入っているもので描かれる
-MERMAID_CLI = "@mermaid-js/mermaid-cli@11.17.0"  # 版を固定する（版が変わると描き方が変わりうる。PNG の指紋に入れる）。手元の mmdc は版が分からないので使わない
+MERMAID_CLI = "@mermaid-js/mermaid-cli@11.17.0"  # バージョンを固定する（バージョンが変わると描き方が変わりうる。PNG の指紋に入れる）。手元の mmdc はバージョンが分からないので使わない
 MERMAID_SCALE = 3  # 描く倍率（PNG の画素 / CSS の画素）。印刷してもにじまない
 MERMAID_DIR = "mermaid"  # 描いた PNG を置く build/ の中のフォルダ。中身・テーマ・倍率が同じなら描き直さない（名前が指紋）
 
@@ -291,7 +291,7 @@ def image_px(path):
 
 
 class Writer:
-    """本文の末尾（最後の空の段落の頭、cur）に塊を足していく要求を作る。要求は前から順に効くので、足すたびに cur を進める。"""
+    """本文の末尾（最後の空の段落の先頭、cur）に塊を足していく要求を作る。要求は前から順に効くので、足すたびに cur を進める。"""
 
     def __init__(self, cur):
         self.cur, self.reqs = cur, []
@@ -392,7 +392,7 @@ class Writer:
 
 def put_table(did, cur, rows, caption, widths):
     """表を cur に入れる。API は表の前に改行を 1 つ入れるので、その段落を表の題にする（題がなければ空の段落のまま）。
-    セルの位置は入れたあとの JSON で取り、後ろのセルから埋める（前のセルの位置がずれない）。戻り: 表のあとの段落の頭。"""
+    セルの位置は入れたあとの JSON で取り、後ろのセルから埋める（前のセルの位置がずれない）。戻り: 表のあとの段落の先頭。"""
     nr, nc = len(rows), len(rows[0])
     w = Writer(cur)
     w.reqs.append({"insertTable": {"rows": nr, "columns": nc, "location": {"index": cur}}})
@@ -468,7 +468,7 @@ def footer(did, name):
 
 
 def build(did, doc, force=False):
-    """did の本文を、doc の塊に置き換える。force=False なら、先に画面での直しとコメントを確かめる（gapi.guard）。"""
+    """did の本文を、doc の塊に置き換える。force=False なら、先に画面での修正とコメントを確かめる（gapi.guard）。"""
     need_brand()
     if not force:
         gapi.guard(did, fingerprint(did), STAMP, "doc.md")
@@ -501,7 +501,7 @@ def build(did, doc, force=False):
         if carrier:  # 貼った画像は文書の中に写し取られているので、仮のファイルは消してよい
             delete(carrier)
     footer(did, doc.name)
-    gapi.stamp(did, f"{FONT}\t{MONO}", FONTS)  # 版（STAMP）より先に書く。途中で止まっても、版の新しい文書に前の書体が残らない
+    gapi.stamp(did, f"{FONT}\t{MONO}", FONTS)  # リビジョン（STAMP）より先に書く。途中で止まっても、リビジョンの新しい文書に前の書体が残らない
     gapi.stamp(did, fingerprint(did), STAMP)
     gapi.stamp(did, os.path.relpath(os.getcwd(), gapi.workspace()), SRC)
     used = {os.path.realpath(x) for x in imgs}  # doc.md が ./mermaid/… や絶対パスで指す画像も消さない
@@ -521,7 +521,7 @@ def new(folder, name):
 STANDARD = "standard"  # 組み込みのテーマ（docs.py の既定の値）。theme を書かず、[docs] default_theme もないとき。doc.md に theme: standard とも書ける
 DEFAULT_NOTE = "既定。A4・本文 10.5pt・濃紺の見出し・濃紺の地の表の見出しの行（../../deck-design/docs.md）"  # themes/docs/standard.json の description で書き換えられる
 # [docs-write-012] テーマのファイル。スライドのテーマのファイル（slides.py の read_theme）と同じ形で、頭の apiVersion・kind と description・font・mono・colors は
-# 同じキー。page・margins・styles はドキュメントだけのキー。版はキーの意味が変わるときだけ上げる（../../slides-build/pages.md の slides-pages-035 と同じ考え方）
+# 同じキー。page・margins・styles はドキュメントだけのキー。バージョンはキーの意味が変わるときだけ上げる（../../slides-build/pages.md の slides-pages-035 と同じ考え方）
 API_VERSION = "docs/v1"
 WS_THEMES = ("themes", "docs")  # ワークスペースの themes/docs/<名前>.json（ファイルの名前がテーマの名前）
 # colors に書ける役割（6 桁の色）。HEAD・TEXT・SUB・RULE・PANEL・RED_TEXT はスライドの役割と同じ意味。TABLE_HEAD・TABLE_HEAD_TEXT はドキュメントだけ
@@ -555,7 +555,7 @@ def read_theme(path):
     except (OSError, json.JSONDecodeError) as e:
         sys.exit(f"{path}: 読めない（{e}）")
     if not isinstance(o, dict) or o.get("apiVersion") != API_VERSION or o.get("kind") != "theme":
-        sys.exit(f'{path}: ファイルの頭は {{"apiVersion": "{API_VERSION}", "kind": "theme", …}}')
+        sys.exit(f'{path}: ファイルの先頭は {{"apiVersion": "{API_VERSION}", "kind": "theme", …}}')
     num = lambda v, pos=False: isinstance(v, (int, float)) and not isinstance(v, bool) and (v > 0 if pos else v >= 0)
     hex6 = lambda v: isinstance(v, str) and re.fullmatch(r"[0-9A-Fa-f]{6}", v)
     bad = []
@@ -587,7 +587,7 @@ def read_theme(path):
             bad.append(f"{k}: {'形が違う' if k in ('colors', 'styles') else '知らないキー（description・font・mono・colors・page・margins・styles）'}")
     if bad:
         sys.exit(f"{path}: " + "。".join(bad))
-    theme_font(o), theme_mono(o)  # 書体の確かめはスライドと同じ（和文を描けない書体、リガチャのある等幅を止める）
+    theme_font(o), theme_mono(o)  # 書体の確認はスライドと同じ（和文を描けない書体、リガチャのある等幅を止める）
     return o
 
 
@@ -617,11 +617,11 @@ def cmd_themes():
 
 
 def need_theme(doc):
-    """new で、standard のほかにテーマがあるのに doc.md の頭に theme: がなければ、一覧を出して止める（slides.py の need_theme と同じく、選ぶものがあるときだけ。
+    """new で、standard のほかにテーマがあるのに doc.md の先頭に theme: がなければ、一覧を出して止める（slides.py の need_theme と同じく、選ぶものがあるときだけ。
     themes/docs/standard.json に説明だけを書いたときは止めない。desk-kaizen の検証では止めない）。"""
     if not doc.meta.get("theme") and set(theme_names()) - {STANDARD} and not os.environ.get("DESK_VERIFY"):
         cmd_themes()
-        sys.exit(f"テーマを選んでから組む。上の description と、資料の種類・聞き手を突き合わせて、doc.md の頭に theme: <名前> を書く"
+        sys.exit(f"テーマを選んでから組む。上の description と、資料の種類・聞き手を突き合わせて、doc.md の先頭に theme: <名前> を書く"
                  f"（既定のままなら theme: {docs_cfg().get('default_theme', STANDARD)}）。選んだテーマと理由は構成案の前提に書く")
 
 
@@ -695,7 +695,7 @@ def from_md(path, apply_theme=True):
     m = re.match(r"---\n(.*?)\n---\n", text, re.S)
     meta = meta_of(m.group(1)) if m else {}
     if not meta.get("name"):
-        sys.exit(f"{path} の頭に name: がない")
+        sys.exit(f"{path} の先頭に name: がない")
     if (name := meta.get("theme") or docs_cfg().get("default_theme")) and apply_theme:  # theme を書かなければ [docs] default_theme
         theme(name)
     d = Doc(meta["name"])
@@ -745,7 +745,7 @@ def from_md(path, apply_theme=True):
                 q.append(L[i].strip()[1:])
                 i += 1
             d.quote(join(q))
-        elif (c := MD_CAPTION.fullmatch(s)) and (s.startswith("表") or next((x.strip() for x in L[i + 1:] if x.strip()), "").startswith("|")):  # 次が表でない「Table: …」は本文の行（英語の文の頭にもなる）
+        elif (c := MD_CAPTION.fullmatch(s)) and (s.startswith("表") or next((x.strip() for x in L[i + 1:] if x.strip()), "").startswith("|")):  # 次が表でない「Table: …」は本文の行（英語の文頭にもなる）
             flush()
             cap = (c[1] or None, [float(x) for x in re.split(r"[,\s]+", c[2].strip())] if c[2] else None)
             i += 1
@@ -1055,7 +1055,7 @@ def conform(d, t):
 
 def skeleton(doc):
     """節ごとの骨組み（箇条書きの段ごとの項目の数、表の大きさ、図の数）。言葉の違う版どうし（元の英語版と訳したテンプレートなど）を比べる。
-    節は、文字のある見出しのうち、いちばん上の段で分ける（英語版は H2、訳した版は H1）。頭（最初の節の前）は表紙。"""
+    節は、文字のある見出しのうち、いちばん上の段で分ける（英語版は H2、訳したものは H1）。先頭（最初の節の前）は表紙。"""
     heads = [p["paragraphStyle"]["namedStyleType"] for e in doc["body"]["content"] if (p := e.get("paragraph"))
              and p["paragraphStyle"].get("namedStyleType", "").startswith("HEADING_") and render(runs_of(p, flat=True))]
     top = min(heads, default="HEADING_1")
@@ -1075,8 +1075,8 @@ def skeleton(doc):
 
 
 def compare_skeleton(a, b):
-    """元（a）と組んだ版（b）の骨組みを、節の順に並べて違うところを出す。"""
-    return [f"節 {i}: 元「{x[0][:24] if x else '（なし）'}」{x[1] if x else ''} ／ 組んだ版「{y[0][:24] if y else '（なし）'}」{y[1] if y else ''}"
+    """元（a）と組んだ文書（b）の骨組みを、節の順に並べて違うところを出す。"""
+    return [f"節 {i}: 元「{x[0][:24] if x else '（なし）'}」{x[1] if x else ''} ／ 組んだ文書「{y[0][:24] if y else '（なし）'}」{y[1] if y else ''}"
             for i, (x, y) in enumerate(zip_longest(a, b)) if not (x and y and x[1] == y[1])]
 
 
@@ -1090,7 +1090,7 @@ def source_dir(did):
 
 
 def built_fonts(did):
-    """build が文書に残した (本文, 等幅) の書体（FONTS）。残していない文書は、テーマで書体を変えられる前の版で組んだものなので、既定の書体。"""
+    """build が文書に残した (本文, 等幅) の書体（FONTS）。残していない文書は、テーマで書体を変えられる前のバージョンで組んだものなので、既定の書体。"""
     v = request("GET", f"{DRIVE}/files/{did}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(FONTS, "")
     return tuple(v.split("\t")) if v.count("\t") == 1 else (FONT_DEFAULT, MONO_DEFAULT)
 
@@ -1113,10 +1113,10 @@ def source_checks(doc, d):
         print(f"\n== 要修正（テンプレート {d.meta['template']} との照合）: {len(h)} ==", *h, sep="\n")
         print(f"\n== 要確認（テンプレートとの照合）: {len(soft)} ==", *soft, sep="\n")
         hard = hard or bool(h)
-    if d.meta.get("source"):  # 頭の skeleton_ok: に「<組んだ版の節の名前>: <理由>」と書いた節の違いは、認めたものとして数だけ出す
+    if d.meta.get("source"):  # 頭の skeleton_ok: に「<組んだ文書の節の名前>: <理由>」と書いた節の違いは、認めたものとして数だけ出す
         ok = {x.split(": ", 1)[0] for x in d.meta.get("skeleton_ok") or []}
         diff = compare_skeleton(skeleton(request("GET", f"{DOCS}/{file_id(d.meta['source'])}")), skeleton(doc))
-        left = [x for x in diff if re.search(r"組んだ版「(.*?)」", x)[1] not in ok]
+        left = [x for x in diff if re.search(r"組んだ文書「(.*?)」", x)[1] not in ok]
         print(f"\n== 要確認（元の文書との骨組みの違い。{d.meta['source']}）: {len(left)}（skeleton_ok: で認めた違い {len(diff) - len(left)}）==", *left, sep="\n")
     return hard
 
@@ -1201,7 +1201,7 @@ def selftest():
     assert d.blocks[2][3] == {"keep": True}
     md_selftest()
     mermaid_selftest()
-    # テーマ: 書いた値だけを入れ替え、本文の幅に合わせて図の倍率も変える（最後に試す。あとの試しに効くので）
+    # テーマ: 書いた値だけを入れ替え、本文の幅に合わせて図の倍率も変える（最後に試す。あとのテストに効くので）
     rest = STYLES["HEADING_1"][3:]  # 書かなければ、見出しの上下の空きと行間は既定のまま
     load_theme({"page": [215.9, 279.4], "margins": [12.7, 12.7], "colors": {"HEAD": "4a86e8", "TABLE_HEAD": "F3F3F3", "TABLE_HEAD_TEXT": TEXT},
                 "styles": {"BODY": {"size": 10}, "H1": {"size": 12}, "H2": {"size": 11}, "H3": {"size": 10.5, "color": "303F47", "above": 6, "spacing": 90}}})
@@ -1209,7 +1209,7 @@ def selftest():
     assert TABLE_HEAD == ("F3F3F3", TEXT) and STYLES["HEADING_1"][3:] == rest and STYLES["TITLE"][2] == "4A86E8"  # 題も HEAD の色
     assert STYLES["HEADING_3"] == (10.5, True, "303F47", 6, 4, 90) and mermaid_config()["themeVariables"]["primaryBorderColor"] == "#4A86E8"
     assert (FONT, MONO) == ("Noto Sans JP", "Cascadia Mono")  # 書かなければ既定の書体
-    tmp = tempfile.mkdtemp()  # テーマのファイルの確かめ
+    tmp = tempfile.mkdtemp()  # テーマのファイルの確認
     put = lambda o, name="t": (open(f := os.path.join(tmp, f"{name}.json"), "w").write(json.dumps({"apiVersion": API_VERSION, "kind": "theme", **o})), f)[1]
     assert read_theme(put({"description": "d", "styles": {"H1": {"size": 14, "above": 0}}}))["styles"]["H1"]["above"] == 0
     for o, want in (({"leading": 1.3}, "leading: 知らないキー"), ({"colors": {"NAVY": "000000"}}, "colors.NAVY: 知らない役割"), ({"colors": {"TEXT": "#303F47"}}, "6 桁"),
@@ -1220,7 +1220,7 @@ def selftest():
             raise AssertionError(f"{o} を通した")
         except SystemExit as e:
             assert want in str(e), (o, str(e))
-    globals()["ws_themes"], real_ws = (lambda: Path(tmp)), ws_themes  # 一覧は、書けない値のあるファイル（t.json は最後の試しの font: Inter）で止まらない
+    globals()["ws_themes"], real_ws = (lambda: Path(tmp)), ws_themes  # 一覧は、書けない値のあるファイル（t.json は最後のテストの font: Inter）で止まらない
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         put({"description": "よい"}, "a")
@@ -1421,7 +1421,7 @@ def main():
     need_theme(doc)
     did = new(a[1], a[2])
     try:
-        build(did, doc, force=True)  # 作ったばかりなので、画面での直しもコメントもない
+        build(did, doc, force=True)  # 作ったばかりなので、画面での修正もコメントもない
     except BaseException:  # 組めなかった文書を残さない。直してから new をやり直す
         trash(did)
         print(f"組めなかったので、作った文書 {did} をゴミ箱に移した", file=sys.stderr)

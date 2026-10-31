@@ -41,7 +41,7 @@ def research(path):
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--selftest"]:  # Google を使わない。lib/ の部品が読めることと、名前の確かめ（2026-10-31 に lib/ へ移したとき、読めずに起動で落ちていた）
+    if sys.argv[1:] == ["--selftest"]:  # Google を使わない。lib/ の部品が読めることと、名前の確認（2026-10-31 に lib/ へ移したとき、読めずに起動で落ちていた）
         for bad in (lambda: main("x", "y", "名前"), lambda: research("Research/x.md")):
             try:
                 bad()

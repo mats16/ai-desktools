@@ -7,7 +7,7 @@ description: The brief and the writing axes for materials (decks, documents) - w
 
 This skill holds the brief that every material serves, the axes for content and wording, and the knowledge for content by material type. This file is the brief and the axes. How a page looks (hierarchy, emphasis, color, composition) is in `deck-design`. The rules in the other skills decide what can be counted and what the user decided; decide what they leave open with these axes. Do not turn an axis into a fixed pattern ("always add a diagram"), because a pattern applied to every page stops serving the page.
 
-Order when things conflict: the workspace rules (`recipes/`, the customer's `memory.md`) → the user decisions written as rules in the other skills → these axes. The outline's 「書き方の決め」 is the parent's decision, not the user's: write it from these axes, and when a line of it pulls against an axis, follow the line and write the conflict under 「親に返すこと」 (children) or fix the line (parent).
+Order when things conflict: the workspace rules (`recipes/`, the customer's `memory.md`) → the user decisions written as rules in the other skills → these axes. The outline's 「書き方の取り決め」 (「書き方の決め」 in outlines written before 2026-11-01) is the parent's decision, not the user's: write it from these axes, and when a line of it pulls against an axis, follow the line and write the conflict under 「親に返すこと」 (children) or fix the line (parent).
 
 ## The brief: what a good material does
 
@@ -49,7 +49,7 @@ This file decides what the reader must grasp, which relationships must be seen, 
 ## 書き方
 
 - 和文と英数字の間に半角スペースを入れる（`2026 年 10 月`、`3 つの問い`）。
-- 製品名・機能名は英語の正式名のまま書く。訳語や言い回しは、資料と同じ言語の社内の資料と、公式のドキュメントのその言語の版に合わせる。
+- 製品名・機能名は英語の正式名のまま書く。訳語や言い回しは、資料と同じ言語の社内の資料と、公式のドキュメントのその言語のページに合わせる。
 - 数字と固有名詞には出典を付ける。口頭で聞いた数字は推測のことがあるので、裏付けてから使う。
 - 資料の文体と出典の付け方は [content.md](content.md) の 6。
 

@@ -34,7 +34,7 @@ INSTALL.md                        会話で入れるときに、エージェン�
 .claude-plugin/marketplace.json   このリポジトリをそのままマーケットプレイスにする
 package.json                      pi のパッケージ（pi.skills: ./skills）
 skills/                           上の 17 個（Claude Code・Codex・pi で共通）
-lib/                              スキルと hook で共有するコード（desk.py・gapi.py・brand.py・textlint.py・sheet.py・ledger.py・refs.py）。スキルではない
+lib/                              スキルと hook で共有するコード（desk.py・gapi.py・brand.py・textlint.py・sheet.py・ledger.py・refs.py、subtree で取り込んだ yomiyasu/）。スキルではない
 hooks/hooks.json                  Claude Code と Codex の hook（プラグインのファイルを読むかスキルを呼んだら、その作業のレシピ〔recipes/〕を、顧客の資料を読んだら memory.md を続けて出す）
 hooks/rules_overlay.py            その中身（Claude Code・Codex・pi で共有）
 extensions/rules.ts               pi の拡張（同じことを pi の read・bash で）
@@ -61,7 +61,7 @@ AI Desk Tools を入れて、ワークスペースを作ってください。
 1. 前の名前で登録したものを拾う。<ワークスペース> は資料のフォルダ（desk.toml か factory.toml のあるところ）で、分からなければ聞く。次の grep で出たファイル（プラグインの写しのフォルダは除いてある）、crontab -l、自分の道具のスケジューラー（T3 Code・Claude Code Desktop・Omnigent など）の定期の作業のうち ai-deck-factory を含むものを、まとめて見せてから進める。自分の道具で見られないスケジューラー（ほかのアプリのもの）に desk-dreaming を登録したかも、ユーザーに聞く。
    grep -rln --exclude-dir=cache --exclude-dir=marketplaces --exclude-dir=git ai-deck-factory ~/.claude/plugins ~/.claude/settings.json ~/.codex/config.toml ~/.codex/automations ~/.claude/scheduled-tasks ~/Library/LaunchAgents ~/.pi/agent/settings.json <ワークスペース>/.claude <ワークスペース>/.codex <ワークスペース>/.pi <ワークスペース>/AGENTS.md <ワークスペース>/rules 2>/dev/null
 2. 前の入れ元が手元の checkout なら、外す前に、その .claude-plugin/marketplace.json の name を見る。desk-tools でなければ（前の版のまま）、何も外さずに見せ、その checkout を mats16/ai-desktools に合わせるか、ほかの入れ元にするかをユーザーに聞く。決まったら、前の名前のプラグインとマーケットプレイスを、入れたときと同じ範囲で外す。https://raw.githubusercontent.com/mats16/ai-desktools/main/docs/ の claude-code-plugin.md・codex-plugin.md・pi.md の「外す」を、desk-tools を ai-deck-factory に替えて使う。pi は settings.json に書かれた入れ元を、そのまま pi remove に渡す（-l の有無も同じにする）。
-3. https://raw.githubusercontent.com/mats16/ai-desktools/main/INSTALL.md の 3（プラグインを入れる）と 4 の 2（desk-doctor）を、今のワークスペースで進める。入れる範囲（ユーザー全体かワークスペースだけか）と入れ元（GitHub か手元の checkout）は前と同じにし、INSTALL.md の 3 のコマンドをそれに合わせて替える（手元のパスから入れる書き方は README の「入れ方」）。desk-doctor が「前の版のワークスペース」を出したら、<プラグイン>/skills/desk-migrate/SKILL.md を開いて移す。
+3. https://raw.githubusercontent.com/mats16/ai-desktools/main/INSTALL.md の 3（プラグインを入れる）と 4 の 2（desk-doctor）を、今のワークスペースで進める。入れる範囲（ユーザー全体かワークスペースだけか）と入れ元（GitHub か手元の checkout）は前と同じにし、INSTALL.md の 3 のコマンドをそれに合わせて替える（手元のパスから入れる書き方は README の「入れ方」）。desk-doctor が「前のバージョンのワークスペース」を出したら、<プラグイン>/skills/desk-migrate/SKILL.md を開いて移す。
 4. AGENTS.md・rules/ に残る ai-deck-factory:（コロン付き。/ai-deck-factory:<スキル> や $ai-deck-factory:<スキル>）を desk-tools: に替える（hook は新しい名前でしか拾わない）。コロンのない ai-deck-factory（テンプレートとデッキの目印 ai-deck-factory theme= など）は替えない。
 5. 定期の整理（desk-dreaming）を登録していたら、登録した先を <プラグイン>/skills/desk-dreaming/schedule.md の見出しの順にすべて見て、前の登録を消し、INSTALL.md の 5 のとおりに、新しい prompt.txt と run.sh のパスで登録し直す。launchd と cron は自分で書き換えず、消すコマンドと入れるコマンドを示して、ユーザーに回してもらう。自分の道具で見られない登録先は、そのアプリで消して登録し直すよう、渡す 1 行と作業フォルダを添えてユーザーに返す。
 6. 1 の grep と crontab -l をもう一度回し、残ったものと、次からの開き方（INSTALL.md の 6）を返す。コロンのない目印と、name が desk-tools の checkout のパスに残る ai-deck-factory は、残ったものに数えない。
@@ -101,7 +101,7 @@ pi install git:github.com/mats16/ai-desktools        # git から
 
 スキルは `/skill:desk-init` のように呼ぶ。資料のフォルダだけで効かせる（`-l`）入れ方と、project trust、効いている範囲の確かめ方は [docs/pi.md](docs/pi.md)。
 
-入れたら、ワークスペースにするフォルダで `desk-init`、続けて `desk-doctor` を呼ぶ。前の版から更新したら `desk-doctor` を回し、「前の版のワークスペース」が出たら `desk-migrate` で移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前〔`factory.toml` → `desk.toml`、`.factory/` → `.desk/`、`factory-*` → `desk-*`、`dreaming` → `desk-dreaming` と決まりの ID の `factory-dreaming` → `desk-dreaming`〕を変えた）。
+入れたら、ワークスペースにするフォルダで `desk-init`、続けて `desk-doctor` を呼ぶ。前の版から更新したら `desk-doctor` を回し、「前のバージョンのワークスペース」が出たら `desk-migrate` で移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前〔`factory.toml` → `desk.toml`、`.factory/` → `.desk/`、`factory-*` → `desk-*`、`dreaming` → `desk-dreaming` と決まりの ID の `factory-dreaming` → `desk-dreaming`〕を変えた）。
 
 ## ワークスペース
 

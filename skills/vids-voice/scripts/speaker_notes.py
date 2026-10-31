@@ -177,7 +177,7 @@ def cmd_push(pid, path):
         batch(pid, reqs)
     if bad := [k for k, t in notes_of(live(pid)["slides"]).items() if t != script[k]]:
         sys.exit(f"書いたあとのノートが台本と違う: p{', p'.join(bad)}")
-    if not screen:  # 自分の書き込みを、次の build が画面での直しと取り違えないように。画面での直しがあったなら残さない（build はそれで止まる）
+    if not screen:  # 自分の書き込みを、次の build が画面での修正と取り違えないように。画面での修正があったなら残さない（build はそれで止まる）
         gapi.stamp(pid, revision(pid), STAMP)
     for i, f in enumerate(files, 1):
         if f:
@@ -200,7 +200,7 @@ def selftest():
         "p1: カタカナにする英語 Café・ＧＣＰ・S3・deck-review・Wi-Fi・GPT-4o・v2.5・Việt・my_var・Ｗｉ－Ｆｉ・Wi‐Fi（画面の表示を指すなら残す）"]  # 書いたとおりの語を、出てきた順に。数字だけは出さない
     assert check({"1": "Pause the video (or not) on slide 5.", "2": "「引用」を p.5 で。"}, "en")[1] == [
         "p1: 読み上げる記号「(」（…the video (or not) on…）", "p1: ページの参照「slide 5」", "p2: ページの参照「p.5」"]  # 英語は「」を見ず、英語の参照を見る
-    assert check({"1": "【ユーザー・2 分】話す。"})[1] == ["p1: 読み上げる記号「【」（…【ユーザー・2 分】話…）"]  # 【】の印も読み上げる
+    assert check({"1": "【ユーザー・2 分】話す。"})[1] == ["p1: 読み上げる記号「【」（…【ユーザー・2 分】話…）"]  # 【】の記号も読み上げる
     note = lambda t: {"slideProperties": {"notesPage": {"notesProperties": {"speakerNotesObjectId": "n"},
                                                         "pageElements": [{"objectId": "n", "shape": {"text": {"textElements": [{"paragraphMarker": {}}, {"textRun": {"content": t}}]}}}] if t else []}}}
     slides = [note("前のノート\n"), note(""), note("同じ\n"), note("  \n")]

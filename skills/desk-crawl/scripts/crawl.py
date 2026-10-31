@@ -11,8 +11,8 @@ usage:
   crawl.py merge <topic> <子の返事.json>... --out <run.json>   子の返事を 1 つの回の記録の下書きにまとめる（同じ URL は 1 つにし、
                       どの先で見えたかを足す。前の回までに使われた項目には dup、題の似たものには similar を付ける）。候補の一覧を出す
   crawl.py record <topic> <run.json> [--published <出力の md>...] [--missed <取りこぼし.json>...]   回を記録する。出力のどれかに
-                      URL があった項目を「使われた」にし（出力を渡さなければ、前に記録した印のまま）、取りこぼしを足す。覚え書きの足しと票、候補から follow への引き上げを当てて出す
-  crawl.py report <topic> [<回の id>]   まとめの md に貼る「## 情報源」の節を出す（既定は最後の回）。直近 10 回とその前の 10 回の比べも出す
+                      URL があった項目を「使われた」にし（出力を渡さなければ、前に記録した目印のまま）、取りこぼしを足す。覚え書きへの追加と票、候補から follow への引き上げを当てて出す
+  crawl.py report <topic> [<回の id>]   まとめの md に貼る「## 情報源」の節を出す（既定は最後の回）。直近 10 回とその前の 10 回の比較も出す
   crawl.py sources <topic> [--json]     台帳と成績の表を出す（人が読む）。--json は、ほかの話題に写す JSON（follow の先と覚え書き）
   crawl.py set <topic> <先の id> key=value...   台帳を直す（tier・name・group・pinned・url・why・created、note=<覚え書き>）
   crawl.py set <topic> --from <file.json>        台帳に読む先をまとめて足す（[{"id": …, "tier": …}, …]。sources --json の出力も読む）
@@ -33,7 +33,7 @@ import desk  # noqa: E402  ワークスペースの探し方
 PROMPT = Path(__file__).resolve().parents[1] / "prompt_collect.md"
 GAMMA = 0.93       # 1 回ごとに前の回の重みに掛ける数（半分になるのは約 10 回、平日の 2 週）。読む先の中身は時期で変わるので、古い回ほど軽くする
 PROMOTE = 2.0      # 候補が、重みを掛けて合わせたこの数の項目で使われたら follow に上げる（自動。報告に書く）
-# ponytail: 段の境目は仮の値。実際の記録が 20 回たまったら、report の比べ（取りこぼしが増えずに読む先が減るか）を見て決め直す
+# ponytail: 段の境目は仮の値。実際の記録が 20 回たまったら、report の比較（取りこぼしが増えずに読む先が減るか）を見て決め直す
 EVERY = ((0.5, 1), (0.25, 2), (0.0, 4))  # 1 日あたりの値打ちが、follow の先の中ほど（中央値）の何倍以上なら、何回に 1 回読むか
 MIN_READS = 5     # この回数読むまでは間を空けない（1 回の空振りで 4 回に 1 回にしない）。中ほども、この回数読んだ先だけで出す
 DROP_READS, DROP_USED = 10, 0.5  # 4 回に 1 回の follow で、最後の DROP_READS 回の読みで使われたのが DROP_USED 件未満なら、外すかを聞く（自動では外さない）
@@ -53,7 +53,7 @@ APPLIED_KEEP = 30  # 台帳に残す「当てた覚え書きと票」の控え�
 KEYS = {"tier", "name", "group", "pinned", "url", "why", "created"}
 OLD = "scout"      # 前の名前（source-scout）の記録のフォルダ（.desk/scout/）
 PIN = {True: True, False: False, "true": True, "false": False, "1": True, "0": False, "yes": True, "no": False}  # これ以外の pinned は止める（黙って false にしない）
-TRACKING = re.compile(r"^(utm_\w+|gclid|fbclid|mc_[ce]id|ref_src|trk)$")  # ref は版や枝を指すことがある（GitHub）ので外さない
+TRACKING = re.compile(r"^(utm_\w+|gclid|fbclid|mc_[ce]id|ref_src|trk)$")  # ref はバージョンや枝を指すことがある（GitHub）ので外さない
 URL = re.compile(r"https?://[^\s<>{}|\"'`（）「」『』【】、。，]+")
 URL_TAIL = ".,;:!?*_~"  # md の文末と強調の記号（「https://x/1.」「**https://x/1**」）。URL の末尾に来ない
 
@@ -107,7 +107,7 @@ def write_json(p, data):
 
 def no_null(v):
     """JSON の null と空の文字列の欄を外す。子は書かない欄を null や ""（created・origin・public_url など）で返すことがあり、
-    読む側の .get(欄, 既定) は null を既定にせず、形の確かめは "" を日付として止めるため（記録には null も "" も入れない）。"""
+    読む側の .get(欄, 既定) は null を既定にせず、形の確認は "" を日付として止めるため（記録には null も "" も入れない）。"""
     if isinstance(v, dict):
         return {k: no_null(x) for k, x in v.items() if x is not None and x != ""}
     return [no_null(x) for x in v] if isinstance(v, list) else v
@@ -769,13 +769,13 @@ def record(topic, path, outputs=(), missed=()):
             if not isinstance(ms, list) or not all(isinstance(m, dict) for m in ms):
                 sys.exit(f"{f} は取りこぼしのオブジェクトのリスト（[{{\"url\": …, \"source\": \"<kind>:<ref>（分かれば）\", \"why\": …}}, …]）")
             add_misses(run, ms)
-    if errs := check(run):  # 形を確かめてから印を付ける（壊れた記録で落ちない）
+    if errs := check(run):  # 形を確かめてから目印を付ける（壊れた記録で落ちない）
         sys.exit("記録の形が違う:\n- " + "\n- ".join(errs))
     if outputs:
         urls = set().union(*(md_urls(read_input(f, as_json=False)) for f in outputs))
         for i in run.get("items", []):
             i["used"] = bool(refs(i) & urls)
-    elif prev:  # 出力を渡さずに記録し直す（取りこぼしだけ足す）ときは、項目ごとに前の印を写す。前の項目とは投稿の URL（keys）で合わせる
+    elif prev:  # 出力を渡さずに記録し直す（取りこぼしだけ足す）ときは、項目ごとに前の目印を写す。前の項目とは投稿の URL（keys）で合わせる
         was = {k: bool(i.get("used")) for i in prev.get("items", []) for k in keys(i)}  # 広い public_url を共にする別の項目に、印を広げないため
         for i in run.get("items", []):
             i["used"] = any(was.get(k) for k in keys(i))
@@ -930,7 +930,7 @@ def set_(topic, a):
         rows = [{"id": a[0] if a else "", **dict(x.split("=", 1) for x in a[1:])}]
     for r in rows:  # 全部の行を確かめてから書く（途中で止めても、台帳は半分だけ直らない）
         if r.get("id") == "*" and set(r) <= {"id", "note", "notes"}:
-            pass  # 話題の覚え書きだけの行（sources --json の頭）
+            pass  # 話題の覚え書きだけの行（sources --json の先頭）
         elif not is_sid(r.get("id")):
             sys.exit(f"先の id は <kind>:<ref>: {r}")
         if bad := set(r) - KEYS - {"id", "note", "notes"}:
@@ -1258,7 +1258,7 @@ def selftest():
         assert len(got["reads"]) == 3 and not any(r["ok"] for r in got["reads"]) and not got["candidates"], got  # 形の違う URL と http・https でないフィードは開かず、ほかの先も続けて読む
         assert check({"id": "x", "discovered": [{"source": "slack:Z", "created": "Oct 24"}]}) and check({"id": "x", "since": "yesterday"})
         assert md_urls("[a](https://w/Foo_(bar)) と [b](https://x/2)。 https://x/3]") == {canon("https://w/Foo_(bar)"), canon("https://x/2"), canon("https://x/3")}
-        assert canon("https://github.com/o/r/blob/x?ref=v1") != canon("https://github.com/o/r/blob/x?ref=v2")  # ref は版を指すので残す
+        assert canon("https://github.com/o/r/blob/x?ref=v1") != canon("https://github.com/o/r/blob/x?ref=v2")  # ref はバージョンを指すので残す
         assert canon(" http://[::1/f ") == "http://[::1/f" and not sites({"sources": {}}, [{"items": [{"used": True, "public_url": "http://[::1/f"}] * 2}])
         assert canon("https://w.slack.com/archives/C1/p2?cid=C1") == canon("https://w.slack.com/archives/C1/p2")
         (Path(d) / "list.json").write_text("[1, 2]")
