@@ -7,12 +7,12 @@ If the conversation was opened under `sandbox/`, ignore this file. That folder i
 ## Names
 
 - The repository is `mats16/ai-desktools`. The plugin, the marketplace, and the pi package are all named `desk-tools`: skills are called like `desk-tools:slides-build` and installed as `desk-tools@desk-tools`. In prose, the product is "AI Desk Tools".
-- Keep the former names (`ai-deck-factory`, "AI Deck Factory") where they refer to the past: past entries in 「決めたこと」 in README, moving installs made under the former name (「前の名前から移る」 and 「残っている課題」 in README), and things from earlier versions (such as the original pptx's corner radius, `slides-visual-018`). Don't update them to the new name. The same holds for the skill names before 2026-10-31 (`deck-practices`, `deck-comments`, `slides-template`, `desk-recipes`, `deck-research`).
+- Keep the former names (`ai-deck-factory`, "AI Deck Factory") where they refer to the past: past entries in `docs/decisions.md`, moving installs made under the former name (「前の名前から移る」 in README, and `docs/todo.md`), and things from earlier versions (such as the original pptx's corner radius, `slides-visual-018`). Don't update them to the new name. The same holds for the skill names before 2026-10-31 (`deck-practices`, `deck-comments`, `slides-template`, `desk-recipes`, `deck-research`).
 - Don't rename the markers written into Google Slides templates and decks (`ai-deck-factory theme=`, `ai-deck-factory layout=`, `ai-deck-factory bar`), because existing templates and decks are read by these strings.
 
 ## Layout
 
-The 17 skills fall into six groups by what they hold (2026-10-31 in 「決めたこと」 in README). Keep the weight of dependencies one way: how the work runs calls the knowledge and the tools, and the knowledge and the tools work without it. A tool or knowledge file may still point the reader to a step of `deck-workflow` that happens around it (Drive, delivering, child agents), but never to rules it needs to do its own job.
+The 17 skills fall into six groups by what they hold (2026-10-31 in `docs/decisions.md`). Keep the weight of dependencies one way: how the work runs calls the knowledge and the tools, and the knowledge and the tools work without it. A tool or knowledge file may still point the reader to a step of `deck-workflow` that happens around it (Drive, delivering, child agents), but never to rules it needs to do its own job.
 
 | Group | Skills | Holds |
 | --- | --- | --- |
@@ -32,10 +32,10 @@ The 17 skills fall into six groups by what they hold (2026-10-31 in 「決めた
 | `.claude-plugin/`, `package.json` | Plugin and marketplace definitions (Codex reads these too); the pi package |
 | `tests/render/` | Builds the JSON samples and checks them as images (`run.py`; per-page checks in `expect.json`) |
 | `tests/skills/` | `check.py`: the shape of each skill (`SKILL.md` within 5,000 tokens, `description` within 1,000 characters, every md linked from `SKILL.md`, every md under 50 KB and 2,000 lines, no path into another skill). Runs with the selftests and before `kaizen.py open` |
-| `docs/` | Installation and development guides. `docs/fixtures/` holds the prompts for prompt tests |
-| 「決めたこと」 and 「残っている課題」 in README | Decisions the user made, and work deferred |
+| `docs/` | Installation and development guides, the decisions (`decisions.md`) and deferred work (`todo.md`). `docs/fixtures/` holds the prompts for prompt tests |
+| `docs/decisions.md` (「決めたこと」), `docs/todo.md` (「残っている課題」) | Decisions the user made, and work deferred |
 
-README is about 200 KB, mostly 「決めたこと」. Don't read it through. Before changing a skill or rule, `grep -n` README for the skill name or rule ID (such as `deck-review-011`) and read only the matching entries, because they record why things are the way they are.
+`docs/decisions.md` is about 260 KB. Don't read it through. Before changing a skill or rule, `grep -n` it (and `docs/todo.md`) for the skill name or rule ID (such as `deck-review-011`) and read only the matching entries, because they record why things are the way they are.
 
 ## Where to change what
 
@@ -56,15 +56,15 @@ Find the owner first, and change it there only. To find where a plugin rule is w
 
 ## Rules for changes
 
-- **Give knowledge, not orders.** Write principles, best practices with their reasons and sources, examples, and tools, and let the model decide. Write an instruction only for what the principles do not cover (what is left over) and for the specifics of one environment or a user's decision, because a fixed instruction applies itself to pages it was not written for (2026-10-30 and 2026-10-31 in 「決めたこと」 in README). What can be measured goes into the components' defaults and lint, not into text the model reads.
+- **Give knowledge, not orders.** Write principles, best practices with their reasons and sources, examples, and tools, and let the model decide. Write an instruction only for what the principles do not cover (what is left over) and for the specifics of one environment or a user's decision, because a fixed instruction applies itself to pages it was not written for (2026-10-30 and 2026-10-31 in `docs/decisions.md`). What can be measured goes into the components' defaults and lint, not into text the model reads.
 - **A skill opens only its own files.** Name another skill by its folder name (`deck-design`), and a part of it by the topic its `SKILL.md` table names, with a section number or rule ID: "`deck-design` → slides §3", "slides-visual-049 (`deck-design`)". Don't write a path into another skill, because its files then cannot move without breaking the caller, and a reader who skips the other skill's `SKILL.md` misses the context it gives. A command of another skill's script is written by name with the skill ("`slides.py lint` (`slides-build`)"); a shared script is `<plugin>/lib/<name>.py`. `tests/skills/check.py` fails on a path into another skill (only `desk-migrate`, which maps earlier paths to current ones, may name them). When you add a topic that other skills point to, add it to that skill's `SKILL.md` table under the same words.
 - Use the same source for Claude Code, Codex, and pi. Codex reads the Claude Code layout (`.claude-plugin/`, `hooks/hooks.json`) as is, so don't add Codex-specific files. When changing how recipes are appended, check both `hooks/hooks.json` and `extensions/rules.ts`. Don't make a fix that works for only one agent.
 - Find the workspace, the settings, and the workspace's recipes (`desk.rules`: `recipes/**/RECIPE.md` with frontmatter `description`; which plugin files trigger which `step`: `desk.TRIGGERS`) only through `lib/desk.py` (walk up for `desk.toml`, else `~/.desk.toml` and its `workspace`; `DESK_CONFIG` overrides the path, and empty skips it). Scripts, `hooks/rules_overlay.py` (and through it `extensions/rules.ts`), and desk-dreaming's `run.sh` and `snapshot.sh` all use it, so the lookup order stays the same everywhere. Take the workspace from `gapi.workspace()` or `desk.locate()`, not from the folder of the settings file, because `~/.desk.toml` sits outside the workspace.
-- Write scripts with the standard library only. Only scripts that need packages such as Pillow declare them in a leading `# /// script` block and run with `uv run`. Target Python 3.11 or later. A script imports `lib/` by inserting the plugin's `lib/` folder into `sys.path` (from `skills/<skill>/scripts/`, three levels up). Don't import another skill's `scripts/`; the exceptions today are `vids-build` and `vids-voice`, which read `slides-build`'s `lint.py` and `slides.py` because a video is made from a deck (「残っている課題」 in README). A script without `--selftest` is not run by CI, so give a new script at least a `--selftest` that imports it.
+- Write scripts with the standard library only. Only scripts that need packages such as Pillow declare them in a leading `# /// script` block and run with `uv run`. Target Python 3.11 or later. A script imports `lib/` by inserting the plugin's `lib/` folder into `sys.path` (from `skills/<skill>/scripts/`, three levels up). Don't import another skill's `scripts/`; the exceptions today are `vids-build` and `vids-voice`, which read `slides-build`'s `lint.py` and `slides.py` because a video is made from a deck (`docs/todo.md`). A script without `--selftest` is not run by CI, so give a new script at least a `--selftest` that imports it.
 - Keep the body of each `SKILL.md` within 5,000 tokens, because after compaction Claude Code re-attaches only the first 5,000 tokens of each invoked skill. Move sections needed only in some situations (conditional steps, failure handling, steps used by a separate call) into a file linked directly from the table in `SKILL.md`. Don't create files reachable only from other files, because nested files tend to be read only in part.
-- Record user decisions in 「決めたこと」 in README, with the date and the user's own words, verbatim. Record deferred work in 「残っている課題」.
+- Record user decisions in `docs/decisions.md`, with the date and the user's own words, verbatim. Record deferred work in `docs/todo.md`.
 - Write PR bodies with the sections of `.github/pull_request_template.md`. Paste the commands you ran and their output as-is. In 「レビューで見てほしいところ」, list file:line locations and the judgments you are unsure of, because reviewers, human and AI, start reading there.
-- 日本語で書くところは、平易な和文で、言い切りの「〜する」。漢語やカタカナ語より、やさしい言い方を選ぶ（「検証」より「確かめる」、「ルール」より「決まり」）。例外: `/deck-review` を回す単位は「ラウンド」（README の「決めたこと」の 2026-10-19）。
+- 日本語で書くところは、平易な和文で、言い切りの「〜する」。漢語やカタカナ語より、やさしい言い方を選ぶ（「検証」より「確かめる」、「ルール」より「決まり」）。例外: `/deck-review` を回す単位は「ラウンド」（`docs/decisions.md` の 2026-10-19）。
 
 ## Verify changes
 
@@ -82,7 +82,7 @@ Run every check in `sandbox/` (see "Sandbox" below), and paste the results as-is
 
 ## Languages
 
-Write instructions that AI reads in English. Write what people read, and rules tied to Japanese, in Japanese (2026-10-20 and 2026-10-25 in 「決めたこと」 in README).
+Write instructions that AI reads in English. Write what people read, and rules tied to Japanese, in Japanese (2026-10-20 and 2026-10-25 in `docs/decisions.md`).
 
 - **English:**
   - In the `skills/` md files (including the `SKILL.md` `description` and headings, and the child prompts `prompt_*.md`): procedures, step order, how to brief child agents, file and folder handling, commands and script descriptions, verification, and rules whose meaning is unambiguous (position, size, spacing, color and contrast, components and JSON keys, alignment, arrows, tables, images, API pitfalls, Drive locations). Keep each `description` within 1,000 characters.
@@ -92,9 +92,9 @@ Write instructions that AI reads in English. Write what people read, and rules t
   - Rules that involve the nuance of making materials (how to phrase claims and headings, tone toward customers, how the audience takes it, the flow of the story, what to say and not say).
   - Examples, user quotes, and strings copied verbatim (file names such as `構成案.md`, section names written in the outline such as 「書き方の決め」, the lint labels `要修正` and `要確認`, ledger values, column names of tables read by scripts or people, the 「要判断」 mark).
   - Output formats shown to users or in Issues (the desk-dreaming report, Issue bodies, the skeleton of profile.md, doc.md examples).
-  - What people read: README.md, the install guides in `docs/` (`claude-code-plugin.md`, `codex-plugin.md`, `pi.md`), the prompts in `docs/fixtures/`, `skills/desk-init/templates/` (workspace owners edit them), and PR, Issue, and commit bodies. Script messages and comments also stay in Japanese for now (「残っている課題」 in README).
+  - What people read: README.md, the install guides in `docs/` (`claude-code-plugin.md`, `codex-plugin.md`, `pi.md`), `docs/decisions.md` and `docs/todo.md`, the prompts in `docs/fixtures/`, `skills/desk-init/templates/` (workspace owners edit them), and PR, Issue, and commit bodies. Script messages and comments also stay in Japanese for now (`docs/todo.md`).
 - Decide per rule (one bullet) by its main point. When unsure, keep Japanese. Don't mix languages within one sentence. Inside an English sentence, put Japanese examples, values, and section names in 「」 or backticks (write `「社外秘と顧客の情報」 in deck-writing`, not `deck-writing の「社外秘と顧客の情報」`). Only source tags (such as （見た目 1-7）) and proper nouns (people, books, companies, typefaces) can go unquoted.
-- When changing the language, keep rule IDs (such as `[slides-visual-027]`) and section numbers. Refer to sections of English files by their English heading ("Working practices" in `deck-workflow`) and write numbers as `§4`. Refer to sections of Japanese files (README, the install guides in `docs/`, `recipes/README.md`) by their Japanese heading. Japanese files (templates, script messages) also refer to sections of English files by the English heading. Don't rewrite past entries in 「決めたこと」 in README.
+- When changing the language, keep rule IDs (such as `[slides-visual-027]`) and section numbers. Refer to sections of English files by their English heading ("Working practices" in `deck-workflow`) and write numbers as `§4`. Refer to sections of Japanese files (README, the Japanese files in `docs/`, `recipes/README.md`) by their Japanese heading. Japanese files (templates, script messages) also refer to sections of English files by the English heading. Don't rewrite past entries in `docs/decisions.md`.
 - Don't tell child agents which language to answer in (such as 「日本語で答える」), because the model picks it without being told. What they need is the instruction to copy rule text, user quotes, and sources in their original language.
 - Write English as short, plain imperative sentences, and keep the reasons ("because ..."). Use the terms already in the skills: 「構成案」 → the outline, 「子」 → child agent, 「指摘」 → finding, 「修正の指示」 → correction, 「扉」 → section divider, 「一覧の画像」 → contact sheet, 「レビューの観点」 → aspect.
 
