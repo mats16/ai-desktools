@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AI Desk Tools のテンプレートを作る・合わせ直す（../themes.md。会社のテンプレートから作る流れは ../../slides-template/create.md）。
+"""AI Desk Tools のテンプレートを作る・合わせ直す（../themes.md。会社のテンプレートから作る流れは ../template_create.md）。
 テーマはテーマのファイル（kind theme。組み込みの ../themes/<名前>.json と、ワークスペースの themes/slides/<名前>.json）。色は役割の名前で書く。
 テーマのファイルだけを見る（形と役割の組のコントラスト）のは slides.py lint <ファイル>（Google を読まない）。
 usage:
@@ -17,7 +17,7 @@ from collections import Counter
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "deck-practices", "scripts"))  # gapi・brand・textlint（ドキュメントと共有する部品）
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))  # gapi・brand・textlint（ドキュメントと共有する部品）
 from gapi import DRIVE, GSLIDES, PPTX, SLIDES, batch, config, file_id, request, run, subfolder, trash, upload
 from lint import JA, cells, contrast, flatten, lum, paras, solid
 from slides import (BG, BLANK, CARD, CARD_DOWN, COPYRIGHT_PT, DECOR, EMU, GA, HEAD, INSET, NAVY, NAVY_BLOCK, ON_RED, OSS, PAD, PANEL, PREVIEW, RED, RED_ON_NAVY,
@@ -37,7 +37,7 @@ FIXED = [(TEXT, "TEXT", "本文の文字", WHITE, None), (HEAD, "HEAD", "本文�
          (ON_RED, "ON_RED", "RED の塗りの上の文字", TEXT, RULE), (RED_SOFT, "RED_SOFT", "小さな赤の札の地", RED_TEXT, None), (STAGE_TEXT, "STAGE_TEXT", "札の文字", WHITE, None),
          (DECOR, "DECOR", "章番号。部品が使う", WHITE, None)]  # テーマに入れない色（既定の値か NAMED の名前, 名前, 用途, 載せる文字, 枠線）
 ON = {NAVY: WHITE, NAVY_BLOCK: WHITE, RED_TEXT: WHITE, SUB: WHITE, OSS: WHITE, BG: TEXT, PANEL: TEXT}  # 枠に載せる文字の色（届かなければ、札の文字か白の届くほう）。ほかは札の文字の色
-# 役割の組（文字, 地, 基準, どこで使うか）。visual.md の 1・3 の組み合わせ。18pt 未満の細字と 11pt 未満の太字は 4.5:1、18pt 以上と 11pt 以上の太字は 3:1（visual.md の 3）。visual・company はすべて届く。
+# 役割の組（文字, 地, 基準, どこで使うか）。deck-design の slides.md の 1・3 の組み合わせ。18pt 未満の細字と 11pt 未満の太字は 4.5:1、18pt 以上と 11pt 以上の太字は 3:1（deck-design の slides.md の 3）。visual・company はすべて届く。
 # NAMED の役割（HEAD・CARD・SUB_ON_NAVY・ON_RED）は、テーマが書いていなければ既定の色で測る（alias）。本文の地が暗いテーマも同じ組で測る
 PAIRS = [(WHITE, NAVY, 4.5, "結論バンドの白"), (SUB_ON_NAVY, NAVY, 4.5, "濃紺の上の補足・フッター"), (RED_ON_NAVY, NAVY, 4.5, "表紙の小見出し"),
          (HEAD, BG, 4.5, "見出し"), (HEAD, PANEL, 4.5, "パネルの見出し"), (HEAD, CARD, 4.5, "カードの見出し・表の 1 列目"),
@@ -67,7 +67,7 @@ def page_ok(size):
 def theme(name):
     """テーマ name の表（slides.py の load_theme）。ファイルがなければ止める。"""
     if (t := load_theme(name)) is None:
-        sys.exit(f"テーマ {name} のファイルがない（ある: {', '.join(theme_names())}）。ワークスペースの themes/slides/{name}.json に書く（../../slides-template/SKILL.md）")
+        sys.exit(f"テーマ {name} のファイルがない（ある: {', '.join(theme_names())}）。ワークスペースの themes/slides/{name}.json に書く（../template.md）")
     return t
 
 
@@ -196,12 +196,12 @@ def audit(url):
     out += ["", "## 書体", "", "| 書体 | 使っている文字の連なり | 和文 |", "|---|---|---|"]
     out += [f"| {f} | {n} | {kind(f) if f != '（継承）' else ''} |" for f, n in fonts.most_common()]
     out += ["", "## プレースホルダーの文字の大きさ（マスターとレイアウト）", ""] + [f"- {k}: {', '.join(f'{v:g}pt' for v in sorted(vs))}" for k, vs in sorted(sizes.items())]
-    out += ["", "## 和文の有無", "", f"- ページの文字の連なり: 和文を含む {ja}、含まない {latin}" + ("。英語だけのテンプレート（slides-template の create.md の B）" if latin and not ja else "")]
+    out += ["", "## 和文の有無", "", f"- ページの文字の連なり: 和文を含む {ja}、含まない {latin}" + ("。英語だけのテンプレート（slides-build の template_create.md の B）" if latin and not ja else "")]
     print("\n".join(out))
 
 
 def specimen(theme, t, origin=()):
-    """テンプレートの見本のページ。テーマの色と部品を一通り、決まり（visual.md）どおりの使い方で置く（色の確かめと、部品を直したときの確かめに使う）。
+    """テンプレートの見本のページ。テーマの色と部品を一通り、決まり（deck-design の slides.md）どおりの使い方で置く（色の確かめと、部品を直したときの確かめに使う）。
     origin は、色の早見表の出典の行に足す元のテンプレートの部品（template() が作る。合わせ直しでは元が分からないので書かない）。"""
     T = palette(t)
     use_theme(t)  # 固定の色と著作権表示はテーマの値（slides.py build がデッキのテーマから読むのと同じ）
@@ -230,7 +230,7 @@ def specimen(theme, t, origin=()):
                    color=on(slot, ON.get(slot)), spacing=115)
         d.text(s, X + 3 * (cw + gap) + PAD, Y_BODY + 2 * (ch + 0.15) + PAD, cw - 2 * PAD, ch - 2 * PAD,
                [("テーマに入れない色（次のページ）\n", {"bold": True}), "ページに名前で書く\n値はテーマのファイルで変えられる"], spacing=115)
-        d.source(s, ["出典: visual.md の 1（色の決まり）。", *origin])
+        d.source(s, ["出典: deck-design の slides.md の 1（色の決まり）。", *origin])
         d.note(s, f"テーマ「{theme}」の 11 の枠です。キッカーは、このページのように役割を示すときだけ置きます。"
                   "BG は地と同じ色なので、見本だけ罫線を付けています。値はテーマのファイルの colors に書く形（# を付けない 6 桁）です。")
 
@@ -240,7 +240,7 @@ def specimen(theme, t, origin=()):
             x, y = X + (i % 5) * (cw + 0.2), Y_BODY + (i // 5) * (ch + 0.15)
             d.box(s, x, y, cw, ch, c, line)
             d.text(s, x + PAD, y + PAD, cw - 2 * PAD, ch - 2 * PAD, [(f"{name}\n", {"bold": True}), f"{tone(T, c)}\n", use], color=on(c, fg), spacing=115)
-        d.source(s, ["出典: visual.md の 1（色の決まり）、slides-template の dark.md（暗い本文のテーマ）。", *origin])
+        d.source(s, ["出典: deck-design の slides.md の 1（色の決まり）、slides-build の template_dark.md（暗い本文のテーマ）。", *origin])
         d.note(s, f"テーマ「{theme}」の、テーマに入れない {len(FIXED)} の色です。HEAD・CARD・SUB_ON_NAVY・ON_RED は、書かなければ NAVY・白・RULE・白と同じ色です。"
                   "DECOR は slides.py の章の扉が使い、ページには書きません。")
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parents[2]  # プラグインの skills/
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(SKILLS / "deck-practices" / "scripts"))
+sys.path.insert(0, str(SKILLS.parent / "lib"))
 sys.path.insert(0, str(SKILLS / "slides-build" / "scripts"))
 sys.path.insert(0, str(SKILLS / "docs-build" / "scripts"))
 sys.path.insert(0, str(SKILLS / "desk-migrate" / "scripts"))
@@ -62,23 +62,23 @@ def check(ws, local=False):
     if "人がレビューするかも選んでもらう" in agents:  # 2026-10-13 までの雛形
         warn("AGENTS.md の方針のレビュー", "前の雛形の「人がレビューするかも選んでもらう」が残っている。ワークスペースの決まりが優先するので、desk.toml の [review] plan_reviewer が効かず、資料ごとに聞く。desk-init の雛形の今の文（plan_reviewer に従う）に替える")
     if "- ユーザーに返す前に、スキル `deck-review` で全体をレビューする。" in agents:  # 2026-10-19 までの雛形
-        warn("AGENTS.md の返したあとの直し", "前の雛形の「ユーザーに返す前に、スキル deck-review で全体をレビューする」が残っている。ワークスペースの決まりが優先するので、返したあとの小さな直しや問いでも全体のレビューを回す。desk-init の雛形の今の文（新しく作った資料は deck-review、返したあとは deck-practices/revise.md）に替える")
+        warn("AGENTS.md の返したあとの直し", "前の雛形の「ユーザーに返す前に、スキル deck-review で全体をレビューする」が残っている。ワークスペースの決まりが優先するので、返したあとの小さな直しや問いでも全体のレビューを回す。desk-init の雛形の今の文（新しく作った資料は deck-review、返したあとは deck-workflow/revise.md）に替える")
     if "- **日本語で作る。**" in agents:  # 2026-10-25 までの雛形
         warn("AGENTS.md の資料の言語", "前の雛形の「日本語で作る」が残っている。ワークスペースの決まりが優先するので、desk.toml の [desk] default_language が効かない。desk-init の雛形の今の文（[desk] default_language の言語で作る）に替える")
     for needles, name, what in (  # 2026-10-27 までの雛形の文。どれも、移行では本文を書き換えない（desk-migrate は決まりのファイルだけを移す）
             (("同じパスのファイルへの足しと上書き",), "AGENTS.md の決まりの置き場所", "前の雛形の「rules/<スキル>/<ファイル>（プラグインの同じパスのファイルへの足しと上書き）」が残っている。今は recipes/<名前>/RECIPE.md のレシピを frontmatter（description・step・per_material）で出す。desk-init の雛形の今の文（「決まりの優先」の 1 つ目）に替える"),
             (("同じファイルへの足しと上書き",), "AGENTS.md のフォルダの表", "前の雛形の「rules/<スキル>/<ファイル> … プラグインの同じファイルへの足しと上書き」が残っている。desk-init の雛形の今の行（recipes/<名前>/RECIPE.md … 頭の frontmatter に、いつ使うかと、出す場面を書く）に替える"),
-            (("`rules.md` の「決まりの層」", "（決まりの層、"), "AGENTS.md の決まりの層", "前の雛形の「決まりの層」（deck-practices/rules.md の前の節の名前）が残っている。層はなくした（ワークスペースの決まりが優先し、ワークスペースどうしは条件が狭いほう）。節の名前は「Workspace rules」。desk-init の雛形の今の文に替える"),
+            (("`rules.md` の「決まりの層」", "（決まりの層、"), "AGENTS.md の決まりの層", "前の雛形の「決まりの層」（desk-feedback/routing.md の前の節の名前）が残っている。層はなくした（ワークスペースの決まりが優先し、ワークスペースどうしは条件が狭いほう）。節の名前は「Workspace rules」。desk-init の雛形の今の文に替える"),
             (("決まりには ID と短い理由だけを書き",), "AGENTS.md の決まりの ID", "前の雛形の「決まりには ID と短い理由だけを書き」が残っている。ワークスペースの決まりには ID を付けない（戻し先はファイル。台帳が版を残す）。desk-init の雛形の今の文（「修正の指示」の「直したら、その場で戻す」）に替える"),
             (("`references_index.md` にも足す", "過去に使った資料は、直下の `references_index.md` にまとめる", "`references_index.md` の「Google Drive の置き場所」"), "AGENTS.md の索引の足し方",  # 2026-10-29 までの雛形
              "前の雛形の「references_index.md にも足す」「過去に使った資料は、直下の references_index.md にまとめる」「references_index.md の「Google Drive の置き場所」の Research の行」のどれかが残っている。2026-10-29 から、索引は refs.py が各フォルダの references.md から作り直す（手で足した行は、作り直すときに .desk/ に控えて消える）。Drive の置き場所と上げた資料は drive_folders.md。desk-init の雛形の今の文（「調べもの」の 1 つ目・3 つ目・4 つ目と「フォルダの置き方」）に替える")):
         if any(x in agents for x in needles):
             warn(name, what)
     if any("frontmatter" in x and re.search(r"`paths`|paths:", x) for x in agents.splitlines()):  # 同じ行に書いたものだけ。 2026-10-29 から、レシピは作業ごとに出る（desk-migrate は文の意味までは書き換えない）
-        warn("AGENTS.md のレシピの出し方", "AGENTS.md に frontmatter の paths の書き方が残っている。2026-10-29 から、レシピ（recipes/<名前>/RECIPE.md）は step（gather・build。書かなければどの作業でも）と per_material で出る（deck-practices/rules.md の「Workspace rules」）。その文を直す")
+        warn("AGENTS.md のレシピの出し方", "AGENTS.md に frontmatter の paths の書き方が残っている。2026-10-29 から、レシピ（recipes/<名前>/RECIPE.md）は step（gather・build。書かなければどの作業でも）と per_material で出る（desk-feedback/routing.md の「Workspace rules」）。その文を直す")
     if old := migrate.needs(root):  # 前の名前の rules/ は読まれず、前の ID は台帳とつながらない
         ng("前の版のワークスペース", f"desk-migrate で今の版へ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの頭に frontmatter を置き、ワークスペースの決まりの ID を外し、2026-10-29 に rules/ を recipes/<名前>/RECIPE.md にし、source-scout を desk-crawl にし、索引の references_index.md を台帳から作るものにした）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
-    odd, top = [], root / desk.RECIPES  # レシピの形と frontmatter（deck-practices/rules.md の「Workspace rules」）
+    odd, top = [], root / desk.RECIPES  # レシピの形と frontmatter（desk-feedback/routing.md の「Workspace rules」）
     for p, m in (rules := desk.rules(root)):
         rel = p.relative_to(root)
         if "paths" in m:
@@ -91,7 +91,7 @@ def check(ws, local=False):
         if (n := len(p.read_text(encoding="utf-8"))) > desk.RULE_MAX:
             odd.append(f"{rel} が {n:,} 字（{desk.RULE_MAX:,} 字まで。memory と並ぶと hook が途中で切るので、もっと狭い目的のレシピに分ける）")
         if skill := next((x for x in p.relative_to(top).parts[:-1] if (SKILLS / x / "SKILL.md").is_file()), None):
-            odd.append(f"{rel} がスキルの名前のフォルダ（{skill}）にある（目的の名前にする。desk-recipes の SKILL.md の §2）")
+            odd.append(f"{rel} がスキルの名前のフォルダ（{skill}）にある（目的の名前にする。desk-feedback の recipes.md の §2）")
         if p.parent != top and (p.parent.parent / desk.RECIPE).is_file():
             odd.append(f"{rel} がほかのレシピのフォルダの中にある（hook は両方を別々のレシピとして出す。資源なら RECIPE.md の名前を替える）")
     have = {p for p, _ in rules}
@@ -168,12 +168,12 @@ def check(ws, local=False):
         warn("ドキュメントのテーマの説明", f"{', '.join(bad)} に description がない。エージェントが資料ごとにテーマを選べない（themes/docs/<名前>.json の description に書く）")
     if (d := docs.get("default_theme")) and d not in doc_themes and d != "standard":  # standard は組み込み（docs.py の STANDARD）
         ng("docs.default_theme", f"{d} のテーマのファイルがない（themes/docs/{d}.json）。theme を書かない doc.md が組めない")
-    review = cfg.get("review", {})  # 書いていなければ既定。読むのはエージェント（deck-practices の 5 と 9）
+    review = cfg.get("review", {})  # 書いていなければ既定。読むのはエージェント（deck-workflow の 5 と 9）
     if (p := review.get("plan_reviewer", "ai")) not in ("ai", "human"):
         ng("review.plan_reviewer", f"{p!r} は使えない。\"ai\" か \"human\" にする")
     if type(n := review.get("deck_review_max_rounds", 3)) is not int or not 1 <= n <= 3:  # bool は int の子なので type で見る
         ng("review.deck_review_max_rounds", f"{n!r} は使えない。1〜3 の整数にする（直すと欠陥が増えるので 3 より多くしない）")
-    if type(h := cfg.get("feedback", {}).get("google_comments", {}).get("watch_hours", 0)) not in (int, float) or not math.isfinite(h) or h < 0:  # 0 か書いていなければ、頼まれたときだけ見張る（deck-comments）
+    if type(h := cfg.get("feedback", {}).get("google_comments", {}).get("watch_hours", 0)) not in (int, float) or not math.isfinite(h) or h < 0:  # 0 か書いていなければ、頼まれたときだけ見張る（deck-workflow の comments.md）
         ng("feedback.google_comments.watch_hours", f"{h!r} は使えない。時間の数にする（見張らないなら 0）")
     if not (type(lang := cfg.get("desk", {}).get("default_language", "ja")) is str and re.fullmatch(r"[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*", lang)):  # スクリプトは主の部分だけを比べる（gapi.language）
         ng("desk.default_language", f"{lang!r} は使えない。言語のコード（\"ja\"・\"en\"・\"zh-Hant\" など）にする")
@@ -278,7 +278,7 @@ def selftest():
         assert kinds()["ワークスペースの決まり"] == "OK"
         rx = Path(tmp) / "recipes" / "x"
         rx.mkdir(parents=True)
-        (rx / "RECIPE.md").write_text("---\ndescription: x\npaths: [slides-build/visual.md]\nstep: review\ntargets: [video]\n---\n" + "あ" * desk.RULE_MAX)
+        (rx / "RECIPE.md").write_text("---\ndescription: x\npaths: [deck-design/slides.md]\nstep: review\ntargets: [video]\n---\n" + "あ" * desk.RULE_MAX)
         d = next(d for k, n, d in check(Path(tmp), local=True) if n == "ワークスペースの決まり")
         assert kinds()["ワークスペースの決まり"] == "要確認" and "paths がある" in d and "step の review" in d and "targets の video" in d and f"字（{desk.RULE_MAX:,} 字まで" in d, d
         (rx / "RECIPE.md").write_text("---\ndescription: x\nstep: build\n---\n- 16pt\n")

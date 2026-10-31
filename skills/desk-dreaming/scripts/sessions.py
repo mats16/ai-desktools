@@ -8,18 +8,20 @@ import glob, json, os, re, shlex, sys
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "deck-practices" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
 import desk  # noqa: E402  ワークスペースの探し方
 
 ROOT = str(f[1]) if (f := desk.locate()) else os.getcwd()  # ワークスペース（今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace）
 AREAS = ("customers", "internal", "research", ".agents")
 RULE = re.compile(r"skills/([\w-]+/[\w./-]+\.(?:md|py|sh))|(AGENTS\.md|references_index\.md)|(?<![\w-])((?:recipes/[\w./-]+/RECIPE|rules/[\w-]+/[\w./-]+)\.md)")  # 最後はワークスペースのレシピ（recipes/ と前の版の rules/ を付けたまま数え、プラグインのファイルと分ける）
-TABLE = ("deck-practices/SKILL.md", "deck-practices/start.md", "deck-writing/SKILL.md", "deck-design/SKILL.md", "slides-build/SKILL.md", "slides-build/pages.md", "slides-build/workflow.md", "slides-build/visual.md",
-         "slides-build/commands.md", "slides-build/lint.md", "deck-practices/content.md", "docs-build/SKILL.md", "docs-build/visual.md", "docs-build/lint.md",
+TABLE = ("deck-workflow/SKILL.md", "deck-workflow/start.md", "deck-writing/SKILL.md", "deck-design/SKILL.md", "slides-build/SKILL.md", "slides-build/pages.md", "deck-workflow/slides_steps.md", "deck-design/slides.md",
+         "slides-build/commands.md", "slides-build/lint.md", "deck-writing/content.md", "docs-build/SKILL.md", "deck-design/docs.md", "docs-build/lint.md",
          "deck-build/slides.md", "deck-practices/visual.md", "doc-build/SKILL.md", "deck-practices/visual_doc.md", "doc-build/docx.md", "deck-build/docx.md",
+         "deck-practices/SKILL.md", "deck-practices/start.md", "slides-build/workflow.md", "slides-build/visual.md", "deck-practices/content.md", "docs-build/visual.md",
          "office-jp/slides.md", "office-jp/docx.md")  # 2026-10-07 に pptx.md から slides.md へ。office-jp は 2026-10-08 に deck-build と改名した。
 # docx.md は 2026-10-09 に deck-build から doc-build へ移した。2026-10-24 に deck-build を slides-build、doc-build を docs-build と改め、
-# visual.md を slides-build へ、visual_doc.md を docs-build/visual.md へ移し、slides.md を pages.md などに分けた（前の会話の記録のため、前の名前も残す）
+# visual.md を slides-build へ、visual_doc.md を docs-build/visual.md へ移し、slides.md を pages.md などに分けた。2026-10-31 に、進め方・知見・道具でスキルを分け直した
+# （deck-practices → deck-workflow、visual.md → deck-design/slides.md・docs.md、content.md → deck-writing/。前の会話の記録のため、前の名前も残す）
 SKIP = ("<", "# AGENTS.md instructions", "Another Claude session sent a message", "Base directory for this skill",
         "This session is being continued", "Caveat:", "Delegated task ")  # 最後は、任せた仕事が終わったという T3 Code の知らせ
 
@@ -154,7 +156,7 @@ def call_evidence(name, args):
             "reads": [], "checks": 0, "piped": False, "nested": False, "read_tool": kind == "read"}
     if kind == "read" and isinstance(args, dict):
         info["reads"] = rules(args.get("file_path", args.get("path", "")))
-    elif kind == "skill" and isinstance(args, dict) and args.get("skill"):  # Claude Code の Skill ツールは SKILL.md を読ませる（2026-10-08 から、作業の始め方は deck-practices/SKILL.md）
+    elif kind == "skill" and isinstance(args, dict) and args.get("skill"):  # Claude Code の Skill ツールは SKILL.md を読ませる（2026-10-08 から、作業の始め方は deck-workflow/SKILL.md）
         info["reads"] = [args["skill"].split(":")[-1] + "/SKILL.md"]
         info["mentions"] += info["reads"]
         info["read_tool"] = True
@@ -485,12 +487,12 @@ def selftest_decks():
 
 
 def selftest():
-    assert rules("cat ~/ws/rules/slides-build/visual.md ~/p/skills/slides-build/visual.md AGENTS.md") == ["rules/slides-build/visual.md", "slides-build/visual.md", "AGENTS.md"]
+    assert rules("cat ~/ws/rules/slides-build/visual.md ~/p/skills/deck-design/slides.md AGENTS.md") == ["rules/slides-build/visual.md", "deck-design/slides.md", "AGENTS.md"]
     assert rules("cat ~/ws/recipes/cxo/RECIPE.md ~/ws/recipes/customer/cxo/RECIPE.md") == ["recipes/cxo/RECIPE.md", "recipes/customer/cxo/RECIPE.md"]
     import tempfile
     from pathlib import Path
     root = "/x/Documents"
-    rule = root + "/.agents/skills/slides-build/visual.md"
+    rule = root + "/.agents/skills/deck-design/slides.md"
     check = root + "/.agents/skills/slides-build/scripts/check.sh"
     selftest_decks()
     s = Session("claude", "abc", "test")
@@ -502,13 +504,13 @@ def selftest():
     assert not s.opened
     s.tool_input("Read", {"file_path": rule}, "read")
     s.tool_result("read", "rules", False)
-    assert s.opened["slides-build/visual.md"] == 1
+    assert s.opened["deck-design/slides.md"] == 1
     s.tool_input("Read", {"file_path": rule}, "read2")
     s.tool_result("read2", "403 Permission denied のときは…（規則の本文）", False)
-    assert s.opened["slides-build/visual.md"] == 2  # 中身に失敗の言葉があっても、Read の成功は読めたと数える
-    s.tool_input("Skill", {"skill": "deck-practices"}, "skill")
-    s.tool_result("skill", "Launching skill: deck-practices", False)
-    assert s.opened["deck-practices/SKILL.md"] == 1  # スキルとして呼んだものも読んだと数える
+    assert s.opened["deck-design/slides.md"] == 2  # 中身に失敗の言葉があっても、Read の成功は読めたと数える
+    s.tool_input("Skill", {"skill": "deck-workflow"}, "skill")
+    s.tool_result("skill", "Launching skill: deck-workflow", False)
+    assert s.opened["deck-workflow/SKILL.md"] == 1  # スキルとして呼んだものも読んだと数える
     s.tool_input("Bash", {"command": f'sh {check} a.pptx'}, "bad")
     s.tool_result("bad", "Exit code 1", True)
     assert not s.built
@@ -542,7 +544,7 @@ def selftest():
     assert not c.opened
     c.tool_input("exec", js, "nested2")
     c.tool_result("nested2", [{"text": json.dumps({"exit_code": 0, "output": "rule"})}], None)
-    assert c.opened["slides-build/visual.md"] == 1
+    assert c.opened["deck-design/slides.md"] == 1
     c.tool_input("exec_command", {"cmd": check + " a.docx"}, "running")
     c.tool_result("running", json.dumps({"session_id": 123, "exit_code": None, "output": "running"}))
     assert not c.built
@@ -572,7 +574,7 @@ def selftest():
         ]
         (folder / 'abc.jsonl').write_text('\n'.join(json.dumps(x, ensure_ascii=False) for x in rows))
         [a] = list(claude_sessions(root, '2026-10-06T00:00:00Z', home))
-        assert a.built and a.opened['slides-build/visual.md'] == 1 and a.title == '見本'
+        assert a.built and a.opened['deck-design/slides.md'] == 1 and a.title == '見本'
         assert [t for _, t in a.said] == ['文字をもっと大きく', '矢印がずれている']
         assert a.md(root).count("（確認のあと）") == 1 and "（確認のあと）: 「矢印がずれている」" in a.md(root)  # 確認が通ったあとの発言だけに印
         assert "- ユーザー 2026-10-06T02:00:00Z（確認のあと）" in a.md(root)  # 時刻は秒まで出す（--at に渡す）
@@ -594,7 +596,7 @@ def selftest():
             rows.append({"type": "response_item", "timestamp": ts, "payload": payload})
         (folder / 'rollout-test.jsonl').write_text('\n'.join(json.dumps(x) for x in rows))
         [a] = list(codex_sessions(root, '2026-10-06T00:00:00Z', home))
-        assert not a.built and a.opened['slides-build/visual.md'] == 1 and a.errors
+        assert not a.built and a.opened['deck-design/slides.md'] == 1 and a.errors
         rows[0]["payload"]["thread_source"] = "guardian_review"
         (folder / 'rollout-guardian.jsonl').write_text('\n'.join(json.dumps(x) for x in rows))
         assert len(list(codex_sessions(root, '2026-10-06T00:00:00Z', home))) == 1  # 承認の審査の会話は数えない
@@ -612,7 +614,7 @@ def selftest():
         rows[0] = {"type": "session", "id": "q", "timestamp": "2026-10-06T03:00:00Z", "cwd": root, "parentSession": str(folder / 'p.jsonl')}
         (folder / 'q.jsonl').write_text('\n'.join(json.dumps(x, ensure_ascii=False) for x in rows + [say("user", "続き", "2026-10-06T03:00:01Z")]))
         p, q = sorted(pi_sessions(root, '2026-10-06T00:00:00Z', home), key=lambda x: x.sid)
-        assert p.built and p.opened['slides-build/visual.md'] == 1 and p.title == '見本' and [t for _, t in p.said] == ['資料を作って']
+        assert p.built and p.opened['deck-design/slides.md'] == 1 and p.title == '見本' and [t for _, t in p.said] == ['資料を作って']
         assert [t for _, t in q.said] == ['続き'] and not q.opened  # /fork の会話は、元の会話から写した行を数えない
         assert is_delegated([(ts, 'Act as the review sub-agent for this task. 日本語で')]) and not is_delegated(p.said)
     print("selftest ok")

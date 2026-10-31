@@ -9,7 +9,7 @@ PLUGIN=$(cd "$(dirname "$0")/../../.." && pwd)  # このスクリプトのある
 # GitHub から入れた Claude Code のプラグインは ~/.claude/plugins/cache/ の下から読まれ（run.sh を指すマーケットプレイスの写しとは別の場所）、-p では許しなしに読めない（run.md などが開けない。2026-10-26 に確かめた）
 CACHE=$HOME/.claude/plugins/cache; [ -d "$CACHE" ] || CACHE=
 # ワークスペース: 今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace（desk.py）。リンクをたどった実際のパスで、Claude Code がメモリに使うものと同じ
-ROOT=$(python3 "$(dirname "$0")/../../deck-practices/scripts/desk.py") || exit 2
+ROOT=$(python3 "$(dirname "$0")/../../../lib/desk.py") || exit 2
 cd "$ROOT"
 MEM=$HOME/.claude/projects/$(printf %s "$ROOT" | tr '/._' '---')/memory
 echo "== $(date '+%F %T') desk-dreaming $1"

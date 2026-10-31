@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "slides-build" / "scripts"))  # slides.py（ノートの読み書き）
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "deck-practices" / "scripts"))  # gapi.py
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))  # gapi.py
 import gapi
 from gapi import SLIDES, batch, file_id, request, run
 from slides import DECK_FIELDS, PAGE_KEY, STAMP, deck_font, note_reqs, notes_of, page_key, revision

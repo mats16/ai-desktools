@@ -5,9 +5,9 @@ description: Create, refresh, or add to a customer's profile (`Customers/<custom
 
 # Customer profile
 
-Keep, per customer, what the materials assume about the other side in `Customers/<customer>/profile.md`. Read it when starting a customer-facing material (step 2 in `deck-practices/start.md`). Recurring materials also start from here every time.
+Keep, per customer, what the materials assume about the other side in `Customers/<customer>/profile.md`. Read it when starting a customer-facing material (step 2 in `deck-workflow` → steps 1–5). Recurring materials also start from here every time.
 
-Separate it from the customer memory ("Customer memory" in `deck-practices/rules.md`) by content.
+Separate it from the customer memory ("Customer memory" in `desk-feedback` → routing and rule IDs) by content.
 
 | | profile | memory |
 |---|---|---|
@@ -45,7 +45,7 @@ If unsure, decide by the form of the sentence. 「〜である」 (a fact) goes 
 
 1. **Decide the customer.** The name of the `Customers/<customer>/` folder. If it does not exist, create it following 「フォルダの置き方」 in AGENTS.md.
 2. **Keep the previous version.** If one exists: `mkdir -p .desk/profile && cp "Customers/<customer>/profile.md" ".desk/profile/<customer>_$(date +%Y%m%d-%H%M%S).md"`.
-3. **Gather.** If the `[user] profile` file has an entry for that customer (ledger ID, channels, owner), use it as a lead. Then read the following (tool usage is in `deck-practices/materials.md`; at most 5 minutes per command).
+3. **Gather.** If the `[user] profile` file has an entry for that customer (ledger ID, channels, owner), use it as a lead. Then read the following (tool usage is in `deck-workflow` → gathering materials; at most 5 minutes per command).
    - `crm`: industry, size, locations, current initiatives
    - `search`, `wiki`: the customer's technology stack and history recorded internally
    - `chat`: the internal account channel and shared channels (last 90 days)

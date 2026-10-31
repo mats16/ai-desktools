@@ -15,7 +15,7 @@ ROOT = HERE.parent.parent
 K = ROOT / "skills" / "slides-build" / "scripts"
 SAMPLES = ROOT / "skills" / "slides-build" / "samples" / "json"
 sys.path.insert(0, str(K))
-sys.path.insert(0, str(ROOT / "skills" / "deck-practices" / "scripts"))  # gapi.py
+sys.path.insert(0, str(ROOT / "lib"))  # gapi.py
 sys.dont_write_bytecode = True
 import gapi  # noqa: E402
 

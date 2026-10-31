@@ -58,7 +58,7 @@ cd <ワークスペース> && (printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"
   | python3 -c "import json,sys; r=next(e for e in map(json.loads, sys.stdin) if e.get('id')==2); [print(h['eventName'], h.get('matcher'), h['trustStatus']) for d in r['result']['data'] for h in d['hooks'] if h.get('pluginId')=='desk-tools@desk-tools']"
 ```
 
-2026-10-20 に検証用のワークスペースで確かめた結果:
+2026-10-20 に検証用のワークスペースで確かめた結果（そのときの 19 個とパス。2026-10-31 にスキルを組み直して 17 個になり、`slides-build/visual.md` は `deck-design/slides.md` になった）:
 
 | フォルダ | 出たスキル | hook |
 |---|---|---|

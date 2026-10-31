@@ -7,7 +7,7 @@ import os, sys, tempfile, tomllib
 from pathlib import Path
 
 TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
-sys.path.insert(0, str(TEMPLATES.parents[1] / "deck-practices" / "scripts"))
+sys.path.insert(0, str(TEMPLATES.parents[2] / "lib"))
 import desk  # noqa: E402  個人の設定の場所と、workspace の書き方
 DIRS = ("Customers", "Internal", "Research", ".desk")  # 雛形のないフォルダ（雛形のある recipes/ は写すときにできる）
 

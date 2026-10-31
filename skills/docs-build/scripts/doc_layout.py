@@ -4,7 +4,7 @@
 # ///
 """usage: uv run -q doc_layout.py <doc.json> <docs.py check のフォルダ>   （--selftest で自己確認）
 Google が描いたページ（Drive の PDF の書き出し。p-N.png と、pdftotext -bbox-layout の行の位置 bbox.html）で、
-JSON では分からないレイアウトの欠陥を測る（../visual.md の 4）。docs.py check が呼ぶ。
+JSON では分からないレイアウトの欠陥を測る（../../deck-design/docs.md の 4）。docs.py check が呼ぶ。
 - ページの末尾に残った見出し（見出しは次の段落と同じページに置くスタイルにしてあるので、出たら書式が外れている）
 - 行頭の約物（Google Docs は前の字ごと次の行に追い出すので、ふつうは出ない）
 - 1〜2 字だけの最終行（見出し・図表の題・表のセルなど、短い段落だけ）
@@ -48,7 +48,7 @@ def text_checks(pages, heads, h1, foot_top):
             for k, (_, _, t) in enumerate(b):
                 if t and t[0] in HEAD_PUNCT:
                     hits.append(("行頭の約物", f"p{i}: 「{t[:16]}」"))
-            # 見出し・図表の題・表のセルなど短い段落（2 行・80 字まで）だけを見る。本文の段落の最終行は直さない（../visual.md の 5）
+            # 見出し・図表の題・表のセルなど短い段落（2 行・80 字まで）だけを見る。本文の段落の最終行は直さない（../../deck-design/docs.md の 5）
             if 2 <= len(b) and len(squash("".join(t for _, _, t in b))) <= SHORT_MAX and 0 < len(squash(b[-1][2])) <= 2:
                 hits.append(("1〜2 字だけの最終行", f"p{i}: 「…{b[-2][2][-10:]}／{b[-1][2]}」"))
         if i < len(pages) and body:
