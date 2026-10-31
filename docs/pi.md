@@ -13,7 +13,7 @@ pi install -l git:github.com/mats16/ai-desktools   # git から
 ```
 
 - 書き込まれるのは `<ワークスペース>/.pi/settings.json` の `packages`。手元のパスは `.pi/` からの相対のパスで入るので、ワークスペースか checkout を動かしたら入れ直す。
-- 入るもの（`package.json` の `pi`）: `skills/` の 19 個のスキルと、`extensions/rules.ts`（プラグインのファイルを read・bash で開いたら、その作業に当たるワークスペースのレシピ〔`recipes/<名前>/RECIPE.md`〕を、資料の `構成案*.md` などを開いたら顧客の `memory.md` と、構成案の「使う決まり」に書いた決まりを続けて出す。今の文脈に残っているものは出し直さない。2026-10-27 に、そのときの `rules/` の形で、read と `/skill:deck-review` で確かめた。codemode などの道具の中から決まりのファイル〔スキルの md、レシピ、AGENTS.md〕を読もうとすると止め、`read` で 1 本ずつ読むよう返す。まとめて読むと出力が約 4 万字で切れ、後ろのファイルが届かないため。2026-10-31 に、codemode の中の read で止まり、直接の read とほかの md は読めることを確かめた）。
+- 入るもの（`package.json` の `pi`）: `skills/` の 19 個のスキルと、`extensions/rules.ts`（プラグインのファイルを read・bash で開いたら、その作業に当たるワークスペースのレシピ〔`recipes/<名前>/RECIPE.md`〕を、資料の `構成案*.md` などを開いたら顧客の `memory.md` と、構成案の「使う決まり」に書いた決まりを続けて出す。今の文脈に残っているものは出し直さない。2026-10-27 に、そのときの `rules/` の形で、read と `/skill:deck-review` で確かめた）。
 - スキルは `/skill:desk-init` のように呼ぶ。入れたら `desk-init`、続けて `desk-doctor`（README の「入れ方」）。
 
 ## project trust
