@@ -95,4 +95,4 @@ codex plugin remove desk-tools@desk-tools
 codex plugin marketplace remove desk-tools
 ```
 
-ワークスペースの `.codex/config.toml` の `[plugins."desk-tools@desk-tools"]` も消す。ワークスペースのファイル（`desk.toml`・`AGENTS.md`・`recipes/`・`.desk/`）と、個人の設定の `~/.desk.toml` は残る。
+ワークスペースの `.codex/config.toml` の `[plugins."desk-tools@desk-tools"]` も消す。ワークスペースのファイル（`desk.toml`・`recipes/`・`.desk/`）と、個人の設定の `~/.desk.toml` は残る。

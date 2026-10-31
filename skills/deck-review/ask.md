@@ -12,7 +12,7 @@ Open at steps 2–3 of every round (`SKILL.md`). How to start a child is in `dec
 ## How to ask
 
 - Start each child as `deck-workflow` → child agents says (a new child without the conversation, the same model and effort as the main agent, passed explicitly).
-- Pass the paths of the image folder (`$D`), the contact sheet, the text (`deck.md`, `text.md`), the outline, the root `AGENTS.md`, and, for customer-facing materials, that customer's `memory.md` (the audience's preferences) and `profile.md` (the customer's business and setup). Do not pass the page JSON, pages.py, or `build/doc.md` (so it looks with eyes that do not know how the material was made).
+- Pass the paths of the image folder (`$D`), the contact sheet, the text (`deck.md`, `text.md`), the outline, and, for customer-facing materials, that customer's `memory.md` (the audience's preferences) and `profile.md` (the customer's business and setup). Do not pass the page JSON, pages.py, or `build/doc.md` (so it looks with eyes that do not know how the material was made).
 - You may run two children side by side split by aspect (story and wording; visuals).
 - Do not have them give scores. Have them return only a list of defects.
 - **Have children write findings to a file and reply with only the counts and the path** (`<findings file>` is `$D/review_<round>_<owner>.md` in a round; outside a round and for deleting an old file of the same name first, follow the top of `prompt_slides.md` or `prompt_doc.md`). A summary can keep only the beginning of a tool result, so if a summary happens between receiving and fixing, the later findings are lost (2026-10-10, pi kept the first 2,000 characters; one child had 16k characters; `Research/pi_compaction_deck_workflow_20261010/README.md`).

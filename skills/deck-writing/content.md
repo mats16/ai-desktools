@@ -70,7 +70,7 @@ Then open the files for this material (read only those that apply; the rules in 
 
 ## 4. Headings
 
-- [deck-content-041] **本文のページの見出しは、短い名詞句にする。言い切りの文にするのは、判断を頼むページと数字の結論のページの 2〜3 枚だけ。** 名詞句は、そのページだけの話が分かる形にする（「問い合わせの一次回答の推移」。「現状」「課題」「まとめ」のような、どの資料にも付く項目名にしない）。主語は聞き手の業務・データ・判断にする（AGENTS.md）。名詞句の見出しのページでは、言えること（だから何か）をリードか本文か結論バンドで言う。言い切りのページは、構成案の型の欄に「言い切り」と書く（`deck-workflow` の 5）。全ページを主張の文にすると、どのページも同じ強さで言い切って要の主張が埋もれ、見出しが長くなる。主張の文の見出し（中身 1-1）は、聞き手に判断を頼むところと数字で言えるところに絞る。文末と句点は 6 の「文体」。
+- [deck-content-041] **本文のページの見出しは、短い名詞句にする。言い切りの文にするのは、判断を頼むページと数字の結論のページの 2〜3 枚だけ。** 名詞句は、そのページだけの話が分かる形にする（「問い合わせの一次回答の推移」。「現状」「課題」「まとめ」のような、どの資料にも付く項目名にしない）。主語は聞き手の業務・データ・判断にする（deck-writing-004）。名詞句の見出しのページでは、言えること（だから何か）をリードか本文か結論バンドで言う。言い切りのページは、構成案の型の欄に「言い切り」と書く（`deck-workflow` の 5）。全ページを主張の文にすると、どのページも同じ強さで言い切って要の主張が埋もれ、見出しが長くなる。主張の文の見出し（中身 1-1）は、聞き手に判断を頼むところと数字で言えるところに絞る。文末と句点は 6 の「文体」。
 - [deck-content-017] **定例のたびに使う資料（スケジュール、進捗の一覧など）は、ページの見出しを回ごとに変えない。** 「プロジェクトスケジュール 1/2　ML とデータ基盤」のように、資料の名前と範囲で決め、その回の要点（何が増えたか、次の一歩）は口頭で話す。毎回同じ見出しなので、画面で同じページを探しやすい。
 - 見出しとリード（言い切りのページは見出し）で、次の 3 つの問いのどれかに答える。本当か（事実と数字）、だから何か（意味）、どうするか（打ち手）（中身 1-2）。
 - 1 行に収める（`deck-design` → slides の 1）。本文幅・24pt で全角 35 字ほどまで。目安は 25〜35 字。lint が「2 行の見込み」を出したら、削るか言い換える（中身 1-2）。
@@ -106,13 +106,13 @@ Then open the files for this material (read only those that apply; the rules in 
 
 ## 6. Wording
 
-- **文体:** 書くところで分ける。和欧間のスペースと製品名の書き方は AGENTS.md の「書き方」。
+- **文体:** 書くところで分ける。和欧間のスペースと製品名の書き方は [SKILL.md](SKILL.md) の「書き方」。
   - 見出し: 表紙の題・章の扉・図表のタイトル・カードや表の項目名と、本文のページの見出し（4）は、短い名詞句（体言止め）。言い切りにする 2〜3 枚の見出しと、名詞句の見出しのページのリードは、主語と述語のある常体の文で言い切る（「問い合わせの一次回答が 3 割減っている」「夜間の集計を新しい基盤に移す」）。言えることを体言止めにすると、誰がするのか、予測なのか意志なのかが消える。「だ」「である」で終える必要はない。見出しに句点を付けず、「〜ください」「〜します」で終えない。頼みごとはリードか本文で言う（lint が「見出しの句点」「見出しが「ください・します」で終わる」を要修正、「言い切りの見出しが多い」を要確認に出す）。
   - 箇条書きと図のラベル: 体言止めでよい。ひとまとまり（1 つの箱の箇条書き、1 つの図のラベル、見出しの並び）の中では、文末（体言止め・常体・敬体）と句点の有無をそろえる（lint が「箇条書きの句点の混在」）。名詞だけで終えない（下の「箇条書きを名詞だけで終えない」）。
   - 本文: 敬体か常体のどちらかにそろえる。スライドは常体か体言止めにする。スライドの です・ます は、案内・依頼・注意書きのページ（問い合わせ先、アンケートのお願い、「ご相談ください」、免責・価格の注記）では残してよい（lint の「スライドに です・ます」は、それ以外のページに出たものを直す）。
   - 顧客向けのドキュメントは です・ます調。社内メモは だ・である調でよい。
 - When making the material in English, use sentence case for headings.
-- [deck-content-033] **Sources:** Attach a source to every number (on slides, the source line at the bottom of the page; in documents, a footnote or parentheses in the body). Give every blog, talk, doc, or study cited as a source a link to the original page, so that it can be reached from the page that cites it. Do not put links only in the source list in the Appendix (lint reports source lines without links). For customer-facing materials, attach only public URLs, and do not cite meetings with the customer as sources (「社外秘と顧客の情報」 in AGENTS.md).
+- [deck-content-033] **Sources:** Attach a source to every number (on slides, the source line at the bottom of the page; in documents, a footnote or parentheses in the body). Give every blog, talk, doc, or study cited as a source a link to the original page, so that it can be reached from the page that cites it. Do not put links only in the source list in the Appendix (lint reports source lines without links). For customer-facing materials, attach only public URLs, and do not cite meetings with the customer as sources (「社外秘と顧客の情報」 in [SKILL.md](SKILL.md)).
 - [deck-content-064] **Facts on pages come from the 「出典の表」.** Put on pages only numbers, availability statements, statements about the customer's environment, and proper nouns that are rows of the 「出典の表」 (columns and kinds: "Ledger" in `deck-workflow` → gathering materials). When you need a new one while writing, add the row with its source first, then write the page; do not settle the value on the page and backfill the table. Write a computed value as a `計算` row with the rows it uses and the formula, because computed values were the numbers most often missing from the table. Product facts (`提供・数字・名前`) need a `公式` source or local data: mark them 「済」 only after opening one, and treat a chat, a meeting, an article, or something said in the conversation as a lead, not a source. Write `見立て` rows on the page so that they read as `見立て` or `仮説`. lint reports numbers that are not in the table (`出典の表にない数字`).
 - [deck-content-063] プレビューやベータの機能は、提供ステージ（Private Preview・Public Preview・Beta）を書く。「本番向けではない」「本番では使えない」と添えない。どこまで使えるかの判断は聞き手に任せる（本文もノートも、ほかのページも同じ）。スライドのラベルの付け方と、控えるページは `deck-design` → slides の 1。
 - 1 つの資料で 1 つのものには 1 つの言葉を使う。最後に表記ゆれを全文で探す。略語は初出で正式名を書く（中身 1-11）。

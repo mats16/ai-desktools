@@ -1118,7 +1118,7 @@ def relink_id(ws, x, to):
     x in open_ or sys.exit(f"{x} は、決められない ID でない（migrate.py check で見る）")
     if to != "戻さない":
         f = (ws / to).resolve()
-        f.is_file() and f.is_relative_to(ws.resolve()) and ledger.rule_file(rel := f.relative_to(ws.resolve()).as_posix()) or sys.exit(f"行き先はワークスペースの決まりのファイル（rules/<名前>.md・AGENTS.md・Customers/<顧客>/memory.md）か 戻さない: {to}")
+        f.is_file() and f.is_relative_to(ws.resolve()) and ledger.rule_file(rel := f.relative_to(ws.resolve()).as_posix()) or sys.exit(f"行き先はワークスペースの決まりのファイル（recipes/<名前>/RECIPE.md・Customers/<顧客>/memory.md）か 戻さない: {to}")
         to = rel
     return hand_edits(ws) + strip_ids(ws, {**ids, x: to}, {x: to}) + baselines(ws) + id_asks(ws, {**ids, x: to}, {k: v for k, v in open_.items() if k != x})  # 初めの apply が、決められない ID だけで止まったときも版を残す
 

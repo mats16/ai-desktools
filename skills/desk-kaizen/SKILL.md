@@ -5,7 +5,7 @@ description: Improve the plugin (upstream). Takes the rules, checks, and script 
 
 # Improve the plugin (file an Issue upstream)
 
-Treat the workspace as one product whose rules (AGENTS.md, `recipes/`) and checks (the `checks.py` in a recipe's folder) grow from accumulated corrections and exchanges. Of these, file only the ones that help other people too (not one person's taste or one customer's circumstances) as an Issue upstream (the plugin). What goes where is in "Workspace rules" of `desk-feedback` → routing and rule IDs.
+Corrections and exchanges go into the workspace's rules (`recipes/`) and checks (the `checks.py` in a recipe's folder). Of these, file only the ones that help other people too (not one person's taste or one customer's circumstances) as an Issue upstream (the plugin). What goes where is in "Workspace rules" of `desk-feedback` → routing and rule IDs.
 
 The shared scripts this skill runs by name (`ledger.py`, `sheet.py`, `textlint.py`) are in `<plugin>/lib/` (`<plugin>` holds `skills/` and `lib/`); its own is `scripts/kaizen.py`.
 
@@ -65,5 +65,5 @@ $P clean <name>                                   # after the Issue is closed (d
 
 ## Notes
 
-- Do not put customer names, internal URLs, or personal names in the Issue body or images (same as 「社外秘と顧客の情報」 in AGENTS.md). `open` stops if the title, body, branch name, changed file names, or included diff (including removed lines and context lines) contain a customer name from the workspace's `Customers/`, a material folder name under `Customers/<customer>/` or `Internal/` (one containing a 4-digit year; by rule `<内容>_<日付>`), or a word in `[desk] private` of `desk.toml`. Write folder names without dates, and Japanese company and product names, in `[desk] private`. Write the source parentheses of a rule like 「顧客向けの資料の p.3」 or 「ユーザー「（顧客）は〜」」.
+- Do not put customer names, internal URLs, or personal names in the Issue body or images (same as 「社外秘と顧客の情報」 in `deck-writing`). `open` stops if the title, body, branch name, changed file names, or included diff (including removed lines and context lines) contain a customer name from the workspace's `Customers/`, a material folder name under `Customers/<customer>/` or `Internal/` (one containing a 4-digit year; by rule `<内容>_<日付>`), or a word in `[desk] private` of `desk.toml`. Write folder names without dates, and Japanese company and product names, in `[desk] private`. Write the source parentheses of a rule like 「顧客向けの資料の p.3」 or 「ユーザー「（顧客）は〜」」.
 - Temporary materials built for verification are created in `drive.desk` and moved to the trash afterward (kept only with `--keep`). They are not recorded in the lint log (`.desk/lint_runs.jsonl`).

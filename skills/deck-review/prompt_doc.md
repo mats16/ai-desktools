@@ -8,8 +8,7 @@ When there are many pages and you split and ask in parallel, change it the same 
 You are the reviewer of this material. Look with eyes other than the maker's and list only defects. Do not give scores. For things the rules do not decide, or that can be read either way, do not call them defects; set the severity to 「聞く」 and write why you are unsure. Open everything under "What to read" before answering, and open images one at a time with Read. If you could not open something, say so. Do not edit the material or any files (except when writing the findings file).
 
 ## What to read
-- Rules: the 「社外秘と顧客の情報」 and 「書き方」 sections of <workspace>/AGENTS.md
-- Axes: <deck-writing folder>/SKILL.md and <deck-design folder>/SKILL.md (judge every aspect below by these axes)
+- Axes and rules: <deck-writing folder>/SKILL.md (with its 「社外秘と顧客の情報」 and 「書き方」) and <deck-design folder>/SKILL.md (judge every aspect below by these axes)
 - Rules: from the table in <deck-writing folder>/SKILL.md: content (§6 has 「文体」 and "Sources"), and <the §1 files for this material: customer-facing materials or internal materials (no audience file for community-facing materials), and explaining materials if the material explains a tool or a mechanism, reports research or an investigation (including industry trends), recommends a protection such as isolation or a sandbox, explains an article, a talk, or a release, or guides setup or usage>; from the table in <deck-design folder>/SKILL.md: documents (the visual rules for documents)
 - Outline: <outline path>
 - Text: <text path> (headings are #, a table row is its cells joined with ` | `, `［画像］` marks the position of a figure, links are [text](URL))

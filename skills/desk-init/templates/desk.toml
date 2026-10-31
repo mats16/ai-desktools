@@ -1,6 +1,6 @@
 # AI Desk Tools の設定（desk-init が置く。自分の値にして、desk-doctor で確かめる）
 #
-# ワークスペースは、資料のフォルダ（Customers/・Internal/・Research/）と決まり（AGENTS.md・rules/）を置くフォルダ（例: ~/Documents）。
+# ワークスペースは、資料のフォルダ（Customers/・Internal/・Research/）と決まり（recipes/）を置くフォルダ（例: ~/Documents）。
 # この設定は、次のどちらか 1 つに置く。スクリプトと hook は、今いるフォルダから上へ desk.toml を探し、なければ ~/.desk.toml を読む。見つかった 1 つだけを読み、混ぜない。
 # - ワークスペースの直下の desk.toml: そのフォルダの中で開いた会話だけが読む（ワークスペースを分けて持つとき、試しの sandbox）。
 # - ~/.desk.toml（環境変数 DESK_CONFIG で場所を替えられる）: 頭の workspace にワークスペースを書く。どのフォルダで開いた会話も、そのワークスペースを使う。そのワークスペースには desk.toml を置かない。

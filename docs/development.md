@@ -10,7 +10,7 @@ Keep the original checkout (the first line of `git worktree list`) on `main`. Pl
 cd <worktree>
 python3 skills/desk-init/scripts/init.py sandbox && cd sandbox   # templates; keeps files that already exist
 cp ~/Documents/desk.toml .         # the production settings; only to build on Google (if they are in ~/.desk.toml: cp ~/.desk.toml desk.toml)
-cp -R ~/Documents/rules ~/Documents/AGENTS.md ~/Documents/CLAUDE.md .   # only to test with the production rules
+cp -R ~/Documents/recipes .         # only to test with the production rules (recipes)
 ```
 
 Change the copied `desk.toml` so that nothing on the Google side of production gets overwritten:

@@ -3,7 +3,7 @@
 同じ名前のファイルがフォルダにあれば中身だけ上書きする（ID・URL・共有の設定は変わらない）。なければ作る。Google Docs に変換するのは research だけ。
 usage: drive_put.py <ファイル> <フォルダの URL か ID> <Drive 上の名前（YYYYMMDD_ で始める。拡張子は省くと付ける）>
        drive_put.py research <Research/<内容>_<YYYYMMDD>.md>   調べものを Google Docs に変換して、[drive] desk の下の Research（なければ作る）に
-                                                              <YYYYMMDD>_<内容> の名前で上げる（ワークスペースの AGENTS.md の「調べもの」）
+                                                              <YYYYMMDD>_<内容> の名前で上げる（deck-workflow/research.md）
 出力: 上書きか作ったかと、名前・URL（社内メモに書き、報告に付ける）。"""
 import mimetypes, os, re, sys, urllib.parse
 

@@ -1,11 +1,11 @@
 ---
 name: desk-dreaming
-description: Periodically tidies this folder's instructions (AGENTS.md), rules, and skills from conversation logs and the rule ledger (modeled on Devin's Dreaming). Rule changes drawn from conversations become proposals that wait for the user's reply. Safe cleanups (rebuilding the index, overlaps, stale text, broken paths) are applied directly and reported. Once a month it also reruns the desk-research survey. A scheduler calls it with the one line in prompt.txt. Also read it when the user says 「整理して」「desk-dreaming して」「提案を適用して」「推奨どおり」.
+description: Periodically tidies this folder's rules (recipes, customer memory) and the skills from conversation logs and the rule ledger (modeled on Devin's Dreaming). Rule changes drawn from conversations become proposals that wait for the user's reply. Safe cleanups (rebuilding the index, overlaps, stale text, broken paths) are applied directly and reported. Once a month it also reruns the desk-research survey. A scheduler calls it with the one line in prompt.txt. Also read it when the user says 「整理して」「desk-dreaming して」「提案を適用して」「推奨どおり」.
 ---
 
 # Scheduled cleanup (desk-dreaming)
 
-Corrections are written back into rules on the spot, in the conversation that makes the material (「修正の指示」 in AGENTS.md and `desk-feedback` → routing and rule IDs). This skill picks up what those conversations missed and tidies the rules themselves. Following Devin's Dreaming (Cognition, 2026-10-05. `https://devin.ai/blog/memory-and-dreaming`, spec at `https://github.com/AgentMemoryRepo/agentmemoryrepo`), it looks at two things.
+Corrections are written back into rules on the spot, in the conversation that makes the material (`desk-feedback` → recording a correction, and routing and rule IDs). This skill picks up what those conversations missed and tidies the rules themselves. Following Devin's Dreaming (Cognition, 2026-10-05. `https://devin.ai/blog/memory-and-dreaming`, spec at `https://github.com/AgentMemoryRepo/agentmemoryrepo`), it looks at two things.
 
 - **Add:** Review conversations and find instructions that are not yet rules, and instructions that repeat across conversations.
 - **Tidy:** Merge overlaps into one place, delete stale text, and settle conflicts by their source. Keep sources and preferences the user stated explicitly.

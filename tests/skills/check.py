@@ -73,7 +73,7 @@ def tokens(text):
 def problems(skills=SKILLS):
     out, names = [], {p.parent.name for p in skills.glob("*/SKILL.md")}
     heads = {n: labels((skills / n / "SKILL.md").read_text(encoding="utf-8", errors="ignore")) for n in names}
-    files = {n: {f.name for f in (skills / n).glob("*.md")} for n in names}  # 直下の md だけ。下のフォルダの md は、ワークスペースの雛形（AGENTS.md など）と README.md で、ほかのスキルもワークスペースのファイルとして名指しする
+    files = {n: {f.name for f in (skills / n).glob("*.md")} for n in names}  # 直下の md だけ。下のフォルダの md は、ワークスペースの雛形（recipes/README.md など）と README.md で、ほかのスキルもワークスペースのファイルとして名指しする
     for s in sorted(skills.glob("*/SKILL.md")):
         name = s.parent.name
         for f in sorted(s.parent.rglob("*.md")):  # frontmatter がなくても見る
@@ -162,9 +162,9 @@ def selftest():
         (root / "g" / "SKILL.md").write_text("---\nname: g\ndescription: x\n---\n\n`f` → writing pages §2、`f` → the flow、`f` → writing (short)、`f` → pages、`f` → output、`f` → writ、`f` → not edit、`f` → hidden\n")
         got = [x for x in problems(root) if x.startswith("g")]
         assert sorted(x.split(" の場面")[0].split(": ", 1)[1] for x in got) == sorted(["`f` → writing (short)、", "`f` → pages、", "`f` → output、", "`f` → writ、", "`f` → not edit、", "`f` → hidden"]), got  # 見出しとちょうど同じ語で切れるものだけ通す（頭だけ・コードの囲みの中の見出しは通さない）
-        (root / "desk-init" / "templates").mkdir(parents=True)
+        (root / "desk-init" / "templates" / "recipes").mkdir(parents=True)
         (root / "desk-init" / "SKILL.md").write_text("---\nname: desk-init\ndescription: x\n---\n")
-        (root / "desk-init" / "templates" / "AGENTS.md").write_text("スキル `d` の `run.md`、<plugin>/skills/d/run.md、`f` → nothing、prompt_*.md\n")
+        (root / "desk-init" / "templates" / "recipes" / "README.md").write_text("スキル `d` の `run.md`、<plugin>/skills/d/run.md、`f` → nothing、prompt_*.md\n")
         got = [x for x in problems(root) if x.startswith("desk-init")]
         assert len(got) == 2 and any("`f` → nothing" in x for x in got) and any("（prompt_*.md）" in x for x in got), got  # 雛形はパスとスキルを名指しした名前を書いてよいが、場面と名前だけの点検はかける  # 見出しで始まるか、見出しの頭なら通す（f → pages は表にない）
         (root / "h").mkdir()

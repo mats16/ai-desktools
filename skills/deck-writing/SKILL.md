@@ -1,19 +1,19 @@
 ---
 name: deck-writing
-description: The brief and the writing axes for materials (decks, documents) - what a good material does, the user's iron rule, and four axes for what the rules leave open in content and wording (what the reader must grasp, which relationships must be seen, how far to claim, which words, what this audience needs). Read before writing an outline or pages, before reviewing, and when a choice of content or wording is not decided by a rule. Also holds what changes by material type (customer-facing, internal, explaining), headings, the content of one page, wording and 「文体」, and how to cite sources. How things look is in deck-design. deck-workflow opens both first; child agents that write pages or review get both.
+description: The brief and the writing axes for materials (decks, documents) - what a good material does, the user's iron rule, and four axes for what the rules leave open in content and wording (what the reader must grasp, which relationships must be seen, how far to claim, which words, what this audience needs). Read before writing an outline or pages, before reviewing, and when a choice of content or wording is not decided by a rule. Also holds what changes by material type (customer-facing, internal, explaining), headings, the content of one page, wording and 「文体」, how to cite sources, and what stays out of customer-facing materials (「社外秘と顧客の情報」). How things look is in deck-design. deck-workflow opens both first; child agents that write pages or review get both.
 ---
 
 # The brief and the writing axes
 
 This skill holds the brief that every material serves, the axes for content and wording, and the knowledge for content by material type. This file is the brief and the axes. How a page looks (hierarchy, emphasis, color, composition) is in `deck-design`. The rules in the other skills decide what can be counted and what the user decided; decide what they leave open with these axes. Do not turn an axis into a fixed pattern ("always add a diagram"), because a pattern applied to every page stops serving the page.
 
-Order when things conflict: the workspace rules (`AGENTS.md`, `recipes/`, the customer's `memory.md`) → the user decisions written as rules in the other skills → these axes. The outline's 「書き方の決め」 is the parent's decision, not the user's: write it from these axes, and when a line of it pulls against an axis, follow the line and write the conflict under 「親に返すこと」 (children) or fix the line (parent).
+Order when things conflict: the workspace rules (`recipes/`, the customer's `memory.md`) → the user decisions written as rules in the other skills → these axes. The outline's 「書き方の決め」 is the parent's decision, not the user's: write it from these axes, and when a line of it pulls against an axis, follow the line and write the conflict under 「親に返すこと」 (children) or fix the line (parent).
 
 ## The brief: what a good material does
 
 読み手が、各ページの言いたいことを細部より先につかみ、信じ、ほかの人に言い直せる。どの選択も、これに近づくかで決める。
 
-鉄則は「営業色を出さずに、お客様の目線で情報を整理するところから入る。課題や問題意識について目線をそろえることは、提案の中身より重要」。顧客向けの提案だけでなく、社内向けの資料にも、顧客も来るコミュニティ向けの技術資料にも当てはめる。ワークスペースの AGENTS.md の「いい資料の考え方」（7 つ）は、この企画書と deck-writing-004 の要点で、どの会話でも見えるようにそちらにも置いてある。
+鉄則は「営業色を出さずに、お客様の目線で情報を整理するところから入る。課題や問題意識について目線をそろえることは、提案の中身より重要」。顧客向けの提案だけでなく、社内向けの資料にも、顧客も来るコミュニティ向けの技術資料にも当てはめる。
 
 ## The writing axes
 
@@ -37,6 +37,21 @@ This file decides what the reader must grasp, which relationships must be seen, 
 
 - **Maker (parent and page-writing children):** before writing a page, write the one sentence it says and what the reader must grasp first (axis 1). Before handing it back, read it as a first-time reader of the stated audience.
 - **Reviewer:** judge every aspect in the review request by the axes here and in deck-design, starting with axis 1, because it is what the user corrects most and reviewers flag least. When a finding comes from an axis rather than a rule, end the proposed fix with the axis ID (such as 「（deck-writing-002）」); the parent moves it to the 「決まり」 column.
+
+## 社外秘と顧客の情報
+
+- 社内の資料には社外秘のもの（Internal Only・Confidential と書かれたもの、ロードマップ、公開されていない顧客事例）が混ざっている。顧客向けに使う前に、公開してよい範囲かを確かめる。
+- 社内の打ち合わせで聞いた話（見立て、作戦、社内事情）は、顧客向けの資料に入れず `社内メモ_*.md` に書く。
+- **顧客向けの資料（本文とスピーカーノート）に入れないもの:** 個人名、社内の事情や見立て、利用額や割引、社内のチケット・チャット・会議だけにある情報。要るなら `社内メモ_*.md` に書く。
+- 顧客向けの資料に付ける出典は公開の URL だけ。顧客との会議は出典の行に書かない。数字の出典は会議を出さずに書き、会議の ID と日付は `references.md` に残す（出典の表からは S の ID で指す）。`references.md` には社内の URL が入るので、納品物に写さない。
+- プレビューやベータの機能は、提供ステージを日付とともに書き、公開情報で言える範囲と社内情報を混ぜない。
+
+## 書き方
+
+- 和文と英数字の間に半角スペースを入れる（`2026 年 10 月`、`3 つの問い`）。
+- 製品名・機能名は英語の正式名のまま書く。訳語や言い回しは、資料と同じ言語の社内の資料と、公式のドキュメントのその言語の版に合わせる。
+- 数字と固有名詞には出典を付ける。口頭で聞いた数字は推測のことがあるので、裏付けてから使う。
+- 資料の文体と出典の付け方は [content.md](content.md) の 6。
 
 ## Files
 
