@@ -196,7 +196,7 @@ def fixture_task(w, n):
     """docs/fixtures/<番号>-*.md の依頼文（```text）。「見るところ」は子に渡さない（プラグインの写しからも docs/ を外す）。"""
     f = next(iter(sorted((w.repo / "docs" / "fixtures").glob(f"{n}-*.md"))), None) or sys.exit(f"docs/fixtures/{n}-*.md がない")
     m = re.search(r"^```text\n(.*?)\n```", f.read_text(encoding="utf-8"), re.S | re.M) or sys.exit(f"{f.name} に依頼文（```text）がない")
-    return {"id": f"fixture-{n}", "label": f"試し {f.stem}", "prompt": m.group(1), "folder": None}
+    return {"id": f"fixture-{n}", "label": f"試し {f.stem}", "prompt": m.group(1), "folder": None, "unattended": True}
 
 
 def replay_task(w, folder):
@@ -316,7 +316,7 @@ def claude_meta(out, plugin):
 def write_one(w, tmp, plugins, task, side, agent, model, timeout, homes, names):
     ws = tmp / task["id"] / names[side]  # 版の名前をパスに出さない（成果物に書かれたパスから、選ぶ役が A・B を見分けないように）
     setup_ws(w, plugins[side], ws, task)
-    prompt = task["prompt"] + ("" if task["folder"] else UNATTENDED)  # 再演の依頼（REPLAY）は自分で確認をしないと言っている  # 書く役にだけ渡す（選ぶ役の task.md は依頼文のまま）
+    prompt = task["prompt"] + (UNATTENDED if task.get("unattended") else "")  # 試しの依頼の書く役にだけ足す（選ぶ役の task.md は依頼文のまま。再演の依頼 REPLAY は、確かめをしないと自分で書いている）
     out, err, end, secs = child(writer_cmd(agent, plugins[side], ws, prompt, model), ws, {"CODEX_HOME": str(homes[side])} if side in homes else {}, timeout)
     log = f"$ 終わり方: {end}、{secs:.0f} 秒\n{out}\n--- stderr\n{err}"  # 記録に書くのは、選ぶ役が終わってから（probe）
     cost, warn = claude_meta(out, plugins[side]) if agent == "claude" else (None, "")
@@ -745,7 +745,7 @@ def selftest():
         (w.repo / "docs" / "fixtures").mkdir(parents=True)
         (w.repo / "docs" / "fixtures" / "02-gantt.md").write_text("# 02\n\n## 依頼文\n\n```text\nガントを書いて\n```\n\n## 見るところ\n\n- gantt を使う\n")
         t = fixture_task(w, "02")
-        assert (t["prompt"], t["label"], t["folder"]) == ("ガントを書いて", "試し 02-gantt", None)
+        assert (t["prompt"], t["label"], t["folder"]) == ("ガントを書いて", "試し 02-gantt", None) and t["unattended"]
         assert stops(lambda: fixture_task(w, "99"), "がない")
     with tempfile.TemporaryDirectory() as d:  # 再演: 構成案と材料と顧客の memory は写し、答え（build/）と作り手の記録（社内メモ・レビュー）は写さない
         w = object.__new__(Work)
@@ -758,7 +758,7 @@ def selftest():
         (w.ws / "themes" / "slides").mkdir(parents=True)
         (w.ws / "themes" / "slides" / "internal.json").write_text("{}")
         t = replay_task(w, str(deck))
-        assert t["label"] == "資料 1" and t["id"] == "deck-1" and "Customers/acme/brief_202610/構成案_v2.md の構成で" in t["prompt"]  # 新しい構成案
+        assert "unattended" not in t and t["label"] == "資料 1" and t["id"] == "deck-1" and "Customers/acme/brief_202610/構成案_v2.md の構成で" in t["prompt"]  # 新しい構成案
         out = Path(d) / "probe"
         sh_real, calls = sh, []
         globals()["sh"] = lambda *a, **k: calls.append(a)  # desk-init は呼んだことだけ見る
@@ -773,7 +773,7 @@ def selftest():
         seen, saved = [], {k: globals()[k] for k in ("setup_ws", "child", "writer_cmd")}  # 人のいない実行の 1 文は書く役にだけ渡し、選ぶ役が読む依頼文には入れない
         globals().update(setup_ws=lambda *a: None, writer_cmd=lambda agent, plug, ws, prompt, model: [prompt], child=lambda cmd, *a: (seen.append(cmd[0]), ("", "", "ok", 0))[1])
         try:
-            for tk in ({"id": "fixture-02", "label": "試し 02-gantt", "prompt": "ガントを書いて", "folder": None}, t):
+            for tk in ({"id": "fixture-02", "label": "試し 02-gantt", "prompt": "ガントを書いて", "folder": None, "unattended": True}, t):
                 write_one(w, Path(d), {"head": Path("/p")}, tk, "head", "pi", None, 1, {}, {"head": "h"})
         finally:
             globals().update(saved)
