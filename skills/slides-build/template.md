@@ -27,7 +27,7 @@ The rules a template must meet when you adjust it. To change a value, edit the s
 | Color roles (11 slots and 6 fixed colors) and the contrast of each pair (4.5:1 for non-bold text under 18pt and bold text under 11pt; 3:1 for text 18pt and above and bold text 11pt and above) | `deck-design` → slides §1 (table and notes) and §3 | `slides.py lint <theme file>` (the role pairs `PAIRS` in `template.py`), 「コントラストが基準に届かない色の組」 in `gslides.py check` |
 | Font (default Noto Sans JP, Cascadia Mono for code only; the theme can change it; fonts not in Google Fonts cannot render) | `deck-design` → slides §2, "Deliverables" in `SKILL.md`, [template_fonts.md](template_fonts.md) | lint's 「書体が … でない」 (compared with the template's font) |
 | Text size (11pt or more; only the copyright notice and page number at 9pt) and page area (13.33 × 7.5 in, 0.6 in left and right margins, top edges of elements) | `deck-design` → slides §1 | lint, constants in `slides.py` |
-| Values of the visual and company themes | `themes/visual.json`, `company.json` | `slides.py lint themes/visual.json` |
+| Values of the navy, white, and blue themes | `themes/navy.json`, `white.json`, `blue.json` | `slides.py lint themes/navy.json` |
 | How to create a template, and what the template decides | `themes.md` and this file | `template.py` |
 | Research history (minimum text size, contrast, number of colors) | 1-1, 1-5, and 1-6 of the workspace's `Research/deck_research/log/20261006_jp_visual.md`, and 「採用したもの」 in `Research/deck_research/state.md` | |
 

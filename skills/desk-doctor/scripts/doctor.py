@@ -131,7 +131,7 @@ def check(ws, local=False):
         warn("brand.company", "空。表紙の左下に社名を置かない")
     docs = cfg.get("docs", {})
     files = {**{f.stem: t for f in slides.BUILTIN_THEMES.glob("*.json") for t in [slides.read_theme(f)]}, **mine}  # ワークスペースのものが勝つ
-    theme, temps = sl.get("default_theme", "visual"), {k: v for k, v in sl.get("templates", {}).items() if v}
+    theme, temps = sl.get("default_theme", "navy"), {k: v for k, v in sl.get("templates", {}).items() if v}
     if old := sl.get("themes"):  # 2026-10-16 までの書き方
         ng("slides.themes", f"{', '.join(old)} はプラグインが読まない。テーマはワークスペースの themes/slides/<名前>.json（kind theme。色は colors の下に同じ名前で書く）に、"
                             "テンプレートの url は [slides.templates] の「<名前> = \"<url>\"」に移して消す（テンプレートのある名前は slides.py theme <url> でも写せる。../../slides-build/themes.md）")
@@ -323,10 +323,10 @@ def selftest():
         toml.write_text(toml.read_text() + '\n[slides.themes.visual]\nurl = "x"\n')
         assert kinds()["slides.themes"] == "要修正"  # 2026-10-16 までの書き方
         toml.write_text(toml.read_text().replace('\n[slides.themes.visual]\nurl = "x"\n', ""))
-        assert "slides の base" not in kinds() and "slides.default_theme" not in kinds()  # 雛形には書いていない。既定の visual は組み込み
-        toml.write_text(toml.read_text().replace('default_theme = "visual"', 'default_theme = "nope"\nbase_template = ""', 1))
+        assert "slides の base" not in kinds() and "slides.default_theme" not in kinds()  # 雛形には書いていない。既定の navy は組み込み
+        toml.write_text(toml.read_text().replace('default_theme = "navy"', 'default_theme = "nope"\nbase_template = ""', 1))
         assert kinds()["slides の base"] == "要修正" and kinds()["slides.default_theme"] == "要修正"  # 2026-10-14 までの書き方（空でも消す）、ファイルのない既定のテーマ
-        toml.write_text(toml.read_text().replace('default_theme = "nope"\nbase_template = ""', 'default_theme = "visual"', 1))
+        toml.write_text(toml.read_text().replace('default_theme = "nope"\nbase_template = ""', 'default_theme = "navy"', 1))
         toml.write_text(toml.read_text() + '\n[docs]\ndefault_theme = "acme"\n\n[docs.themes.us]\npage = [215.9, 279.4]\n')
         dput("us", {"page": [215.9, 279.4]})
         k = kinds()

@@ -1,0 +1,23 @@
+{
+ "apiVersion": "slides/v1",
+ "kind": "theme",
+ "description": "白地の本文、墨色の表紙と扉、暖かい灰色のパネル、赤のアクセントの白基調のテーマ。会社と関係ない資料（個人の勉強会、コミュニティの登壇）。明るい印象の顧客向けの提案・説明は blue",
+ "colors": {
+  "NAVY": "191918",
+  "BG": "FFFFFF",
+  "RED_ON_NAVY": "F28B82",
+  "PANEL": "F6F5F4",
+  "NAVY_BLOCK": "31302E",
+  "GA": "00A972",
+  "RED_TEXT": "B5332E",
+  "PREVIEW": "FFAB00",
+  "SUB": "615D59",
+  "OSS": "2272B4",
+  "RED": "D44C47",
+  "TEXT": "31302E",
+  "RULE": "DFDCD9",
+  "RED_SOFT": "FDEBEC",
+  "STAGE_TEXT": "191918",
+  "DECOR": "787470"
+ }
+}

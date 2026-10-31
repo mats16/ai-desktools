@@ -8,7 +8,7 @@
 #
 # - ここに書くもの: 人や組織で変わる値だけ（社名は下の brand。会社のテンプレートの書体と色は、下のテーマのファイルに書く）。見た目の決まり（色の役割・余白・版面）は slides.py とスキル deck-design の slides。
 # - 値の形: Google Slides と Drive のフォルダは URL のまま書く（スクリプトが ID を取り出す）。
-# - テーマ: 色・書体・使い分けの description はワークスペースの themes/slides/<名前>.json に書き（組み込みは visual・company）、ここの [slides.templates] には
+# - テーマ: 色・書体・使い分けの description はワークスペースの themes/slides/<名前>.json に書き（組み込みは navy・white・blue）、ここの [slides.templates] には
 #   テーマごとのテンプレートの URL だけを書く（エージェントが slides.py themes で一覧を見て、資料ごとに選ぶ）。URL は template.py <名前> --from-base が書き込む。
 #   元のテンプレートの URL はここに持たない（--from-base <元の URL> で渡す。渡さなければ白紙の pptx から作る）。
 
@@ -25,7 +25,7 @@ profile = ""  # 使う人の名前・メール・会社・役割・担当の顧�
 quota_project = ""  # gcloud の既定の OAuth クライアントで取ったトークンは、これがないと Slides・Docs で 403。自分の OAuth クライアントなら空でよい
 
 [slides]
-default_theme = "visual"  # 説明で決まらないときのテーマ。テーマは資料ごとに選ぶ（slides.py themes が名前と説明を出す）。切り替えはスキル slides-build の templates の「Choosing the default theme」
+default_theme = "navy"  # 説明で決まらないときのテーマ。テーマは資料ごとに選ぶ（slides.py themes が名前と説明を出す）。切り替えはスキル slides-build の templates の「Choosing the default theme」
 
 [brand]  # 表紙の社名と著作権表示（ドキュメントのフッターも）、ドキュメントの表紙のロゴ。copyright は要る（desk-doctor が見る）
 # company = "アクメ・ジャパン株式会社"  # 表紙の左下。書かなければ置かない
@@ -33,7 +33,7 @@ default_theme = "visual"  # 説明で決まらないときのテーマ。テー�
 # logo = "acme/logo.png"  # ドキュメントの表紙のロゴ。ワークスペースの assets/ の中のパスか URL。書かなければ置かない
 
 [slides.templates]  # テーマの名前 = テンプレートの URL。template.py <名前> --from-base が書き込み、slides.py new が複製する。テーマの値は themes/slides/<名前>.json
-# visual = "https://docs.google.com/presentation/d/…/edit"
+# navy = "https://docs.google.com/presentation/d/…/edit"
 
 # [docs]
 # default_theme = "acme"  # doc.md に theme: を書かないときのテーマ（themes/docs/acme.json）。書かなければ既定（A4）

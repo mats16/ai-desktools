@@ -27,7 +27,6 @@ from slides import (BUILTIN_THEMES, FIXED as FIXED_DEFAULT, FONT_EM, JP_FONTS, L
                     theme_reqs, theme_slots, use_font, use_layouts, use_theme, ws_themes)
 
 BLANK_PPTX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "blank.pptx")  # --from-base に元の URL を渡さないときの元。中身は ../assets/README.md
-NAMES = {"visual": "テンプレート（visual: このフォルダの色）", "company": "テンプレート（company: 会社の色をコントラストだけ調整）"}
 ROLES = [(NAVY, "NAVY", "表紙・扉の地・結論バンド・表の見出しの行"), (BG, "BG", "本文スライドの地"), (RED_ON_NAVY, "RED_ON_NAVY", "濃紺の上の赤（扉の小見出し）"),
          (PANEL, "PANEL", "パネル・表の 1 行おきの地"), (NAVY_BLOCK, "NAVY_BLOCK", "扉の中のブロック"), (GA, "GA", "GA の札の塗り"),
          (RED_TEXT, "RED_TEXT", "18pt 未満の赤の文字"), (PREVIEW, "PREVIEW", "Beta・Preview の札の塗り"), (SUB, "SUB", "補助の文字・フッター"),
@@ -37,7 +36,7 @@ FIXED = [(TEXT, "TEXT", "本文の文字", WHITE, None), (HEAD, "HEAD", "本文�
          (ON_RED, "ON_RED", "RED の塗りの上の文字", TEXT, RULE), (RED_SOFT, "RED_SOFT", "小さな赤の札の地", RED_TEXT, None), (STAGE_TEXT, "STAGE_TEXT", "札の文字", WHITE, None),
          (DECOR, "DECOR", "章番号。部品が使う", WHITE, None)]  # テーマに入れない色（既定の値か NAMED の名前, 名前, 用途, 載せる文字, 枠線）
 ON = {NAVY: WHITE, NAVY_BLOCK: WHITE, RED_TEXT: WHITE, SUB: WHITE, OSS: WHITE, BG: TEXT, PANEL: TEXT}  # 枠に載せる文字の色（届かなければ、札の文字か白の届くほう）。ほかは札の文字の色
-# 役割の組（文字, 地, 基準, どこで使うか）。deck-design の slides.md の 1・3 の組み合わせ。18pt 未満の細字と 11pt 未満の太字は 4.5:1、18pt 以上と 11pt 以上の太字は 3:1（deck-design の slides.md の 3）。visual・company はすべて届く。
+# 役割の組（文字, 地, 基準, どこで使うか）。deck-design の slides.md の 1・3 の組み合わせ。18pt 未満の細字と 11pt 未満の太字は 4.5:1、18pt 以上と 11pt 以上の太字は 3:1（deck-design の slides.md の 3）。組み込みのテーマ（navy・white・blue）はすべて届く。
 # NAMED の役割（HEAD・CARD・SUB_ON_NAVY・ON_RED）は、テーマが書いていなければ既定の色で測る（alias）。本文の地が暗いテーマも同じ組で測る
 PAIRS = [(WHITE, NAVY, 4.5, "結論バンドの白"), (SUB_ON_NAVY, NAVY, 4.5, "濃紺の上の補足・フッター"), (RED_ON_NAVY, NAVY, 4.5, "表紙の小見出し"),
          (HEAD, BG, 4.5, "見出し"), (HEAD, PANEL, 4.5, "パネルの見出し"), (HEAD, CARD, 4.5, "カードの見出し・表の 1 列目"),
@@ -456,7 +455,7 @@ def template(name, from_base=False, base=""):
         record_template(name)  # desk.toml に URL を書けるか（書けないのに複製を残さない）
     src, origin = file_id(base), ()
     if from_base:
-        title = NAMES.get(name, f"テンプレート（{name}）")
+        title = f"テンプレート（{name}）"
         origin = ("ページの大きさとマスターは", ("元のテンプレート", {"link": base})) if src else ("ページの大きさとマスターは白紙の pptx（slides-build/assets/blank.pptx）",)
         if not src:  # Google Slides に変換して上げる（変換しないと Office のファイルのままで、Slides API が使えない）
             with open(BLANK_PPTX, "rb") as f:
@@ -497,15 +496,21 @@ def main():
             d = specimen(name, theme(name))
             assert len(d.slides) == 6 and not d.images and all(s in d.notes for s in d.slides)
         assert all(not fix(palette(read_theme(f)))[1] for f in BUILTIN_THEMES.glob("*.json"))  # 組み込みのテーマは、役割の組がすべて届く
-        for f in BUILTIN_THEMES.glob("*.json"):  # 組み込みのテーマの章番号は、濃紺・赤・白のどの地の扉でも 3:1 に届く（slides-visual-038）
-            assert not fix(palette(read_theme(f)), PAIRS + list(DIVIDER.values()))[1], f
-        light = {**read_theme(BUILTIN_THEMES / "visual.json"), "section": [{"layout": "a"}, {"layout": "b", "tone": "light"}]}
+        for f in BUILTIN_THEMES.glob("*.json"):  # 組み込みのテーマの章番号が、濃紺・赤・白の地の扉のどれで 3:1 に届くか（slides-visual-038）
+            # blue だけは、白の地の DECOR（2.49:1）と赤の地の NAVY（2.36:1）が届かない。組み込みは濃い地の扉だけなので、使う地（theme_pairs）では届く
+            P = palette(read_theme(f))
+            short = {use for fg, gr, need, use in DIVIDER.values() if contrast(P.get(fg, fg), P.get(gr, gr)) < need}
+            assert short == ({"白の地の扉の章番号", "赤の地の扉の章番号"} if f.stem == "blue" else set()), (f, short)
+        # 見本: 組み込みの navy と、2026-10-31 に外した company の色（2026 年の公式テンプレートの色。SUB を暗くした案を確かめる）
+        visual = read_theme(BUILTIN_THEMES / "navy.json")
+        company = {"description": "company", "NAVY": "1B3139", "BG": "FFFFFF", "RED_ON_NAVY": "FF5F46", "PANEL": "EEEDE9", "NAVY_BLOCK": "1B5162", "GA": "00A972",
+                   "RED_TEXT": "D61400", "PREVIEW": "FFAB00", "SUB": "506F7A", "OSS": "4359FF", "RED": "FF3621"}
+        light = {**visual, "section": [{"layout": "a"}, {"layout": "b", "tone": "light"}]}
         assert [p[3] for p in theme_pairs(light)][-2:] == ["濃紺の地の扉の章番号", "白の地の扉の章番号"] and DIVIDER["accent"] not in theme_pairs(light)  # 使う地だけ
         F, out = fix({**palette(light), DECOR: "3E5159"}, theme_pairs(light))  # 白の地の扉もあれば、直す案は両方の地に届く
         assert all(contrast(F[DECOR], F[g]) >= 3 for g in (NAVY, BG)) and F[NAVY] == palette(light)[NAVY]
         F, out = fix({**palette(light), NAVY: "8A3A3A"}, PAIRS + [DIVIDER["accent"]])  # 赤の地の章番号（濃紺）が届かなくても、主色と強調の色は章番号のためには動かさない
         assert "赤の地の扉の章番号" not in [o[0] for o in out]
-        visual, company = (read_theme(BUILTIN_THEMES / f"{n}.json") for n in ("visual", "company"))
         F, out = fix({**palette(company), SUB: "618794"})  # 公式のテンプレートの ACCENT5。Oat Medium の上で 3.32:1
         assert {o[1] for o in out} == {SUB} and F[SUB] == "506F7A"  # 同じ青緑のまま暗くする（company の SUB はこの案）
         assert contrast(shift("FFFFFF", "FFFFFF", 4.5), "FFFFFF") >= 4.5  # 同じ色からでも離す

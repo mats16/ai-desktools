@@ -31,8 +31,8 @@ from brand import BRAND_COPYRIGHT as COPYRIGHT, COPYRIGHT_PT, LOGO, need_brand, 
 # 1 行は全角 40 字まで（jlreq・デジタル庁。../../deck-design/docs.md の 1）。左右 30 mm（Word の和文の既定と同じ）で、本文の幅 150 mm・10.5pt が 40 字
 PAGE_MM, MARGIN_TB_MM, MARGIN_LR_MM = (210, 297), 25, 30  # A4 縦
 TEXT_MM = PAGE_MM[0] - 2 * MARGIN_LR_MM
-NAVY, SUB, PANEL = "1B3139", "5A6F77", "EEEDE9"  # テーマ visual の DARK1・ACCENT5・LIGHT2 の値（deck-design の docs.md の 1）。Docs にはテーマの色がない
-RED_TEXT = "CC2B17"  # ***赤の太字***。テーマ visual の ACCENT3（18pt 未満の赤の文字。白の地で 4.5:1 に届く。../../deck-design/docs.md の 1）
+NAVY, SUB, PANEL = "1B3139", "5A6F77", "EEEDE9"  # テーマ navy の DARK1・ACCENT5・LIGHT2 の値（deck-design の docs.md の 1）。Docs にはテーマの色がない
+RED_TEXT = "CC2B17"  # ***赤の太字***。テーマ navy の ACCENT3（18pt 未満の赤の文字。白の地で 4.5:1 に届く。../../deck-design/docs.md の 1）
 HEAD = NAVY  # 題と見出しの色。この色と TEXT・SUB・RULE・PANEL・RED_TEXT・TABLE_HEAD は、テーマのファイルの colors で替わる（load_theme）
 BODY_PT, SMALL_PT, CODE_PT, COVER_PT = 10.5, 9, 9.5, 30  # 本文、図表の題・出典・表の中、コード、表紙の題
 # 名前付きスタイル: 大きさ、太字、色、上の空き、下の空き、行間（%）。組むたびに入れ直す（ここを変えれば、組み直した資料すべてに効く）

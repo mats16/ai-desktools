@@ -18,9 +18,9 @@ Open from `template.md` when creating a template. `template.md` has what a templ
    | `RED_TEXT`, `RED_ON_NAVY` | Same hue as `RED`, for text under 18pt and for text on `NAVY`. Write `RED` as is and match the brightness with lint's suggested fix |
    | `NAVY_BLOCK` | Blocks inside the section divider. `NAVY` made slightly lighter |
    | `SUB` | Secondary text and the footer. The company's gray |
-   | `GA`, `PREVIEW`, `OSS` | Release-stage tags. Their colors are set by meaning, so normally do not write them (visual's values) |
+   | `GA`, `PREVIEW`, `OSS` | Release-stage tags. Their colors are set by meaning, so normally do not write them (navy's values) |
 
-   Write every role except `GA`, `PREVIEW`, and `OSS` (for themes with a light body background; for dark themes, see [template_dark.md](template_dark.md)). Roles not written take visual (Databricks) values and stand out among the company's colors (in a trial on 2026-10-12, visual's gray `NAVY_BLOCK` remained on a divider with a blue `NAVY`). Use at most 4 colors on one page (`deck-design` → slides §3), so do not try to use all of the company's colors.
+   Write every role except `GA`, `PREVIEW`, and `OSS` (for themes with a light body background; for dark themes, see [template_dark.md](template_dark.md)). Roles not written take navy (Databricks) values and stand out among the company's colors (in a trial on 2026-10-12, visual's (now navy's) gray `NAVY_BLOCK` remained on a divider with a blue `NAVY`). Use at most 4 colors on one page (`deck-design` → slides §3), so do not try to use all of the company's colors.
 4. **Decide the font.** See [template_fonts.md](template_fonts.md).
 5. **Write.** Write the company name and copyright notice in `[brand]` in `desk.toml`, and the theme in the workspace's `themes/slides/acme.json` (the file name is the theme name; slides-theme-036 in `themes.md`).
    ```toml
@@ -55,7 +55,7 @@ Open from `template.md` when creating a template. `template.md` has what a templ
 
 ### B. Only an English template exists (e.g. the Japan branch of a foreign company)
 
-Databricks's internal template (DM Sans, English only) is this case, and the visual and company themes were made from it (`themes.md`).
+Databricks's internal template (DM Sans, English only) is this case, and the navy theme (named visual until 2026-10-31) and the former company theme were made from it (`themes.md`).
 
 - **Font:** Latin fonts (DM Sans, Arial, Montserrat, and so on) have no Japanese glyphs. Google Slides renders Japanese in another Gothic, and you cannot choose which one. Choose a Google Fonts font with Japanese whose impression is close to the Latin font (the table in [template_fonts.md](template_fonts.md)). Latin letters and digits are also rendered in that font. Only DM Sans can be written in `font` as is (its alphanumeric widths are measured; Japanese becomes the Gothic that Google chooses). Ask the user whether to match the alphanumerics to the original company look or to unify the Japanese font, and decide. Matching the original works as is only for DM Sans; for another Latin font (Montserrat and so on), say that its alphanumeric widths must be measured and added first ("Limitations" in [template.md](template.md)), or choose the Japanese font.
 - **Company name and copyright notice:** The company name on the cover is the Japanese entity's name (e.g. アクメ・ジャパン株式会社). The copyright notice may stay in the head office's English form.

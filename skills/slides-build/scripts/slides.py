@@ -115,10 +115,9 @@ SLOTS = ("DARK1", "LIGHT1", "DARK2", "LIGHT2", "ACCENT1", "ACCENT2", "ACCENT3", 
 ROLE = {"NAVY": NAVY, "BG": BG, "RED_ON_NAVY": RED_ON_NAVY, "PANEL": PANEL, "NAVY_BLOCK": NAVY_BLOCK, "GA": GA, "RED_TEXT": RED_TEXT, "PREVIEW": PREVIEW,
         "SUB": SUB, "OSS": OSS, "RED": RED}
 FOLLOWED = "954F72"
-# 組み込みの visual の 12 の枠。テーマが書かない役割はこの色（テーマのファイルの色は役割の名前で書く）。visual は 2025 年版の公式パレットから
-# コントラストを確かめて選んだ色。company は 2026 年の公式テンプレートの色で、本文の地は白、小さな赤の文字（Lava 600、白の上で 3.62:1）と
-# SUB（618794、白の上で 3.89:1）は色相を保って暗くした（2026-10-13）
-VISUAL = {**{s: json.loads((BUILTIN_THEMES / "visual.json").read_text())["colors"][r] for r, s in ROLE.items()}, "FOLLOWED_HYPERLINK": FOLLOWED}
+# 組み込みの navy（前の visual。2026-10-31 に名前を変えた）の 12 の枠。テーマが書かない役割はこの色（テーマのファイルの色は役割の名前で書く）。
+# 2025 年版の公式パレットからコントラストを確かめて選んだ色
+VISUAL = {**{s: json.loads((BUILTIN_THEMES / "navy.json").read_text())["colors"][r] for r, s in ROLE.items()}, "FOLLOWED_HYPERLINK": FOLLOWED}
 
 
 TEXT_EM, TEXT_BOLD_EM = FONT_EM[FONT]  # 組む・見るデッキの書体の英数字の幅（use_font。ponytail: 1 つずつ組む前提の大域の値）
@@ -2554,7 +2553,7 @@ def spec_schema():
          "band": {"anyOf": [{"type": "string"}, {"type": "object", "properties": {"text": {"type": "string"}, "sub": {"type": "string"}}, "required": ["text"], "additionalProperties": False}]},
          "raw": {"type": "object", "description": "形の外の書き方: Deck のメソッドの引数（lint が要確認に出す）"},
          "colors": {"type": "object", "properties": {k: {"type": "string", "pattern": "^[0-9A-Fa-f]{6}$"} for k in (*ROLE, *FIXED, *NAMED)}, "additionalProperties": False,
-                    "description": "役割の名前 → 6 桁の色（# は付けない）。書かない役割は visual の色、テーマに入れない色は既定の値"},
+                    "description": "役割の名前 → 6 桁の色（# は付けない）。書かない役割は navy の色、テーマに入れない色は既定の値"},
          "layouts": {"type": "array", "items": {"anyOf": [{"type": "string"}, {"type": "object", "properties": {"layout": {"type": "string"}, "w": pos, "tone": {"enum": list(TONES)}},
                                                                              "required": ["layout"], "additionalProperties": False}]},
                      "description": "会社のテンプレートから残す表紙・扉のレイアウトの名前（並びの順が variant の番号）。w（文字の幅）と tone（地の明るさ）は template.py が書き込む"}}
@@ -2814,7 +2813,7 @@ def load_theme(name):
 
 
 def theme_slots(t):
-    """テーマの表 t の 12 の枠の色。書いていない役割は visual の色。"""
+    """テーマの表 t の 12 の枠の色。書いていない役割は navy の色。"""
     return VISUAL | {ROLE[k]: t[k] for k in ROLE if k in t}
 
 
@@ -3467,8 +3466,8 @@ def refont(o, font):
 
 
 def default_theme():
-    """desk.toml の [slides] default_theme（書いていなければ visual。desk-doctor と同じ）。"""
-    return config().get("slides", {}).get("default_theme", "visual") if gapi.find_config() else "visual"
+    """desk.toml の [slides] default_theme（書いていなければ navy。desk-doctor と同じ）。"""
+    return config().get("slides", {}).get("default_theme", "navy") if gapi.find_config() else "navy"
 
 
 def theme_list():
@@ -3534,7 +3533,7 @@ def cmd_theme(url, name=None, force=False):
     if template and name != mark:  # new が、テンプレートの目印の名前とテーマの名前をそろえる（need_mark）
         sys.exit(f"テンプレートはテーマ {mark} の名前を持つ。同じ名前で写す（slides.py theme <URL>）か、template.py {name} で合わせ直してから写す")
     f, have = d / f"{name}.json", theme_from(p)
-    if f.is_file() and not force and theme_from(theme_pages(name, read_theme(f))) != have:  # 書いていない値（既定の書体・visual の色）は埋めて比べる
+    if f.is_file() and not force and theme_from(theme_pages(name, read_theme(f))) != have:  # 書いていない値（既定の書体・navy の色）は埋めて比べる
         sys.exit(f"{f} がもうあり、中身が違う。今のファイルを残すなら別の名前を渡し（slides.py theme <URL> <名前>）、置き換えるなら --force を付ける")
     if template:
         record_template(name)  # 書けるかを、ファイルを書く前に確かめる
@@ -4019,8 +4018,8 @@ def selftest():
     use_font(FONT)
     assert abs(em_width("1-1 あ") - noto) < 1e-9
     # テーマのファイル: 組み込みは役割の名前で 11 の枠を書き、説明がある。読むと colors を開いた表になり、theme_file で戻る
-    vis = read_theme(BUILTIN_THEMES / "visual.json")
-    assert theme_slots(vis) == VISUAL and all(set(t) == {"description", *ROLE} and t["description"] and set(theme_slots(t)) == set(SLOTS)
+    vis = read_theme(BUILTIN_THEMES / "navy.json")
+    assert theme_slots(vis) == VISUAL and all({"description", *ROLE} <= set(t) and t["description"] and set(theme_slots(t)) == set(SLOTS)
                                              for t in map(read_theme, BUILTIN_THEMES.glob("*.json")))  # 配色は 12 の枠をすべて決める（API の決まり）
     with tempfile.TemporaryDirectory() as d:
         f = Path(d, "acme.json")
@@ -4048,7 +4047,7 @@ def selftest():
                 raise AssertionError(path)
             except SystemExit as e:
                 assert want in str(e), str(e)
-    # スライドの形（マスターの配色・書体・目印）に当てて読み戻すと、同じ値に戻る。書いていない役割は visual の色、測っていない表紙・扉の地の明るさは dark
+    # スライドの形（マスターの配色・書体・目印）に当てて読み戻すと、同じ値に戻る。書いていない役割は navy の色、測っていない表紙・扉の地の明るさは dark
     pages = theme_pages("acme", acme)
     assert theme_from(pages) == {**acme, **{r: VISUAL[s] for r, s in ROLE.items() if r not in acme}, "cover": [{"layout": "Title 1", "tone": "dark"}, acme["cover"][1]]}
     assert deck_theme(pages) == "acme" and deck_font(pages) == "DM Sans" and mark_values(pages) == {"copyright": acme["copyright"], "TEXT": "111111", "HEAD": "222222"}
@@ -4107,16 +4106,16 @@ def selftest():
     try:
         assert unlisted() == [("corp", "https://docs.google.com/presentation/d/t2/edit", "新しい", "共有"), ("mine", "https://docs.google.com/presentation/d/t5/edit", "", "個人")]
         rows = theme_list()
-        assert ("visual", vis["description"], False, default_theme() == "visual", True) in rows and ("acme", "", True, False, False) in rows  # テンプレートだけでファイルのないテーマ
+        assert ("navy", vis["description"], False, default_theme() == "navy", True) in rows and ("acme", "", True, False, False) in rows  # テンプレートだけでファイルのないテーマ
         with tempfile.TemporaryDirectory() as d:  # 書きかけのテーマのファイルがあっても、ほかのテーマは出す
             Path(d, "bad.json").write_text("{書きかけ")
             tn, tp = theme_names, theme_path
-            globals().update(theme_names=lambda: ["visual", "bad"], theme_path=lambda n: Path(d, "bad.json") if n == "bad" else tp(n))
+            globals().update(theme_names=lambda: ["navy", "bad"], theme_path=lambda n: Path(d, "bad.json") if n == "bad" else tp(n))
             try:
                 rows = theme_list()
             finally:
                 globals().update(theme_names=tn, theme_path=tp)
-        assert rows[0][0] == "visual" and rows[1][0] == "bad" and rows[1][1].startswith("（読めない"), rows
+        assert rows[0][0] == "navy" and rows[1][0] == "bad" and rows[1][1].startswith("（読めない"), rows
         files.append({"id": "t4", "properties": {THEME_PROP: "own"}})
         with contextlib.redirect_stdout(out := io.StringIO()):
             cmd_themes()
@@ -4243,7 +4242,7 @@ def selftest():
             assert len(dry("pages_a.py").slides) == 2
             Path(t, "pages_s.py").write_text('def make(d):\n    d.divider("02", "扉", variant=2)\n')  # テンプレートの扉のパターン 2
             saved = default_theme, ws_themes
-            globals().update(default_theme=lambda: "visual", ws_themes=lambda: None)  # 回すワークスペースの既定のテーマに左右されない（組み込みの visual には扉のパターンがない）
+            globals().update(default_theme=lambda: "navy", ws_themes=lambda: None)  # 回すワークスペースの既定のテーマに左右されない（組み込みの navy には扉のパターンがない）
             try:
                 dry("pages_s.py")
                 raise AssertionError("デッキを読まずに扉のパターン 2 を通した")
@@ -4405,7 +4404,7 @@ def selftest_spec():
         (Path(t) / "sub" / "p.json").write_text(json.dumps({**head, "kind": "page", "title": "画像", "body": [{"type": "image", "src": "../img/a.png", "w": 4}]}))
         (Path(t) / "pages_a.json").write_text(json.dumps({**head, "kind": "deck", "name": "a", "pages": ["sub/p.json"]}))  # 子が担当のページを並べたもの
         (Path(t) / "cover.json").write_text(json.dumps({**head, "kind": "page", "type": "cover", "title": "表紙", "kicker": "k", "speakerNotes": "[画像のページ](#p)"}))
-        (Path(t) / "deck.json").write_text(json.dumps({**head, "kind": "deck", "name": "資料", "theme": "visual", "pages": ["pages_a.json", "cover.json"]}))
+        (Path(t) / "deck.json").write_text(json.dumps({**head, "kind": "deck", "name": "資料", "theme": "navy", "pages": ["pages_a.json", "cover.json"]}))
         for bad, want in [({"kind": "page", "title": "t"}, "apiVersion がない"), ({"apiVersion": "slides/v2", "kind": "page", "title": "t"}, "apiVersion 'slides/v2' は読めない"),
                           ({**head, "kind": "Slide", "title": "t"}, "kind 'Slide' はない"), ([{"title": "t"}], "ファイルの頭は")]:
             (Path(t) / "bad.json").write_text(json.dumps(bad))
@@ -4419,9 +4418,9 @@ def selftest_spec():
         try:
             m = load_make("deck.json")
             d = make_deck(m.make, m.NAME)
-            assert m.THEME == "visual" and declared_theme("deck.json") == "visual" and declared_theme("pages.py") is None
+            assert m.THEME == "navy" and declared_theme("deck.json") == "navy" and declared_theme("pages.py") is None
             try:
-                need_deck_theme("visual", "company")
+                need_deck_theme("navy", "white")
                 raise AssertionError("deck.json と違うテーマのデッキに組んだ")
             except SystemExit as e:
                 assert "new で作り直す" in str(e)
@@ -5424,19 +5423,19 @@ def selftest_diff():
                     build("x" * 10, spec())
                     assert live[0] != before[0] and live[1:] == before[1:], (live, before)
                     # deck.json の theme のファイルがあれば、URL を渡しても Google を読まない
-                    Path(t, "d2.json").write_text(json.dumps({"apiVersion": API_VERSION, "kind": "deck", "name": "d", "theme": "visual", "pages": ["p1.json"]}))
+                    Path(t, "d2.json").write_text(json.dumps({"apiVersion": API_VERSION, "kind": "deck", "name": "d", "theme": "navy", "pages": ["p1.json"]}))
                     req0, c0 = globals()["request"], COPYRIGHT
                     globals()["request"] = lambda *a, **k: (_ for _ in ()).throw(AssertionError("Google を読んだ"))
                     try:
-                        assert deck_context("d2.json", "https://docs.google.com/presentation/d/abc/edit")[0] == "visual"
+                        assert deck_context("d2.json", "https://docs.google.com/presentation/d/abc/edit")[0] == "navy"
                     finally:
                         globals()["request"], COPYRIGHT = req0, c0  # deck_context はテーマの著作権表示で組むようにする（ここの仮の値に戻す）
                         use_pages(p)
                     # テーマのファイルは、デッキのテーマのファイルそのものだけを受け付ける（名前が同じ別のファイルで、違う値を当てたと思わせない）
-                    Path(t, "visual.json").write_text((BUILTIN_THEMES / "visual.json").read_text())
-                    assert chosen([str(theme_path("visual"))], dk, "visual") == set()
+                    Path(t, "navy.json").write_text((BUILTIN_THEMES / "navy.json").read_text())
+                    assert chosen([str(theme_path("navy"))], dk, "navy") == set()
                     try:
-                        chosen([str(Path(t, "visual.json"))], dk, "visual")
+                        chosen([str(Path(t, "navy.json"))], dk, "navy")
                         raise AssertionError("別の場所のテーマのファイルを通した")
                     except SystemExit as e:
                         assert "デッキのテーマのファイルは" in str(e)
@@ -5449,11 +5448,11 @@ def selftest_diff():
                             raise gapi.ApiError("500 batchUpdate")
                         fb(pid, reqs)
                     globals()["batch"] = fail_pages
-                    vis = read_theme(BUILTIN_THEMES / "visual.json")
+                    vis = read_theme(BUILTIN_THEMES / "navy.json")
                     os.makedirs(f"/tmp/slides_{('x' * 10)[:8]}", exist_ok=True)
                     Path(f"/tmp/slides_{('x' * 10)[:8]}/shots.json").write_text("[]")  # 前に取った画像の記録
                     try:
-                        build("x" * 10, spec(), force=False, theme=("visual", {**vis, "NAVY": "000000"}))
+                        build("x" * 10, spec(), force=False, theme=("navy", {**vis, "NAVY": "000000"}))
                         raise AssertionError("ページの batch の失敗を通した")
                     except gapi.ApiError:
                         pass
