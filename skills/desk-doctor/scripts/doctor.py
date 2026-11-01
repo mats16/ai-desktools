@@ -2,7 +2,7 @@
 """usage: doctor.py [<ワークスペース>] [--local]   （--selftest で自己確認）
 AI Desk Tools を動かす前提を確かめる。--local は手元だけ見て、Google の API を呼ばない。
 1 行 1 項目で「OK」「要修正」「要確認」を出す。要修正が 1 つでもあれば exit 1。標準ライブラリだけ。"""
-import io, contextlib, json, math, os, re, shutil, subprocess, sys, tempfile, tomllib
+import io, contextlib, json, math, os, re, shutil, subprocess, sys, tempfile, tomllib, urllib.parse
 from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parents[2]  # プラグインの skills/
@@ -13,6 +13,20 @@ sys.path.insert(0, str(SKILLS / "docs-build" / "scripts"))
 sys.path.insert(0, str(SKILLS / "desk-migrate" / "scripts"))
 import desk  # noqa: E402  ワークスペースと設定のファイルの探し方
 import migrate  # noqa: E402  前のバージョンのワークスペースか（desk-migrate）
+import gapi  # noqa: E402  Google の API（connection を通すときの確かめと、proxy の断りの見分け）
+
+
+CHECKS = "connection にログインしてあるか（人ごとの OAuth）、USE CONNECTION の権限、connection の OAuth の scope（drive・presentations・documents）、databricks auth login"
+
+
+def proxy_fail(e):
+    """connection を通して通らなかったときのメッセージ。原因は当てない（状態コードと本文からの見分けは外れる。2026-11-01 の review-loop）。
+    proxy が自分で断ったもの（gapi.rejected。返事にログインの URL がある）だけを分け、ほかは返事の先頭と確かめることの一覧を出す。"""
+    first, *rest = (str(e) or type(e).__name__).splitlines()
+    if first.startswith(gapi.REJECTED):
+        return f"{first}。ワークスペースの画面で connection にログインする: {' '.join(rest)[:400]}"
+    body = " ".join(rest)[:300]
+    return f"{first}{f'（{body}）' if body else ''}。確かめる: {CHECKS}"
 
 
 def check(ws, local=False):
@@ -100,7 +114,16 @@ def check(ws, local=False):
     dup = list(found.values())
     (warn if dup else ok)("スキルの重なり", f"ワークスペースにも同じ名前のスキルがある（プラグインと二重に読まれる）: {', '.join(dup)}" if dup else "")
     g, sl, dr = cfg.get("google", {}), cfg.get("slides", {}), cfg.get("drive", {})
-    if not g.get("quota_project"):
+    try:
+        px = gapi.uc(cfg)  # 型の違う設定は gapi.uc が断る（スクリプトも同じところで止まる）
+        if cfg.get("uc_connections", {}).get("proxy"):
+            ok("uc_connections", f"有効: {', '.join(h for h, n in px['proxy'].items() if n) or 'connection の名前がない（直接呼ぶ）'}" if px else "無効（enabled = false。Google を直接呼ぶ）")
+    except gapi.ApiError as e:
+        ng("uc_connections", str(e))
+        px = {"bad": True}  # Google への呼び出しはどれも同じ理由で止まるので、下では見ない
+    via = {h: n for h, n in px.get("proxy", {}).items() if n}  # gapi.route と同じ。名前が空のホストは直接呼ぶ
+    bad_uc = px.get("bad", False)
+    if not g.get("quota_project") and not all(urllib.parse.urlsplit(u).netloc in via for u in (gapi.DRIVE, gapi.SLIDES, gapi.DOCS)):  # 直接呼ぶホストがある
         warn("google.quota_project", "空。gcloud の既定の OAuth クライアントで取ったトークンなら、Slides・Docs が 403 になる")
     from brand import COPYRIGHT_FOOTER  # 9pt で通す著作権表示の形（slides.py が全ページに書く）
     import slides  # 仮の著作権表示（PLACEHOLDER_COPYRIGHT。need_brand と同じ）と、テーマのファイルの読み方（read_theme）
@@ -166,17 +189,36 @@ def check(ws, local=False):
     for k in ("customers", "internal", "docs", "desk"):
         if not dr.get(k):
             warn(f"drive.{k}", "空。資料の置き場所が決まらない")
-    if local:
+    if local or bad_uc:
         return out
 
-    import gapi
     gapi.find_config = lambda: (conf, root)  # gapi も、ここで見つけて出した設定を読む（ワークスペースから探し直すと、上に desk.toml があるときに別のものを読む）
+    try:  # ワークスペースの URL が決まるか（gapi.route と同じ確かめとメッセージ）。決まらなければ、どの connection も同じ理由で通らないので 1 行だけ出す
+        gapi.route(f"https://{next(iter(via))}/") if via else None  # databricks auth describe を呼ぶので --local では見ない
+    except gapi.ApiError as e:
+        ng("uc_connections", str(e))
+        if "www.googleapis.com" in via:  # Drive も通らない（下の確かめはどれも同じ理由で止まる）
+            return out
+        via = {}
+    probe = {urllib.parse.urlsplit(u).netloc for u in (gapi.SLIDES, gapi.DOCS)}  # API の説明（$discovery、v1）を ID なしで取れる、プラグインが使うホスト
+    for host, conn in via.items():  # Drive（下の「Google の認証」）のほかの connection。Drive が通らなくても見る
+        if host in probe:
+            try:
+                gapi.request("GET", f"https://{host}/$discovery/rest?version=v1")
+                ok(f"uc_connections.proxy.{host}", f"{conn} に届く（OAuth の scope は、使うときに 403 で分かる）")
+            except Exception as e:  # 1 つのホストが通らなくても、ほかのホストを見続ける（回線のエラー・形の違う返事も）
+                ng(f"uc_connections.proxy.{host}", f"connection {conn} で通らない: {proxy_fail(e)}")
+        elif host != "www.googleapis.com":
+            ok(f"uc_connections.proxy.{host}", f"{conn}（プラグインは呼ばないホストなので、確かめていない）")
     try:
         who = gapi.request("GET", f"{gapi.DRIVE}/about?fields=user(emailAddress)")["user"]["emailAddress"]
         ok("Google の認証", who)
-    except gapi.ApiError as e:
+    except Exception as e:  # 回線のエラー・形の違う返事（キーがない JSON など）も、トレースバックにしない
+        first = (str(e) or type(e).__name__).splitlines()[0]
+        if conn := via.get("www.googleapis.com"):  # Drive を connection で呼んだ
+            ng("Google の認証", f"Unity Catalog の connection {conn} で通らない: {proxy_fail(e)}")
+            return out
         how = "GOOGLE_OAUTH_ACCESS_TOKEN" if os.environ.get("GOOGLE_OAUTH_ACCESS_TOKEN") else str(gapi.credentials_path())  # gapi.token() と同じ順
-        first = str(e).splitlines()[0]
         fix = "google.quota_project を書く（空だと gcloud の既定の OAuth クライアントのトークンは 403）" if first.startswith("403") and not g.get("quota_project") else f"作り直す: {gapi.LOGIN}"
         ng("Google の認証", f"{how} で通らない: {first}。{fix}")
         return out
@@ -187,8 +229,9 @@ def check(ws, local=False):
         try:
             f = gapi.request("GET", f"{gapi.DRIVE}/files/{fid}?supportsAllDrives=true&fields=name,trashed")
             (warn if f.get("trashed") else ok)(name, f"{f['name']}{'（ゴミ箱にある）' if f.get('trashed') else ''}")
-        except gapi.ApiError as e:
-            ng(name, f"開けない（{str(e).split()[0]}）: {url}")
+        except Exception as e:  # connection を通すと、回線のエラーや proxy の断り・形の違う返事もここに来る。行ごとに知らせ、ほかの行を落とさない
+            w = (str(e) or type(e).__name__).split()[0]
+            ng(name, f"開けない（{w}）: {url}" if w[:3].isdigit() else f"開けない: {url}。{proxy_fail(e)}")
     if dr.get("shared_themes"):  # 全社の共有テーマのフォルダ。探すときだけ読む（使うテーマは slides.py theme <url> で写す）
         try:
             files, have = slides.shared_files(), {gapi.file_id(u) for u in temps.values()}  # 自分の Themes は読まない（slides.py themes が出す）
@@ -219,6 +262,9 @@ def main(args):
 
 
 def selftest():
+    assert "connection にログインする: Please login" in proxy_fail(Exception(f"{gapi.REJECTED}: GET u\nPlease login"))  # 返事のログインの URL を見せる
+    m = proxy_fail(Exception('503 GET u\n<html>bad gateway</html>'))
+    assert m.startswith("503 GET u（<html>bad gateway</html>）。確かめる: ") and CHECKS in m and proxy_fail(TimeoutError()) == f"TimeoutError。確かめる: {CHECKS}"  # 原因は当てない
     with tempfile.TemporaryDirectory() as tmp:  # ~/.desk.toml の workspace を使う。ワークスペースにも desk.toml があれば要確認
         ws, conf = Path(tmp, "Documents").resolve(), Path(tmp, "home", ".desk.toml")
         os.environ["DESK_CONFIG"] = str(conf)
@@ -255,6 +301,20 @@ def selftest():
         (Path(tmp) / "Customers" / "acme" / "memory.md").unlink()
         (Path(tmp) / "Customers" / "acme" / "CLAUDE.md").rename(Path(tmp) / "Customers" / "acme" / "memory.md")
         assert "顧客の memory" not in kinds()
+        conf, base = Path(tmp) / "desk.toml", (Path(tmp) / "desk.toml").read_text()
+        for bad in ('uc_connections = "on"\n', '[uc_connections]\nenabled = "false"\n', '[uc_connections]\nprofile = 5\n', '[uc_connections]\nhost = 5\n',
+                    '[uc_connections.proxy]\n"slides.googleapis.com" = 5\n'):  # 表でない・型の違う設定は要修正（トレースバックにしない）
+            conf.write_text(bad + base)  # 先頭に書く（末尾だと、最後の表のキーになる）
+            assert kinds()["uc_connections"] == "要修正", bad
+        hosts = '[uc_connections.proxy]\n"www.googleapis.com" = "d"\n"slides.googleapis.com" = "s"\n"docs.googleapis.com" = "x"\n'
+        conf.write_text(base + hosts)
+        k = kinds()
+        assert k["uc_connections"] == "OK" and "google.quota_project" not in k  # 全部 connection を通すなら、quota project は要らない
+        conf.write_text(base + hosts.replace('"x"', '""'))
+        assert kinds()["google.quota_project"] == "要確認"  # Docs は直接呼ぶ
+        conf.write_text(base + "[uc_connections]\nenabled = false\n" + hosts)
+        assert "無効" in next(d for _, n, d in check(Path(tmp), local=True) if n == "uc_connections") and kinds()["google.quota_project"] == "要確認"
+        conf.write_text(base)
         agents = Path(tmp) / "AGENTS.md"
         assert "前の雛形の AGENTS.md" not in kinds() and "前のバージョンのワークスペース" not in kinds()  # 今の雛形は AGENTS.md を置かない
         (Path(tmp) / "rules" / "deck-build").mkdir(parents=True)
@@ -356,7 +416,7 @@ def selftest():
         with contextlib.redirect_stdout(io.StringIO()):
             assert main([tmp, "--local"]) == (0 if shutil.which("uv") else 1)
         toml.write_text(toml.read_text().replace('shared_themes = ""', 'shared_themes = "shared"'))
-        import gapi, slides
+        import slides
         cwd, saved = os.getcwd(), (gapi.request, slides.shared_files, slides.theme_files)
         gapi.request = lambda method, url, *a, **k: {"user": {"emailAddress": "me"}} if "/about" in url else {"name": "x"}
         shared = lambda: next(d for _, n, d in check(Path(tmp)) if n == "共有テーマ")
