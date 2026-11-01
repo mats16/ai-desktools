@@ -187,6 +187,8 @@ API を直接呼ぶ（MCP は使わない）。トークンは `lib/gapi.py` が
 
 gcloud の既定の OAuth クライアントで作った認証情報は、`google.quota_project` がないと 403 になる。
 
+Databricks の Unity Catalog の HTTP の connection を通して呼ぶこともできる（Google のトークンは connection が持つ）。`desk.toml` の `[uc_connections]` に、Databricks の CLI の profile（`profile`。ワークスペースの URL もそこから読む。profile を使わないなら `host` にワークスペースの URL）と、Google のホストごとの connection の名前（`[uc_connections.proxy]`。`www.googleapis.com`（Drive）・`slides.googleapis.com`・`docs.googleapis.com`）を書くと、そのホストへの呼び出しは `/api/2.0/unity-catalog/connections/<名前>/proxy/…` に送る。connection は、host をその Google のホスト、base_path を空にし、OAuth の scope に drive・presentations・documents を入れて作る。Databricks のトークンは、`profile` があればその profile で `databricks auth token` が取る（`databricks auth login` でログインしたもの。`DATABRICKS_TOKEN` は使わない）。`databricks auth token` は OAuth の profile だけを扱うので、PAT の profile は `profile` に書かず、`host` と `DATABRICKS_TOKEN` で渡す。`profile` がなければ環境変数 `DATABRICKS_TOKEN`、それもなければ `host` のホストで `databricks auth token`（同じホストの profile が 2 つ以上あると CLI が選べないので、`profile` を書く）。Genie Code などの Databricks の上では、子のプロセスは自分でトークンを取れないので、呼び出す側の Python で `WorkspaceClient().config.authenticate()` のトークンを `DATABRICKS_TOKEN` に、`config.host` を `DATABRICKS_HOST` に入れて渡す（`profile` と `host` は書かない。`desk-doctor` にも同じく渡す）。`profile` と `host` を両方書くと、`profile` を使う。Genie One は、2026-11-01 の時点で、スキルに入れたスクリプトを動かせない。connection が人ごとの OAuth なら、使う人が先にワークスペースの画面で connection にログインしておく。`[uc_connections]` に `enabled = false` と書くと、設定を残したまま直接呼ぶのに戻る（書かなければ有効）。
+
 ## 決めたこと・残っている課題
 
 ユーザーが決めたことは [docs/decisions.md](docs/decisions.md)、後回しにしたことは [docs/todo.md](docs/todo.md) に書く。

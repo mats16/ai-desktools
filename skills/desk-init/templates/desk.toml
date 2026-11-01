@@ -24,6 +24,15 @@ profile = ""  # 使う人の名前・メール・会社・役割・担当の顧�
 # （GOOGLE_APPLICATION_CREDENTIALS、なければ gcloud の ADC。作るのは desk-doctor が出す gcloud auth application-default login のコマンド）
 quota_project = ""  # gcloud の既定の OAuth クライアントで取ったトークンは、これがないと Slides・Docs で 403。自分の OAuth クライアントなら空でよい
 
+# [uc_connections]  # Google の API を、Databricks の Unity Catalog の HTTP の connection を通して呼ぶとき（Google のトークンは connection が持つ）。書かなければ直接呼ぶ
+# enabled = true  # false にすると、設定を残したまま直接呼ぶのに戻す
+# profile = ""  # ~/.databrickscfg の profile。ワークスペースの URL もここから読み、トークンもこの profile で databricks auth token が取る（DATABRICKS_TOKEN は使わない）。OAuth の profile だけ（PAT なら host と DATABRICKS_TOKEN）
+# host = "https://….cloud.databricks.com"  # profile を書かないときのワークスペースの URL（トークンは DATABRICKS_TOKEN、なければこのホストの profile。同じホストの profile が 2 つ以上なら profile を書く）。どちらも書かなければ DATABRICKS_HOST と DATABRICKS_TOKEN（Genie Code など）
+# [uc_connections.proxy]  # ホストごとの connection の名前（connection の host はそのホスト、base_path は空）。ないホストは直接呼ぶ
+# "www.googleapis.com" = ""     # Drive
+# "slides.googleapis.com" = ""  # Slides
+# "docs.googleapis.com" = ""    # Docs
+
 [slides]
 default_theme = "navy"  # 説明で決まらないときのテーマ。テーマは資料ごとに選ぶ（slides.py themes が名前と説明を出す）。切り替えはスキル slides-build の templates の「Choosing the default theme」
 
