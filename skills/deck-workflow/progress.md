@@ -1,6 +1,8 @@
 # Step records
 
-A material's step records live in `progress.jsonl` in the material folder, one JSON object per line. `scripts/flow.py record` appends them, and `scripts/flow.py <material folder>` shows them. This file explains what a record holds, where each field comes from, and when a record helps. Whether to record, and when, is your call; nothing else in the workflow requires it. The workflow owns the records. The tools (`slides-build`, `docs-build`, the ledgers) never write them, so they keep working without the workflow.
+A material's step records live in `progress.jsonl` in the material folder, one JSON object per line. Whoever does a piece of work, the parent or a child agent, records only its own scope: which step, what state, which files, what it produced. `scripts/flow.py` is the orchestrator: it merges the records and decides the state of each step, the next step, and whether finished files have changed since. Whether to record, and when, is your call; nothing else in the workflow requires it. The workflow owns the records. The tools (`slides-build`, `docs-build`, the ledgers) never write them, so they keep working without the workflow.
+
+The split follows graph engines. A LangGraph node returns only its own update, and the edges decide the next node. A Temporal activity returns its result, and the workflow decides what follows. Parallel branches are merged by a reducer (LangGraph) or joined when all of them succeed (Airflow's `all_success`). Bazel and Dagster tell stale outputs by the content hash of their inputs, not by time. A writer here therefore never writes the next step: a child sees only its pages and cannot know it.
 
 ## Why records, not inference
 
@@ -10,7 +12,7 @@ A material's step records live in `progress.jsonl` in the material folder, one J
 
 ```sh
 python3 <deck-workflow folder>/scripts/flow.py record <material folder> <step number> <status> \
-  [--out <name>=<value> ...] [--note <text>] [--next <text>] [--by <who>]
+  [--files <file> ...] [--out <name>=<value> ...] [--note <text>]
 ```
 
 | Field | Written by | Holds | Modeled on |
@@ -18,12 +20,11 @@ python3 <deck-workflow folder>/scripts/flow.py record <material folder> <step nu
 | `ts` | the script (UTC, seconds) | When the record was made | LangGraph checkpoint `created_at`; Temporal event time |
 | `step` | you (`1`–`11`; 1–4 are one step) | The step of "Overall flow" in `SKILL.md` | Codex `update_plan` `step`; LangGraph `metadata.step` |
 | `status` | you | 「始めた」, 「済んだ」, 「飛ばした」 (the step does not apply, such as step 6 for a deck of 10 pages or fewer), or 「止まった」 (waiting for the user's answer or other work) | Codex and Claude Code `pending` / `in_progress` / `completed`; GitHub Actions `skipped`; beads `blocked` |
-| `out` | you (`--out`, repeatable) | Facts the step produced that files do not show, as name=value pairs | LangGraph `metadata.writes`; GitHub Actions step `outputs`; OpenTelemetry span attributes |
+| `inputs` | the script, from `--files` | Your scope: the files you work on (paths from the material folder), each with the sha256 of its content when you recorded. A file not written yet (planned, or dropped and deleted) can be named in any status but 「済んだ」, with no hash. Without `--files`, the scope is the whole material | Bazel action inputs; Dagster data versions |
+| `out` | you (`--out`, repeatable) | Facts your work produced that files do not show, as name=value pairs | LangGraph `metadata.writes`; GitHub Actions step `outputs`; OpenTelemetry span attributes |
 | `note` | you | What was decided, what was dropped and why, what is waited for | beads `notes`; Codex `explanation`; `claude-progress.txt` in Anthropic's long-running harness |
-| `next` | you | The next concrete action | LangGraph `next`; beads handoff notes ("the next concrete step") |
-| `by` | you | Who did it: 「親」 or the child agent's name, when children write pages | Claude Code `TaskUpdate` `owner`; beads `assignee` |
 
-The file is append-only, as an event history is (Temporal, LangGraph checkpoints): a new record does not edit an older one, and the last record of a step is its current state. Anthropic's harness has agents change only the `passes` field of its feature list, for the same reason: a history that is only added to cannot lose what was done.
+The file is append-only, as an event history is (Temporal, LangGraph checkpoints): a new record does not edit an older one. Anthropic's harness has agents change only the `passes` field of its feature list, for the same reason: a history that is only added to cannot lose what was done.
 
 Names that help in `--out`:
 
@@ -37,12 +38,16 @@ Names that help in `--out`:
 
 ## What `flow.py` shows
 
-For each step it shows the last record with its count, then the facts from the files and the ledger. At the top it shows the newest record of any step, which is where the work last stood. It also reports two mismatches between a record and the files. One is a file in `build/` changed after a 「済んだ」 record of step 7 or later and before any later step's record (a change after the next step started belongs to that step; a file changed again later shows only its last change; the record's time is in whole seconds, so a change within the same second as the record is not listed). The other is an `out` URL at step 8 whose Google file ID is in neither the outline nor `社内メモ_*.md` (where deck-drive-003 writes the URL; the `/a/<domain>/`, `/u/0/`, and Drive forms of the same file match). Only page sources in `build/` count as changes (`.json`, `doc.md`, `pages.py`); images and `*.bak*` backups do not. Times come from the clock of the machine that wrote each record. Lines it cannot read are counted and skipped.
+- **The state of each step.** For each file, and for the whole material (records without `--files`), the last record is its state; no record replaces another. A step is 「止まった」 if any of these is, 「始めた」 if any is still open, and otherwise 「済んだ」 (「飛ばした」 if all were skipped), so a step is done only when every scope is. The order is the order of lines in the file, never the clock: the file is only appended to, under a lock.
+- **Where the work is, and the next step.** The first step still 「始めた」 or 「止まった」 is where the work is (so going back to an earlier step for a fix after delivery shows, with the furthest recorded step beside it to tell rework from a forgotten close), and the next action is to continue it or clear what stopped it, with the scopes still open. Files changed after 「済んだ」 are also listed at the top, so a fix made without a record shows there. If no step is open, the next step is the one after the furthest recorded step in "Overall flow"; record a step that does not apply as 「飛ばした」 and move on.
+- **Changed since finished.** For each file whose last record is 「済んだ」, a content that no longer matches the recorded hash, or a missing file. A file changed and changed back matches again. After reworking a page on purpose, record it again (「済んだ」 with `--files`) to take the new content as finished. A link inside the folder counts as the file it points to.
+- **The built URL.** An `out` URL at step 8 whose Google file ID is in neither the outline nor `社内メモ_*.md` (where deck-drive-003 writes the URL; the `/a/<domain>/`, `/u/0/`, and Drive forms of the same file match).
+- **The facts.** What the files and the ledger show for each step. Other `out` values, such as `pages=24`, are shown as written and not compared with the files, so compare them yourself. Lines it cannot read are counted and skipped.
 
 ## When a record helps
 
-- **Before a summary** (deck-flow-005): the record and `next` survive in the folder, and after the summary one `flow.py` call shows where to resume (deck-flow-015).
+- **Before a summary** (deck-flow-005): the records survive in the folder, and after the summary one `flow.py` call shows where to resume (deck-flow-015).
 - **When the files cannot tell**: the planned page count, the built URL, a skipped step, or waiting for an answer in 「聞く」.
-- **When child agents write pages** (slides-flow-016): a child can record 「始めた」 for step 7 with `--by <name>` and its pages in `--out` (`pages=p06-p10`), so the parent sees who is on which pages. Record step 7 as 「済んだ」 only from the parent, after every child has returned, because the last record of a step is the state of the whole step.
+- **When child agents write pages** (slides-flow-016): record step 7 「始めた」 for the whole material and, when you hand out the pages, 「始めた」 with `--files` for each child's planned pages (they need not exist yet), because the join sees only scopes that have a record. Ask each child to record its own pages when it finishes (`flow.py record <material folder> 7 済んだ --files build/p06.json build/p07.json`). Step 7 is 「済んだ」 only after the parent records it 「済んだ」 for the whole material and every child's pages are 「済んだ」 or 「飛ばした」. A page dropped from the plan is recorded 「飛ばした」 with `--files`, even after the file is deleted; the children's hashes keep watching the pages after step 7 closes.
 
 A short material finished in one sitting may need no record; the files and the outline already say enough.

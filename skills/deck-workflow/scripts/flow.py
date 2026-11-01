@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """usage: flow.py <資料のフォルダ>     手順ごとの記録と、ファイルと台帳から分かる事実
-       flow.py record <資料のフォルダ> <手順の番号> <始めた|済んだ|飛ばした|止まった> [--out <名前>=<値> ...] [--note <ひとこと>] [--next <次にすること>] [--by <誰>]
-                                    手順の記録を資料のフォルダの progress.jsonl に 1 行足す（使うか、いつ使うかはエージェントが決める）
+       flow.py record <資料のフォルダ> <手順の番号> <始めた|済んだ|飛ばした|止まった> [--files <ファイル> ...] [--out <名前>=<値> ...] [--note <ひとこと>]
+                                    自分の範囲の記録を資料のフォルダの progress.jsonl に 1 行足す（使うか、いつ使うかはエージェントが決める）
        （--selftest で自己確認）
 記録は資料を作るワークフロー（deck-workflow）のもので、道具（slides.py・docs.py など）は書かない。項目と値は deck-workflow の progress.md。
-表示は、手順ごとの最後の記録と、ファイルと台帳から分かる事実を並べる。手順が済んだかは、記録だけが言い、ファイルの形からは決めない
+記録を書く側（親・子・各手順）は自分の範囲（--files。なければ資料全体）のことだけを書き、次の手順は書かない。
+まとめるのはこのスクリプト: 手順ごと・範囲ごとに最後の記録を今の状態にし、範囲の状態から手順の状態を、手順の並びから次を決め、
+記録したときのファイルの sha256 と今の中身を比べる（時刻では比べない）。手順が済んだかは記録だけが言い、ファイルの形からは決めない
 （予定の枚数、どの URL が組んだ資料か、節の中身が決まりか下書きかは、ファイルからは決めきれないため。2026-11-01 の「決めたこと」）。
 事実は手順ごとに調べ、崩れた手順だけを「調べられない」と出して先へ進む。標準ライブラリだけ。"""
-import argparse, contextlib, functools, io, json, posixpath, re, sys
+import argparse, contextlib, functools, hashlib, io, json, posixpath, re, sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -127,25 +129,30 @@ def step_of(n):
     return STEPS[0] if 1 <= n <= 4 else next((s for s in STEPS[1:] if s.split()[0] == str(n)), None)
 
 
+def good_inputs(v):
+    """記録の inputs の形か: 資料のフォルダからの素直なパス（.. で外へ出ない・絶対でない）→ sha256 か null。手で直して崩れた行は、読めない行に数える。"""
+    path = lambda k: isinstance(k, str) and k not in ("", ".", "..", PROGRESS) and "\0" not in k and not posixpath.isabs(k) and posixpath.normpath(k) == k and not k.startswith("../")
+    return isinstance(v, dict) and all(path(k) and (h is None or isinstance(h, str) and re.fullmatch(r"[0-9a-f]{64}", h)) for k, h in v.items())
+
+
 def records(folder):
-    """(手順の名前 → その手順の記録の並び〔古い順〕, 読めない行の数か、ファイルを読めないときの文)。記録の "_n" は、ファイルの中の何行目か（同じ秒の記録の前後）。"""
+    """(手順の名前 → その手順の記録の並び〔書いた順〕, 読めない行の数か、ファイルを読めないときの文)。
+    順はファイルの行の順だけで決める（足すだけのファイルを鍵をかけて書くので、行の順が書いた順。時計のずれに左右されない）。"""
     got, bad, p = {}, 0, folder / PROGRESS
-    if p.exists() and not p.is_file():
-        return {}, f"{PROGRESS} がファイルでない（フォルダなど）"
+    if p.exists() and not p.is_file() or p.is_symlink():
+        return {}, f"{PROGRESS} がファイルでない（フォルダかリンク）"
     text = read(p)
     if text is None and p.exists():
         return {}, f"{PROGRESS} を読めない（読む権限など）"
-    for n, line in enumerate((text or "").lstrip("\ufeff").split("\n")):  # エディタが先頭に付ける BOM は外す  # splitlines は U+2028 などでも切り、1 件の記録を 2 つに割る
+    for line in (text or "").lstrip("\ufeff").split("\n"):  # エディタが先頭に付ける BOM は外す  # splitlines は U+2028 などでも切り、1 件の記録を 2 つに割る
         try:
             r = json.loads(line)
         except (ValueError, RecursionError):  # 深すぎる入れ子の行も、その行だけを読めないとする
             r = None
-        if isinstance(r, dict) and r.get("step") in STEPS and r.get("status") in STATUSES and when(r.get("ts")):
-            got.setdefault(r["step"], []).append({**r, "_n": n})
+        if isinstance(r, dict) and r.get("step") in STEPS and r.get("status") in STATUSES and when(r.get("ts")) and good_inputs(r.get("inputs", {})):
+            got.setdefault(r["step"], []).append(r)
         else:
             bad += bool(line.strip())
-    for rs in got.values():
-        rs.sort(key=lambda r: (when(r["ts"]), r["_n"]))  # 時刻の順。同じ秒はファイルの順（あとから足した子の記録も時刻で並ぶ）
     return got, bad
 
 
@@ -157,16 +164,39 @@ def out_arg(s):
     return k, v
 
 
-def record(folder, n, status, out=(), note="", next_="", by=""):
-    """手順の記録を 1 行足す。足すだけで、前の行は書き換えない（同じ手順は、最後の行が今の状態）。"""
+def sha(p):
+    """ファイルの中身の sha256。読めなければ None。"""
+    try:
+        return hashlib.sha256(p.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def record(folder, n, status, out=(), note="", files=()):
+    """自分の範囲の記録を 1 行足す。足すだけで、前の行は書き換えない（同じ手順・同じ範囲は、最後の行が今の状態）。
+    files は範囲のファイル（資料のフォルダからのパス）。記録には、そのときの中身の sha256 を inputs として残す。"""
     folder = Path(folder).resolve()
     folder.is_dir() or sys.exit(f"資料のフォルダがない: {folder}")
     step = step_of(n) or sys.exit(f"手順の番号は 1〜11: {n}")
     status in STATUSES or sys.exit(f"状態は {'・'.join(STATUSES)} のどれか: {status}")
+    inputs, bad = {}, []
+    for x in files:
+        try:
+            p = (folder / x).resolve()  # 先に解く: リンクで外を指すファイルは読まずに止め、中を指すリンクは指す先のファイルとして数える
+        except (OSError, ValueError, RuntimeError):  # NUL の入った名前・リンクの輪
+            bad.append(x)
+            continue
+        h = sha(p) if p.is_relative_to(folder) and p != folder / PROGRESS else None  # 記録のファイルそのものは、書くたびに変わるので範囲にしない
+        if not p.is_relative_to(folder) or p == folder / PROGRESS or h is None and (p.exists() or status == "済んだ"):  # まだないページ（始める・外した）は書ける。済んだはあるファイルだけ
+            bad.append(x)
+        else:
+            inputs[p.relative_to(folder).as_posix()] = h
+    bad and sys.exit(f"--files は資料のフォルダの中の読めるファイル（build/p06.json など。まだないファイルは 済んだ 以外で書ける）: {', '.join(bad)}")
     rec = {"ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "step": step, "status": status,
-           **({"out": dict(out)} if out else {}), **({"note": note} if note else {}), **({"next": next_} if next_ else {}), **({"by": by} if by else {})}
+           **({"inputs": inputs} if inputs else {}), **({"out": dict(out)} if out else {}), **({"note": note} if note else {})}
     p = folder / PROGRESS
     p.exists() and not p.is_file() and sys.exit(f"{p} がファイルでない（フォルダなど）。名前を変えてから回す")
+    p.is_symlink() and sys.exit(f"{p} がリンク。資料のフォルダの外に書かないよう、ふつうのファイルにしてから回す")
     with p.open("a+b") as f:
         if fcntl:  # 子が同時に書いても行が混ざらないように（長い --note は 1 回の書き込みで収まらない）
             fcntl.flock(f, fcntl.LOCK_EX)
@@ -176,11 +206,46 @@ def record(folder, n, status, out=(), note="", next_="", by=""):
     return rec
 
 
+def scope(r):
+    """記録の範囲（inputs のファイルの組）。なければ資料全体 ()。"""
+    return tuple(sorted(r["inputs"])) if isinstance(r.get("inputs"), dict) else ()
+
+
+def state(rs):
+    """手順の記録（書いた順）→ (手順の状態, 今の状態を決めている記録の並び, {ファイルか None〔資料全体〕: それを最後に書いた記録})。
+    ファイルごとと資料全体ごとに、最後に書いた記録が今の状態で、ほかの記録を置き換えない（範囲を分け直しても、前のファイルの状態はそのファイルの次の記録で変わる）。
+    止まったが 1 つでもあれば止まった、始めたが残っていれば始めた、残りがなければ済んだ（全部が飛ばしたなら飛ばした）。Airflow の all_success と同じ合流。"""
+    last = {}
+    for r in rs:
+        last.update((x, r) for x in (r["inputs"] if scope(r) else [None]))  # None は資料全体
+    live = list({id(r): r for r in last.values()}.values())
+    sts = {r["status"] for r in live}
+    return next(s for s in ("止まった", "始めた", "済んだ", "飛ばした") if s in sts), live, last
+
+
+def where(recs):
+    """(いまの手順, その状態, 次)。始めた・止まったのままの手順があれば、その最初のもの（返したあとに前の手順に戻った直しも見える）。
+    なければ、記録のあるいちばん先の手順と、手順の並びで決める。記録がなければ None。"""
+    if not (logged := [s for s in STEPS if s in recs]):
+        return None
+    open_ = [(s, st) for s in logged if (st := state(recs[s])[0]) in ("始めた", "止まった")]
+    if open_:
+        s, st = open_[0]
+        opened = [x for x, r in state(recs[s])[2].items() if r["status"] in ("始めた", "止まった")]
+        still = ["資料全体"] * (None in opened) + ([short([x for x in opened if x], 4)] if any(opened) else [])
+        far = f"（記録のあるいちばん先の手順は {logged[-1]}・{state(recs[logged[-1]])[0]}。前の手順に戻った直しか、閉じ忘れか）" if logged[-1] != s else ""
+        return s, st, (f"{s} を続ける" if st == "始めた" else f"{s} の止まった理由（記録の note）を片付ける") + f"（開いている範囲: {'、'.join(still)}）" + far
+    s = logged[-1]
+    i = STEPS.index(s) + 1
+    return s, state(recs[s])[0], f"{STEPS[i]} を始める（当てはまらない手順なら、飛ばした と記録して次へ）" if i < len(STEPS) else "なし（11 まで済んだ）"
+
+
 def shown(r):
     """記録の 1 行の見せ方。"""
-    out = "".join(f" {k}={v}" for k, v in (r.get("out") or {}).items()) if isinstance(r.get("out"), dict) else ""
-    return (f"記録: {r['status']} {r['ts']}" + (f"（{r['by']}）" if r.get("by") else "") + out
-            + (f"。{r['note']}" if r.get("note") else "") + (f"。次: {r['next']}" if r.get("next") else ""))
+    flat = lambda v: " ".join(str(v).split())  # 改行で、報告の別の行に見せない
+    out = "".join(f" {flat(k)}={flat(v)}" for k, v in r["out"].items()) if isinstance(r.get("out"), dict) else ""
+    return (f"記録: {r['status']} {r['ts']}（{'範囲 ' + short(scope(r), 4) if scope(r) else '資料全体'}）" + out
+            + (f"。{flat(r['note'])}" if r.get("note") else ""))
 
 
 def google_urls(folder, o, text):
@@ -194,7 +259,7 @@ def google_urls(folder, o, text):
 
 
 def facts(folder, ws):
-    """([(手順, [事実の文])], 記録と突き合わせるもの {"files": build/ のファイルの時刻, "ids": Google の URL})。手順ごとに調べ、崩れたら（読めないファイル・思わない形の値）、その手順に「調べられない」と出して次へ進む。
+    """([(手順, [事実の文])], 構成案と社内メモの Google の ID の集合か None)。手順ごとに調べ、崩れたら（読めないファイル・思わない形の値）、その手順に「調べられない」と出して次へ進む。
     壊れ方を 1 つずつ数え上げず、どの壊れ方でも 1 つの手順だけで止まるようにする。手順が済んだかは決めない。"""
     build, name, out = folder / "build", folder.name, []
 
@@ -209,15 +274,6 @@ def facts(folder, ws):
         with contextlib.redirect_stdout(io.StringIO()):
             errs = refs.check(folder)
         return refs.facts(folder), errs
-
-    @functools.cache
-    def changed():
-        """build/ のページの元（.json・doc.md・pages.py）の [(最後に変えた時刻, build/ からのパス)]。
-        画像・控え（*.bak*）・. で始まるファイル・__pycache__ は見ない（道具が書くもので、ページの中身の変更でない）。"""
-        source = lambda p: p.suffix == ".json" or p.name in ("doc.md", "pages.py")
-        files = [p for p in build.rglob("*") if p.is_file() and source(p) and ".bak" not in p.name
-                 and not any(x.startswith(".") or x == "__pycache__" for x in p.relative_to(build).parts)] if build.is_dir() else []
-        return [(p.stat().st_mtime, p.relative_to(build).as_posix()) for p in files]
 
     @functools.cache
     def ledger_facts():
@@ -277,8 +333,6 @@ def facts(folder, ws):
         got = ledger_facts()
         items = [no_ledger] if got is None else [f"台帳に取り込んだレビュー {len(got[0])} 行" + (
             f"・最後 {t:%Y-%m-%d %H:%M:%S}Z" if (t := max((x for r in got[0] if (x := when(r.get("ts")))), default=None)) else "")]
-        c = max(changed(), default=None)
-        items.append(f"build/ の最後の変更: {datetime.fromtimestamp(c[0], timezone.utc):%Y-%m-%d %H:%M:%S}Z（{c[1]}）" if c else "build/ にページの元のファイル（.json・doc.md・pages.py）がない")
         return items + [f"出典の照合の 2 回目（sources_{name}_2）を構成案に{'書いた' if f'sources_{name}_2' in outline()[1] else '書いていない'}"]
 
     def deliver():
@@ -300,12 +354,10 @@ def facts(folder, ws):
 
     for step, fn in zip(STEPS, (prep, plan, rules, pages, urls, review, deliver, clean)):
         out.append((step, guarded(fn)))
-    extra = {}  # 記録と突き合わせるもの。調べられなければ入れない（その手順の事実に「調べられない」と出ている）
+    ids = None  # 8 の記録の url と突き合わせる Google の ID。調べられなければ None（8 の事実に「調べられない」と出ている）
     with contextlib.suppress(Exception, SystemExit):
-        extra["files"] = changed()
-    with contextlib.suppress(Exception, SystemExit):
-        extra["ids"] = {i for _, i in gurls()}
-    return out, extra
+        ids = {i for _, i in gurls()}
+    return out, ids
 
 
 def report(folder):
@@ -320,33 +372,37 @@ def report(folder):
         recs, bad = records(folder)
     except (Exception, SystemExit) as e:  # noqa: BLE001
         recs, bad = {}, f"{PROGRESS} を調べられない（{type(e).__name__}: {e}）"
-    rows, extra = facts(folder, ws)
-    files, ids = extra.get("files"), extra.get("ids")
+    rows, ids = facts(folder, ws)
+    def inside(x):  # 記録のあとにリンクに差し替えて外を指すようにしたパスは読まない
+        try:
+            return (folder / x).resolve().is_relative_to(folder)
+        except (OSError, ValueError, RuntimeError):
+            return False
+    moved = {s: [x for x, r in state(rs)[2].items() if x and r["status"] == "済んだ" and inside(x) and sha(folder / x) != r["inputs"][x]] for s, rs in recs.items()}
     print(f"資料: {ledger.rel(ws, folder) if ws else folder}")
-    every = sorted((r for rs in recs.values() for r in rs), key=lambda r: (when(r["ts"]), r["_n"]))
-    if every:
-        print(f"最後の記録: {every[-1]['step']}。{shown(every[-1])}")
+    if now := where(recs):
+        print(f"いま: {now[0]}（{now[1]}）。次: {now[2]}")
     elif not isinstance(bad, str):
         print(f"記録なし（{PROGRESS} に読める記録がない）" if (folder / PROGRESS).exists() else f"記録なし（{PROGRESS} がない。手順が済んだかは、記録とファイルを読んで決める）")
     if bad:
         print(f"{PROGRESS} に読めない行 {bad}" if isinstance(bad, int) else bad)
+    if any(moved.values()):  # 記録しないまま直したページも、いちばん上に出す
+        print("済んだと記録したあとに中身が変わった（か、なくなった）: " + "、".join(f"{s} の {short(xs)}" for s, xs in moved.items() if xs))
     for step, items in rows:
         print(f"\n{step}")
-        rs = recs.get(step, [])
-        if rs:
-            r = rs[-1]
-            print(f"  - {shown(r)}" + (f"（この手順の記録 {len(rs)} 件）" if len(rs) > 1 else ""))
-            at = when(r["ts"]).timestamp()
-            end = min((x for s in STEPS[STEPS.index(step) + 1:] for y in recs.get(s, []) if (x := when(y["ts"]).timestamp()) >= at), default=float("inf"))
-            done = r["status"] == "済んだ" and STEPS.index(step) >= STEPS.index("7 ページを書く")  # 6 までが済んだあとにページを書くのは、ふつうの流れ
-            if done and (late := [f for m, f in files or [] if at + 1 <= m < end]):  # 時刻は秒まで。あとの手順を始めてからの変更は、その手順のもの
-                print(f"  - 済んだと記録したあと、次の手順の記録より前に build/ が変わった: {short(late)}（そのあとにまた変えたファイルは見えない）")
-            u = r["out"].get("url") if isinstance(r.get("out"), dict) else None
-            if step == "8 全体を組む" and isinstance(u, str) and ids is not None:
-                if not (m := URL.search(u)):
-                    print("  - 記録の url から Google のファイルの ID を読めない（突き合わせない）")
-                elif m["id"] not in ids:
-                    print("  - 記録の url の ID が構成案にも社内メモにもない")
+        if rs := recs.get(step, []):
+            st, live, last = state(rs)
+            print(f"  - 状態: {st}" + (f"（範囲 {len(last)}: " + "・".join(f"{s} {n}" for s in STATUSES if (n := sum(r['status'] == s for r in last.values()))) + "）" if len(last) > 1 else ""))
+            for r in live:
+                print(f"  - {shown(r)}")
+                u = r["out"].get("url") if isinstance(r.get("out"), dict) else None
+                if step == "8 全体を組む" and isinstance(u, str) and ids is not None:
+                    if not (m := URL.search(u)):
+                        print("  - 記録の url から Google のファイルの ID を読めない（突き合わせない）")
+                    elif m["id"] not in ids:
+                        print("  - 記録の url の ID が構成案にも社内メモにもない")
+            if moved[step]:
+                print(f"  - 済んだと記録したあとに中身が変わった（か、なくなった）: {short(moved[step])}")
         print(*(f"  - {x}" for x in items), sep="\n")
     print("\nコマンドで確かめる（結果は会話の中にしかない）: slides.py lint・gslides.py check <URL> --all（slides-build）か docs.py check <URL>（docs-build）の要修正、"
           f"refs.py check {folder} --fetch（10 の前）")
@@ -383,12 +439,19 @@ def selftest():
             s = got()
             assert "references.md がない" in s["1–4"] and "構成案*.md がない" in s["5"] and "build/ にページがない" in s["7"] and "出典の表がない" in s["10"]
             assert "記録なし" in page()
-            # 記録: 足すだけで、手順ごとに最後の 1 件が今の状態
-            r1 = record(f, 5, "済んだ", [("pages", "20")], "4 つの答えに合意", "代表の 3 枚を組む", "親")
-            assert r1["step"] == "5 構成" and r1["out"] == {"pages": "20"} and r1["by"] == "親"
+            # 記録: 足すだけで、手順ごと・範囲ごとに最後の 1 件が今の状態。次は手順の並びから決める
+            r1 = record(f, 5, "済んだ", [("pages", "20")], "4 つの答えに合意")
+            assert r1["step"] == "5 構成" and r1["out"] == {"pages": "20"} and "inputs" not in r1
             assert record(f, 3, "飛ばした")["step"] == "1–4 準備"
             for bad in ((12, "済んだ"), ("²", "済んだ"), (8, "終わった")):
                 assert "1〜11" in _exits(lambda: record(f, *bad)) or "状態は" in _exits(lambda: record(f, *bad))
+            (f / "build" / "link.json").symlink_to("/etc/hosts")
+            for x in ("build/nothing.json", "../x.json", "/etc/hosts", "build/link.json"):
+                assert "--files は" in _exits(lambda: record(f, 7, "済んだ", files=[x])), x
+            (f / "build" / "link.json").unlink()
+            (f / "..notes.json").write_text("{}")
+            assert record(f, 3, "飛ばした", files=["..notes.json"])["inputs"]  # .. で始まる名前は外ではない
+            (f / "..notes.json").unlink()
             assert out_arg("url=https://x/y?a=b") == ("url", "https://x/y?a=b")
             try:
                 out_arg("=x")
@@ -396,7 +459,7 @@ def selftest():
             except argparse.ArgumentTypeError:
                 pass
             p = page()
-            assert "最後の記録: 1–4 準備。記録: 飛ばした" in p and "記録: 済んだ" in p and "pages=20。4 つの答えに合意。次: 代表の 3 枚を組む" in p and "（親）" in p
+            assert "いま: 5 構成（済んだ）。次: 6 代表の 3 枚 を始める" in p and "記録: 済んだ" in p and "（資料全体） pages=20。4 つの答えに合意" in p
             (f / "references.md").write_text("| " + " | ".join(refs.SRC_COLS) + " |\n|" + "---|" * len(refs.SRC_COLS) + "\n"
                                              "| S1 | 製品の docs | https://example.com | 公式 | 2026-10-01 | 2026-11-01 | 可 | 価格 |\n")
             for i in range(1, 13):
@@ -449,31 +512,65 @@ def selftest():
                 ledger.main(["review", "--deck", str(f), "--table", str(t)])
                 ledger.main(["add", "--deck", str(f), "--quote", "表を分けて"])
             s = got()
-            assert "取り込んだレビュー 2 行・最後 " in s["9"] and "build/ の最後の変更: " in s["9"] and "戻し先が「未」の指摘 1 件" in s["11"]
+            assert "取り込んだレビュー 2 行・最後 " in s["9"] and "最後の変更" not in s["9"] and "戻し先が「未」の指摘 1 件" in s["11"]  # 古さは時刻で比べない
             with open(ws / ".desk" / "ledger.jsonl", "a") as x:
                 x.write("[1]\n")
             s = got()
             assert "調べられない" in s["9"] and "調べられない" in s["11"] and "出典 1 件" in s["1–4"]  # JSON だが行の形でない。ほかの手順は出る
             (ws / ".desk" / "ledger.jsonl").write_text("".join(l for l in (ws / ".desk" / "ledger.jsonl").read_text().splitlines(True) if l != "[1]\n"))
             assert when("2026-11-01T00:00:00.5+00:00") and when("壊れた") is None and when("0001-01-01T00:00:00+05:00") is None
-            # 済んだと記録したあとの build/ の変更（7 から後の手順だけ）。記録の url が構成案にない
+            # 子は自分の範囲だけを書き、合流はこのスクリプトが決める（全部の範囲が済むまで、手順は始めたまま）
+            record(f, 7, "始めた", note="子 2 つに分けた")
+            record(f, 7, "始めた", files=["build/p13.json"])  # 子に渡した、まだないページ
+            assert "開いている範囲: 資料全体、build/p13.json" in page()
+            for x in ("progress.jsonl", "a\0b"):
+                assert "--files は" in _exits(lambda: record(f, 7, "始めた", files=[x])), x
+            record(f, 7, "始めた", files=["build/p13.json", "build/p14.json"])
+            record(f, 7, "飛ばした", files=["build/p13.json"])
+            assert "開いている範囲: 資料全体、build/p14.json）" in page()  # 閉じたファイルは開いている範囲に出さない
+            record(f, 7, "飛ばした", files=["build/p14.json"])
+            record(f, 7, "飛ばした", files=["build/p13.json"])
+            record(f, 7, "済んだ", files=["build/p04.json", "build/p05.json"])
+            record(f, 7, "始めた", files=["build/p06.json"])
+            p = page()
+            assert "いま: 7 ページを書く（始めた）。次: 7 ページを書く を続ける" in p and "範囲 6: 始めた 2・済んだ 2・飛ばした 2" in p and "範囲 build/p04.json, build/p05.json" in p
+            record(f, 7, "済んだ", files=["build/p06.json", "build/p07.json"])  # 範囲を分け直しても、前の範囲（p06 の始めた）は残らない
+            assert "いま: 7 ページを書く（始めた）" in page()  # 資料全体の始めたが残っている（親が閉じるまで）
+            # 古さは中身の sha256 で見る（時刻では見ない）。元に戻せば出ない
+            (f / "build" / "p05.json").write_text('{"直した": 1}')
+            assert "済んだと記録したあとに中身が変わった（か、なくなった）: build/p05.json" in page()
+            (f / "build" / "p05.json").write_text("{}")
+            assert "中身が変わった" not in page()
+            (f / "build" / "p08.json").write_text("{}")
+            record(f, 7, "始めた", files=["build/p08.json"])
+            (f / "build" / "p08.json").unlink()  # 計画から外して消したページ
+            record(f, 7, "済んだ", note="全部の子が戻った")
+            assert "いま: 7 ページを書く（始めた）" in page()  # 子の範囲が 1 つでも開いていれば、親が閉じても済まない（all_success）
+            assert "--files は" in _exits(lambda: record(f, 7, "済んだ", files=["build/p08.json"]))
+            assert "--files は" in _exits(lambda: record(f, 7, "飛ばした", files=["build"]))  # フォルダは外したページでない
+            record(f, 7, "飛ばした", files=["build/p08.json"])
+            p = page()
+            assert "いま: 7 ページを書く（済んだ）。次: 8 全体を組む を始める" in p and "範囲 build/p04.json" in p  # 親の記録は子の記録を置き換えない（ハッシュも残る）
+            (f / "build" / "p05.json").write_text('{"直した": 1}')
+            p = page()
+            assert "中身が変わった（か、なくなった）: build/p05.json" in p and "\n済んだと記録したあとに中身が変わった（か、なくなった）: 7 ページを書く の build/p05.json" in p  # 親が閉じたあとの変更も、いちばん上に見える
+            with open(f / PROGRESS, "a") as x:  # 手で直した記録の外を指すパスは読まない
+                for bad in ({"../../../etc/hosts": None}, {"/etc/hosts": None}, {"build/p01.json": 123}, {"build/./p01.json": None}, {"progress.jsonl": None}, {".": None}):
+                    x.write(json.dumps({"ts": "2026-11-01T00:00:00Z", "step": "6 代表の 3 枚", "status": "始めた", "inputs": bad}, ensure_ascii=False) + "\n")
+            p = page()
+            assert "etc/hosts" not in p and "progress.jsonl に読めない行 6" in p and "\n6 代表の 3 枚\n  - 状態" not in p  # 崩れた inputs の行は、読めない行に数える
+            (f / PROGRESS).write_text("".join(l for l in (f / PROGRESS).read_text().splitlines(True) if '"6 代表の 3 枚", "status": "始めた"' not in l))
+            (f / "build" / "p05.json").write_text("{}")
+            (f / "build" / "alias.json").symlink_to("p06.json")
+            assert record(f, 7, "済んだ", files=["build/alias.json"])["inputs"] == {"build/p06.json": sha(f / "build" / "p06.json")}  # 中を指すリンクは指す先のファイル
+            (f / "build" / "alias.json").unlink()
+            record(f, 5, "始めた", note="返したあとの直しで構成に戻った")
+            assert "いま: 5 構成（始めた）。次: 5 構成 を続ける（開いている範囲: 資料全体）（記録のあるいちばん先の手順は 7 ページを書く・済んだ" in page()  # 前の手順に戻った直しも見える
+            record(f, 5, "済んだ")
             r8 = record(f, 8, "済んだ", [("url", "https://docs.google.com/presentation/d/elsewhere/edit")])
-            old = when(r8["ts"]).timestamp() - 10
-            for x in (f / "build").rglob("*"):
-                os.utime(x, (old, old))
-            p = page()
-            assert "済んだと記録したあと" not in p and "記録の url の ID が構成案にも社内メモにもない" in p
-            os.utime(f / "build" / "p02.json", (old + 20, old + 20))
-            (f / "build" / ".DS_Store").write_bytes(b"")
-            os.utime(f / "build" / ".DS_Store", (old + 99, old + 99))
-            p = page()
-            assert p.count("次の手順の記録より前に build/ が変わった: p02.json") == 1  # 5 の記録には出さない。. で始まるファイルは見ない
-            r9 = record(f, 9, "始めた")
-            os.utime(f / "build" / "p02.json", (when(r9["ts"]).timestamp() + 5,) * 2)
-            assert "済んだと記録したあと" not in page()  # 9 を始めてからの変更は 9 のもの（8 に出さない）
-            os.utime(f / "build" / "p02.json", (old, old))  # 未来の時刻のままにすると、あとで足す記録の窓に入る（速く走る CI で落ちた）
+            assert "記録の url の ID が構成案にも社内メモにもない" in page()
             record(f, 8, "済んだ", [("url", "https://docs.google.com/presentation/d/built_1/edit")])
-            assert "記録の url" not in page() and "この手順の記録 2 件" in page()
+            assert "記録の url" not in page()
             record(f, 8, "済んだ", [("url", "https://docs.google.com/presentation/d/built/edit")])
             assert "記録の url の ID が構成案にも社内メモにもない" in page()  # built_1 の先頭だけでは合わない
             (f / "社内メモ_urls.md").write_text("".join(f"https://docs.google.com/document/d/many_{i}/edit\n" for i in range(8)) + "https://docs.google.com/presentation/d/built/edit\n")
@@ -491,49 +588,43 @@ def selftest():
             record(f, 8, "済んだ", [("url", "組んだ資料")])
             assert "記録の url から Google のファイルの ID を読めない" in page()
             record(f, 8, "済んだ", [("url", "https://docs.google.com/presentation/d/built_1/edit")])
-            for n in ("p02.json.bak1", "assets/a.png"):
-                (f / "build" / n).parent.mkdir(exist_ok=True)
-                (f / "build" / n).write_bytes(b"x")
-            assert "済んだと記録したあと" not in page()  # 控えと画像は、ページの中身の変更に数えない
-            record(f, 9, "止まった", note="答え待ち\u20282 行目")
-            assert "答え待ち\u20282 行目" in page() and "読めない行" not in page()  # U+2028 で記録を割らない
+            record(f, 9, "止まった", note="答え待ち\u20282 行目\n  - 記録の url の ID が構成案にも社内メモにもない")
+            p = page()
+            assert "答え待ち 2 行目 - 記録の url" in p and "\n  - 記録の url の ID" not in p and "読めない行" not in p  # U+2028 で記録を割らない。改行で報告の行に見せない
             with open(f / PROGRESS, "a") as x:
                 x.write('{"切れた')
             record(f, 9, "始めた")
-            assert "progress.jsonl に読めない行 1" in page() and "最後の記録: 9 /deck-review。記録: 始めた" in page()  # 切れた行に新しい記録をつなげない
+            assert "progress.jsonl に読めない行 1" in page() and "いま: 9 /deck-review（始めた）" in page()  # 切れた行に新しい記録をつなげない
             with open(f / PROGRESS, "a") as x:
                 x.write("[" * 100000 + "\n")
             assert "読めない行 2" in page() and "記録なし" not in page()  # 深すぎる入れ子は、その行だけ
             assert "1〜11" in _exits(lambda: record(f, "9" * 5000, "済んだ"))
             with open(f / PROGRESS, "a") as x:
-                x.write('{壊れた\n{"step": "8 全体を組む", "status": "済んだ", "ts": "x"}\n')
-            assert "progress.jsonl に読めない行 4" in page()  # 時刻の読めない記録も数えない（前の 2 行と合わせて 4）
+                x.write('{壊れた\n{"step": "8 全体を組む", "status": "済んだ", "ts": "x"}\n{"step": "8 全体を組む", "status": "済んだ", "ts": "2026-11-01T00:00:00Z", "inputs": 1}\n')
+            assert "progress.jsonl に読めない行 5" in page()  # 時刻の読めない記録、形の違う inputs も数えない（前の 2 行と合わせて 5）
             (f / "構成案.md").write_bytes("言語: ja\n".encode("utf-16"))
             s = got()
             assert "調べられない（UnicodeDecodeError" in s["5"] and "調べられない（UnicodeDecodeError" in s["10"] and "出典 1 件" in s["1–4"]
             os.chdir(Path(d).parent)  # ワークスペースの外から回しても、資料のフォルダのワークスペースを読む
             assert "資料: Customers/acme/deck_202611" in page()
             os.chdir(ws)
-            # 時刻を決めた記録: 7 を済んだあとの変更は、8 を始めたあとに別のファイルを変えても見える。同じ秒の記録はファイルの順
+            # 時計のずれに左右されない: 最後の記録はファイルの行の順で決める
             h = ws / "Internal" / "times_202611"
             (h / "build").mkdir(parents=True)
             T = 2_000_000_000
             ts = lambda x: datetime.fromtimestamp(x, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             (h / PROGRESS).write_text("".join(json.dumps({"ts": ts(T + a), "step": s, "status": st}, ensure_ascii=False) + "\n"
-                                              for a, s, st in ((-10, "8 全体を組む", "始めた"), (0, "7 ページを書く", "済んだ"), (6, "8 全体を組む", "始めた"), (6, "9 /deck-review", "始めた"), (6, "8 全体を組む", "済んだ"))))
-            for n, a in (("p03.json", 3), ("p04.json", 9)):
+                                              for a, s, st in ((6, "8 全体を組む", "始めた"), (6, "8 全体を組む", "済んだ"), (2, "8 全体を組む", "始めた"))))
+            assert "いま: 8 全体を組む（始めた）" in page(h)  # 順はファイルの行の順だけ（あとに書いた始めたが、前の時刻でも今の状態）
+            for n in ("p03.json", "p04.json"):
                 (h / "build" / n).write_text("{}")
-                os.utime(h / "build" / n, (T + a, T + a))
-            p = page(h)
-            assert "次の手順の記録より前に build/ が変わった: p03.json" in p and "p04.json（" not in p.split("7 ページを書く")[1].split("8 全体を組む")[0]
-            assert "最後の記録: 8 全体を組む。記録: 済んだ" in p  # 同じ秒の 9 と 8 は、ファイルの順で 8 が後
-            with open(h / PROGRESS, "a") as x:  # あとから足した、前の時刻の記録（遅れて書いた子など）
-                x.write(json.dumps({"ts": ts(T + 2), "step": "8 全体を組む", "status": "始めた"}, ensure_ascii=False) + "\n")
-            assert "記録: 済んだ" in page(h).split("\n8 全体を組む")[1].split("\n9 ")[0]  # 手順の中も時刻の順
             (h / PROGRESS).unlink()
             (h / PROGRESS).mkdir()
             assert "ファイルでない" in _exits(lambda: record(h, 5, "済んだ")) and "progress.jsonl がファイルでない" in page(h) and "記録なし" not in page(h)
             (h / PROGRESS).rmdir()
+            (h / PROGRESS).symlink_to(ws / "outside.jsonl")  # 外を指すリンクには書かない・読まない
+            assert "リンク" in _exits(lambda: record(h, 5, "済んだ")) and not (ws / "outside.jsonl").exists() and "ファイルでない（フォルダかリンク）" in page(h)
+            (h / PROGRESS).unlink()
             (h / PROGRESS).write_bytes(b"\xef\xbb\xbf" + json.dumps({"ts": ts(T), "step": "5 構成", "status": "済んだ"}).encode() + b"\n")
             assert "読めない行" not in page(h) and "記録: 済んだ" in page(h)  # 先頭の BOM は外す
             (h / PROGRESS).write_text("ごみ\n")
@@ -575,10 +666,9 @@ def main(argv):
         ap.add_argument("folder"); ap.add_argument("step", help="手順の番号（1〜11）"); ap.add_argument("status", choices=STATUSES)
         ap.add_argument("--out", type=out_arg, action="append", default=[], help="<名前>=<値>（url=…・pages=20・round=2 など。くり返してよい）")
         ap.add_argument("--note", default="", help="決めたこと・やめたこととその理由・待っていること")
-        ap.add_argument("--next", dest="next_", default="", help="次にすること")
-        ap.add_argument("--by", default="", help="誰が（親・子の名前）")
+        ap.add_argument("--files", nargs="+", default=[], help="自分の範囲のファイル（資料のフォルダからのパス。なければ資料全体）")
         a = ap.parse_args(argv[1:])
-        print(json.dumps(record(a.folder, a.step, a.status, a.out, a.note, a.next_, a.by), ensure_ascii=False))
+        print(json.dumps(record(a.folder, a.step, a.status, a.out, a.note, a.files), ensure_ascii=False))
     elif len(argv) == 1 and not argv[0].startswith("-"):
         report(argv[0])
     else:
