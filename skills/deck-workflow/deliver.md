@@ -26,6 +26,6 @@ Check that no findings for this material remain with the destination 「未」 (
 
 ## What to keep
 
-- Keep the deliverables (Google Slides and Google Docs on Drive, html and csv, pptx from before 2026-10-07, docx from before 2026-10-09, PDFs made from HTML and handed over) and the documents (`構成案*.md`, `社内メモ_*.md`, `references.md`, research notes).
+- Keep the deliverables (Google Slides and Google Docs on Drive, html and csv, pptx from before 2026-10-07, docx from before 2026-10-09, PDFs made from HTML and handed over) and the documents (`構成案*.md`, `社内メモ_*.md`, `progress.jsonl`, `references.md`, research notes).
 - Delete generator scripts, images and PDFs used for checking, `__pycache__`, `.venv`, and old versions of the outline once the material is no longer in use.
 - Keep `build/` only for materials likely to be edited again. List the current `build/` folders with `find Customers Internal -maxdepth 3 -type d -name build`. Do not decide to delete one just because it exists; check each material's work status and whether it will be edited. Google Slides materials cannot be rebuilt without `build/deck.json` and the page JSON (older materials: `build/pages.py`), and Google Docs materials without `build/doc.md`, so do not delete them until there is no prospect of editing. Materials whose `build/` was deleted, and documents that started being edited in the UI, are edited in the UI and not rebuilt from then on. Edit docx and pptx from before 2026-10-07 by the official skill's editing procedure (unzip → rewrite the XML → zip).
