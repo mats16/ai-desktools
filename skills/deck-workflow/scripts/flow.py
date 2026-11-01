@@ -22,7 +22,7 @@ except ImportError:  # shortcut: Windows では鍵をかけない（ledger.py �
 PROGRESS = "progress.jsonl"  # 資料のフォルダに置く手順の記録。足すだけで書き換えない。build/ を消しても残る
 STEPS = ("1–4 準備", "5 構成", "6 代表の 3 枚", "7 ページを書く", "8 全体を組む", "9 /deck-review", "10 渡す", "11 片付け")
 STATUSES = ("始めた", "済んだ", "飛ばした", "止まった")  # 止まったは、ユーザーの答えか別の作業を待つもの
-URL = re.compile(r"(?<![\w.-])(?:docs|drive)\.google\.com/(?:a/[\w.-]+/|u/\d+/)?(?P<kind>presentation|document|spreadsheets|file)/d/(?P<id>[\w-]+)", re.ASCII)
+URL = re.compile(r"(?<![\w.-])(?:docs|drive)\.google\.com/(?:a/[\w.-]+/|u/\d+/)?(?P<kind>presentation|document|spreadsheets|file)/(?:u/\d+/)?d/(?P<id>[\w-]+)", re.ASCII)  # /u/0/ は種類の前にも後にも付く
 KINDS = {"presentation": "スライド", "document": "文書", "spreadsheets": "表計算", "file": "Drive のファイル"}
 
 
@@ -47,6 +47,7 @@ def read_json(p, build):
 
 def listed(build, name="deck.json", seen=frozenset()):
     """deck.json の pages が指すページのファイル（build/ からのパス。pages_<担当>.json は中を開く）。
+    pages の中のパスは、それを書いたデッキのファイルのあるフォルダから読む（slides.py の spec_files と同じ）。
     (ファイルの並び〔同じファイルが 2 度出てよい〕, JSON の中に直に書いたページの数, 読めないものの文の並び)。"""
     o, err = read_json(build / name, build)
     pages = o.get("pages") if isinstance(o, dict) else None
@@ -58,7 +59,7 @@ def listed(build, name="deck.json", seen=frozenset()):
             inline += 1
         elif not isinstance(x, str):
             bad.append(f"build/{name} の pages に、ファイルの名前でもページでもないもの（{x!r}）")
-        elif posixpath.isabs(x := posixpath.normpath(x)) or x == ".." or x.startswith("../"):
+        elif posixpath.isabs(x) or (x := posixpath.normpath(posixpath.join(posixpath.dirname(name), x))) == ".." or x.startswith("../"):
             bad.append(f"build/{name} の pages が build/ の外を指す（{x}）")
         elif x in seen | {name}:
             bad.append(f"build/{name} の pages が自分を指す（{x}）")
@@ -428,6 +429,15 @@ def selftest():
             (f / "build" / "pages_c.json").write_text('{"kind": "deck", "pages": null}')
             (f / "build" / "deck.json").write_text(json.dumps({"kind": "deck", "pages": ["p01.json", "pages_c.json"]}))
             assert "build/pages_c.json の pages が並び" in got()["7"] and "ページ 1 枚" in got()["7"]  # 入れ子の pages_*.json の誤りも、その文で出す
+            (f / "build" / "sub").mkdir()
+            (f / "build" / "sub" / "pages_s.json").write_text(json.dumps({"kind": "deck", "pages": ["p01.json", "../p02.json", "../../x.json"]}))
+            (f / "build" / "sub" / "p01.json").write_text("{}")
+            (f / "build" / "deck.json").write_text(json.dumps({"kind": "deck", "pages": ["sub/pages_s.json"]}))
+            s = got()
+            assert "ページ 2 枚" in s["7"] and "ないファイル" not in s["7"] and "build/ の外を指す（../x.json）" in s["7"]  # 入れ子のデッキのページは、そのフォルダから読む
+            for x in ("pages_s.json", "p01.json"):
+                (f / "build" / "sub" / x).unlink()
+            (f / "build" / "sub").rmdir()
             (f / "build" / "pages_b.json").write_text("{書きかけ")
             (f / "build" / "deck.json").write_text(json.dumps({"kind": "deck", "pages": ["pages_b.json", "deck.json"]}))
             assert "build/pages_b.json を JSON として読めない" in got()["7"] and "自分を指す" in got()["7"]
@@ -470,6 +480,13 @@ def selftest():
             (f / "社内メモ_urls.md").unlink()
             record(f, 8, "済んだ", [("url", "https://docs.google.com/a/example.com/presentation/d/built_1/edit")])
             assert "記録の url" not in page()  # /a/<ドメイン>/ の書き方も、ID で同じファイル
+            for u in ("https://docs.google.com/presentation/u/0/d/built_1/edit", "https://docs.google.com/u/1/presentation/d/built_1/edit"):
+                record(f, 8, "済んだ", [("url", u)])
+                assert "記録の url" not in page(), u  # /u/0/ は種類の前にも後にも付く
+            (f / "社内メモ_u.md").write_text("https://docs.google.com/presentation/u/0/d/only_u/edit\n")
+            record(f, 8, "済んだ", [("url", "https://docs.google.com/presentation/d/only_u/edit")])
+            assert "記録の url" not in page()  # 構成案の側が /u/0/ の形でも
+            (f / "社内メモ_u.md").unlink()
             record(f, 8, "済んだ", [("url", "組んだ資料")])
             assert "記録の url から Google のファイルの ID を読めない" in page()
             record(f, 8, "済んだ", [("url", "https://docs.google.com/presentation/d/built_1/edit")])
