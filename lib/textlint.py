@@ -30,7 +30,7 @@ WARN = {
     "要確認・TBD": re.compile(r"要確認|TBD"),
     "社外秘の表示": re.compile(r"Internal Only|Internal Use|Confidential|社外秘|社内限り", re.I),
 }
-# [deck-lint-027] 言い回しの要確認は、yomiyasu の lint の規則のうち、資料 53 本で当たりの多かったものだけ（2026-11-01。deck-writing の content.md の deck-content-065）。
+# [deck-lint-027] 言い回しの要確認は、yomiyasu の lint の規則のうち、資料 53 本で当たりの多かったものだけ（2026-11-01。deck-content-065、deck-writing）。
 # 外したもの: 読点（pause_comma。本文の文の読点にも出て空振りが多い。スライドの見出しと 1 行の箇条は slide_comma が見る）、空疎な語（slop_vocabulary。「台帳」にも出る。WARN の空疎な言い回しで見る）、
 # 「〜ではなく」（negative_parallelism。比べるページでは普通）、カタカナ語、Markdown の書式（太字・箇条の多さ。ページの JSON には当たらない）
 SLIDE_COMMA = "見出しと箇条の間の読点"
@@ -64,14 +64,14 @@ def contrast(a, b):
 
 
 NO_LINK = "出典の行にリンクがない"
-# [deck-lint-026] ページの数字は出典の表にあるものだけ。足すときは先に表へ足す（../skills/deck-writing/content.md の deck-content-064）。表は refs.py が資料のフォルダから読む
+# [deck-lint-026] ページの数字は出典の表にあるものだけ。足すときは先に表へ足す（deck-content-064、deck-writing）。表は refs.py が資料のフォルダから読む
 NOT_IN_FACTS = "出典の表にない数字"
-HEAD_PERIOD, BULLET_PERIOD = "見出しの句点", "箇条書きの句点の混在"  # deck-writing の content.md の 6。名前は Docs の規則と同じ（Docs は見出しのスタイル、箇条書きのリストごと）
-# [deck-lint-023] 見出しは短い名詞句。言い切りは判断を頼むページと数字の結論のページの 2〜3 枚だけ（deck-writing の content.md の 4・6、deck-design/docs.md の 2）
+HEAD_PERIOD, BULLET_PERIOD = "見出しの句点", "箇条書きの句点の混在"  # deck-content-066・deck-content-067（deck-writing）。名前は Docs の規則と同じ（Docs は見出しのスタイル、箇条書きのリストごと）
+# [deck-lint-023] 見出しは短い名詞句。言い切りは判断を頼むページと数字の結論のページの 2〜3 枚だけ（deck-content-041 と content の 6（deck-writing）、docs-visual-002（deck-design））
 HEAD_POLITE = "見出しが「ください・します」で終わる"
 POLITE_END = re.compile(r"(ください|します|しましょう)$")
 FONT_NG = f"書体が {FONT} でない"  # スライドはテンプレートの書体（deck_font）と比べる。Google Fonts にない書体は、API が受け付けても黙って別の書体で描かれる（api.md）。英数字だけの MONO（コード）は通す
-MONO_NG = f"等幅の {MONO_DEFAULT} に和文"  # 名前は既定の書体のまま（台帳と lint_runs.jsonl が名前で数える）。テーマの mono なら指摘にその名前を出す。MONO に和文の字形はなく、Google が別の書体で描く。和文は FONT にする（slides.py の mono_reqs。deck-design の slides.md の 2）
+MONO_NG = f"等幅の {MONO_DEFAULT} に和文"  # 名前は既定の書体のまま（台帳と lint_runs.jsonl が名前で数える）。テーマの mono なら指摘にその名前を出す。MONO に和文の字形はなく、Google が別の書体で描く。和文は FONT にする（slides.py の mono_reqs。slides-visual-014、deck-design）
 HARD_NAMES = set(HARD) | {HEAD_PERIOD, HEAD_POLITE, FONT_NG, MONO_NG}  # スライドとドキュメントで同じ要修正（それぞれの lint が足す）
 
 

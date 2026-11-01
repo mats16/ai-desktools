@@ -9,13 +9,13 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gapi  # noqa: E402
 
-# ---- 書体（../skills/deck-design/slides.md の 2） ----
+# ---- 書体（deck-design → slides §2） ----
 FONT = "Noto Sans JP"  # Google Fonts の名前。Noto Sans CJK JP と字形・文字幅は同じ（Google Fonts にない書体は黙って別の書体になる）
 # Google Slides で描けることを確かめた、和文のある Google Fonts（2026-10-07。../skills/slides-build/template_fonts.md）。会社のテーマの書体はここから選ぶ
 JP_FONTS = {FONT, "Noto Serif JP", "BIZ UDPGothic", "BIZ UDGothic", "BIZ UDPMincho", "M PLUS 1p", "M PLUS 2", "M PLUS Rounded 1c", "Zen Kaku Gothic New",
             "Zen Maru Gothic", "Sawarabi Gothic", "Kosugi Maru", "IBM Plex Sans JP", "LINE Seed JP", "Murecho", "Shippori Mincho", "Zen Old Mincho", "Klee One"}
-MONO_DEFAULT = "Cascadia Mono"  # コードの箱・コマンドの等幅の書体の既定（Google Fonts。Windows Terminal の既定でリガチャがない。deck-design の slides.md の 2）。和文の字形がないので、ASCII の続きにだけ付ける（mono_reqs）
-LIGATURE_MONO = {"JetBrains Mono", "Fira Code", "Cascadia Code"}  # Google Fonts のバージョンにリガチャがあり、Google Slides が描く（2026-10-09。deck-design の slides.md の 2）。テーマの mono に書けない
+MONO_DEFAULT = "Cascadia Mono"  # コードの箱・コマンドの等幅の書体の既定（Google Fonts。Windows Terminal の既定でリガチャがない。slides-visual-014、deck-design）。和文の字形がないので、ASCII の続きにだけ付ける（mono_reqs）
+LIGATURE_MONO = {"JetBrains Mono", "Fira Code", "Cascadia Code"}  # Google Fonts のバージョンにリガチャがあり、Google Slides が描く（2026-10-09。slides-visual-014、deck-design）。テーマの mono に書けない
 
 # [deck-brand-003] 英数字と記号の幅（em）。Noto Sans CJK JP Regular の実測（2026-10-08）。前は英数字を一律 0.57 にしていて、大文字の多い行を
 # 2.52 in と見込み、2.56 in の枠に収まるとしたが、実際は 2.57 in で Google が最後の 1 字を折り返した
@@ -90,7 +90,7 @@ def theme_mono(t):
     if not isinstance(m := t.get("mono", MONO_DEFAULT), str) or not m.strip():
         sys.exit(f"テーマの mono {m!r} は書体の名前でない（例: Cascadia Mono）")
     if " ".join(m.split()).casefold() in {x.casefold() for x in LIGATURE_MONO}:  # 大文字と小文字、空白の数の違いでも同じ書体とみなす
-        sys.exit(f"テーマの mono {m!r} は、Google が描くとリガチャが出る（-> が矢印 1 字になる。deck-design の slides.md の 2）。リガチャのない書体にする")
+        sys.exit(f"テーマの mono {m!r} は、Google が描くとリガチャが出る（-> が矢印 1 字になる。slides-visual-014、deck-design）。リガチャのない書体にする")
     return m.strip()
 
 
