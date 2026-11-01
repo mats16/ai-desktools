@@ -15,9 +15,9 @@ import textlint  # noqa: E402
 from brand import COPYRIGHT_FOOTER  # noqa: E402
 from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, contrast, facts_hit,  # noqa: E402
                       load_facts, lum, not_in_facts, workspace_checks)  # load_facts・lum・JA は slides.py・template.py が lint から引く
-from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_LEAD, deck_card, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
+from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMPH_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_KICK, Y_LEAD, deck_card, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
 
-MIN_PT = 11  # [slides-lint-001] スライドの文字の下限。下回ると要確認（詰まった図の説明など、ページによっては小さくてよい）。社内資料の差し替え用（名前に「差し替え用」）は元の大きさのままなので見ない
+MIN_PT = 11  # [slides-lint-001] スライドの文字の下限（slides-visual-002、deck-design）。下回ると要確認（詰まった図の説明など、ページによっては小さくてよい）。社内資料の差し替え用（名前に「差し替え用」）は元の大きさのままなので見ない
 FIG_MIN_PT = MIN_PT - 2  # [slides-lint-022] 塗りのある図形の中の文字（ガントのバー、図のラベル）は本文から 2pt 下まで（slides-visual-037）。表のセル、塗りのない文字、別の図形の塗りに重ねた文字（カードの本文、背景の四角の上の出典）は MIN_PT のまま
 COPYRIGHT_NG = f"{COPYRIGHT_PT}pt 未満の著作権フッター"
 
@@ -28,7 +28,7 @@ SLIDE_ONLY = {"スライドに です・ます": re.compile(r"(です|ます|で
 BODY_LINES = "本文が 8 行を超える見込み"
 TALK_MAX = 125  # [slides-lint-002] 話す資料の 1 枚の本文の目安。5 行 × 1 行 25 字（Research/deck_research/log/20261006_jp_content.md の 1-13、deck-design の slides.md の 2）
 TALK = f"話す資料で本文が {TALK_MAX} 字を超える"
-# [slides-lint-003] 章の扉（濃紺の地）。本編が長いのに扉がないと、テーマの切り替わりが唐突になる。扉の間が 1 枚だけなら細切れ（deck-design の slides.md の 1）
+# [slides-lint-003] 章の扉（濃紺の地）。本編が長いのに扉がないと、テーマの切り替わりが唐突になる。扉の間が 1 枚だけなら細切れ（slides-visual-012、deck-design）
 DIVIDER_MIN = 12
 NO_DIVIDER = f"{DIVIDER_MIN} 枚を超えるのに章の扉がない"
 SHORT_CH = "扉のあとが 1 枚だけの章"
@@ -38,32 +38,38 @@ LINE_GRID = "格子を線で組んでいる（標準の表にできないか）"
 NO_SOURCE = "数字に出典の行がない"
 TWO_LINES = "見出しかリードが 2 行の見込み"  # 見出しは 1 行、リードは 1 文（deck-design の slides.md の 1）
 BULLET_PERIOD = "箇条書きの句点の混在"  # deck-writing の content.md の 6。名前は Docs の規則と同じ（箇条書きのリストごと）
-HEAD_CLAIMS, CLAIM_MAX = "言い切りの見出しが多い", 3  # 言い切りは判断を頼むページと数字の結論のページの 2〜3 枚だけ（../../../lib/textlint.py の deck-lint-023。deck-writing の content.md の 4）
+HEAD_CLAIMS, CLAIM_MAX = "言い切りの見出しが多い", 3  # 言い切りは判断を頼むページと数字の結論のページの 2〜3 枚だけ（../../../lib/textlint.py の deck-lint-023。deck-content-041、deck-writing）
 CLAIM_END = re.compile(r"[るうくすつむぶぐただい]$")  # 読点があり、動詞・形容詞らしい仮名で終わるものを言い切りの見込みにする。「N つ」で終わる名詞句は除く。形態素解析は入れない
 # [slides-lint-004] 空きと結論バンド。目安は、空いて見えたページを拾う値にした
 EMPTY_BELOW = "本文の下が空いている"
 EMPTY_BOX = "箱の中の下が空いている"
 EMPTY_HOLE = "本文の中ほどが空いている"  # [slides-lint-005] 要素と要素の間・結論バンドの上・本文の上の大きな空き。中身より大きい箱やページの中の穴を、レビューより先に出す
-PAD_NG = "塗りの箱の端と文字の間が 1 字分より狭い"  # deck-design の slides.md の 4
-NUM_NO_UNIT = "大きな数字に単位がない"  # [slides-lint-006] deck-design の slides.md の 2。数字だけの段落は何の数か分からない
-PHRASE_BREAK = "自動の折り返しが文節の途中に入る見込み"  # [slides-lint-024] ../../deck-design/slides.md の slides-visual-013。Google Slides は和文を 1 字ずつ折り返す。レビューで直した改行でいちばん多かった
+PAD_NG = "塗りの箱の端と文字の間が 1 字分より狭い"  # slides-visual-027（deck-design）
+NUM_NO_UNIT = "大きな数字に単位がない"  # [slides-lint-006] slides-visual-015（deck-design）。数字だけの段落は何の数か分からない
+PHRASE_BREAK = "自動の折り返しが文節の途中に入る見込み"  # [slides-lint-024] slides-visual-013（deck-design）。Google Slides は和文を 1 字ずつ折り返す。レビューで直した改行でいちばん多かった
 NO_HEAD = "、。，．）」』】〕・ー!?！？：；"  # 行頭に来ない字（禁則で前の行に戻るので、見込みの位置で折れない）
-OPEN_HEAD = "手の改行のあとの行頭に全角の開き括弧"  # [slides-lint-007] deck-design の slides.md の 2 の「改行」。行頭の「（」「「」は半字下がって見え、左端がそろわない
+OPEN_HEAD = "手の改行のあとの行頭に全角の開き括弧"  # [slides-lint-007] slides-visual-013（deck-design）の「改行」。行頭の「（」「「」は半字下がって見え、左端がそろわない
 TEXT_OVER = "文字が枠の下からはみ出し、下の文字に重なる見込み"  # [slides-lint-025] 枠の高さを決め打ちにした見出しが折り返したとき（2026-10-19。カードの太字の見出しを Regular の字幅で見込み、2 行目が本文に重なった）
-COL_SHIFT = "隣り合う列の箱の上端か下端がずれている"  # [slides-lint-008] deck-design の slides.md の 4。片方の列にだけ小見出しを置くと、箱の上下がそろわない
+COL_SHIFT = "隣り合う列の箱の上端か下端がずれている"  # [slides-lint-008] slides-visual-024（deck-design）。片方の列にだけ小見出しを置くと、箱の上下がそろわない
 BIG_NUM_PT, COL_TOL, COL_MAX, NEST = 28, 0.03 * EMU, 1.0 * EMU, 0.25 * EMU  # 大きな数字の大きさ。列のずれは 0.03〜1.0 in を出す（それより大きいのは中身の量の違いとみなす）
-DASH_ROUND = "点線の角丸が Google 標準の丸み"  # api.md。中のカード（半径 0.1 in）と曲率が合わない。JSON の box の dash にする（2026-10-08）
-CODE_NOT_MONO = f"濃紺の地のコードが等幅の {MONO_DEFAULT} でない"  # [slides-lint-009] deck-design の slides.md の 2。pages.py に残った古いコードの箱の部品で、等幅にならなかった（レビューでも見落としやすい）
+DASH_ROUND = "点線の角丸が Google 標準の丸み"  # slides-visual-023（deck-design）、api.md。中のカード（半径 0.1 in）と曲率が合わない。JSON の box の dash にする（2026-10-08）
+CODE_NOT_MONO = f"濃紺の地のコードが等幅の {MONO_DEFAULT} でない"  # [slides-lint-009] slides-visual-014（deck-design）。pages.py に残った古いコードの箱の部品で、等幅にならなかった（レビューでも見落としやすい）
 CODE_LINE = re.compile(r"\s*(SELECT|UPDATE|INSERT|DELETE|CREATE|ALTER|WITH|FROM|WHERE|SET|ANALYZE|GROUP BY|ORDER BY|import|def|pip|uv|curl|psql|python3?|databricks)(?=[\s(;]|$)")  # コードの行頭（URL の databricks.com などは数えない）
-BLOCK_ON_NAVY = "濃紺の箱の上に NAVY_BLOCK の箱"  # [slides-lint-010] deck-design の slides.md の 1。地との差が小さく、群の境が見えない。本文ページでは淡色（PANEL・CARD）にする。扉（濃紺の地）は見ない
-STAGE_NG = "提供ステージの札の塗りが言葉と合わない"  # [slides-lint-011] deck-design の slides.md の 1。Public Preview（本番で使える）を Beta・Private Preview の黄と分ける
-MANY_BANDS = "結論バンドが本文の 3 分の 1 を超える"  # [slides-lint-012] deck-design の slides.md の 1「要るページにだけ」
+BLOCK_ON_NAVY = "濃紺の箱の上に NAVY_BLOCK の箱"  # [slides-lint-010] slides-visual-004（deck-design）。地との差が小さく、群の境が見えない。本文ページでは淡色（PANEL・CARD）にする。扉（濃紺の地）は見ない
+STAGE_NG = "提供ステージの札の塗りが言葉と合わない"  # [slides-lint-011] slides-visual-010（deck-design）。Public Preview（本番で使える）を Beta・Private Preview の黄と分ける
+MANY_BANDS = "結論バンドが本文の 3 分の 1 を超える"  # [slides-lint-012] slides-visual-008（deck-design）「要るページにだけ」
+BAND_ECHO, ECHO_MIN = "結論バンドが見出しかリードの言い直し", 0.5  # [slides-lint-029] slides-visual-008（deck-design）。バンドの 1 文目の 2 字の組のうち、見出しとリードにもあるものの割合。言い切った見出しの下に同じことを言う箱
+KICKERS = "キッカーが本文の半分を超える"  # [slides-lint-030] slides-visual-008（deck-design）。章の名前（扉の文字にある語か、2 枚以上に同じ文）と Appendix・参考は数えない。同じ飾りがどのページにも付くと、題と関係のない既定に見える
+CODE_HEAD = "コードの箱の上の見出しが塗りの札か帯"  # [slides-lint-032] slides-visual-017（deck-design）。濃紺のコードの箱がもう囲みなので、札にすると二重に見える。ターミナルの窓の帯（箱と同じ囲みの中）は見ない
+PANEL_BANDS = "本文の下の淡色の帯が本文の半分を超える"  # [slides-lint-033] slides-visual-009（deck-design）。本文の幅いっぱいで、下端が結論バンドの位置の近くにある、淡い塗りの低い箱
+AXIS_NEAR, AXIS_GAP = "箱の列の間の矢印が、上か下の箱に近い", 0.2 * EMU  # [slides-lint-034] slides-visual-021（deck-design）。時間の軸など、箱の列の間を通る横の矢印は、上下の箱から 0.2 in 以上離す（近いと箱の枠に見える）
+RED_THIN = f"赤の囲みの線が {EMPH_PT}pt より細い"  # [slides-lint-031] slides-visual-023（deck-design）。JSON の box は赤なら既定で 2pt。weight を書いたものと pages.py の古い資料で細くなる
 GAP_BELOW, GAP_BOX = 1.0 * EMU, 0.6 * EMU  # 本文の下（本文の領域 5 in の 2 割）と、箱の中の文字より下
 GAP_HOLE, GAP_TOP = 0.65 * EMU, 1.0 * EMU  # 要素の間の穴と、本文の上の空き
 THIN = 0.05 * EMU  # これより細い四角は線として数える（四角で罫線や軸を引いても、格子と矢印の確認から漏れないように）
 MONO = MONO_DEFAULT  # 見ている資料の等幅の書体。lint_slides がデッキのテーマから入れ直す（is_mono などが読む。ponytail: 1 つずつ見る前提の大域の値）
-DECK_WIDE = {NO_COVER, NO_DIVIDER, SHORT_CH, MANY_BANDS, HEAD_CLAIMS}  # デッキ全体を見て出す規則。lint_slides の only で絞らない（ページの番号が付いていても、ほかのページで決まる）
-PAGE_ONLY = {NO_SOURCE, NOT_IN_FACTS, NO_LINK, TALK, TWO_LINES, HEAD_PERIOD, HEAD_POLITE, EMPTY_BELOW, EMPTY_HOLE}  # ページを見て出す規則。部品だけを見るときは出さない
+DECK_WIDE = {NO_COVER, NO_DIVIDER, SHORT_CH, MANY_BANDS, KICKERS, PANEL_BANDS, HEAD_CLAIMS}  # デッキ全体を見て出す規則。lint_slides の only で絞らない（ページの番号が付いていても、ほかのページで決まる）
+PAGE_ONLY = {NO_SOURCE, NOT_IN_FACTS, NO_LINK, TALK, TWO_LINES, BAND_ECHO, HEAD_PERIOD, HEAD_POLITE, EMPTY_BELOW, EMPTY_HOLE}  # ページを見て出す規則。部品だけを見るときは出さない
 ESTIMATE = {TWO_LINES, BODY_LINES, PHRASE_BREAK, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, TEXT_OVER, textlint.SLIDE_COMMA}  # 字幅と行の高さの見積もりから出す指摘。Google が描いた画像で確定する（ほかは JSON で決まる）
 HARD_NAMES = textlint.HARD_NAMES | {COPYRIGHT_NG}
 INS = INSET * 72  # 文字の枠の内側の余白（pt）。Slides API の既定は 0.1 in で、変えられない
@@ -371,7 +377,66 @@ def page_holes(els, scheme):
     return out
 
 
-def tight_pad(sh, b, box):  # [slides-lint-014] 塗りの箱に左寄せ・右寄せで置いた文字と、箱の端の間が 1 字分（文字の大きさ）より狭い（deck-design の slides.md の 4。pptx から作り直した札の余白は、枠の内側の余白 0.1 in のままになりやすい）
+def echo(a, b):
+    """a の 2 字の組（和文だけ）のうち、b にもあるものの割合（結論バンドが見出しとリードの言い直しか）。
+    英数字は数えない（製品の名前は、聞き手に頼むことを書いたバンドにも見出しにも出るので、重なって見える）。"""
+    grams = lambda t: (lambda u: {u[k:k + 2] for k in range(len(u) - 1)})(re.sub(rf"[^{JA}]", "", t))
+    x = grams(a)
+    return len(x & grams(b)) / len(x) if x else 0.0
+
+
+def center_in(b, box, pad=0):  # b の中心が box の中にあるか
+    cx, cy = b[0] + b[2] / 2, b[1] + b[3] / 2
+    return box[0] - pad <= cx <= box[0] + box[2] + pad and box[1] - pad <= cy <= box[1] + box[3] + pad
+
+
+def shape_text(e):
+    return "".join(ptext(x) for x in paras(e.get("shape", {}).get("text"))).strip()
+
+
+def code_heads(els, scheme):
+    """[slides-lint-032] 濃紺のコードの箱（等幅の文字が中にある）の真上 0.3 in までに、横に重なって置いた塗りのある文字の図形。
+    箱と一緒に、もっと大きな塗りの箱の中にあるもの（ターミナルの窓の帯）は見ない。"""
+    fill = lambda e: solid(e.get("shape", {}).get("shapeProperties", {}).get("shapeBackgroundFill"), scheme)
+    filled = [(e, b) for e, b in els if "shape" in e and fill(e)]
+    codes = [b for e, b in filled if fill(e) == scheme.get("DARK1", "1B3139") and b[2] >= 1.5 * EMU and b[3] >= 0.5 * EMU
+             and any(x is not e and "shape" in x and shape_text(x) and is_mono(x["shape"]) and center_in(xb, b) for x, xb in els)]
+    out = []
+    for cb in codes:
+        for e, b in filled:
+            over = min(b[0] + b[2], cb[0] + cb[2]) - max(b[0], cb[0])
+            if (t := shape_text(e)) and not is_mono(e["shape"]) and cb[1] - 0.3 * EMU <= b[1] + b[3] <= cb[1] + 0.02 * EMU and over >= b[2] / 2 \
+                    and not any(ob is not b and ob[2] > cb[2] and ob[0] <= min(b[0], cb[0]) and ob[1] <= b[1] and ob[1] + ob[3] >= cb[1] + cb[3] for _, ob in filled):
+                out.append(f"「{t[:20]}」。コードの箱の上の見出しは塗らず、太字の文字にする")
+    return out
+
+
+def panel_band(els, scheme):
+    """[slides-lint-033] 本文の下の淡色の帯（幅 10 in 以上、高さ 1 in まで、下端 5.6〜6.65 in、文字のある淡い塗り）があるか。"""
+    for e, b in els:
+        f = solid(e.get("shape", {}).get("shapeProperties", {}).get("shapeBackgroundFill"), scheme) if "shape" in e else None
+        if f and f != scheme.get("DARK1", "1B3139") and lum(f) > 0.6 and b[2] >= 10 * EMU and b[3] <= 1.0 * EMU and 5.6 * EMU <= b[1] + b[3] <= 6.65 * EMU \
+                and any(shape_text(x) for x, xb in els if "shape" in x and center_in(xb, b)):
+            return True
+    return False
+
+
+def axis_near(arrows, boxes):
+    """[slides-lint-034] 長さ 2 in 以上の横の矢印が、上と下の両方に塗りの箱（横に半分以上重なる）のある間を通り、どちらかの箱から 0.2 in より近い。
+    罫線・下線（矢印のない線）と、箱の端に触れる線（0.01 in まで）は見ない。"""
+    out = []
+    for x, y, w, h in arrows:
+        if h or w < 2 * EMU:
+            continue
+        near = lambda b: min(x + w, b[0] + b[2]) - max(x, b[0]) >= b[2] / 2
+        above = [y - (b[1] + b[3]) for b in boxes if near(b) and b[1] + b[3] <= y]
+        below = [b[1] - y for b in boxes if near(b) and b[1] >= y]
+        if above and below and 0.01 * EMU < (gap := min(min(above), min(below))) < AXIS_GAP:
+            out.append(f"{y / EMU:.2f} in の矢印が、上の箱から {min(above) / EMU:.2f} in・下の箱から {min(below) / EMU:.2f} in。上下の箱の真ん中に引く")
+    return out
+
+
+def tight_pad(sh, b, box):  # [slides-lint-014] 塗りの箱に左寄せ・右寄せで置いた文字と、箱の端の間が 1 字分（文字の大きさ）より狭い（slides-visual-027、deck-design。pptx から作り直した札の余白は、枠の内側の余白 0.1 in のままになりやすい）
     ps = [x for x in paras(sh.get("text")) if ptext(x).strip()]
     if not box or not ps or ps[0][0].get("alignment", "START") not in ("START", "END"):
         return None
@@ -395,12 +460,12 @@ def has_text(e):
     return bool(sh and "".join(ptext(x) for x in paras(sh.get("text"))).strip())
 
 
-def src_without_link(sh):  # [slides-lint-015] 出典の行なのに、リンクが 1 つもない（ブログや講演はそのページから飛べるようにする）
+def src_without_link(sh):  # [slides-lint-015] 出典の行なのに、リンクが 1 つもない（deck-content-033、deck-writing。ブログや講演はそのページから飛べるようにする）
     ps = paras(sh.get("text"))
     return not is_mono(sh) and any(re.match(r"(出典|Sources?)[：:]", ptext(x).strip(), re.I) for x in ps) and not any("link" in st for x in ps for _, st in x[1])
 
 
-def off_center_arrows(lines, boxes):  # [slides-lint-016] 2 つの箱をつなぐ横の線の高さが、どちらかの箱の上下の中央から 0.02 in を超えてずれている（言葉の置き場所のために矢印をずらすことがある）
+def off_center_arrows(lines, boxes):  # [slides-lint-016] 2 つの箱をつなぐ横の線の高さが、どちらかの箱の上下の中央から 0.02 in を超えてずれている（slides-visual-025、deck-design。言葉の置き場所のために矢印をずらすことがある）
     # 同じ 2 つの箱の間に 2 本以上の横の線があれば、上下にずらすのが意図なので見ない（行きと帰りの矢印。../diagrams.md の arrow の offset）
     pairs, gap, tol = {}, 0.3 * EMU, 0.02 * EMU
     for x, y, w, h in lines:
@@ -485,6 +550,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
     only（ページの番号の集合）を渡すと、そのページの指摘・見出し・字数だけを出す（slides.py lint --pages）。デッキ全体の規則（DECK_WIDE）と、
     ワークスペースの点検（ページをまたいで見るものがありうる）は絞らない。"""
     titles, sizes, pairs, chars, dark, foot_secret, bands, claims, wraps = [], Counter(), defaultdict(list), [], [], [], [], [], []
+    kicks, div_text, panels = [], [], []  # 本文のページのキッカー (ページ, 文字) と、扉の文字（章の名前のキッカーを見分ける）
     global MONO
     font, MONO = deck_font(p), deck_mono(p)  # 会社のテンプレートは会社の書体（template.md）。等幅はデッキのテーマの mono
     use_font(font)  # 字幅の見積もり（行数・折り返し）もデッキの書体のもの
@@ -493,7 +559,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
         scheme = scheme_of(p, s.get("slideProperties", {}).get("masterObjectId"))
         bg = page_bg(p, s, scheme)
         dark.append(is_dark(p, s, scheme))
-        grid = []
+        grid, arrows = [], []
         shapes, lines, boxes, best, top, has_src, nums, fact_nums = [], [], [], (0, None, None), (0, None, None), False, [], []
         els = list(flatten(s.get("pageElements", [])))
         ups = dict(ancestry(s.get("pageElements", [])))
@@ -507,6 +573,8 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                 lp = e.get("line", {}).get("lineProperties", {})
                 if lp.get("startArrow", "NONE") == lp.get("endArrow", "NONE") == "NONE":  # 矢印は格子の線でない（並んだ下向きの矢印を格子と読まない）
                     grid.append(lines[-1])
+                elif "line" in e:
+                    arrows.append(lines[-1])
                 continue
             if "shape" not in e and "table" not in e:  # 画像・動画など。上に重ねた文字の地は分からない
                 shapes.append((b, "IMAGE", None))
@@ -532,6 +600,11 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                     r.hits[STAGE_NG].append(f"p{i}: 「{''.join(ptext(x) for x in paras(sh.get('text'))).strip()}」の塗りが {got}（{want} にする。slides.py の STAGE_FILL）")
             if sh.get("shapeType") == "ROUND_RECTANGLE" and sh.get("shapeProperties", {}).get("outline", {}).get("dashStyle", "SOLID") not in ("SOLID", "DASH_STYLE_UNSPECIFIED"):
                 r.hits[DASH_ROUND].append(f"p{i}: {b[2]:.2f} × {b[3]:.2f} in。JSON の box に \"shape\": \"round_rectangle\", \"dash\": true を書き、半径 0.1 in の点線にする（pages.py は d.box(…, kind=\"ROUND_RECTANGLE\", dash=True)）")
+            ol = sh.get("shapeProperties", {}).get("outline", {})
+            if "shape" in e and solid(ol.get("outlineFill"), scheme) == scheme.get("HYPERLINK") and (wt := ol.get("weight", {})).get("magnitude") is not None:
+                w = wt["magnitude"] / (12700 if wt.get("unit") == "EMU" else 1)  # Google が返す値は EMU、組む要求は pt
+                if w < EMPH_PT - 0.01:
+                    r.hits[RED_THIN].append(f"p{i}: {w:g}pt（{b[2] / EMU:.2f} × {b[3] / EMU:.2f} in）。強調の囲みは実線も点線も {EMPH_PT}pt（JSON の box は weight を書かない）")
             if "shape" in e and src_without_link(e["shape"]):
                 r.hits[NO_LINK].append(f"p{i}: 「{''.join(ptext(x) for x in paras(e['shape'].get('text'))).strip()[:30]}」")
             for text, f in texts:
@@ -592,7 +665,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                             r.hits[COPYRIGHT_NG if copyright_footer else f"{MIN_PT}pt 未満の文字"].append(f"p{i}: {sz:g}pt「{txt[:20]}」")
                         col, ground = hexof(st.get("foregroundColor"), scheme), f or under
                         if col and ground:
-                            large = sz >= 18 or (sz >= 11 and st.get("bold"))  # 太字は本文の 11pt から大きな文字（WCAG の 14pt より下げた。deck-design の slides.md の 3）
+                            large = sz >= 18 or (sz >= 11 and st.get("bold"))  # 太字は本文の 11pt から大きな文字（WCAG の 14pt より下げた。slides-visual-039、deck-design）
                             pairs[(col, ground, 3.0 if large else 4.5)].append(txt)
                         if sz > best[0] and not re.fullmatch(r"[\d\s.]+", txt):
                             best = (sz, e, b)
@@ -626,6 +699,26 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                 k = text_lines(e["shape"], b[2])
                 if k and k > 1:
                     r.hits[TWO_LINES].append(f"p{i} のリード: 「{lead[:30]}」")
+        said = " ".join("".join(ptext(x) for x in paras(e["shape"].get("text"))) for e, b in els  # 見出し（いちばん大きい文字）とリード（上端 1.20 in）
+                        if "shape" in e and (e is best[1] or abs(b[1] / EMU - Y_LEAD) < 0.12))
+        if dark[-1] and i > 1:
+            div_text += ["".join(ptext(x) for x in paras(e["shape"].get("text"))) for e, _ in els if "shape" in e]
+        elif not dark[-1]:
+            kicks += [(i, k) for e, b in els if "shape" in e and e is not best[1] and abs(b[1] / EMU - Y_KICK) < 0.08
+                      and (k := "".join(ptext(x) for x in paras(e["shape"].get("text"))).strip())]
+            for e, b in els:  # 結論バンドの上に重ねた文字（slides.py の band は箱と文字の枠を分ける）
+                if "shape" in e and is_band(e, b, scheme):
+                    inside = [x for x, xb in els if "shape" in x and x.get("shape", {}).get("text") and abs(xb[1] + xb[3] - b[1] - b[3]) < 0.05 * EMU and xb[0] >= b[0] - 0.05 * EMU]
+                    first = next((ptext(x).strip() for x2 in inside for x in paras(x2["shape"].get("text")) if ptext(x).strip()), "")
+                    if first and (rate := echo(first, said)) >= ECHO_MIN:
+                        r.hits[BAND_ECHO].append(f"p{i}: 「{first[:30]}」の {rate:.0%} が見出しかリードにある。バンドは外すか、見出しで言っていないこと（聞き手に頼むこと）にする")
+        if not dark[-1] and not reuse:
+            r.hits[CODE_HEAD].extend(f"p{i}: {m}" for m in code_heads(els, scheme))
+            cards_on = [b for e, b in els if "shape" in e and b[2] >= 1.0 * EMU and b[3] >= 0.4 * EMU
+                        and solid(e["shape"].get("shapeProperties", {}).get("shapeBackgroundFill"), scheme)]  # 箱の列（矢印の言葉の枠と、札・番号の丸は数えない）
+            r.hits[AXIS_NEAR].extend(f"p{i}: {m}" for m in axis_near(arrows, cards_on))
+            if panel_band(els, scheme):
+                panels.append(i)
         r.hits[ARROW_MID].extend(f"p{i}: {m}" for m in off_center_arrows(lines, boxes))
         r.hits[TEXT_OVER].extend(f"p{i}: {m}" for m in text_over(els))
         r.hits[LINE_GRID].extend(f"p{i}: 同じ長さの縦線が {n} 本。格子は表にし、月をまたぐバーなどだけ図形で上に置く（diagrams.md の slides-pages-009）" for n in line_grid(grid))
@@ -661,7 +754,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
             if t.strip():
                 r.scan(f"p{i} のノート", t, HARD)
 
-    if dark and not dark[0] and not reuse:  # [slides-lint-018] どの資料にも表紙を付ける（deck-design の slides.md の 1）
+    if dark and not dark[0] and not reuse:  # [slides-lint-018] どの資料にも表紙を付ける（slides-visual-011、deck-design）
         r.hits[NO_COVER].append("p1 が濃紺の地でない。表紙を付ける（定例の資料も）")
     divs = [i for i, d in enumerate(dark, 1) if d and i > 1]  # 1 枚目（表紙）は扉に数えない
     if len(dark) > DIVIDER_MIN and not divs:
@@ -671,9 +764,19 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
             r.hits[SHORT_CH].append(f"p{a} の扉のあとが {f'p{a + 1} だけ' if b - a == 2 else '1 枚もない'}。前後の章とまとめる")
     body_pages = dark.count(False)
     if not reuse and len(bands) > max(1, body_pages / 3):
-        r.hits[MANY_BANDS].append(f"本文 {body_pages} 枚中 {len(bands)} 枚（{', '.join(f'p{k}' for k in bands)}）。見出しかリードで言い切れているページからは外す（deck-design の slides.md の 1）")
+        r.hits[MANY_BANDS].append(f"本文 {body_pages} 枚中 {len(bands)} 枚（{', '.join(f'p{k}' for k in bands)}）。見出しかリードで言い切れているページからは外す（slides-visual-008、deck-design）")
+    norm = lambda t: re.sub(rf"[^{JA}A-Za-z0-9]|^\d+", "", t)
+    chapters = [norm(t) for t in div_text if norm(t)]
+    seen = Counter(t for _, t in kicks)  # 2 枚以上に同じキッカーなら、扉のない章の名前とみなす
+    plain = [(k, t) for k, t in kicks if seen[t] < 2 and not re.search(r"(?i)appendix|参考|付録", t) and not any(norm(t) and (norm(t) in c or c in norm(t)) for c in chapters)]
+    if not reuse and len(plain) >= 3 and len(plain) > body_pages / 2:
+        r.hits[KICKERS].append(f"本文 {body_pages} 枚中 {len(plain)} 枚（{', '.join(f'p{k}' for k, _ in plain[:8])}{' ほか' if len(plain) > 8 else ''}）。"
+                               "章の名前か、レイアウトで分からない役割（Appendix・参考）を示すページにだけ付ける（slides-visual-008、deck-design）")
+    if not reuse and len(panels) >= 3 and len(panels) > body_pages / 2:
+        r.hits[PANEL_BANDS].append(f"本文 {body_pages} 枚中 {len(panels)} 枚（{', '.join(f'p{k}' for k in panels[:8])}{' ほか' if len(panels) > 8 else ''}）。"
+                                   "本文か話す人が言えることは帯にせず、要らないものから外す（slides-visual-009、deck-design）")
     if len(claims) > CLAIM_MAX:
-        r.hits[HEAD_CLAIMS].append(f"{len(claims)} 枚（{', '.join(f'p{k}' for k in claims)}）。名詞句にし、言い切りは判断を頼むページと数字の結論のページの 2〜3 枚に絞る（deck-writing の content.md の 4）")
+        r.hits[HEAD_CLAIMS].append(f"{len(claims)} 枚（{', '.join(f'p{k}' for k in claims)}）。名詞句にし、言い切りは判断を頼むページと数字の結論のページの 2〜3 枚に絞る（deck-content-041、deck-writing）")
     if only is not None:  # 選んだページの指摘だけを残す（デッキ全体の規則 DECK_WIDE と、p<番号> で始まらない指摘は残す）。文節の点検（uv を呼ぶ）も、そのページだけにする
         on = lambda h: hit_page(h) is None or hit_page(h) in only
         wraps = [w for w in wraps if on(w[0])]
@@ -705,7 +808,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
     print(f"\n== 本文の字数（見出し・リード・出典・フッターを除く。話す資料は {TALK_MAX} 字まで） ==")
     print(" / ".join(chars))
     hard = r.show(list(HARD) + [COPYRIGHT_NG, FONT_NG, MONO_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
-    r.show(list(WARN) + textlint.YOMI_NAMES + list(SLIDE_ONLY) + [f"{MIN_PT}pt 未満の文字", NO_SOURCE, NOT_IN_FACTS, NO_LINK, BODY_LINES, TWO_LINES, HEAD_CLAIMS, BULLET_PERIOD, TALK, ARROW_MID, TEXT_OVER, LINE_GRID, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, PAD_NG, NUM_NO_UNIT, OPEN_HEAD, PHRASE_BREAK, COL_SHIFT, DASH_ROUND, STAGE_NG, CODE_NOT_MONO, BLOCK_ON_NAVY, MANY_BANDS, NO_COVER, NO_DIVIDER, SHORT_CH], "要確認")
+    r.show(list(WARN) + textlint.YOMI_NAMES + list(SLIDE_ONLY) + [f"{MIN_PT}pt 未満の文字", NO_SOURCE, NOT_IN_FACTS, NO_LINK, BODY_LINES, TWO_LINES, HEAD_CLAIMS, BULLET_PERIOD, TALK, ARROW_MID, TEXT_OVER, LINE_GRID, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, PAD_NG, NUM_NO_UNIT, OPEN_HEAD, PHRASE_BREAK, COL_SHIFT, DASH_ROUND, RED_THIN, STAGE_NG, CODE_NOT_MONO, BLOCK_ON_NAVY, MANY_BANDS, BAND_ECHO, KICKERS, PANEL_BANDS, CODE_HEAD, AXIS_NEAR, NO_COVER, NO_DIVIDER, SHORT_CH], "要確認")
     hard += workspace_checks("slides", p, r)
     print("\n== 文字サイズ（pt: run の数） ==")
     print(", ".join(f"{k:g}: {v}" for k, v in sorted(sizes.items())))
@@ -865,7 +968,7 @@ def selftest():
     oat = rgb("F9F7F4")
     assert len(run(deck([(NAVY, [title()]), (oat, [title(), shape(1, size=36, text=["55"])])]))[0].hits[NUM_NO_UNIT]) == 1
     assert not run(deck([(NAVY, [title()]), (oat, [title(), shape(1, size=36, text=["55 モデル"])])]))[0].hits[NUM_NO_UNIT]
-    # 手の改行のあとの行頭の全角の開き括弧（deck-design の slides.md の 2）。括弧の後で改行したものは出さない
+    # 手の改行のあとの行頭の全角の開き括弧（slides-visual-013、deck-design）。括弧の後で改行したものは出さない
     assert len(run(deck([(NAVY, [title()]), (oat, [title(), shape(1, text=["表と同じ権限\v（Unity Catalog）"])])]))[0].hits[OPEN_HEAD]) == 1
     assert not run(deck([(NAVY, [title()]), (oat, [title(), shape(1, text=["表と同じ権限（Unity\vCatalog）"])])]))[0].hits[OPEN_HEAD]
     # 自動の折り返しが文節の途中に入る見込み（slides-visual-013）。数え方は slides.py の wrap_lines と同じ。文節は BudouX の結果を差し替えて試す
@@ -1001,6 +1104,31 @@ def selftest():
     assert comma(shape(1, y=2, w=6, text=["監査は、この 1 か所で確かめる"])) == 1 and comma(shape(1, y=2, w=1.5, text=["監査は、この 1 か所で確かめる"])) == 0 and comma(unsized) == 0
     band = {"objectId": "b", "shape": {"shapeType": "RECTANGLE", "shapeProperties": fill(NAVY)}, **box(0.6, 5.88, 12.13, 0.72)}
     assert len(run(deck([(OAT, [band])] * 3))[0].hits[MANY_BANDS]) == 1 and not run(deck([(OAT, [band]), (OAT, []), (OAT, [])]))[0].hits[MANY_BANDS]
+    # 結論バンドの言い直し（slides-lint-029）: バンドの文の和文の 2 字の組の半分以上が見出しにあれば出す。聞き手に頼むことと、英字の重なりは出さない
+    said = lambda t, head="夜間の集計を新しい基盤に移す": run(deck([(OAT, [title(head), shape(1, fill=NAVY, text=[t]) | box(0.6, 5.88, 12.13, 0.72)])]))[0].hits[BAND_ECHO]
+    assert len(said("夜間の集計を新しい基盤に移す")) == 1 and not said("ご相談したいこと: 日程と参加する方") and not said("Claude Code Lakebase で", "Claude Code と Lakebase")
+    # キッカーが本文の半分を超える（slides-lint-030）: ページごとに違うキッカーは数え、2 枚以上に同じ文（章の名前）と Appendix は数えない
+    kick = lambda ts: run(deck([(NAVY, [title()])] + [(OAT, [title(), shape(1, y=0.40, size=11, w=6, text=[t])]) for t in ts]))[0].hits[KICKERS]
+    assert len(kick([f"キッカー{k}" for k in "一二三四五六"])) == 1 and not kick(["章の名前"] * 6) and not kick(["Appendix", "参考", "キッカー一", "章", "章", "章"])
+    # 赤の囲みの線（slides-lint-031）: 2pt より細い赤の枠を出す。Google が返す EMU の 2pt（25400）は通す
+    scheme.append({"type": "HYPERLINK", "color": rgb("FF3621")})
+    red = lambda w, unit="PT": run(deck([(OAT, [title(), {"objectId": "r", **box(1, 2, 4, 2), "shape": {"shapeType": "ROUND_RECTANGLE", "shapeProperties": {
+        "outline": {"outlineFill": {"solidFill": {"color": {"themeColor": "HYPERLINK"}}}, "weight": {"magnitude": w, "unit": unit}}}}}])]))[0].hits[RED_THIN]
+    assert len(red(0.75)) == 1 and not red(2) and not red(25400, "EMU") and len(red(12700, "EMU")) == 1
+    # コードの箱の上の塗りの見出し（slides-lint-032）: 真上の札は出す。塗りのない太字と、ターミナルの窓の帯（箱と一緒に大きな塗りの箱の中）は出さない
+    PANEL_C = {"rgbColor": rgb("EEEDE9")}
+    code_box = [{"objectId": "c", **box(1, 2.5, 6, 2), "shape": {"shapeType": "RECTANGLE", "shapeProperties": fill(NAVY)}}, shape(1, font=MONO, text=["SELECT 1"]) | box(1.2, 2.7, 5, 1)]
+    head = lambda tag, wrap=False: run(deck([(OAT, [title()] + ([{"objectId": "w", **box(0.8, 2.0, 6.4, 2.7), "shape": {"shapeType": "RECTANGLE", "shapeProperties": fill(PANEL_C)}}] if wrap else [])
+                                                + code_box + [tag | box(1, 2.1, 1.5, 0.35)])]))[0].hits[CODE_HEAD]
+    assert len(head(shape(1, fill=PANEL_C, text=["SQL"]))) == 1 and not head(shape(1, text=["SQL"])) and not head(shape(1, fill=PANEL_C, text=["SQL"]), wrap=True)
+    # 本文の下の淡色の帯（slides-lint-033）: 本文の半分を超えるページにあれば出す
+    pband = shape(1, fill=PANEL_C, text=["だから、先に移す"]) | box(0.6, 5.9, 12.1, 0.6)
+    panels_of = lambda k: run(deck([(NAVY, [title()])] + [(OAT, [title()] + ([pband] if j < k else [])) for j in range(4)]))[0].hits[PANEL_BANDS]
+    assert len(panels_of(4)) == 1 and not panels_of(2)
+    # 箱の列の間の矢印（slides-lint-034）: 上下の箱の間を 0.2 in より近く通る横の矢印は出す。真ん中の矢印と、矢印のない罫線は出さない
+    card2 = lambda y: {"objectId": f"k{y}", **box(1, y, 3, 1), "shape": {"shapeType": "RECTANGLE", "shapeProperties": fill(PANEL_C)}}
+    axis = lambda y, head="FILL_ARROW": run(deck([(OAT, [title(), card2(2), card2(3.6), line(0.8, y, 10, 0) | {"line": {"lineProperties": {"endArrow": head}}}])]))[0].hits[AXIS_NEAR]
+    assert len(axis(3.1)) == 1 and not axis(3.3) and not axis(3.1, "NONE")
     print("selftest ok")
 
 

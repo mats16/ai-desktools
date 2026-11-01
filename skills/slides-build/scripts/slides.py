@@ -61,14 +61,14 @@ BAND_BOTTOM, Y_SRC, Y_FOOT = 6.60, 6.68, 7.08  # 結論バンドの下端、出�
 COPYRIGHT = BRAND_COPYRIGHT  # 組むデッキの著作権表示。テーマの copyright があればそれ（use_theme）
 # 結論バンドの内側の余白（in）。枠と文字の間は 1 字分より大きめに取る（見た目 1-8。13pt の 1 字は 0.18 in）。左右は pptx 版と同じ 18pt
 BAND_PAD_X, BAND_PAD_Y = 0.25, 0.2
-# [slides-component-001] 正円の番号の直径（in）と数字（pt）。medium・large は数字の高さが円の 4 割ほど。small は周りの 11pt の文字に合わせて 11pt（11pt の太字なので、赤に白の 3.62:1 で届く。deck-design の slides.md の 3 の slides-visual-039）
+# [slides-component-001] 正円の番号の直径（in）と数字（pt）。medium・large は数字の高さが円の 4 割ほど。small は周りの 11pt の文字に合わせて 11pt（11pt の太字なので、赤に白の 3.62:1 で届く。slides-visual-039、deck-design）
 NUM = {"small": (0.3, 11), "medium": (0.36, 14), "large": (0.48, 18)}  # 図の中の印／カードと手順（既定）／大きな段
 NUM_SHAPES = ("ellipse", "round_rectangle")  # 番号の形。角丸は高さを円の直径にし、幅を数字に合わせる（num_w）
 # カードの箱の角（Deck.card の corner）。round は CORNER_RADIUS、square は四角、pill は短い辺の半分の丸み（組んだ大きさで決めるので、h が変わってもピルのまま）。
 # 丸みを数で書かせないのは、選べる値を 3 つに絞るため（2026-10-26）
 CORNERS = ("round", "square", "pill")
 PILL_MAX = 1.2  # ピルのカードの短い辺の上限（in）。これより大きいと半円（半径 0.6 in より大）が、角から 0.18 in ほどの見出しの 1 字目にかかる
-# [slides-component-002] 赤（RED）の線の太さ（pt）。強調の囲みは実線でも点線でも 2pt（強調のための線なので、細くしない）。ほかの枠線は 0.75pt
+# [slides-component-002] 赤（RED）の線の太さ（pt。slides-visual-023、deck-design）。強調の囲みは実線でも点線でも 2pt（強調のための線なので、細くしない）。ほかの枠線は 0.75pt
 EMPH_PT = 2
 
 # ---- 色の役割（deck-design の slides.md の 1）。テーマの色の枠の名前 ----
@@ -107,7 +107,7 @@ VARIANTS = {}  # 組んでいるデッキの {"cover"・"section": {番号: (文
 TONES = {"dark": (WHITE, RED_ON_NAVY, DECOR, SUB_ON_NAVY), "accent": (WHITE, NAVY, NAVY, NAVY), "light": (HEAD, RED_TEXT, DECOR, SUB)}
 _SWAP = {}  # 組んでいるデッキの、FIXED の既定の値 → テーマの値（use_theme が決める）
 _NAMED = {}  # 組んでいるデッキの、テーマが書いた NAMED の値（use_theme が決める）
-# 提供ステージの札の塗り（deck-design の slides.md の 1）。本番で使える Public Preview は、Beta・Private Preview（本番向けではない）の黄と分け、GA の緑を 4 割にした色（2026-10-09）
+# 提供ステージの札の塗り（slides-visual-010、deck-design）。本番で使える Public Preview は、Beta・Private Preview（本番向けではない）の黄と分け、GA の緑を 4 割にした色（2026-10-09）
 PUBLIC_PREVIEW = "99DDC7"
 STAGE_FILL = {"GA": GA, "Public Preview": PUBLIC_PREVIEW, "Beta": PREVIEW, "Private Preview": PREVIEW, "OSS": OSS}  # 札の文字は OSS だけ WHITE、ほかは STAGE_TEXT
 SLOTS = ("DARK1", "LIGHT1", "DARK2", "LIGHT2", "ACCENT1", "ACCENT2", "ACCENT3", "ACCENT4", "ACCENT5", "ACCENT6", "HYPERLINK", "FOLLOWED_HYPERLINK")
@@ -589,10 +589,10 @@ class Deck:
         （大きな数字）は、spacing によらず 100 にする（125 だと、Google の行送りでは数字と説明が離れて見えた。2026-10-08）。
         edge=True で、文字の端を (x, y)・幅 w・高さ h にそろえる（塗りのない文字。枠を INSET だけ外に出す。legacy.md の「Laying out shapes and text」）。
         pad（in）は、塗りか枠線のある文字の、左寄せ・右寄せのときの箱の端と文字の間。省くと 1 字分（枠でいちばん小さい文字の大きさ。lint と同じ測り方）。
-        枠の内側の余白は 0.1 in で変えられず 1 字分に足りないので、文字の枠を内に縮める（deck-design の slides.md の 4。lint が見る）。中央寄せには効かない。
+        枠の内側の余白は 0.1 in で変えられず 1 字分に足りないので、文字の枠を内に縮める（slides-visual-027、deck-design。lint が見る）。中央寄せには効かない。
         gap（pt）は段落の間の空き（最後の段落には付けない。付けると上下の中央が上にずれる）。
         改行を含む part は、その行が枠に収まるかを見て、収まらない見込みなら警告する（fit=False で見ない）。
-        mono=True で、英数字を等幅の MONO にする（コードの箱・コマンドだけの札。deck-design の slides.md の 2）。
+        mono=True で、英数字を等幅の MONO にする（コードの箱・コマンドだけの札。slides-visual-014、deck-design）。
         wide=True で、楕円でない図形も、楕円と同じく文字の枠を図形より広げる（角丸の番号。Deck.num）。"""
         parts = [parts] if isinstance(parts, str) else parts
         full = "".join(p if isinstance(p, str) else p[0] for p in parts)
@@ -773,7 +773,7 @@ class Deck:
         dict のセルは text（文字列か parts）と、colspan・rowspan（右と下へ結合する数。覆う位置にはセルを書かない。HTML と同じ）、fill（そのセルの塗り）、
         align・valign（そのセルの寄せ）、color（文字の色。濃い fill なら WHITE などを渡す）、bullets（箇条書き）。
         行は文字に合わせて伸びる（row_h は最小）。戻りは表の下端の見込み（in。下に置く要素の位置に使う）。
-        mono_cols の列は、見出しの行を除いて英数字を等幅の MONO にする（コマンドの一覧など。deck-design の slides.md の 2）。
+        mono_cols の列は、見出しの行を除いて英数字を等幅の MONO にする（コマンドの一覧など。slides-visual-014、deck-design）。
         row_h は行ごとの並びでもよい。fills は (行, 列, 色) の並び（0 始まり。行か列が None ならその列か行の全部）で、1 行おきの塗りの上に塗る（行か列の強調）。
         vlines は (始めの列, 列の数) で、見出しの行の下のその列の左右と間に縦の罫線を引く（ガントの月の区切り。線の図形で引くと lint の格子に出る）。"""
         t, nr, nc, nh = self.oid(), len(rows), len(widths), int(header)
@@ -843,7 +843,7 @@ class Deck:
         return y + table_h(widths, rows, size, hs, header, mono_cols, first_col)
 
     def arrow(self, sid, x1, y1, x2, y2, color=SUB, head=True, dash=False, weight=1.25, link=None, bent=False):
-        """細い線。横の矢印は、両側の箱の上下の中央に引く（deck-design の slides.md の 4。lint が見る）。dash で点線（「できるが手間」などの意味）、weight は太さ（pt）。
+        """細い線。横の矢印は、両側の箱の上下の中央に引く（slides-visual-025、deck-design。lint が見る）。dash で点線（「できるが手間」などの意味）、weight は太さ（pt）。
         link は (始めの図形の ID, 辺, 終わりの図形の ID, 辺) で、線を四角の図形の辺の中央（接続点）につなぐ（画面で箱を動かしても付いてくる）。辺は top・left・bottom・right。
         (x1, y1)・(x2, y2) はその接続点に置く（Google がつないだ点に引き直す）。bent は折れ線（両端をつないだときだけ。つないだ辺に合わせて、横・縦・横、縦・横・縦、1 回だけ折れる形に Google が引く）。
         [slides-component-024] 2026-10-16 の sandbox で、つないだ線の形、グループの中の図形につなげること、つないでいない折れ線は形が崩れることを確かめた。
@@ -1378,7 +1378,7 @@ class SpecPage:
                 l = f"{loc}（list）.items[{i}]"
                 if isinstance(it, dict):
                     spec_check(it, LIST_ITEM, l)
-                    if len(ms := [k for k in ("icon", "num", "image") if k in it]) > 1:
+                    if len(ms := [k for k in ("icon", "num", "image") if k in it]) > 1:  # slides-visual-020（deck-design）
                         sys.exit(f"{l}: 項目の印は icon・num・image のどれか 1 つ: {'・'.join(ms)}")
                 it = {"text": it} if isinstance(it, str) else it
                 if not (spec_plain(spec_md(it.get("text", ""))).strip() or it.get("head", "").strip()):  # 記法を外した文字で見る（"***  ***" は空白だけ）
@@ -1921,7 +1921,7 @@ class SpecPage:
             y += ih + e.get("gap", LIST_GAP)
 
     def mark(self, e):
-        """カードの印（icon・num・image のどれか）。2 つ以上なら止める。"""
+        """カードの印（icon・num・image のどれか）。2 つ以上なら止める（slides-visual-020、deck-design。番号とアイコンが行頭に 2 つ並ぶ）。"""
         ms = [k for k in ("icon", "num", "image") if k in e]
         if len(ms) > 1:
             sys.exit(f"カードの印は icon・num・image のどれか 1 つ: {'・'.join(ms)}")
@@ -2106,7 +2106,7 @@ class SpecPage:
             self.warns.append(f"{loc}（card）: ピルの短い辺が {min(w, h):.2f} in で {PILL_MAX} in より大きく、半円が文字にかかる見込み。"
                               "背の高いカードと同じ行に置かない、文字を減らす、corner を外すのどれかにする")
         if e.get("shape") == "rectangle" and (fill or kind == "label"):
-            self.warns.append(f"{loc}: 塗りの箱を四角（shape: rectangle）にした。塗りの箱は、書かなければ角丸（deck-design の slides.md の 4）。四角にする理由がなければ shape を外す")
+            self.warns.append(f"{loc}: 塗りの箱を四角（shape: rectangle）にした。塗りの箱は、書かなければ角丸（slides-visual-018、deck-design）。四角にする理由がなければ shape を外す")
         if kind in ("text", "label"):
             s, bul = spec_bullets(e["text"], f"{loc}（text）") if kind == "text" else (e["text"], False)
             parts = spec_md(s, emph, loc)
@@ -2185,7 +2185,7 @@ class SpecPage:
                 hs = [[self.measure(t, self.slot_w(t, cw), loc) for t in c] for c, cw in zip(cols, ws)]
                 if any(max(h[i] for h in hs) - min(h[i] for h in hs) > 0.03 for i in range(len(shapes[0]) - 1)):  # 最後の段は上端がそろえばよい
                     self.warns.append(f"{loc}（row）: 同じ形の stack を並べたが、段の高さがそろわず、下の段の上端がずれる。段の順に grid（cols: {len(cols)}）に並べる"
-                                      "（grid は行ごとに高さをそろえる。../../deck-design/slides.md の slides-visual-024）")
+                                      "（grid は行ごとに高さをそろえる。slides-visual-024、deck-design）")
         it, cy, k = iter(ws), y, 0
         for row in self.rows_of(e):
             cw = [next(it) for _ in row]
@@ -2291,7 +2291,7 @@ class SpecPage:
                 return v if v in self.ids or "." not in v else v.rsplit(".", 1)[0]
             ends = Counter((k, eid(a[k])) for a, *_ in self.arrows for k in ("from", "to") if isinstance(a[k], str))
             if ends["from", fa] == 1 and ends["to", fb] == 1:  # fa から出る線も fb に入る線も 1 本だけ  # 2026-10-20、ワークスペースの決まりから（避けて回した 1 本の線は、どこからどこへの流れかが読みにくい）
-                self.warns.append(f"{loc}: 枝分かれでも合流でもない 1 本の流れを折れ線（bent）にした。つなぐ 2 つの箱を同じ行か同じ列に置き直し、まっすぐ引く（../../deck-design/slides.md の slides-visual-043）")
+                self.warns.append(f"{loc}: 枝分かれでも合流でもない 1 本の流れを折れ線（bent）にした。つなぐ 2 つの箱を同じ行か同じ列に置き直し、まっすぐ引く（slides-visual-043、deck-design）")
         if boxed and route == "straight" and not sided and abs(x1 - x2) > 0.01 and abs(y1 - y2) > 0.01:  # ずらした線（offset）も、両端の箱の中央からずらすので同じ  # 2026-10-16 の依頼文のテストで、枝の 1 本だけ直線にして斜めになった
             self.warns.append(f"{loc}: 矢印が斜めになる。枝分かれなら、どの枝も \"route\": \"bent\" にする（中央が同じ高さの枝はまっすぐ引かれる）か、両端の箱の高さをそろえる")
         self.emit("arrow", loc, e, x1=x1, y1=y1, x2=x2, y2=y2, color=spec_color(e.get("color", "SUB")), head=e.get("head", True), dash=e.get("dash", False), weight=e.get("weight", 1.25),
@@ -2340,7 +2340,7 @@ class SpecPage:
             if kind == "box" and e.get("shape") != "ellipse":
                 for l2, k2, b in edged:
                     if l2 != l1 and rect_in(b, a) and (gap := min(b[0] - a[0], a[0] + a[2] - b[0] - b[2], b[1] - a[1], a[1] + a[3] - b[1] - b[3])) < BOX_IN - 0.005:
-                        self.warns.append(f"{l2}（{k2}）が囲みの {l1} の辺から {max(gap, 0):.2f} in。中の部品を細くするか間を詰めて、4 辺から {BOX_IN} in 以上内側に置く（../../deck-design/slides.md の slides-visual-044）")
+                        self.warns.append(f"{l2}（{k2}）が囲みの {l1} の辺から {max(gap, 0):.2f} in。中の部品を細くするか間を詰めて、4 辺から {BOX_IN} in 以上内側に置く（slides-visual-044、deck-design）")
         for loc, pts, _, ends, lab in self.lines:
             for l2, k2, r in rs:
                 if l2 not in ends and not point_in(pts[0], r) and not point_in(pts[-1], r) and any(seg_hits(p, q, r) for p, q in zip(pts, pts[1:])):
@@ -3705,7 +3705,7 @@ def lint_local(path="pages.py", url=None, talk=False, pages=None):
 
 
 def merge(pages, fixes):
-    """[slides-component-014] 子が別のファイル（build/fix_<担当>.py）に書いたページの関数を pages.py に合わせる（../../deck-review/prompt_fix.md の deck-review-011）。
+    """[slides-component-014] 子が別のファイル（build/fix_<担当>.py）に書いたページの関数を pages.py に合わせる（deck-review-011、deck-review）。
     子は pages.py を書かず、親がここで合わせて 1 回だけ組む。同じ名前の関数は置き換え、pages.py にない関数は make の前に足す。import と docstring は読み飛ばす
     （名前は pages.py の import を使う）。make と、関数でない文（定数など）があれば合わせずに止める（共通のものとページの順は親が書く）。2 つのファイルが同じ関数を
     書いても止める。足した関数を make が呼んでいなければ警告する。前の pages.py は pages.py.bak に残す（直して欠陥が増えたら戻すため。あれば上書きせず pages.py.bak1 …）。

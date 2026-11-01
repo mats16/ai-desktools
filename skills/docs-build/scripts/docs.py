@@ -190,7 +190,7 @@ class Doc:
         self.para(text, quote=True)
 
     def src(self, text):
-        """出典の行（表と図の下）。リンクを付ける（deck-writing の content.md の 6）。「出典:」「Source:」がなければ、資料の言語のもの（gapi.source_head）を付ける。"""
+        """出典の行（表と図の下）。リンクを付ける（deck-content-033、deck-writing）。「出典:」「Source:」がなければ、資料の言語のもの（gapi.source_head）を付ける。"""
         if not re.match(r"(出典|Sources?)[：:]", text):
             text = gapi.source_head() + text
         self.para(text, small=True)

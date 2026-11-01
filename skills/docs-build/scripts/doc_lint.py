@@ -94,7 +94,7 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
 
     def close():
         if sec_num and not sec_link:
-            r.hits["数字に出典のリンクがない"].append(f"{sec}: 「{sec_num[0]}」ほか。数字の出典を、その節の本文か表の下の出典の行にリンクで書く（deck-writing の content.md の 6）")
+            r.hits["数字に出典のリンクがない"].append(f"{sec}: 「{sec_num[0]}」ほか。数字の出典を、その節の本文か表の下の出典の行にリンクで書く（deck-content-033、deck-writing）")
     for k, (n, p, tab, before_table) in enumerate(paras):
         text, style = gdoc_text(p).rstrip("\n"), p["paragraphStyle"].get("namedStyleType", "NORMAL_TEXT")
         where = f"段落 {n}" + (f"（表 {tab}）" if tab else "")
