@@ -5200,6 +5200,25 @@ def selftest_diff():
     with contextlib.redirect_stdout(io.StringIO()):
         lint.lint_slides(local_json(json.loads(resolved(t, pt_)), t, pt_), r := lint.Report())
     assert not r.hits[f"{lint.MIN_PT}pt 未満の文字"], r.hits  # ターミナルの帯の 9pt は塗りのある図形の中の文字（slides-visual-037）
+    # 部品は塗り・文字・枠線を別の図形に分けて組むので、lint の点検（slides-lint-029〜034）は組んだ部品で確かめる（2026-11-01。札を塗りと文字の枠に分けるので、コードの見出しを見逃していた）
+    pc = json.loads(json.dumps(p))
+    pc["masters"][0]["pageProperties"]["colorScheme"]["colors"] = [{"type": k, "color": rgb(v)} for k, v in (("DARK1", "1B3139"), ("LIGHT2", "EEEDE9"), ("HYPERLINK", "FF3621"))]
+    def lint_hits(make, key):
+        t = make_deck(make, "t")
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            lint.lint_slides(local_json(json.loads(resolved(t, pc)), t, pc), r := lint.Report())
+        return len(r.hits.get(key, []))
+    def one(f):
+        return lambda d: f(d, d.page("夜間の集計を新しい基盤に移す"))
+    assert lint_hits(one(lambda d, s: (d.label(s, "SQL", X, Y_BODY, 1.5, 0.35), d.code(s, X, Y_BODY + 0.45, 6, 1.2, ["SELECT 1"]))), lint.CODE_HEAD) == 1
+    assert lint_hits(one(lambda d, s: d.code(s, X, Y_BODY, 6, 1.2, ["$ ls"], title="ターミナル")), lint.CODE_HEAD) == 0  # 窓の帯は見出しでない
+    assert lint_hits(one(lambda d, s: d.box(s, X, Y_BODY, 4, 2, None, RED, kind="ROUND_RECTANGLE", weight=1)), lint.RED_THIN) == 1  # 辺と角に分かれても 1 件
+    assert lint_hits(one(lambda d, s: d.box(s, X, Y_BODY, 4, 2, None, RED, kind="ROUND_RECTANGLE", dash=True)), lint.RED_THIN) == 0
+    assert lint_hits(one(lambda d, s: d.band(s, "夜間の集計を新しい基盤に移す")), lint.BAND_ECHO) == 1
+    assert lint_hits(one(lambda d, s: (d.box(s, X, 2, 3, 1, PANEL), d.box(s, X, 3.6, 3, 1, PANEL), d.arrow(s, X, 3.1, X + 10, 3.1))), lint.AXIS_NEAR) == 1
+    assert lint_hits(lambda d: [d.cover("表紙", "k")] + [d.label(d.page("見出し", kicker=f"キッカー{k}"), "だから、先に移す", X, 5.9, W, 0.6, align="START") for k in "一二三四"],
+                     lint.PANEL_BANDS) == 1
+    assert lint_hits(lambda d: [d.cover("表紙", "k")] + [d.page("見出し", kicker=f"キッカー{k}") for k in "一二三四"], lint.KICKERS) == 1
 
     # ページのハッシュ: 組むたびに変わる ID では変わらず、中身が変わったページと、そこへリンクするページだけが変わる
     _, h1, links, n1 = pages_of(d, json.loads(resolved(d, p)))

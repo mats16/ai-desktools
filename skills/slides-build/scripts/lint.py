@@ -395,19 +395,24 @@ def shape_text(e):
 
 
 def code_heads(els, scheme):
-    """[slides-lint-032] 濃紺のコードの箱（等幅の文字が中にある）の真上 0.3 in までに、横に重なって置いた塗りのある文字の図形。
+    """[slides-lint-032] 濃紺のコードの箱（等幅の文字を含む枠が中にある）の真上 0.3 in までに、横に重なって置いた文字の枠で、下に塗りがあるもの（札・帯）。
+    部品は塗りと文字を別の図形にする（slides.py の label は角丸の箱と透明の文字の枠）ので、文字の枠ごとに、中心の下に塗りの図形があるかで見る。
     箱と一緒に、もっと大きな塗りの箱の中にあるもの（ターミナルの窓の帯）は見ない。"""
     fill = lambda e: solid(e.get("shape", {}).get("shapeProperties", {}).get("shapeBackgroundFill"), scheme)
     filled = [(e, b) for e, b in els if "shape" in e and fill(e)]
     codes = [b for e, b in filled if fill(e) == scheme.get("DARK1", "1B3139") and b[2] >= 1.5 * EMU and b[3] >= 0.5 * EMU
-             and any(x is not e and "shape" in x and shape_text(x) and is_mono(x["shape"]) and center_in(xb, b) for x, xb in els)]
-    out = []
-    for cb in codes:
-        for e, b in filled:
+             and any(x is not e and "shape" in x and center_in(xb, b) and any(st.get("fontFamily") == MONO for para in paras(x["shape"].get("text")) for c, st in para[1] if c.strip())
+                     for x, xb in els)]  # 等幅の文字を含む（コードの和文のコメントは本文の書体になる）
+    out, R = [], 0.12 * EMU  # 角丸の箱は半径（0.1 in）だけ内に寄った四角に分かれるので、囲むかはその分ゆるく見る
+    for x, b in els:
+        if "shape" not in x or not (t := shape_text(x)) or is_mono(x["shape"]):
+            continue
+        for cb in codes:
             over = min(b[0] + b[2], cb[0] + cb[2]) - max(b[0], cb[0])
-            if (t := shape_text(e)) and not is_mono(e["shape"]) and cb[1] - 0.3 * EMU <= b[1] + b[3] <= cb[1] + 0.02 * EMU and over >= b[2] / 2 \
-                    and not any(ob is not b and ob[2] > cb[2] and ob[0] <= min(b[0], cb[0]) and ob[1] <= b[1] and ob[1] + ob[3] >= cb[1] + cb[3] for _, ob in filled):
+            if cb[1] - 0.3 * EMU <= b[1] + b[3] <= cb[1] + 0.02 * EMU and over >= b[2] / 2 and any(center_in(b, fb) for _, fb in filled) \
+                    and not any(ob[2] >= cb[2] - 2 * R and ob[0] <= min(b[0], cb[0]) + R and ob[1] <= b[1] + R and ob[1] + ob[3] >= cb[1] + cb[3] - R for _, ob in filled):
                 out.append(f"「{t[:20]}」。コードの箱の上の見出しは塗らず、太字の文字にする")
+                break
     return out
 
 
@@ -559,7 +564,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
         scheme = scheme_of(p, s.get("slideProperties", {}).get("masterObjectId"))
         bg = page_bg(p, s, scheme)
         dark.append(is_dark(p, s, scheme))
-        grid, arrows = [], []
+        grid, arrows, thin_red = [], [], []
         shapes, lines, boxes, best, top, has_src, nums, fact_nums = [], [], [], (0, None, None), (0, None, None), False, [], []
         els = list(flatten(s.get("pageElements", [])))
         ups = dict(ancestry(s.get("pageElements", [])))
@@ -604,7 +609,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
             if "shape" in e and solid(ol.get("outlineFill"), scheme) == scheme.get("HYPERLINK") and (wt := ol.get("weight", {})).get("magnitude") is not None:
                 w = wt["magnitude"] / (12700 if wt.get("unit") == "EMU" else 1)  # Google が返す値は EMU、組む要求は pt
                 if w < EMPH_PT - 0.01:
-                    r.hits[RED_THIN].append(f"p{i}: {w:g}pt（{b[2] / EMU:.2f} × {b[3] / EMU:.2f} in）。強調の囲みは実線も点線も {EMPH_PT}pt（JSON の box は weight を書かない）")
+                    thin_red.append(w)  # 角丸の囲みは辺の線と角の円弧に分かれるので、ページごとに 1 件にまとめる
             if "shape" in e and src_without_link(e["shape"]):
                 r.hits[NO_LINK].append(f"p{i}: 「{''.join(ptext(x) for x in paras(e['shape'].get('text'))).strip()[:30]}」")
             for text, f in texts:
@@ -673,6 +678,8 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                             top = (sz, e, b)
             if "shape" in e:
                 shapes.append((b, own, e.get("objectId")))
+        if thin_red:
+            r.hits[RED_THIN].append(f"p{i}: {min(thin_red):g}pt（{len(thin_red)} 個の図形）。強調の囲みは実線も点線も {EMPH_PT}pt（JSON の box は weight を書かない）")
         if top[1] is not None:
             best = top
         if best[1] is not None:
