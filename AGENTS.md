@@ -35,7 +35,7 @@ The 17 skills fall into six groups by what they hold (2026-10-31 in `docs/decisi
 | `docs/` | Installation and development guides, the decisions (`decisions.md`) and deferred work (`todo.md`). `docs/fixtures/` holds the prompts for prompt tests |
 | `docs/decisions.md` (「決めたこと」), `docs/todo.md` (「残っている課題」) | Decisions the user made, and work deferred |
 
-`docs/decisions.md` is about 260 KB. Don't read it through. Before changing a skill or rule, `grep -n` it (and `docs/todo.md`) for the skill name or rule ID (such as `deck-review-011`) and read only the matching entries, because they record why things are the way they are.
+`docs/decisions.md` is about 260 KB. Don't read it through. Before changing a skill or rule, `grep -n` it (and `docs/todo.md`) for the skill name or rule ID (such as `deck-review-011`) and read only the matching entries, because they record why things are the way they are. For a rule ID, `python3 ../lib/ledger.py trace <ID>` in `sandbox/` lists those lines with the scripts and files that name the rule.
 
 ## Where to change what
 
@@ -47,7 +47,7 @@ Find the owner first, and change it there only. To find where a plugin rule is w
 | What makes content or wording good | `deck-writing` (an axis in `SKILL.md`; by material type in `content*.md`) | The review aspects in `deck-review`'s `prompt_slides.md` and `prompt_doc.md`, if the reviewer must look for it |
 | How pages look | `deck-design` (a principle in `SKILL.md`; values for a format in `slides.md` or `docs.md`) | The component's default in `slides.py` or `docs.py` if it can be built in, and lint if it can be counted |
 | A key or component of the page JSON | `slides-build/scripts/slides.py`, and `pages.md` or `diagrams.md` (what the key does, not which page should use it) | A page in `samples/json/` and its checks in `tests/render/expect.json` (the selftest checks both); which form suits which message goes in `deck-design` |
-| A lint check | `lint.py` (`slides-build`), `doc_lint.py` (`docs-build`), or `lib/textlint.py` (both) | The rule text says 「lint が〜」 and the check names the rule ID |
+| A lint check | `lint.py` (`slides-build`), `doc_lint.py` (`docs-build`), or `lib/textlint.py` (both) | The rule text says 「lint が〜」 and the check names the rule ID (`ledger.py trace <ID>` then lists the check as an edge of the rule) |
 | Google API calls | `lib/gapi.py` (shared), or the tool skill's script | The pitfall in that tool's `api.md` |
 | How the workspace, settings, or recipes are found; which plugin files trigger which recipes | `lib/desk.py` (`TRIGGERS`) | `hooks/rules_overlay.py` and `extensions/rules.ts` behave the same; the trigger lists in `desk-feedback/routing.md` ("Workspace rules") |
 | How corrections are judged, recorded, or routed | `desk-feedback`, and `lib/ledger.py` for the ledger | `desk-dreaming`'s `run.md` if the daily cleanup reads it |
