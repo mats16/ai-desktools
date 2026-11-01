@@ -13,6 +13,7 @@ If none is given, decide it from the request and tell the user in the first repl
   社内メモ_<content>.md   … things not shown to the customer (speaking order, 要確認 items, personal names, internal circumstances)
   build/                  … source of truth for the content (decks: deck.json and one file per page p<number>.json [older materials: pages.py]; documents: doc.md). Images used only by this material go in build/assets/
   references.md           … ledger of the sources read while making it (one row per source with an S<number> ID; `refs.py add`; format: "Ledger" in materials.md)
+  progress.jsonl          … step records left with `flow.py record`, if any (progress.md)
   ```
 
 ## 2. Read past materials for the same customer
