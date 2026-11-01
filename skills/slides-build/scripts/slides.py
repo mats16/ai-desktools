@@ -19,14 +19,14 @@ usage（資料の build/ で。deck.json か pages.py は今いるフォルダ�
   slides.py schema [--brief]   JSON のページの書く形の JSON Schema を出す（--brief は型・キー・色の早見表）
   slides.py stats   JSON のページの形の外の書き方（raw）を、キーごとに使った資料の数で出す（ワークスペースの .desk/spec_raw.jsonl。形に足す候補）
   slides.py upgrade <ファイル>...   JSON のページの raw のうち、形のキーで書けるものを書き換える
-  slides.py themes   テーマの名前・説明・テンプレートがあるか・既定か。資料ごとに選ぶ（../../deck-workflow/start.md の 5）。
+  slides.py themes   テーマの名前・説明・テンプレートがあるか・既定か。資料ごとに選ぶ（deck-workflow → steps 1–5 §5）。
                      [drive] shared_themes と [drive] desk の下の Themes の、[slides.templates] にないテンプレートも候補に出す
   slides.py theme <URL か ID> [<名前>] [--force]   テンプレートかデッキが持つテーマ（マスターの配色・書体・目印）を、ワークスペースの themes/slides/<名前>.json に書く。
                      テンプレートなら [slides.templates] にも書く（共有テーマを使い始めるとき、画面で直した色を戻すとき）
-  slides.py merge <ファイル>...   pages.py の資料で、子が別のファイルに書いたページの関数を pages.py に合わせる（組まない。../../deck-review/prompt_fix.md）
+  slides.py merge <ファイル>...   pages.py の資料で、子が別のファイルに書いたページの関数を pages.py に合わせる（組まない。deck-review → splitting fixes）
   slides.py --selftest
 テンプレートの管理は template.py。色は下の「色の役割」の名前で渡す。役割の名前はテーマの色（マスターの配色）を指すので、テンプレートを替えると色が変わる。
-見た目の決まりは ../../deck-design/slides.md の 1。"""
+見た目の決まりは deck-design → slides §1。"""
 import ast, atexit, contextlib, decimal, functools, hashlib, importlib, inspect, io, itertools, json, math, os, re, shutil, subprocess, sys, tempfile, time, tomllib, types, urllib.error, urllib.parse, urllib.request
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -43,7 +43,7 @@ from brand import (ASCII_BOLD_EM, ASCII_EM, BRAND_COPYRIGHT, COMPANY, COPYRIGHT_
 # ---- テンプレート。ID・置き場所・既定のテーマは人ごとに違うので、設定（ワークスペースの desk.toml か ~/.desk.toml）の [slides] に置く（作り方は template.py） ----
 BLANK = "Content E - Blank"  # テンプレートに残した、置き物のないレイアウト。ページ番号の枠だけを持つ
 
-# ---- 版面（deck-design の slides.md の 1。上端は in） ----
+# ---- 版面（slides-visual-051、deck-design。上端は in） ----
 MONO = MONO_DEFAULT  # 組むデッキの等幅の書体。テーマの mono があればそれ（use_theme）
 MONO_EM = 0.586  # Cascadia Mono の英数字の幅（em。hmtx で測った。2026-10-09）。テーマで等幅の書体を替えても、この幅で見込む（ずれる。template_fonts.md）
 EMU = 914400
@@ -71,7 +71,7 @@ PILL_MAX = 1.2  # ピルのカードの短い辺の上限（in）。これより
 # [slides-component-002] 赤（RED）の線の太さ（pt。slides-visual-023、deck-design）。強調の囲みは実線でも点線でも 2pt（強調のための線なので、細くしない）。ほかの枠線は 0.75pt
 EMPH_PT = 2
 
-# ---- 色の役割（deck-design の slides.md の 1）。テーマの色の枠の名前 ----
+# ---- 色の役割（slides-visual-003、deck-design）。テーマの色の枠の名前 ----
 NAVY, BG, RED_ON_NAVY, PANEL = "DARK1", "LIGHT1", "DARK2", "LIGHT2"  # 表紙・扉の地、結論バンド、表の見出しの行、コードの箱／本文の地／濃紺の上の赤／パネル
 NAVY_BLOCK, GA, RED_TEXT, PREVIEW = "ACCENT1", "ACCENT2", "ACCENT3", "ACCENT4"  # 扉の中のブロック／GA の札／18pt 未満の赤の文字／Beta・Preview の札
 SUB, OSS, RED = "ACCENT5", "ACCENT6", "HYPERLINK"  # 補助の文字とフッター／OSS の札／赤のアクセント（塗りと 18pt 以上の文字）
@@ -111,7 +111,7 @@ _NAMED = {}  # 組んでいるデッキの、テーマが書いた NAMED の値�
 PUBLIC_PREVIEW = "99DDC7"
 STAGE_FILL = {"GA": GA, "Public Preview": PUBLIC_PREVIEW, "Beta": PREVIEW, "Private Preview": PREVIEW, "OSS": OSS}  # 札の文字は OSS だけ WHITE、ほかは STAGE_TEXT
 SLOTS = ("DARK1", "LIGHT1", "DARK2", "LIGHT2", "ACCENT1", "ACCENT2", "ACCENT3", "ACCENT4", "ACCENT5", "ACCENT6", "HYPERLINK", "FOLLOWED_HYPERLINK")
-# テーマのファイルに書く役割の名前 → テーマの枠（deck-design の slides.md の 1）。FOLLOWED_HYPERLINK は役割がなく、どのテーマも同じ色
+# テーマのファイルに書く役割の名前 → テーマの枠（slides-visual-003、deck-design）。FOLLOWED_HYPERLINK は役割がなく、どのテーマも同じ色
 ROLE = {"NAVY": NAVY, "BG": BG, "RED_ON_NAVY": RED_ON_NAVY, "PANEL": PANEL, "NAVY_BLOCK": NAVY_BLOCK, "GA": GA, "RED_TEXT": RED_TEXT, "PREVIEW": PREVIEW,
         "SUB": SUB, "OSS": OSS, "RED": RED}
 FOLLOWED = "954F72"
@@ -585,7 +585,7 @@ class Deck:
              dash=False, weight=None, mono=False, wide=False):
         """parts は文字列か、(文字列, {"bold":…, "color":…, "size":…, "link":…}) の並び。改行は \\n（段落を分ける）、\\v は段落の中の改行。
         link は URL か、ページ番号（int。Appendix の出典のページなど）。リンクの文字は周りの色のまま下線を付ける。
-        spacing（行間、%）を省くと、2 行以上の見込みなら 125、1 行なら 100（deck-design の slides.md の 2）。基準（size）の 2 倍以上の文字の段落
+        spacing（行間、%）を省くと、2 行以上の見込みなら 125、1 行なら 100（slides-visual-053、deck-design）。基準（size）の 2 倍以上の文字の段落
         （大きな数字）は、spacing によらず 100 にする（125 だと、Google の行送りでは数字と説明が離れて見えた。2026-10-08）。
         edge=True で、文字の端を (x, y)・幅 w・高さ h にそろえる（塗りのない文字。枠を INSET だけ外に出す。legacy.md の「Laying out shapes and text」）。
         pad（in）は、塗りか枠線のある文字の、左寄せ・右寄せのときの箱の端と文字の間。省くと 1 字分（枠でいちばん小さい文字の大きさ。lint と同じ測り方）。
@@ -769,7 +769,7 @@ class Deck:
               valign="middle", borders="rows"):
         """rows は行の並びで、セルは文字列か、parts の並び（d.text と同じ書式。改行は \\n）か、dict。header は見出しの行の数（True は 1）。
         見出しの行は濃紺に白の太字、1 列目は HEAD の太字（first_col）、行は 1 行おきに PANEL（zebra）、ほかは CARD。align は列ごとの "left"・"center"・"right" の並び（金額は右）、
-        valign はセルの上下の寄せ（top・middle・bottom）。罫線は borders で、rows は横の罫線だけを RULE で引き（deck-design の slides.md の 5。既定）、grid は縦横と外枠、none は引かない。
+        valign はセルの上下の寄せ（top・middle・bottom）。罫線は borders で、rows は横の罫線だけを RULE で引き（slides-visual-054、deck-design。既定）、grid は縦横と外枠、none は引かない。
         dict のセルは text（文字列か parts）と、colspan・rowspan（右と下へ結合する数。覆う位置にはセルを書かない。HTML と同じ）、fill（そのセルの塗り）、
         align・valign（そのセルの寄せ）、color（文字の色。濃い fill なら WHITE などを渡す）、bullets（箇条書き）。
         行は文字に合わせて伸びる（row_h は最小）。戻りは表の下端の見込み（in。下に置く要素の位置に使う）。
@@ -886,7 +886,7 @@ class Deck:
             sys.exit(f"アイコンの色は役割の名前か 6 桁で渡す: {name} に {color!r}")
         return self.image(sid, iconify(name, color) if ":" in name else render_icon(name, color), x, y, size, size, alt=name)
 
-    # ---- 1 枚の型（deck-design の slides.md の 1） ----
+    # ---- 1 枚の型（slides-visual-050、deck-design） ----
     def page(self, title, lead=None, kicker=None):
         sid = self.slide()
         if kicker:
@@ -1016,7 +1016,7 @@ B_GROUP, B_GAP, B_SEG, B_KEY, B_KEY_GAP = 0.8, 0.04, 0.02, 0.14, 0.24
 B_VMAX = 1e15  # series の数の上限。4 つ足しても float の整数が丸まらない（2**53 ≈ 9e15）
 B_DRAW = 1e-4  # これより低い棒・段は描かない（解いた形は 4 桁に丸めるので、0 の高さの図形になる）
 B_SERIES = (("NAVY", "WHITE"), ("OSS", "WHITE"), ("GA", "STAGE_TEXT"), ("SUB", "WHITE"))
-TABLE_BORDERS = ("rows", "grid", "none")  # 表の罫線: 横の罫線だけ（既定。deck-design の slides.md の 5）、縦横と外枠、なし
+TABLE_BORDERS = ("rows", "grid", "none")  # 表の罫線: 横の罫線だけ（既定。slides-visual-054、deck-design）、縦横と外枠、なし
 SITE = {"top": 0, "left": 1, "bottom": 2, "right": 3}  # 四角の図形の辺 → Slides API の接続点の番号（Deck.arrow の link）
 CONNECT = ("text", "label", "card", "stat", "code", "box")  # 矢印をつなげる部品（SpecPage.place が、四角の枠が箱と同じ大きさのものだけを選ぶ）
 # キーの型。s 文字列、md 記法つきの文字（spec_md）、n 数、i 整数、b 真偽、c 色、els 部品の並び、pt ID か [x, y]、ほかは SPEC_OK
@@ -1041,7 +1041,7 @@ SPEC_EL = {  # type → (要るキー, 書けるキー)
     "arrow": ({"from": "pt", "to": "pt"}, {"color": "c", "head": "b", "dash": "b", "weight": "p", "route": ("straight", "bent"), "label": "md",
                          "label_side": ("top", "bottom", "left", "right"), "offset": "f"}),  # label は線の札、label_side はその置き場所、offset は線を横（縦）にずらす in
     "gantt": ({"cols": "cols", "rows": "grows"}, {"today": "p"}),  # 予定表（slides-pages-010）
-    "bars": ({"items": "bitems"}, {"unit": "s", "horizontal": "b", "hot": "ints", "tentative": "btent", "line": "bline", "threshold": "bthr", "series": "bseries", "stack": "b"}),  # 棒グラフ（deck-design の slides.md の 5）。折れ線と直線を重ねられる。series で 2〜4 系列（束ねるか積み上げる）。tentative は確定していない数（点線の枠）
+    "bars": ({"items": "bitems"}, {"unit": "s", "horizontal": "b", "hot": "ints", "tentative": "btent", "line": "bline", "threshold": "bthr", "series": "bseries", "stack": "b"}),  # 棒グラフ（slides-visual-055、deck-design）。折れ線と直線を重ねられる。series で 2〜4 系列（束ねるか積み上げる）。tentative は確定していない数（点線の枠）
     "row": ({"items": "kids"}, {"gap": "n", "widths": "nums", "arrows": "b"}),
     "stack": ({"items": "kids"}, {"gap": "n"}),
     "grid": ({"items": "kids", "cols": "pi"}, {"gap": "n"}),
@@ -1584,7 +1584,7 @@ class SpecPage:
             top += rh
 
     def bars(self, e, x, y, w, h, loc):
-        """[slides-component-026] 棒グラフ（deck-design の slides.md の 5）。1 系列は凡例と目盛りを置かず、棒の端に数字を書く（直接のラベル）。棒は NAVY、hot の棒は RED と赤の数字。
+        """[slides-component-026] 棒グラフ（slides-visual-055、deck-design）。1 系列は凡例と目盛りを置かず、棒の端に数字を書く（直接のラベル）。棒は NAVY、hot の棒は RED と赤の数字。
         縦の棒（既定）は、下に名前、棒の上に数字、下端に基準の線。横の棒（horizontal）は、左に名前、棒の右に数字、左端に基準の線。
         line（縦の棒だけ）は、棒の上の段に、棒と別の目盛りで SUB の折れ線を引き、点の上に数字を書く。何の数か（label）は段の左上。
         折れ線は棒と違い 0 から始めず、いちばん小さい数を段の下、いちばん大きい数を段の上にする（段が低いので、0 からだと動きが見えない。数は点に書く）。
@@ -2073,7 +2073,7 @@ class SpecPage:
 
     def lone_text(self):
         """塗りの箱の中に、ほかの部品がなく、塗りのない文字が 1 つだけ入っていたら止める（札は図形と文字を 1 つにする。角丸と箱の端と文字の間がそろう。
-        deck-design の slides.md の 4。2026-10-16 の sandbox で、構成図の箱を box と text を重ねて組んでいた）。見出しとカードを入れた囲みは、ほかの部品が入るので通る。"""
+        deck-design → slides §4。2026-10-16 の sandbox で、構成図の箱を box と text を重ねて組んでいた）。見出しとカードを入れた囲みは、ほかの部品が入るので通る。"""
         for kind, loc, r, filled, _, _ in self.placed:
             if filled and len(ins := [p for p in self.placed if p[1] != loc and rect_in(p[2], r)]) == 1 and ins[0][4]:
                 sys.exit(f"{ins[0][1]}（text）: {loc} の塗りの箱の中に、文字だけを重ねた。塗りの箱と文字は、1 つの label か、fill のある text にする（アイコンも置くなら印のあるカード）")

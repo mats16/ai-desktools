@@ -3,7 +3,7 @@
        python3 doc_lint.py --selftest で自己確認（要確認の残り方は ../../../lib/textlint.py --stats）
 ドキュメントの決まりのうち、機械で見られるものを数える（2026-10-09）。本文の表記の決まり・出典の照合・記録はスライドと同じ textlint.py。標準ライブラリだけで動く。
 要修正（HARD）が 1 つでもあれば exit 1。要確認（WARN）は 1 件ずつ見て、直すか、残す理由を言えるようにする。
-ルールの出典は ../../deck-design/docs.md と ../../deck-writing/content.md。docx を読んでいた部分は Archive/docx_pipeline_20261010/。"""
+ルールの出典は deck-design → docs と deck-writing → content。docx を読んでいた部分は Archive/docx_pipeline_20261010/。"""
 import itertools, json, os, re, sys
 from collections import Counter, defaultdict
 
@@ -15,10 +15,10 @@ from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_L
                       not_in_facts, workspace_checks)  # load_facts は docs.py が doc_lint から引く
 
 FIG_HEAD, TAB_HEAD = r"図 ?\d+|Figure \d+\.", r"表 ?\d+|Table \d+\."  # 図表の題の先頭（docs.py が付ける）。英語は「Table 3 shows …」の文と分けるため「.」まで見る
-DOC_MIN_PT = 9  # ドキュメントの文字の下限（下回ると要確認）。図表の題・出典・表の中・フッターが 9pt（deck-design/docs.md の 1）
+DOC_MIN_PT = 9  # ドキュメントの文字の下限（下回ると要確認）。図表の題・出典・表の中・フッターが 9pt（docs-visual-006、deck-design）
 SENTENCE_MAX, PARA_SENT_MAX, LINE_MAX = 100, 8, 40  # 一文の字数（textlint の sentence-length の既定）、1 段落の文の数（3〜8 文。木下・倉島・サイボウズ）、
-# 1 行の字数（jlreq・デジタル庁）。deck-design/docs.md の 1・3
-BOLD_PER_1000 = 3  # 本文 1,000 字あたりの太字の数（Qiita の 2019〜22 年の平均は 1.26、2026 年は 3.83。deck-design/docs.md の 3）
+# 1 行の字数（jlreq・デジタル庁）。一文は docs-visual-014、1 行は docs-visual-004（deck-design）
+BOLD_PER_1000 = 3  # 本文 1,000 字あたりの太字の数（Qiita の 2019〜22 年の平均は 1.26、2026 年は 3.83。docs-visual-012、deck-design）
 DESU = re.compile(r"(です|ます|でした|ました|ません|でしょう|ください)$")
 DEARU = re.compile(r"(だ|である|だった|であった|する|した|しない|ない|なかった|ある|あった|いる|いた|できる|なる|なった)$")
 A4_NG, UTM_NG = "用紙が A4 でない", "追跡の印の付いたリンク"
@@ -143,7 +143,7 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
         if facts is not None and not re.match(f"(出典|Sources?|図|表) ?[：:\\d]|{FIG_HEAD}|{TAB_HEAD}", text) and (miss := not_in_facts([text], facts)):  # 見出しの数字も（数字で結論を言う見出し）
             r.hits[NOT_IN_FACTS].append(facts_hit(where, miss, facts))
         if style == "TITLE" and text.rstrip("。").endswith("について"):
-            r.hits["題が「について」で終わる"].append(f"{where}: 「{text[:30]}」。主題と文書の性格（提案・報告・計画）を入れる（deck-design/docs.md の 2）")
+            r.hits["題が「について」で終わる"].append(f"{where}: 「{text[:30]}」。主題と文書の性格（提案・報告・計画）を入れる（docs-visual-010、deck-design）")
         if (style == "TITLE" or style.startswith("HEADING_")) and POLITE_END.search(text):
             r.hits[HEAD_POLITE].append(f"{where}: 「{text[:24]}」。頼みごとは段落で言う")
         if style.startswith("HEADING_"):
@@ -198,7 +198,7 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
     strip = lambda t: re.sub(r"^(第?\d+(\.\d+)*[.章節]?|[0-9０-９]+[.．])\s*", "", t)
     h1 = [strip(t) for lv, t, _ in heads if lv == 1]
     if h1 and not template and not re.match(r"(要旨|概要|結論|サマリー|エグゼクティブサマリー)", h1[0]):
-        r.hits["冒頭に要旨がない"].append(f"最初の章「{h1[0][:20]}」。結論と読み手に求めることを最初の章で言う（deck-design/docs.md の 2）")
+        r.hits["冒頭に要旨がない"].append(f"最初の章「{h1[0][:20]}」。結論と読み手に求めることを最初の章で言う（docs-visual-011、deck-design）")
     if heads and re.match(r"(まとめ|おわりに)$", strip(heads[-1][1])):
         r.hits["末尾の「まとめ」"].append(f"{heads[-1][2] or '最後の見出し'}: 「{heads[-1][1]}」。結論は冒頭の要旨で言い、繰り返しの章を作らない")
     seen = Counter(strip(t) for _, t, _ in heads)

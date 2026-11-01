@@ -48,7 +48,7 @@ add と review は、そのときのハーネス（プラグインと、ワー�
 desk-migrate がワークスペースの決まりの ID を外したときの、ID → ファイルの対応は migrated の記録に残し、前の記録の ID はそのファイルとして読む（台帳の前の行は書き換えない）。"""
 import argparse, difflib, fnmatch, hashlib, json, os, re, sys, tempfile, time
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import desk  # ワークスペースの探し方
@@ -67,6 +67,7 @@ KEY = re.compile(rf"{ID}|lint:.+|{FILE}")  # レビューの表の「決まり�
 CITE = re.compile(rf"(?<![A-Za-z0-9_-])\[?({ID}|{FILE})\]?\s*「([^」]*)」")  # 決まりの列の ID・ファイルに添えた、その決まりの文から写した語句（slides-visual-013「単語や文節の途中で折り返さない」）
 RESULTS = ("直した", "残した（誤り）", "残した", "聞く")
 NO_RULE = ("未", "戻さない")  # 決まりにつないでいない戻し先
+RECENT = 14  # 直近の日数。下ろす合図の数のうち、この日数の分（指摘の件数と、レビューで直した資料の数）も出す（日は決め打ち。合うかは使いながら見る。docs/todo.md）
 TWICE = 2  # 2 本以上の資料・2 社以上の顧客に出たら、たまたまでないとみなす（desk-dreaming の prompt_propose.md の c、run.md の 4i・5）
 AUTO = ("重なり", "古い記述")  # 会話を出典にしない片付け。--auto で、出してすぐ当てる（desk-dreaming/run.md の 3d）
 RECS = ("適用", "様子見", "却下")
@@ -440,8 +441,19 @@ def why(ws, rid):
     return cs
 
 
-def tally(ws):
-    """決まりごとの数。再発と「直した」が続くなら、文の決まりでは止まっていない。「残した（誤り）」が多いなら、決まりの書き方が外れている。"""
+def recent_from():
+    """直近の数を数えはじめる日（UTC の日付）。指摘とレビューの行は、それぞれこの日とだけ比べ、行どうしの時刻は比べない（日付の細かさと時差で前後が決まらない）。"""
+    return (datetime.now(timezone.utc) - timedelta(days=RECENT)).strftime("%Y-%m-%d")
+
+
+def recent(x):
+    """tally の 1 行の直近の数を 1 句にする（candidates と trace <ID>）。"""
+    return f"台帳の日付で直近 {RECENT} 日（{recent_from()} から）: ユーザーの指摘 {x['直近の指摘']} 件・レビューで直した資料 {x['直近の直した']} 本"
+
+
+def tally(ws, cut=None):
+    """決まりごとの数。再発と「直した」が続くなら、文の決まりでは止まっていない。「残した（誤り）」が多いなら、決まりの書き方が外れている。
+    直近の指摘・直近の直したは、直近 RECENT 日（cut の日から。selftest は日を渡す）の指摘の件数と「直した」の資料の数。指摘の日は when なので、あとで台帳に書いた日のことがある（遅れて書いた指摘は直近に入る）。"""
     cs, _, _, rv = state(ws)
     rows = {}
     row = lambda k: rows.setdefault(k, {"指摘": [], "再発": [], "decks": set(), "決めた": False, **{x: [] for x in RESULTS}})
@@ -460,6 +472,10 @@ def tally(ws):
         x[r["result"]].append(r)
         x["decks"].add(r["deck"])
     signals = ("再発", *RESULTS)
+    cut = cut or recent_from()
+    for x in rows.values():
+        x["直近の指摘"] = sum(when(c)[:10] >= cut for c in x["指摘"])
+        x["直近の直した"] = len({r["deck"] for r in x["直した"] if r["ts"][:10] >= cut} - {""})
     return {k: {**x, "顧客": len(customers(x["decks"])), "資料ごと": {f: len({r["deck"] for r in x[f]} - {""}) for f in signals}} for k, x in rows.items()}
 
 
@@ -527,7 +543,7 @@ def candidates(ws, plugin=PLUGIN):
                 nodes = nodes if nodes is not None else graph(plugin)
                 c = nodes.get(k, {}).get("code", [])
                 code = f"。スクリプトの名指し: {c[0]}" + (f" ほか {len(c) - 1}" if len(c) > 1 else "") + "（点検をすり抜けた。その点検を見直す）" if c else "。スクリプトの名指し: なし（点検を作る候補）"
-            out.append(("下ろす", k, f"{layer}。再発 {d['再発']} 本・直した {d['直した']} 本の資料（文の決まりでは止まっていない。点検か作る手順に）{code}"))
+            out.append(("下ろす", k, f"{layer}。再発 {d['再発']} 本・直した {d['直した']} 本の資料（文の決まりでは止まっていない。点検か作る手順に）。{recent(x)}{code}"))
         if d["残した（誤り）"] >= TWICE:
             out.append(("書き直す", k, f"{layer}。残した（誤り）{d['残した（誤り）']} 本の資料（拾う範囲が外れている。消す・緩めるは判断待ち）"))
         if d["聞く"] >= TWICE:
@@ -656,7 +672,8 @@ def lowered(x):
 
 def trace(ws, rid=None, every=False, plugin=PLUGIN):
     """決まりのつながりを出す。rid なしは決まりごとの 1 行（既定は台帳に指摘かレビューの結果のある決まり。every はすべて）と、つながりの数。
-    並びは、下ろす合図があるのにスクリプトが名指ししていない決まりが先（点検を作る候補）。rid ありは、その決まりのつながりをすべてと、why。"""
+    並びは、下ろす合図があるのにスクリプトが名指ししていない決まりが先（点検を作る候補）。どのまとまりでも、台帳に数のある決まりが先で、その中では直近のユーザーの指摘が多い決まりが先。
+    rid ありは、その決まりのつながりをすべてと、直近の数と、why。"""
     nodes, rows = graph(plugin), tally(ws)
     if rid:
         x = nodes.get(rid) or sys.exit(f"{rid} はプラグインのどこにもない（where・why で経緯を見る。ワークスペースの決まりは ID でなくファイル）")
@@ -665,24 +682,29 @@ def trace(ws, rid=None, every=False, plugin=PLUGIN):
         print(f"\nスクリプトが名指し（点検・警告・部品の既定値）: {len(x['code'])}", *x["code"], sep="\n  ")
         print(f"\nほかのファイルから指す: {len(x['refs'])}", *sorted(x["refs"]), sep="\n  ")
         print(f"\n決めたこと・残っている課題: {len(x['docs'])}", *(f"{d}:{n} {t[:120]}" for d, n, t in x["docs"]), sep="\n  ")
+        if r := rows.get(rid):
+            print(f"\n{recent(r)}。最後のユーザーの指摘: {max(map(when, r['指摘']), default='台帳になし')[:10]}")
         print("\n台帳:")
         why(ws, rid)
         return x
     out = [(k, x, rows.get(k)) for k, x in nodes.items() if every or rows.get(k)]
-    out.sort(key=lambda t: (not (lowered(t[2]) and not t[1]["code"]), not t[2], -len(t[2]["指摘"]) if t[2] else 0, t[0]))
-    print("決まり\t書いた場所\tスクリプト\tほかから\t決めたこと\t根拠のタグ\t指摘\t再発（資料）\t直した（資料）\t残した（誤り）（資料）\t合図")
+    out.sort(key=lambda t: (not (lowered(t[2]) and not t[1]["code"]), not t[2], -t[2]["直近の指摘"] if t[2] else 0, -len(t[2]["指摘"]) if t[2] else 0, t[0]))
+    print("決まり\t書いた場所\tスクリプト\tほかから\t決めたこと\t根拠のタグ\t指摘\t再発（資料）\t直した（資料）\t残した（誤り）（資料）"
+          f"\t直近 {RECENT} 日の指摘\t直近 {RECENT} 日の直した（資料）\t合図")
     for k, x, r in out:
         d = r["資料ごと"] if r else {}
         sign = "下ろす・点検なし" if lowered(r) and not x["code"] else "下ろす・点検をすり抜けた" if lowered(r) else ""
         print("\t".join(map(str, [k, f"{x['file']}:{x['line']}", len(x["code"]), len(x["refs"]), len(x["docs"]), "あり" if EVIDENCE.search(x["text"]) else "",
-                                   len(r["指摘"]) if r else 0, d.get("再発", 0), d.get("直した", 0), d.get("残した（誤り）", 0), sign])))
+                                   len(r["指摘"]) if r else 0, d.get("再発", 0), d.get("直した", 0), d.get("残した（誤り）", 0),
+                                   r["直近の指摘"] if r else 0, r["直近の直した"] if r else 0, sign])))
     n = len(nodes)
     count_ = lambda f: sum(map(f, nodes.values()))
     print(f"\n決まり {n}: スクリプトが名指し {count_(lambda x: bool(x['code']))}・ほかのファイルから指す {count_(lambda x: bool(x['refs']))}・"
           f"決めたことか課題に経緯 {count_(lambda x: bool(x['docs']))}・行に根拠のタグ {count_(lambda x: bool(EVIDENCE.search(x['text'])))}・"
           f"台帳に指摘かレビューの結果 {sum(k in rows for k in nodes)}")
     print(f"下ろす合図（2 本以上の資料で再発か直した）: スクリプトが名指ししていない {sum(lowered(rows.get(k)) and not x['code'] for k, x in nodes.items())}・"
-          f"名指ししているのに出た {sum(lowered(rows.get(k)) and bool(x['code']) for k, x in nodes.items())}")
+          f"名指ししているのに出た {sum(lowered(rows.get(k)) and bool(x['code']) for k, x in nodes.items())}。"
+          f"そのうち、台帳の日付で直近 {RECENT} 日（{recent_from()} から）にユーザーの指摘がある {sum(lowered(rows.get(k)) and rows[k]['直近の指摘'] > 0 for k in nodes)}")
     return out
 
 
@@ -2078,18 +2100,37 @@ def selftest_trace(quiet):
                 for deck in ("Customers/a/d1", "Customers/b/d2"):
                     main(["add", "--deck", deck, "--quote", "線を細く", "--to", "slides-visual-013"])
                     main(["add", "--deck", deck, "--quote", "字を大きく", "--to", "slides-visual-012"])
+                main(["add", "--deck", "Customers/a/d1", "--quote", "余白を", "--to", "slides-visual-014", "--at", "2020-01-01T00:00"])  # 前の指摘。いまはレビューが直している
+                for n, (deck, rule, ts) in enumerate([("Customers/a/d1", "slides-visual-014", None), ("Customers/b/d2", "slides-visual-014", None),
+                                                      ("Customers/a/d1", "slides-visual-013", "2000-01-01T00:00:00Z"), ("Customers/b/d2", "slides-visual-013", "2000-01-01T00:00:00Z")]):
+                    write(ws, {"kind": "review", "deck": deck, "rule": rule, "page": "p1", "from": "画像", "result": "直した", "key": f"k{n}", **({"ts": ts} if ts else {})})
             with contextlib.redirect_stdout(io.StringIO()) as out:
                 rows = trace(ws, plugin=plug)
-            assert [k for k, _, _ in rows] == ["slides-visual-013", "slides-visual-012"]  # 指摘のある決まりだけ。点検のないほうが先
-            assert "slides-visual-013\tdeck-design/slides.md:2\t0" in out.getvalue() and "下ろす・点検なし" in out.getvalue() and "下ろす・点検をすり抜けた" in out.getvalue()
-            assert "スクリプトが名指ししていない 1・名指ししているのに出た 1" in out.getvalue()
+            assert [k for k, _, _ in rows] == ["slides-visual-013", "slides-visual-014", "slides-visual-012"]  # 指摘のある決まりだけ。点検のないほうが先で、その中では直近の指摘が多いほうが先
+            cut = recent_from()
+            before = (datetime.fromisoformat(cut) - timedelta(days=1)).strftime("%Y-%m-%d")
             with quiet():
-                assert len(trace(ws, every=True, plugin=plug)) == 4
+                for day, at in ((cut, "T00:00:00"), (before, "T23:59:59")):  # 境目の日は入れ、その前の日は入れない（台帳にだけある決まりの ID）
+                    main(["add", "--deck", f"Customers/a/{day}", "--quote", "境目", "--to", "slides-visual-015", "--at", day + at])
+                    write(ws, {"kind": "review", "deck": f"Customers/a/{day}", "rule": "slides-visual-015", "page": "p1", "from": "画像", "result": "直した", "key": day, "ts": day + at + "Z"})
+            r = tally(ws, cut)  # 0 時をまたいでも、同じ日で数える
+            assert (r["slides-visual-015"]["直近の指摘"], r["slides-visual-015"]["直近の直した"]) == (1, 1)
+            assert (r["slides-visual-014"]["直近の指摘"], r["slides-visual-014"]["直近の直した"]) == (0, 2) and (r["slides-visual-013"]["直近の指摘"], r["slides-visual-013"]["直近の直した"]) == (2, 0)  # 前の行は数えない
+            assert next(l for l in out.getvalue().splitlines() if l.startswith("slides-visual-014\t")).endswith("\t0\t2\t下ろす・点検なし")
+            assert f"直近 {RECENT} 日の指摘\t" in out.getvalue() and f"直近 {RECENT} 日（{recent_from()} から）にユーザーの指摘がある 2" in out.getvalue()
+            assert "slides-visual-013\tdeck-design/slides.md:2\t0" in out.getvalue() and "下ろす・点検なし" in out.getvalue() and "下ろす・点検をすり抜けた" in out.getvalue()
+            assert "スクリプトが名指ししていない 2・名指ししているのに出た 1" in out.getvalue()
+            with quiet():
+                assert [k for k, _, _ in trace(ws, every=True, plugin=plug)] == ["slides-visual-013", "slides-visual-014", "slides-visual-012", "slides-lint-001"]  # 台帳にない決まりは後
                 got = {k: w for a, k, w in candidates(ws, plug) if a == "下ろす"}
             assert got["slides-visual-013"].endswith("スクリプトの名指し: なし（点検を作る候補）") and "lint.py:1（点検をすり抜けた" in got["slides-visual-012"]
+            assert "ユーザーの指摘 0 件・レビューで直した資料 2 本。" in got["slides-visual-014"] and "ユーザーの指摘 2 件・レビューで直した資料 0 本。" in got["slides-visual-013"]
             with contextlib.redirect_stdout(io.StringIO()) as out:
                 trace(ws, "slides-visual-012", plugin=plug)
             assert "slides-build/scripts/lint.py:1" in out.getvalue() and "decisions.md:1" in out.getvalue() and "指摘 2 件" in out.getvalue()
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                trace(ws, "slides-visual-014", plugin=plug)
+            assert "ユーザーの指摘 0 件・レビューで直した資料 2 本。最後のユーザーの指摘: 2020-01-01" in out.getvalue()
             assert "どこにもない" in fails(["trace", "slides-visual-999"])
         finally:
             os.chdir(cwd)

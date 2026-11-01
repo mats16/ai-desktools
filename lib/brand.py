@@ -9,7 +9,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gapi  # noqa: E402
 
-# ---- 書体（../skills/deck-design/slides.md の 2） ----
+# ---- 書体（deck-design → slides §2） ----
 FONT = "Noto Sans JP"  # Google Fonts の名前。Noto Sans CJK JP と字形・文字幅は同じ（Google Fonts にない書体は黙って別の書体になる）
 # Google Slides で描けることを確かめた、和文のある Google Fonts（2026-10-07。../skills/slides-build/template_fonts.md）。会社のテーマの書体はここから選ぶ
 JP_FONTS = {FONT, "Noto Serif JP", "BIZ UDPGothic", "BIZ UDGothic", "BIZ UDPMincho", "M PLUS 1p", "M PLUS 2", "M PLUS Rounded 1c", "Zen Kaku Gothic New",
