@@ -64,7 +64,7 @@ ANY_ID = r"(?:ws-)?[a-z][\w-]*?-\d{3}"  # 前の版のワークスペースの I
 RULE_ID = re.compile(rf"\[({ID})\]")
 FILE = r"[^\s,、「」|\[\]](?:[^,、「」|\[\]\n]*?[^\s,、「」|\[\]])?\.(?:md|py)"  # レビューの表の「決まり」の列に書く、ワークスペースかプラグインのファイル（顧客のフォルダの名前に空白があってよい）
 KEY = re.compile(rf"{ID}|lint:.+|{FILE}")  # レビューの表の「決まり」の列に書くもの（lint の規則は名前で lint:<名前>）
-CITE = re.compile(rf"(?<![\w-])\[?({ID}|{FILE})\]?\s*「([^」]*)」")  # 決まりの列の ID・ファイルに添えた、その決まりの文から写した語句（slides-visual-013「単語や文節の途中で折り返さない」）
+CITE = re.compile(rf"(?<![A-Za-z0-9_-])\[?({ID}|{FILE})\]?\s*「([^」]*)」")  # 決まりの列の ID・ファイルに添えた、その決まりの文から写した語句（slides-visual-013「単語や文節の途中で折り返さない」）
 RESULTS = ("直した", "残した（誤り）", "残した", "聞く")
 NO_RULE = ("未", "戻さない")  # 決まりにつないでいない戻し先
 TWICE = 2  # 2 本以上の資料・2 社以上の顧客に出たら、たまたまでないとみなす（desk-dreaming の prompt_propose.md の c、run.md の 4i・5）
@@ -85,7 +85,7 @@ TOPICS = {  # 決まりの ID の主題（何についての決まりか）。ID
 PLAN_RULE = "deck-flow-004"  # 構成案の AI レビューの頼み方。これを見直すかの判断待ちに答えたら、構成の見逃しをその答えのあとから数え直す
 HARNESS = ("skills", "lib", "hooks", "extensions")  # 指紋に入れるプラグインのフォルダ（リポジトリの根元から）
 OVERRIDE = re.compile(r"[（(]([^（）()\n]*?)\s*より優先")  # ワークスペースの決まりの「…（slides-visual-012 より優先）」。括弧の中の ID を全部取る
-PLUGIN_ID = re.compile(r"(?<![\w-])(?!ws-)[a-z][\w-]*?-\d{3}")
+PLUGIN_ID = re.compile(rf"(?<![A-Za-z0-9_-])({ID})(?![A-Za-z0-9_-])")  # 角括弧のない ID も（決まりを指す書き方）。\w は和文の字も含むので、境目は英数字で見る（「決まりslides-visual-012より優先」）
 BRACKETED = re.compile(rf"\[({ANY_ID})\]")  # ワークスペースのファイルに書かない、角括弧の ID
 CHANGES = ("足した", "まとめた", "消した", "書き換えた")  # 版が取り込んだ指摘ごとの変化（--changes）
 VERSIONS = ("その場で戻した", "手で直した", "初めの版", "移行")  # 台帳が書く版だけの提案（人に出す提案でない。「前の提案」に出さない）
@@ -599,7 +599,7 @@ def where(rid):
     return out
 
 
-MENTION = re.compile(rf"(?<![A-Za-z0-9_-])({ID})(?![A-Za-z0-9_-])")  # 角括弧のない ID も（決まりを指す書き方）。\w は和文の字も含むので、境目は英数字で見る（「slides-visual-012に従う」）
+MENTION = PLUGIN_ID  # 決まりのつながりで、ほかのファイルが ID を指す書き方
 EVIDENCE = re.compile(r"(?:中身|見た目|AI 実践|研究|仕組み|社内) ?\d")  # 決まりの行の根拠のタグ（deck-workflow の SKILL.md の略語の表。（研究 1-3）など）
 
 
@@ -1336,7 +1336,8 @@ def selftest_topics():
     """プラグインのどの [ID] も、TOPICS の主題を使い、1 つのファイルにだけ書く（ファイルを分けたり、新しい決まりを足したりしたときに、表から外れた ID を止める）。"""
     bad, seen = [], {}
     for f in plugin_files():
-        if f.suffix in (".md", ".py") and f.is_file() and "desk-migrate" not in f.parts and "templates" not in f.parts and f.resolve() != Path(__file__).resolve():
+        parts = Path(plugin_rel(f)).parts  # 入れた場所の上のフォルダの名前では外さない（graph と同じ）
+        if f.suffix in (".md", ".py") and f.is_file() and "desk-migrate" not in parts and "templates" not in parts and f.resolve() != Path(__file__).resolve():
             for m in RULE_ID.finditer(f.read_text(encoding="utf-8")):
                 rid = m.group(1)
                 if rid.rsplit("-", 1)[0] not in TOPICS:
@@ -2048,6 +2049,8 @@ def selftest_effects(quiet):
 
 def selftest_trace(quiet):
     """決まりのつながり: selftest の中の ID は点検に数えない。下ろす合図があって点検のない決まりが先に並び、candidates にも出る。"""
+    assert PLUGIN_ID.findall("（決まりslides-visual-012より優先、slides-visual-0123 でない）") == ["slides-visual-012"]  # 和文に続けて書いた ID と、桁の多いもの
+    assert [m[0] for m in CITE.findall("決まりslides-visual-013「単語や文節の途中で折り返さない」")] == ["slides-visual-013"]
     import contextlib, io, os
     with tempfile.TemporaryDirectory() as d:
         root = Path(d).resolve() / "templates"  # 入れた場所の上に templates があっても読む
