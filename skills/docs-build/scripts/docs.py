@@ -12,7 +12,7 @@ usage（資料の build/ で。doc.md は今いるフォルダのもの）:
                               doc.md と組んだ文書の照合、テンプレートとの照合、元のテンプレートとの骨組みの比較を /tmp/docs_<ID の先頭 8 字>/ に出す
   docs.py export <URL か ID> <出力.docx か .pdf>   Word か PDF で書き出す（相手が Word を求めたときだけ。納品は Google Docs の URL）
   docs.py --selftest
-見た目の決まりは ../../deck-design/docs.md。書体・色・著作権表示はスライドと同じもの（../../../lib/brand.py）を使う。lint は doc_lint.py。"""
+見た目の決まりは deck-design → docs。書体・色・著作権表示はスライドと同じもの（../../../lib/brand.py）を使う。lint は doc_lint.py。"""
 import contextlib, difflib, glob, hashlib, io, json, os, re, shutil, subprocess, sys, tempfile
 from collections import Counter
 from itertools import zip_longest
@@ -27,17 +27,17 @@ import textlint
 from gapi import DOCS, DRIVE, GDOCS, carry, delete, file_id, folder_id, png, request, run, trash, u16
 from brand import BRAND_COPYRIGHT as COPYRIGHT, COPYRIGHT_PT, LOGO, need_brand, FONT, FONT as FONT_DEFAULT, MONO_DEFAULT, MONO_DEFAULT as MONO, theme_font, theme_mono, RULE, TEXT, WHITE, asset  # FONT・MONO はテーマで替わる（load_theme）
 
-# ---- 版面と書体（../../deck-design/docs.md の 1。大きさは pt、版面は mm） ----
-# 1 行は全角 40 字まで（jlreq・デジタル庁。../../deck-design/docs.md の 1）。左右 30 mm（Word の和文の既定と同じ）で、本文の幅 150 mm・10.5pt が 40 字
+# ---- 版面と書体（docs-visual-004・docs-visual-006、deck-design。大きさは pt、版面は mm） ----
+# 1 行は全角 40 字まで（jlreq・デジタル庁。docs-visual-004、deck-design）。左右 30 mm（Word の和文の既定と同じ）で、本文の幅 150 mm・10.5pt が 40 字
 PAGE_MM, MARGIN_TB_MM, MARGIN_LR_MM = (210, 297), 25, 30  # A4 縦
 TEXT_MM = PAGE_MM[0] - 2 * MARGIN_LR_MM
-NAVY, SUB, PANEL = "1B3139", "5A6F77", "EEEDE9"  # テーマ navy の DARK1・ACCENT5・LIGHT2 の値（deck-design の docs.md の 1）。Docs にはテーマの色がない
-RED_TEXT = "CC2B17"  # ***赤の太字***。テーマ navy の ACCENT3（18pt 未満の赤の文字。白の地で 4.5:1 に届く。../../deck-design/docs.md の 1）
+NAVY, SUB, PANEL = "1B3139", "5A6F77", "EEEDE9"  # テーマ navy の DARK1・ACCENT5・LIGHT2 の値（docs-visual-008、deck-design）。Docs にはテーマの色がない
+RED_TEXT = "CC2B17"  # ***赤の太字***。テーマ navy の ACCENT3（18pt 未満の赤の文字。白の地で 4.5:1 に届く。docs-visual-008、deck-design）
 HEAD = NAVY  # 題と見出しの色。この色と TEXT・SUB・RULE・PANEL・RED_TEXT・TABLE_HEAD は、テーマのファイルの colors で替わる（load_theme）
 BODY_PT, SMALL_PT, CODE_PT, COVER_PT = 10.5, 9, 9.5, 30  # 本文、図表の題・出典・表の中、コード、表紙の題
 # 名前付きスタイル: 大きさ、太字、色、上の空き、下の空き、行間（%）。組むたびに入れ直す（ここを変えれば、組み直した資料すべてに効く）
 # 行送りは「字の 1.88 倍 × 行間の %」（Noto Sans JP。2026-10-09 に PDF で測った）。行のアキは、本文は全角近く（100% = 1.88 em）、
-# 表の中と図表の題は二分（80% = 1.5 em）、折り返す見出しは三分ほど（75% = 1.41 em）にする（小林敏「行間の選択」。../../deck-design/docs.md の 1）
+# 表の中と図表の題は二分（80% = 1.5 em）、折り返す見出しは三分ほど（75% = 1.41 em）にする（小林敏「行間の選択」。docs-visual-007、deck-design）
 STYLES = {
     "TITLE": (20, True, NAVY, 0, 4, 75),
     "SUBTITLE": (11, False, SUB, 0, 18, 100),
@@ -145,14 +145,14 @@ class Doc:
 
     # ---- 中身 ----
     def title(self, text, sub=None):
-        """表紙の代わりの題と副題（日付・宛先など）。ドキュメントは表紙のページを作らない（../../deck-design/docs.md の 2）。"""
+        """表紙の代わりの題と副題（日付・宛先など）。ドキュメントは表紙のページを作らない（docs-visual-009、deck-design）。"""
         self.para(text, "TITLE")
         if sub:
             self.para(sub, "SUBTITLE")
 
     def cover(self, lines, left=None, logo=LOGO):
         """表紙のページ（テンプレートに表紙があるとき）。題の行を中央に大きく置き、その下に左の語（顧客のロゴの代わりの社名など）と
-        自社のロゴ（desk.toml の [brand] logo。なければ置かない）を並べ、改ページする。表紙を作るかは ../../deck-design/docs.md の 2（資料ごとに聞く）。"""
+        自社のロゴ（desk.toml の [brand] logo。なければ置かない）を並べ、改ページする。表紙を作るかは docs-visual-009（deck-design。資料ごとに聞く）。"""
         if logo and not re.match(r"https?://", logo):
             logo = asset(logo)
         self.blocks.append(("cover", lines, left, logo or None))
@@ -182,7 +182,7 @@ class Doc:
         self.blocks.append(("list", numbered, [runs(x) for x in items]))
 
     def code(self, text):
-        """コードやコマンド。英数字は等幅の MONO、和文は FONT（MONO に和文の字形はない。deck-design の docs.md の 2）。"""
+        """コードやコマンド。英数字は等幅の MONO、和文は FONT（MONO に和文の字形はない。docs-visual-005、deck-design）。"""
         self.blocks.append(("code", text.strip("\n")))
 
     def quote(self, text):
@@ -519,7 +519,7 @@ def new(folder, name):
 
 
 STANDARD = "standard"  # 組み込みのテーマ（docs.py の既定の値）。theme を書かず、[docs] default_theme もないとき。doc.md に theme: standard とも書ける
-DEFAULT_NOTE = "既定。A4・本文 10.5pt・濃紺の見出し・濃紺の地の表の見出しの行（../../deck-design/docs.md）"  # themes/docs/standard.json の description で書き換えられる
+DEFAULT_NOTE = "既定。A4・本文 10.5pt・濃紺の見出し・濃紺の地の表の見出しの行（deck-design → docs）"  # themes/docs/standard.json の description で書き換えられる
 # [docs-write-012] テーマのファイル。スライドのテーマのファイル（slides.py の read_theme）と同じ形で、頭の apiVersion・kind と description・font・mono・colors は
 # 同じキー。page・margins・styles はドキュメントだけのキー。バージョンはキーの意味が変わるときだけ上げる（../../slides-build/pages.md の slides-pages-035 と同じ考え方）
 API_VERSION = "docs/v1"

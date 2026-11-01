@@ -66,7 +66,7 @@ def contrast(a, b):
 NO_LINK = "出典の行にリンクがない"
 # [deck-lint-026] ページの数字は出典の表にあるものだけ。足すときは先に表へ足す（deck-content-064、deck-writing）。表は refs.py が資料のフォルダから読む
 NOT_IN_FACTS = "出典の表にない数字"
-HEAD_PERIOD, BULLET_PERIOD = "見出しの句点", "箇条書きの句点の混在"  # deck-writing の content.md の 6。名前は Docs の規則と同じ（Docs は見出しのスタイル、箇条書きのリストごと）
+HEAD_PERIOD, BULLET_PERIOD = "見出しの句点", "箇条書きの句点の混在"  # deck-content-066・deck-content-067（deck-writing）。名前は Docs の規則と同じ（Docs は見出しのスタイル、箇条書きのリストごと）
 # [deck-lint-023] 見出しは短い名詞句。言い切りは判断を頼むページと数字の結論のページの 2〜3 枚だけ（deck-content-041 と content の 6（deck-writing）、docs-visual-002（deck-design））
 HEAD_POLITE = "見出しが「ください・します」で終わる"
 POLITE_END = re.compile(r"(ください|します|しましょう)$")

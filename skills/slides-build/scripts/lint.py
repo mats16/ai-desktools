@@ -4,7 +4,7 @@
 --talk は LT など話す資料（聞き手が初めて聞く中身を短く話すもの）。1 枚の本文の字数も見る。
 書いたルールのうち、機械で見られるものを数える。本文の表記の決まり・出典の照合・記録はドキュメントと同じ textlint.py。ドキュメントは docs-build の doc_lint.py。
 標準ライブラリだけで動く。要修正（HARD）が 1 つでもあれば exit 1。要確認（WARN）は 1 件ずつ見て、直すか、残す理由を言えるようにする。
-ルールの出典は ../../deck-design/slides.md・../../deck-writing/ と、ワークスペースの Research/deck_research/log/。pptx を読んでいたバージョンは Archive/pptx_pipeline_20261007/。"""
+ルールの出典は deck-design → slides・deck-writing と、ワークスペースの Research/deck_research/log/。pptx を読んでいたバージョンは Archive/pptx_pipeline_20261007/。"""
 import itertools, json, math, os, re, subprocess, sys
 from collections import Counter, defaultdict
 
@@ -25,8 +25,8 @@ SLIDE_ONLY = {"スライドに です・ます": re.compile(r"(です|ます|で
 
 
 
-BODY_LINES = "本文が 8 行を超える見込み"
-TALK_MAX = 125  # [slides-lint-002] 話す資料の 1 枚の本文の目安。5 行 × 1 行 25 字（Research/deck_research/log/20261006_jp_content.md の 1-13、deck-design の slides.md の 2）
+BODY_LINES = "本文が 8 行を超える見込み"  # 1 つの箱の本文は 8 行まで（slides-visual-052、deck-design）
+TALK_MAX = 125  # [slides-lint-002] 話す資料の 1 枚の本文の目安。5 行 × 1 行 25 字（Research/deck_research/log/20261006_jp_content.md の 1-13。slides-visual-052、deck-design）
 TALK = f"話す資料で本文が {TALK_MAX} 字を超える"
 # [slides-lint-003] 章の扉（濃紺の地）。本編が長いのに扉がないと、テーマの切り替わりが唐突になる。扉の間が 1 枚だけなら細切れ（slides-visual-012、deck-design）
 DIVIDER_MIN = 12
@@ -36,8 +36,8 @@ NO_COVER = "1 枚目が表紙（濃紺の地）でない"
 ARROW_MID = "横向きの矢印が、両側の箱の上下の中央にない"
 LINE_GRID = "格子を線で組んでいる（標準の表にできないか）"
 NO_SOURCE = "数字に出典の行がない"
-TWO_LINES = "見出しかリードが 2 行の見込み"  # 見出しは 1 行、リードは 1 文（deck-design の slides.md の 1）
-BULLET_PERIOD = "箇条書きの句点の混在"  # deck-writing の content.md の 6。名前は Docs の規則と同じ（箇条書きのリストごと）
+TWO_LINES = "見出しかリードが 2 行の見込み"  # 見出しは 1 行、リードは 1 文（slides-visual-050、deck-design）
+BULLET_PERIOD = "箇条書きの句点の混在"  # deck-content-067（deck-writing）。名前は Docs の規則と同じ（箇条書きのリストごと）
 HEAD_CLAIMS, CLAIM_MAX = "言い切りの見出しが多い", 3  # 言い切りは判断を頼むページと数字の結論のページの 2〜3 枚だけ（../../../lib/textlint.py の deck-lint-023。deck-content-041、deck-writing）
 CLAIM_END = re.compile(r"[るうくすつむぶぐただい]$")  # 読点があり、動詞・形容詞らしい仮名で終わるものを言い切りの見込みにする。「N つ」で終わる名詞句は除く。形態素解析は入れない
 # [slides-lint-004] 空きと結論バンド。目安は、空いて見えたページを拾う値にした
@@ -73,7 +73,7 @@ PAGE_ONLY = {NO_SOURCE, NOT_IN_FACTS, NO_LINK, TALK, TWO_LINES, BAND_ECHO, HEAD_
 ESTIMATE = {TWO_LINES, BODY_LINES, PHRASE_BREAK, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, TEXT_OVER, textlint.SLIDE_COMMA}  # 字幅と行の高さの見積もりから出す指摘。Google が描いた画像で確定する（ほかは JSON で決まる）
 HARD_NAMES = textlint.HARD_NAMES | {COPYRIGHT_NG}
 INS = INSET * 72  # 文字の枠の内側の余白（pt）。Slides API の既定は 0.1 in で、変えられない
-BODY_TOP, BODY_BOTTOM = Y_BODY_NOLEAD * EMU, BAND_BOTTOM * EMU  # 本文の領域（deck-design の slides.md の 1 の配置）
+BODY_TOP, BODY_BOTTOM = Y_BODY_NOLEAD * EMU, BAND_BOTTOM * EMU  # 本文の領域（slides-visual-051、deck-design）
 FOOT_TOP = (Y_FOOT - 0.13) * EMU  # これより下はフッター（出典の行 6.68 in とフッター 7.08 in の間）
 
 
@@ -1060,7 +1060,7 @@ def selftest():
     assert len(res.hits["社外秘の表示"]) == 1 and "2 ページ" in res.hits["社外秘の表示"][0]
     res = run(deck([(NAVY, [title("あ" * 40), shape(1, y=1.2, w=12, size=12, text=["い" * 80])])]))[0]
     assert len(res.hits[TWO_LINES]) == 2
-    # 見出しの句点と、1 つの枠の箇条書きの句点の混在（deck-writing の content.md の 6）。箇条書きでない段落は数えない
+    # 見出しの句点と、1 つの枠の箇条書きの句点の混在（deck-content-066・deck-content-067、deck-writing）。箇条書きでない段落は数えない
     def bulleted(ts):
         e = shape(1, text=ts)
         for te in e["shape"]["text"]["textElements"]:

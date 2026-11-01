@@ -14,7 +14,7 @@ try:
 except ImportError:  # python3 で回すと、ここで落ちて 1 枚ずつ画像を開くほうへ流れていた（2026-10-16）
     sys.exit("Pillow がない。uv run -q sheet.py … で回す（頭の # /// script が Pillow を入れる）")
 
-LABEL = (204, 43, 23)  # 赤の文字の色（deck-design の slides.md の RED_TEXT）。濃紺の地でも Oat の地でも目立つ
+LABEL = (204, 43, 23)  # 赤の文字の色（deck-design → slides §1 の RED_TEXT）。濃紺の地でも Oat の地でも目立つ
 
 
 def label(path):
