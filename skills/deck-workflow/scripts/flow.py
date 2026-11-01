@@ -240,12 +240,13 @@ def where(recs):
     return s, state(recs[s])[0], f"{STEPS[i]} を始める（当てはまらない手順なら、飛ばした と記録して次へ）" if i < len(STEPS) else "なし（11 まで済んだ）"
 
 
-def shown(r):
-    """記録の 1 行の見せ方。"""
+def shown(r, keys):
+    """記録の 1 行の見せ方。keys は、その記録が今も最後の記録であるファイル（None は資料全体）。あとの記録が書いたファイルは、範囲に出さない。"""
     flat = lambda v: " ".join(str(v).split())  # 改行で、報告の別の行に見せない
     out = "".join(f" {flat(k)}={flat(v)}" for k, v in r["out"].items()) if isinstance(r.get("out"), dict) else ""
-    return (f"記録: {r['status']} {r['ts']}（{'範囲 ' + short(scope(r), 4) if scope(r) else '資料全体'}）" + out
-            + (f"。{flat(r['note'])}" if r.get("note") else ""))
+    files = [k for k in keys if k]
+    where_ = "資料全体" if None in keys else "範囲 " + short(files, 4) + (f"。記録したときの {len(scope(r))} ファイルのうち、ほかはあとの記録" if len(files) < len(scope(r)) else "")
+    return f"記録: {r['status']} {r['ts']}（{where_}）" + out + (f"。{flat(r['note'])}" if r.get("note") else "")
 
 
 def google_urls(folder, o, text):
@@ -391,10 +392,13 @@ def report(folder):
     for step, items in rows:
         print(f"\n{step}")
         if rs := recs.get(step, []):
-            st, live, last = state(rs)
+            st, _, last = state(rs)
             print(f"  - 状態: {st}" + (f"（範囲 {len(last)}: " + "・".join(f"{s} {n}" for s in STATUSES if (n := sum(r['status'] == s for r in last.values()))) + "）" if len(last) > 1 else ""))
-            for r in live:
-                print(f"  - {shown(r)}")
+            owns = {}  # 記録 → その記録が今も最後の記録であるファイル
+            for k, r in last.items():
+                owns.setdefault(id(r), (r, []))[1].append(k)
+            for r, keys in owns.values():
+                print(f"  - {shown(r, keys)}")
                 u = r["out"].get("url") if isinstance(r.get("out"), dict) else None
                 if step == "8 全体を組む" and isinstance(u, str) and ids is not None:
                     if not (m := URL.search(u)):
@@ -529,11 +533,17 @@ def selftest():
             record(f, 7, "飛ばした", files=["build/p13.json"])
             assert "開いている範囲: 資料全体、build/p14.json）" in page()  # 閉じたファイルは開いている範囲に出さない
             record(f, 7, "飛ばした", files=["build/p14.json"])
+            (f / "build" / "p15.json").write_text("{}")
+            record(f, 7, "始めた", files=["build/p15.json", "build/p16.json"], note="2 枚を作成中")
+            record(f, 7, "済んだ", files=["build/p15.json"])
+            p = page()
+            assert "記録: 始めた" in p and "（範囲 build/p16.json。記録したときの 2 ファイルのうち、ほかはあとの記録）。2 枚を作成中" in p and "build/p15.json, build/p16.json" not in p  # 済んだ p15 を、古い始めたの範囲に出さない
+            record(f, 7, "飛ばした", files=["build/p16.json"])
             record(f, 7, "飛ばした", files=["build/p13.json"])
             record(f, 7, "済んだ", files=["build/p04.json", "build/p05.json"])
             record(f, 7, "始めた", files=["build/p06.json"])
             p = page()
-            assert "いま: 7 ページを書く（始めた）。次: 7 ページを書く を続ける" in p and "範囲 6: 始めた 2・済んだ 2・飛ばした 2" in p and "範囲 build/p04.json, build/p05.json" in p
+            assert "いま: 7 ページを書く（始めた）。次: 7 ページを書く を続ける" in p and "範囲 8: 始めた 2・済んだ 3・飛ばした 3" in p and "範囲 build/p04.json, build/p05.json" in p
             record(f, 7, "済んだ", files=["build/p06.json", "build/p07.json"])  # 範囲を分け直しても、前の範囲（p06 の始めた）は残らない
             assert "いま: 7 ページを書く（始めた）" in page()  # 資料全体の始めたが残っている（親が閉じるまで）
             # 古さは中身の sha256 で見る（時刻では見ない）。元に戻せば出ない
