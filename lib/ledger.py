@@ -20,6 +20,8 @@ usage:
   ledger.py effects                                文を変えた決まりごとに、変わる前と後に作った資料での指摘の数と見立て（効いた・変わらない・害が出た・指摘なし・まだ分からない、混ざっている）
   ledger.py next <接頭辞>                          プラグインの次の決まりの ID（接頭辞は TOPICS の主題）
   ledger.py where <決まりの ID>                    プラグインの決まりが書いてある場所（[ID] のファイルと行）
+  ledger.py trace [<決まりの ID>] [--all]         決まりのつながり: 書いた場所・名指しするスクリプト（点検とのつながり）・ほかから指すファイル・決めたことの経緯・根拠のタグと、台帳の数。
+                                                   ID なしは、台帳に指摘かレビューの結果のある決まり（--all はすべて）を、下ろす合図があるのに点検のないものから並べる
   ledger.py topics                                 決まりの ID の主題の一覧
   ledger.py propose --file <ワークスペースのファイル> (--new <新しい文> [--old <今の文>] | --rewrite <新しい全文のファイル>) --why <要点> [--src c-1,c-2] [--changes c-1:足した,…] [--kind <種類>] [--rec 適用|様子見|却下 [--rec-why <理由>]] [--auto]
   ledger.py propose --plugin --file <skills/ からのパス> --new <新しい文> [--old <今の文>] [--rule <ID>] --why <要点> [--src c-1,c-2] [--replaces <ワークスペースのファイル>,…] [--kind <種類>] [--rec …]
@@ -62,7 +64,7 @@ ANY_ID = r"(?:ws-)?[a-z][\w-]*?-\d{3}"  # 前の版のワークスペースの I
 RULE_ID = re.compile(rf"\[({ID})\]")
 FILE = r"[^\s,、「」|\[\]](?:[^,、「」|\[\]\n]*?[^\s,、「」|\[\]])?\.(?:md|py)"  # レビューの表の「決まり」の列に書く、ワークスペースかプラグインのファイル（顧客のフォルダの名前に空白があってよい）
 KEY = re.compile(rf"{ID}|lint:.+|{FILE}")  # レビューの表の「決まり」の列に書くもの（lint の規則は名前で lint:<名前>）
-CITE = re.compile(rf"(?<![\w-])\[?({ID}|{FILE})\]?\s*「([^」]*)」")  # 決まりの列の ID・ファイルに添えた、その決まりの文から写した語句（slides-visual-013「単語や文節の途中で折り返さない」）
+CITE = re.compile(rf"(?<![A-Za-z0-9_-])\[?({ID}|{FILE})\]?\s*「([^」]*)」")  # 決まりの列の ID・ファイルに添えた、その決まりの文から写した語句（slides-visual-013「単語や文節の途中で折り返さない」）
 RESULTS = ("直した", "残した（誤り）", "残した", "聞く")
 NO_RULE = ("未", "戻さない")  # 決まりにつないでいない戻し先
 TWICE = 2  # 2 本以上の資料・2 社以上の顧客に出たら、たまたまでないとみなす（desk-dreaming の prompt_propose.md の c、run.md の 4i・5）
@@ -83,7 +85,7 @@ TOPICS = {  # 決まりの ID の主題（何についての決まりか）。ID
 PLAN_RULE = "deck-flow-004"  # 構成案の AI レビューの頼み方。これを見直すかの判断待ちに答えたら、構成の見逃しをその答えのあとから数え直す
 HARNESS = ("skills", "lib", "hooks", "extensions")  # 指紋に入れるプラグインのフォルダ（リポジトリの根元から）
 OVERRIDE = re.compile(r"[（(]([^（）()\n]*?)\s*より優先")  # ワークスペースの決まりの「…（slides-visual-012 より優先）」。括弧の中の ID を全部取る
-PLUGIN_ID = re.compile(r"(?<![\w-])(?!ws-)[a-z][\w-]*?-\d{3}")
+PLUGIN_ID = re.compile(rf"(?<![A-Za-z0-9_-])({ID})(?![A-Za-z0-9_-])")  # 角括弧のない ID も（決まりを指す書き方）。\w は和文の字も含むので、境目は英数字で見る（「決まりslides-visual-012より優先」）
 BRACKETED = re.compile(rf"\[({ANY_ID})\]")  # ワークスペースのファイルに書かない、角括弧の ID
 CHANGES = ("足した", "まとめた", "消した", "書き換えた")  # 版が取り込んだ指摘ごとの変化（--changes）
 VERSIONS = ("その場で戻した", "手で直した", "初めの版", "移行")  # 台帳が書く版だけの提案（人に出す提案でない。「前の提案」に出さない）
@@ -514,13 +516,18 @@ def candidates(ws, plugin=PLUGIN):
     mine = {f: read(ws, f) for f in rule_files(ws) if f.endswith(".md")}  # ワークスペースの決まりと顧客の memory
     sent = [p for p in ps.values() if p["status"] == "Issue にした"]
     promoted = [(t, p) for p in sent for t in {*p.get("prev", {}).values(), *p.get("replaces", [])} if t in mine]  # Issue の直しが届いたら写しを消すワークスペースのファイル（出典の指摘の前の戻し先と --replaces）と、その提案
-    out = []
+    out, nodes = [], None
     for k, x in tally(ws).items():
         if not (k.startswith("lint:") or k in mine or f"[{k}]" in plug or re.search(r"\.\w+$", k) and (plugin_path(k) if plugin == PLUGIN else (plugin / k).is_file())):  # プラグインのファイルは plugin_path を通す（selftest は仮のプラグインのフォルダで回す）
             continue  # 消した・移した決まりとファイル（写しを消したあとも、レビューの結果はもとの ID に残る）
         d, layer = x["資料ごと"], "ワークスペース" if k in mine else "lint" if k.startswith("lint:") else "プラグイン"
-        if max(d["再発"], d["直した"]) >= TWICE:
-            out.append(("下ろす", k, f"{layer}。再発 {d['再発']} 本・直した {d['直した']} 本の資料（文の決まりでは止まっていない。点検か作る手順に）"))
+        if lowered(x):
+            code = ""
+            if layer == "プラグイン" and re.fullmatch(ID, k):
+                nodes = nodes if nodes is not None else graph(plugin)
+                c = nodes.get(k, {}).get("code", [])
+                code = f"。スクリプトの名指し: {c[0]}" + (f" ほか {len(c) - 1}" if len(c) > 1 else "") + "（点検をすり抜けた。その点検を見直す）" if c else "。スクリプトの名指し: なし（点検を作る候補）"
+            out.append(("下ろす", k, f"{layer}。再発 {d['再発']} 本・直した {d['直した']} 本の資料（文の決まりでは止まっていない。点検か作る手順に）{code}"))
         if d["残した（誤り）"] >= TWICE:
             out.append(("書き直す", k, f"{layer}。残した（誤り）{d['残した（誤り）']} 本の資料（拾う範囲が外れている。消す・緩めるは判断待ち）"))
         if d["聞く"] >= TWICE:
@@ -589,6 +596,93 @@ def where(rid):
             for n, line in enumerate(f.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
                 if f"[{rid}]" in line:
                     out.append(f"{plugin_rel(f)}:{n}")
+    return out
+
+
+MENTION = PLUGIN_ID  # 決まりのつながりで、ほかのファイルが ID を指す書き方
+EVIDENCE = re.compile(r"(?:中身|見た目|AI 実践|研究|仕組み|社内) ?\d")  # 決まりの行の根拠のタグ（deck-workflow の SKILL.md の略語の表。（研究 1-3）など）
+
+
+def test_lines(text):
+    """py の selftest の関数（selftest で始まる名前。中の関数も）の行の番号。試しの ID を点検に数えない。読めない py は空。"""
+    import ast
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return set()
+    return {n for d in ast.walk(tree) if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef)) and d.name.startswith("selftest")
+            for n in range(d.lineno, d.end_lineno + 1)}
+
+
+def graph(plugin=PLUGIN):
+    """プラグインの決まりのつながり。{ID: {file, line, text, code, refs, docs}}。
+    file:line は [ID] を書いた場所。code はスクリプト（py の selftest の外）で ID を名指しする行（lint の規則・警告・部品の既定値。点検とのつながり）、
+    refs は書いた場所のほかで ID を指す md と py、docs は docs/decisions.md と docs/todo.md で ID を書いた行（経緯）。
+    この台帳のスクリプトと desk-migrate（前の ID の対応）とテンプレートは読まない（selftest_topics と同じ）。"""
+    me = Path(__file__).resolve()
+    nodes, seen = {}, []
+    for root in plugin_roots(plugin):
+        for f in sorted(root.rglob("*")) if root.is_dir() else []:
+            parts = f.relative_to(root).parts  # 入れた場所の上のフォルダの名前では外さない
+            if f.suffix not in (".md", ".py") or not f.is_file() or f.resolve() == me or "desk-migrate" in parts or "templates" in parts:
+                continue
+            text = f.read_text(encoding="utf-8", errors="ignore")
+            skip = test_lines(text) if f.suffix == ".py" else set()
+            name = Path(os.path.relpath(f, plugin)).as_posix()
+            for n, line in enumerate(text.splitlines(), 1):
+                if n in skip:
+                    continue
+                for m in RULE_ID.finditer(line):
+                    nodes.setdefault(m.group(1), {"file": name, "line": n, "text": line.strip(), "code": [], "refs": set(), "docs": []})
+                seen += [(m.group(1), name, n, f.suffix) for m in MENTION.finditer(line)]
+    for rid, name, n, suffix in seen:
+        if x := nodes.get(rid):
+            if suffix == ".py":
+                x["code"].append(f"{name}:{n}")
+            if name != x["file"]:
+                x["refs"].add(name)
+    for doc in ("decisions.md", "todo.md"):
+        p = plugin.parent / "docs" / doc
+        for n, line in enumerate(p.read_text(encoding="utf-8").splitlines() if p.is_file() else [], 1):
+            for rid in set(MENTION.findall(line)) & nodes.keys():
+                nodes[rid]["docs"].append((doc, n, line))
+    return nodes
+
+
+def lowered(x):
+    """台帳の数から、点検か作る手順に下ろす合図か（candidates の「下ろす」と同じ境目）。"""
+    return bool(x) and max(x["資料ごと"]["再発"], x["資料ごと"]["直した"]) >= TWICE
+
+
+def trace(ws, rid=None, every=False, plugin=PLUGIN):
+    """決まりのつながりを出す。rid なしは決まりごとの 1 行（既定は台帳に指摘かレビューの結果のある決まり。every はすべて）と、つながりの数。
+    並びは、下ろす合図があるのにスクリプトが名指ししていない決まりが先（点検を作る候補）。rid ありは、その決まりのつながりをすべてと、why。"""
+    nodes, rows = graph(plugin), tally(ws)
+    if rid:
+        x = nodes.get(rid) or sys.exit(f"{rid} はプラグインのどこにもない（where・why で経緯を見る。ワークスペースの決まりは ID でなくファイル）")
+        print(f"== {rid}  {x['file']}:{x['line']}\n{x['text'][:300]}")
+        print(f"\n根拠のタグ: {'あり' if EVIDENCE.search(x['text']) else 'なし（行の中に（研究 1-3）などがない。節の Evidence にあるかもしれない）'}")
+        print(f"\nスクリプトが名指し（点検・警告・部品の既定値）: {len(x['code'])}", *x["code"], sep="\n  ")
+        print(f"\nほかのファイルから指す: {len(x['refs'])}", *sorted(x["refs"]), sep="\n  ")
+        print(f"\n決めたこと・残っている課題: {len(x['docs'])}", *(f"{d}:{n} {t[:120]}" for d, n, t in x["docs"]), sep="\n  ")
+        print("\n台帳:")
+        why(ws, rid)
+        return x
+    out = [(k, x, rows.get(k)) for k, x in nodes.items() if every or rows.get(k)]
+    out.sort(key=lambda t: (not (lowered(t[2]) and not t[1]["code"]), not t[2], -len(t[2]["指摘"]) if t[2] else 0, t[0]))
+    print("決まり\t書いた場所\tスクリプト\tほかから\t決めたこと\t根拠のタグ\t指摘\t再発（資料）\t直した（資料）\t残した（誤り）（資料）\t合図")
+    for k, x, r in out:
+        d = r["資料ごと"] if r else {}
+        sign = "下ろす・点検なし" if lowered(r) and not x["code"] else "下ろす・点検をすり抜けた" if lowered(r) else ""
+        print("\t".join(map(str, [k, f"{x['file']}:{x['line']}", len(x["code"]), len(x["refs"]), len(x["docs"]), "あり" if EVIDENCE.search(x["text"]) else "",
+                                   len(r["指摘"]) if r else 0, d.get("再発", 0), d.get("直した", 0), d.get("残した（誤り）", 0), sign])))
+    n = len(nodes)
+    count_ = lambda f: sum(map(f, nodes.values()))
+    print(f"\n決まり {n}: スクリプトが名指し {count_(lambda x: bool(x['code']))}・ほかのファイルから指す {count_(lambda x: bool(x['refs']))}・"
+          f"決めたことか課題に経緯 {count_(lambda x: bool(x['docs']))}・行に根拠のタグ {count_(lambda x: bool(EVIDENCE.search(x['text'])))}・"
+          f"台帳に指摘かレビューの結果 {sum(k in rows for k in nodes)}")
+    print(f"下ろす合図（2 本以上の資料で再発か直した）: スクリプトが名指ししていない {sum(lowered(rows.get(k)) and not x['code'] for k, x in nodes.items())}・"
+          f"名指ししているのに出た {sum(lowered(rows.get(k)) and bool(x['code']) for k, x in nodes.items())}")
     return out
 
 
@@ -1148,6 +1242,7 @@ def main(argv):
     sub.add_parser("effects")
     s = sub.add_parser("next"); s.add_argument("prefix")
     s = sub.add_parser("where"); s.add_argument("id")
+    s = sub.add_parser("trace"); s.add_argument("id", nargs="?"); s.add_argument("--all", action="store_true")
     sub.add_parser("topics")
     s = sub.add_parser("propose")
     s.add_argument("--file", required=True); s.add_argument("--new"); s.add_argument("--old"); s.add_argument("--rewrite"); s.add_argument("--rule", type=rule_arg)
@@ -1198,6 +1293,8 @@ def main(argv):
         print(next_id(ws, a.prefix))
     elif a.cmd == "where":
         print("\n".join(where(a.id)) or f"{a.id} はプラグインのどこにもない（消した決まりなら why で経緯を見る。ワークスペースの決まりは ID でなくファイル）")
+    elif a.cmd == "trace":
+        trace(ws, a.id, a.all)
     elif a.cmd == "topics":
         print("\n".join(f"{k}\t{v}" for k, v in TOPICS.items()))
     elif a.cmd == "propose":
@@ -1239,7 +1336,8 @@ def selftest_topics():
     """プラグインのどの [ID] も、TOPICS の主題を使い、1 つのファイルにだけ書く（ファイルを分けたり、新しい決まりを足したりしたときに、表から外れた ID を止める）。"""
     bad, seen = [], {}
     for f in plugin_files():
-        if f.suffix in (".md", ".py") and f.is_file() and "desk-migrate" not in f.parts and "templates" not in f.parts and f.resolve() != Path(__file__).resolve():
+        parts = Path(plugin_rel(f)).parts  # 入れた場所の上のフォルダの名前では外さない（graph と同じ）
+        if f.suffix in (".md", ".py") and f.is_file() and "desk-migrate" not in parts and "templates" not in parts and f.resolve() != Path(__file__).resolve():
             for m in RULE_ID.finditer(f.read_text(encoding="utf-8")):
                 rid = m.group(1)
                 if rid.rsplit("-", 1)[0] not in TOPICS:
@@ -1577,6 +1675,7 @@ def selftest():
         finally:
             os.chdir(cwd)
     selftest_candidates(quiet)
+    selftest_trace(quiet)
     selftest_effects(quiet)
     print("selftest ok")
 
@@ -1948,10 +2047,59 @@ def selftest_effects(quiet):
             os.chdir(cwd)
 
 
+def selftest_trace(quiet):
+    """決まりのつながり: selftest の中の ID は点検に数えない。下ろす合図があって点検のない決まりが先に並び、candidates にも出る。"""
+    assert PLUGIN_ID.findall("（決まりslides-visual-012より優先、slides-visual-0123 でない）") == ["slides-visual-012"]  # 和文に続けて書いた ID と、桁の多いもの
+    assert [m[0] for m in CITE.findall("決まりslides-visual-013「単語や文節の途中で折り返さない」")] == ["slides-visual-013"]
+    import contextlib, io, os
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d).resolve() / "templates"  # 入れた場所の上に templates があっても読む
+        ws, plug = root / "ws", root / "plugin" / "skills"
+        (ws / "Customers" / "a" / "d1").mkdir(parents=True)
+        (ws / "Customers" / "b" / "d2").mkdir(parents=True)
+        (ws / "desk.toml").write_text("")
+        (plug / "deck-design").mkdir(parents=True)
+        (plug / "deck-design" / "slides.md").write_text("- [slides-visual-012] 本文は 16pt（見た目 1-4）。\n- [slides-visual-013] 線は 1pt。\n- [slides-visual-014] 余白は広く。\n")
+        (plug / "deck-review").mkdir()
+        (plug / "deck-review" / "fix.md").write_text("slides-visual-014 を見る。\n")
+        (plug / "slides-build" / "scripts").mkdir(parents=True)
+        (plug / "slides-build" / "scripts" / "lint.py").write_text(
+            "MIN = 16  # [slides-lint-001] 本文の字の大きさ（slides-visual-012）\n\n\ndef selftest():\n    assert 'slides-visual-013'\n")
+        (root / "plugin" / "docs").mkdir()
+        (root / "plugin" / "docs" / "decisions.md").write_text("- 2026-11-01: 決まりslides-visual-012を決めた。\n")  # 和文に続けて書いた ID も拾う
+        nodes = graph(plug)
+        assert nodes["slides-visual-012"]["code"] == ["slides-build/scripts/lint.py:1"] and nodes["slides-visual-013"]["code"] == []  # selftest の中は数えない
+        assert nodes["slides-lint-001"]["file"] == "slides-build/scripts/lint.py" and nodes["slides-visual-014"]["refs"] == {"deck-review/fix.md"}
+        assert [x[:2] for x in nodes["slides-visual-012"]["docs"]] == [("decisions.md", 1)] and EVIDENCE.search(nodes["slides-visual-012"]["text"])
+        cwd = os.getcwd()
+        os.chdir(ws)
+        try:
+            with quiet():
+                for deck in ("Customers/a/d1", "Customers/b/d2"):
+                    main(["add", "--deck", deck, "--quote", "線を細く", "--to", "slides-visual-013"])
+                    main(["add", "--deck", deck, "--quote", "字を大きく", "--to", "slides-visual-012"])
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                rows = trace(ws, plugin=plug)
+            assert [k for k, _, _ in rows] == ["slides-visual-013", "slides-visual-012"]  # 指摘のある決まりだけ。点検のないほうが先
+            assert "slides-visual-013\tdeck-design/slides.md:2\t0" in out.getvalue() and "下ろす・点検なし" in out.getvalue() and "下ろす・点検をすり抜けた" in out.getvalue()
+            assert "スクリプトが名指ししていない 1・名指ししているのに出た 1" in out.getvalue()
+            with quiet():
+                assert len(trace(ws, every=True, plugin=plug)) == 4
+                got = {k: w for a, k, w in candidates(ws, plug) if a == "下ろす"}
+            assert got["slides-visual-013"].endswith("スクリプトの名指し: なし（点検を作る候補）") and "lint.py:1（点検をすり抜けた" in got["slides-visual-012"]
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                trace(ws, "slides-visual-012", plugin=plug)
+            assert "slides-build/scripts/lint.py:1" in out.getvalue() and "decisions.md:1" in out.getvalue() and "指摘 2 件" in out.getvalue()
+            assert "どこにもない" in fails(["trace", "slides-visual-999"])
+        finally:
+            os.chdir(cwd)
+
+
 def selftest_candidates(quiet):
     import contextlib, io, os
     with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as plug:
-        ws, plug = Path(d).resolve(), Path(plug)
+        ws, plug = Path(d).resolve(), Path(plug) / "skills"  # plug.parent の lib/ と docs/ も読むので、/tmp の直下にしない
+        plug.mkdir()
         (ws / "desk.toml").write_text("")
         (ws / "rules" / "slides-build").mkdir(parents=True)
         V = "rules/slides-build/visual.md"

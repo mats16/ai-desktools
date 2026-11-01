@@ -36,7 +36,7 @@ FIXED = [(TEXT, "TEXT", "本文の文字", WHITE, None), (HEAD, "HEAD", "本文�
          (ON_RED, "ON_RED", "RED の塗りの上の文字", TEXT, RULE), (RED_SOFT, "RED_SOFT", "小さな赤の札の地", RED_TEXT, None), (STAGE_TEXT, "STAGE_TEXT", "札の文字", WHITE, None),
          (DECOR, "DECOR", "章番号。部品が使う", WHITE, None)]  # テーマに入れない色（既定の値か NAMED の名前, 名前, 用途, 載せる文字, 枠線）
 ON = {NAVY: WHITE, NAVY_BLOCK: WHITE, RED_TEXT: WHITE, SUB: WHITE, OSS: WHITE, BG: TEXT, PANEL: TEXT}  # 枠に載せる文字の色（届かなければ、札の文字か白の届くほう）。ほかは札の文字の色
-# 役割の組（文字, 地, 基準, どこで使うか）。deck-design の slides.md の 1・3 の組み合わせ。18pt 未満の細字と 11pt 未満の太字は 4.5:1、18pt 以上と 11pt 以上の太字は 3:1（deck-design の slides.md の 3）。組み込みのテーマ（navy・white・blue）はすべて届く。
+# 役割の組（文字, 地, 基準, どこで使うか）。deck-design の slides.md の 1・3 の組み合わせ。18pt 未満の細字と 11pt 未満の太字は 4.5:1、18pt 以上と 11pt 以上の太字は 3:1（slides-visual-039、deck-design）。組み込みのテーマ（navy・white・blue）はすべて届く。
 # NAMED の役割（HEAD・CARD・SUB_ON_NAVY・ON_RED）は、テーマが書いていなければ既定の色で測る（alias）。本文の地が暗いテーマも同じ組で測る
 PAIRS = [(WHITE, NAVY, 4.5, "結論バンドの白"), (SUB_ON_NAVY, NAVY, 4.5, "濃紺の上の補足・フッター"), (RED_ON_NAVY, NAVY, 4.5, "表紙の小見出し"),
          (HEAD, BG, 4.5, "見出し"), (HEAD, PANEL, 4.5, "パネルの見出し"), (HEAD, CARD, 4.5, "カードの見出し・表の 1 列目"),

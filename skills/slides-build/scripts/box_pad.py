@@ -4,11 +4,11 @@
 # ///
 """usage: uv run -q box_pad.py <deck.json> <画像のフォルダ> [ページ ...]   （--selftest で自己確認）
 箱の中の文字と、箱の下端の間を、Google が描いたページの画像（gslides.py check の p-NN.png）で測る。
-1 字分（その枠でいちばん小さい文字の大きさ）より狭いものを出す（deck-design の slides.md の 4「枠と文字の間は 1 字分」）。
+1 字分（その枠でいちばん小さい文字の大きさ）より狭いものを出す（slides-visual-027、deck-design「枠と文字の間は 1 字分」）。
 [slides-lint-019] JSON の行の高さの見積もりは ±0.4 in ずれるので、画像で測る。
 見るのは、塗りの箱の中にある、上寄せの 2 行以上の文字の枠と、白いカードの下端の真上にある 1 行の文字の枠。gslides.py check が呼ぶ。
 もう 1 つ、1 つだけで置く淡色のパネル（白いカード・濃紺の箱・横に同じ高さの箱が並ぶものを除く）の上寄せの文字で、
-下の空きが上の空きより SLACK_MIN 以上大きいものを出す（deck-design の slides.md の 4。中央に置くか縮める。2026-10-10）。"""
+下の空きが上の空きより SLACK_MIN 以上大きいものを出す（slides-visual-028、deck-design。中央に置くか縮める。2026-10-10）。"""
 import json, os, sys
 
 from PIL import Image
@@ -67,10 +67,10 @@ def top_gap(img, x0, x1, first, y_lo):
     return None
 
 
-MID = "中央寄せの文字と箱の上下の端の間が 1 字分より狭い"  # [slides-lint-023] deck-design の slides.md の 4
-SLACK = "上寄せの文字の下が、上より大きく空いている"  # [slides-lint-026] deck-design の slides.md の 4。淡色のパネルの文字は上下の中央に置く
+MID = "中央寄せの文字と箱の上下の端の間が 1 字分より狭い"  # [slides-lint-023] slides-visual-027（deck-design）
+SLACK = "上寄せの文字の下が、上より大きく空いている"  # [slides-lint-026] slides-visual-028（deck-design）。淡色のパネルの文字は上下の中央に置く
 SLACK_MIN = 0.25  # in。下の空きが上の空きをこれ以上超えたら出す（1 行ぶんほど）
-CARD = "白いカードの最終行と下端が近い"  # [slides-lint-027] deck-design の slides.md の 4
+CARD = "白いカードの最終行と下端が近い"  # [slides-lint-027] slides-visual-027（deck-design）
 CARD_MIN = 0.28  # in。2 字分ほど。slides.py のカードは、見出しの上もこれと同じ見た目にする（中身を上下の中央に置く）
 
 
@@ -131,7 +131,7 @@ def page_hits(p, folder, i, rule, card):
             tol = 0.03 * EMU
             row = lambda f: any(g is not f and (g[0] >= f[0] + f[2] or g[0] + g[2] <= f[0]) and abs(g[1] - f[1]) < tol
                                 and abs(g[1] + g[3] - f[1] - f[3]) < tol for g, _ in fills)
-            panel = [f for f in panel if not row(f)]  # 横に同じ高さの箱が並ぶ列は、見出しの高さをそろえるので上寄せでよい（deck-design の slides.md の 4）
+            panel = [f for f in panel if not row(f)]  # 横に同じ高さの箱が並ぶ列は、見出しの高さをそろえるので上寄せでよい（slides-visual-028、deck-design）
         x0, x1 = int((b[0] + INSET * EMU) * px), int((b[0] + b[2] - INSET * EMU) * px)
         sz = min(((size_of(st) or 99) for x in paras(sh["text"]) for c, st in x[1] if c.strip()), default=99)
         if sz == 99:
