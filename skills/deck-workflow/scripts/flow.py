@@ -471,6 +471,7 @@ def selftest():
             r9 = record(f, 9, "始めた")
             os.utime(f / "build" / "p02.json", (when(r9["ts"]).timestamp() + 5,) * 2)
             assert "済んだと記録したあと" not in page()  # 9 を始めてからの変更は 9 のもの（8 に出さない）
+            os.utime(f / "build" / "p02.json", (old, old))  # 未来の時刻のままにすると、あとで足す記録の窓に入る（速く走る CI で落ちた）
             record(f, 8, "済んだ", [("url", "https://docs.google.com/presentation/d/built_1/edit")])
             assert "記録の url" not in page() and "この手順の記録 2 件" in page()
             record(f, 8, "済んだ", [("url", "https://docs.google.com/presentation/d/built/edit")])
