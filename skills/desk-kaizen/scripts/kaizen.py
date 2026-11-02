@@ -12,7 +12,7 @@ usage:
   kaizen.py --selftest
 置き場所は <ワークスペース>/.desk/kaizen/<名前>/（repo/ 変える版、base/ 前の版、verify/ 検証の記録）。資料の名前・URL・本文は verify/detail.md にだけ書き、
 Issue には「資料 1」のような番号と、規則ごとの数の変化と、選んだ画像と、変更案の差分だけを出す。ブランチは push しない。"""
-import json, os, re, secrets, shutil, subprocess, sys, tempfile, time, tomllib
+import json, os, re, secrets, shutil, struct, subprocess, sys, tempfile, time, tomllib, zlib
 from concurrent.futures import ThreadPoolExecutor
 from functools import cached_property
 from pathlib import Path
@@ -155,6 +155,14 @@ def is_slides(build):
     sys.exit(f"{build} に deck.json も pages.py も doc.md もない")
 
 
+def page_shots(folder, slides, repo):
+    """check が出したページの画像（ファイルの名前 → パス）。スライドの画像は WebP にそろえる。base の側の前のバージョンの gslides.py は PNG を出すので、
+    同じ劣化なしの WebP にしてから比べる（同じ画素なら同じバイト列になる。形式の違いだけを、見た目の変更と数えない）。"""
+    if slides and (old := sorted(folder.glob("p-*.png"))):
+        sh("uv", "run", "-q", repo / "lib" / "sheet.py", "--webp", *old)
+    return {p.name: p for p in sorted(folder.glob("p-*.webp" if slides else "p-*.png"))}
+
+
 def rebuild(w, folders, pages=None, keep=False):
     w.need()
     out_dir = gapi.config().get("drive", {}).get("desk") or sys.exit("desk.toml の drive.desk（仮に組む Drive のフォルダ）がない")
@@ -173,7 +181,10 @@ def rebuild(w, folders, pages=None, keep=False):
                 made.append(fid)
                 cmd = [sys.executable, s / ("gslides.py" if slides else "docs.py"), "check", fid] + (["--pages", pages] if pages and slides else [])
                 outs.append(sh(*cmd, cwd=build, env={"DESK_VERIFY": "1"}, check=False).stdout)
-                shots[side] = {p.name: p for p in sorted(Path(f"/tmp/{'slides' if slides else 'docs'}_{fid[:8]}").glob("p-*.png"))}
+                cj = Path(f"/tmp/slides_{fid[:8]}/changed.json")
+                if slides and cj.is_file() and any(x["image"] is None for x in json.loads(cj.read_text())["pages"]):  # 画像のないページ（WebP にできなかった）を、変わらなかったページと取り違えない
+                    sys.exit(f"{side} のページの画像を WebP にできなかった（gslides.py check の出力）。uv と Pillow を確かめてから回し直す")
+                shots[side] = page_shots(Path(f"/tmp/{'slides' if slides else 'docs'}_{fid[:8]}"), slides, w.repo)
         finally:
             for fid in made if not keep else []:
                 gapi.trash(fid)
@@ -655,6 +666,30 @@ def clean(w):
     print(f"消した: {w.dir}")
 
 
+def png(path, rgb):
+    """4 × 4 の単色の PNG（selftest 用。素の python3 で書く）。"""
+    chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d))
+    raw = b"".join(b"\0" + bytes(rgb) * 4 for _ in range(4))
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 4, 4, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+def shots_selftest():
+    """base が PNG（前のバージョン）、head が WebP でも、同じページを名前でつなぎ、見た目の違うページだけを違うとする。uv と Pillow を使う。"""
+    repo = Path(__file__).resolve().parents[3]
+    with tempfile.TemporaryDirectory() as t:
+        base, head = Path(t, "base"), Path(t, "head")
+        base.mkdir(), head.mkdir()
+        for d, colors in ((base, ((200, 0, 0), (200, 0, 0))), (head, ((200, 0, 0), (0, 0, 200)))):
+            for n, c in enumerate(colors, 1):
+                png(d / f"p-{n:02d}.png", c)
+        page_shots(head, True, repo)  # head の側は、gslides.py check が WebP にしたもの
+        b, h = page_shots(base, True, repo), page_shots(head, True, repo)
+        assert sorted(b) == sorted(h) == ["p-01.webp", "p-02.webp"] and not list(base.glob("*.png"))
+        assert b["p-01.webp"].read_bytes() == h["p-01.webp"].read_bytes() and b["p-02.webp"].read_bytes() != h["p-02.webp"].read_bytes()
+        png(base / "p-1.png", (0, 0, 0))
+        assert sorted(page_shots(base, False, repo)) == ["p-1.png"]  # ドキュメントは PNG のまま
+
+
 def selftest():
     before = "== 要修正: 1 ==\n[絵文字] p1: 「✅」\n\n== 要確認: 2 ==\n[あおり] p2: 「このままでは」\n[空疎な言い回し] p3: 「実現する」\n"
     after = "== 要修正: 0 ==\n\n== 要確認: 2 ==\n[あおり] p2: 「このままでは」\n[空疎な言い回し] p3: 「実現する」\n\n== 要確認（ワークスペースの点検）: 1 ==\n[気になる語] p4\n"
@@ -815,6 +850,7 @@ def selftest():
             os.environ.pop("CODEX_HOME") if old_home is None else os.environ.__setitem__("CODEX_HOME", old_home)
     assert "混ざっている（変えた決まり a-001, b-002" in probe_verdict([row("差なし")], ["a-001", "b-002"])
     assert claude_meta('{"type":"system","subtype":"init","plugins":[{"name":"desk-tools","path":"/elsewhere"}]}\n{"type":"result","total_cost_usd":1.5}', Path("/tmp/x")) == (1.5, "読み込んだ desk-tools が写しでない（/elsewhere）")
+    shots_selftest()
     print("selftest ok")
 
 
