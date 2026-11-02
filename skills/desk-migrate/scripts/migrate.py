@@ -509,14 +509,18 @@ KEEP = VERBATIM | {"by"}  # by は書いた者の種類（session・dreaming・i
 
 
 def ledger_lines(path, fn):
-    """台帳の行ごとに、文字列の値を fn で書き換える（JSON の形は変えない。人の言葉の欄 VERBATIM はそのまま）。"""
+    """台帳の行ごとに、文字列の値を fn で書き換える（JSON の形は変えない。人の言葉の欄 VERBATIM はそのまま）。
+    ワークスペースへの変更案の文（old・new）は、その変更先のファイルを texts が書き換えるときだけ書き換える（ファイルと文が同じ替えを受け、ledger.py の apply・undo が文で探せる。
+    checks.py などの md でないファイルは書き換えないので、その変更案の文もそのまま。PR #57 のレビュー）。"""
+    ws = path.parent.parent
+    same = {p.relative_to(ws).as_posix() for p in texts(ws)}
     def walk(v):
         if isinstance(v, str):  # まるごと前の lib/ のスクリプトの値（route の前後の戻し先 prev・after なども）は、欄によらず skills/ からの今のパスに
             return lib_target(v, fn) if v.startswith("../lib/") and LIB_VALUE.fullmatch(v) else fn(v)  # skills/ からの ../lib/ だけ（lib/x.py はワークスペースのパスでもある）
         if isinstance(v, list):
             return [walk(x) for x in v]
         if isinstance(v, dict):
-            return {k: x if k in KEEP else fn(x) if k in ("old", "new") and isinstance(x, str)  # 変更案の文は、ワークスペースの文と同じ替えだけ（apply・undo が文で探す）
+            return {k: x if k in KEEP else (fn(x) if v.get("plugin") or str(v.get("file", "")).removeprefix("./") in same else x) if k in ("old", "new") and isinstance(x, str)  # 変更案の文は、変更先のファイルと同じ替えだけ
                     else lib_target(x, fn) if (k in TARGETS and (k == "to" or v.get("plugin")) or k == "rule") and isinstance(x, str) else walk(x) for k, x in v.items()}
         return v
     out = []
@@ -1214,6 +1218,33 @@ def selftest():
         assert sorted(x.split(": ")[0] for x in unresolved(Path(t))) == ["台帳の P0001 の file", "台帳の c-0001 の to", "台帳の c-0006 の to"]  # 前の形のまま残るものは出し続け、書き換えた c-0007 は出さない（作るファイルへの今の形の提案と見分けられない）
         out = subprocess.run([sys.executable, str(Path(__file__).resolve()), "check"], cwd=t, capture_output=True, text=True, env={**os.environ, "DESK_CONFIG": ""}).stdout
         assert "今のプラグインにないファイルを指す" in out and "移すものはない" not in out, out  # check も、決めるまで出し続ける（desk-doctor が check で見る）
+    with tempfile.TemporaryDirectory() as t:  # md でないファイル（checks.py）への変更案は、ファイルも文も書き換えず、移したあとも ledger.py apply が当たる（PR #57）
+        w = Path(t)
+        (w / "desk.toml").write_text("")
+        (w / "recipes" / "slide_checks").mkdir(parents=True)
+        (w / "recipes" / "slide_checks" / "checks.py").write_text('PATH = "../lib/brand.py"\n')
+        (w / "recipes" / "a").mkdir(parents=True)
+        (w / "recipes" / "a" / "RECIPE.md").write_text("---\ndescription: a\n---\n- python3 ../lib/ledger.py list\n")
+        (w / ".desk").mkdir()
+        import contextlib, io
+        cwd = os.getcwd()
+        try:
+            os.chdir(w)
+            with contextlib.redirect_stdout(io.StringIO()):
+                ledger.main(["propose", "--file", "recipes/slide_checks/checks.py", "--old", "../lib/brand.py", "--new", "replacement", "--why", "試し"])
+                ledger.main(["propose", "--file", "recipes/a/RECIPE.md", "--old", "python3 ../lib/ledger.py list", "--new", "y", "--why", "試し"])
+            pid = {r["file"]: r["id"] for r in ledger.state(w)[1].values()}
+            apply(w)
+            led = {r["id"]: r for r in map(json.loads, (w / ".desk" / "ledger.jsonl").read_text().splitlines()) if r.get("kind") == "proposal"}
+            p1, p2 = led[pid["recipes/slide_checks/checks.py"]], led[pid["recipes/a/RECIPE.md"]]
+            assert p1["old"] == "../lib/brand.py" and p1["old"] in (w / "recipes" / "slide_checks" / "checks.py").read_text(), p1  # 書き換えないファイルへの文はそのまま
+            assert "skills/desk-feedback/scripts/ledger.py" in p2["old"] and p2["old"] in (w / "recipes" / "a" / "RECIPE.md").read_text(), p2  # 書き換えるファイルへの文は、同じ替え
+            with contextlib.redirect_stdout(io.StringIO()):
+                ledger.main(["apply", p1["id"]])
+                ledger.main(["apply", p2["id"]])
+        finally:
+            os.chdir(cwd)
+        assert (w / "recipes" / "slide_checks" / "checks.py").read_text() == 'PATH = "replacement"\n' and "- y" in (w / "recipes" / "a" / "RECIPE.md").read_text()  # 移したあとも、どちらも当たる
     with tempfile.TemporaryDirectory() as t:  # 台帳の同じ値は、欄によらず同じ今のパスに（ledger.py は値で数える）
         (Path(t) / "l.jsonl").write_text('{"kind": "review", "rule": "../lib/textlint.py"}\n{"kind": "correction", "to": "../lib/textlint.py"}\n{"kind": "review", "rule": "slides-visual-012"}\n'
                                          '{"kind": "applied", "prev": {"c-0001": "../lib/textlint.py"}, "fix": "python3 ../lib/textlint.py --stats"}\n')
