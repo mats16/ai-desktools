@@ -484,8 +484,15 @@ def rewrite(text, paths=True, seen=None, ws_map=None, ids=True):
     return text
 
 
+def rewritten(rel):
+    """texts が書き換える形のファイルか（ワークスペースからのパス）。形で決めるので、rules/ から recipes/ へ移す前のパスでも、移したあとのパスでも同じ答え
+    （ledger_lines が、変更案の文を変更先のファイルと同じに替えるかを、これで決める。PR #57 のレビュー）。"""
+    parts = Path(rel).parts
+    return rel in ("AGENTS.md", "CLAUDE.md") or rel.endswith(".md") and parts[:1] in (("rules",), ("recipes",)) or fnmatch.fnmatch(rel, "Customers/*/memory.md")
+
+
 def texts(ws):
-    """ID とパスを書き換える、人と会話が書くファイル。"""
+    """ID とパスを書き換える、人と会話が書くファイル（rewritten の形のもの）。"""
     return [p for p in [ws / "AGENTS.md", ws / "CLAUDE.md", *sorted((ws / "rules").rglob("*.md")), *sorted((ws / "recipes").rglob("*.md")),
                         *sorted((ws / "Customers").glob("*/memory.md"))] if p.is_file()]  # recipes/ は 2026-10-29 から。そのあとの名前の替え（source-scout）も届くように
 
@@ -510,17 +517,15 @@ KEEP = VERBATIM | {"by"}  # by は書いた者の種類（session・dreaming・i
 
 def ledger_lines(path, fn):
     """台帳の行ごとに、文字列の値を fn で書き換える（JSON の形は変えない。人の言葉の欄 VERBATIM はそのまま）。
-    ワークスペースへの変更案の文（old・new）は、その変更先のファイルを texts が書き換えるときだけ書き換える（ファイルと文が同じ替えを受け、ledger.py の apply・undo が文で探せる。
-    checks.py などの md でないファイルは書き換えないので、その変更案の文もそのまま。PR #57 のレビュー）。"""
-    ws = path.parent.parent
-    same = {p.relative_to(ws).as_posix() for p in texts(ws)}
+    ワークスペースへの変更案の文（old・new）は、その変更先が texts の書き換える形（rewritten）のときだけ書き換える（ファイルと文が同じ替えを受け、ledger.py の apply・undo が文で探せる。
+    checks.py などの md でないファイルは書き換えないので、その変更案の文もそのまま。移す前のパスでも同じ答えになるよう、ファイルの一覧でなく形で決める。PR #57 のレビュー）。"""
     def walk(v):
         if isinstance(v, str):  # まるごと前の lib/ のスクリプトの値（route の前後の戻し先 prev・after なども）は、欄によらず skills/ からの今のパスに
             return lib_target(v, fn) if v.startswith("../lib/") and LIB_VALUE.fullmatch(v) else fn(v)  # skills/ からの ../lib/ だけ（lib/x.py はワークスペースのパスでもある）
         if isinstance(v, list):
             return [walk(x) for x in v]
         if isinstance(v, dict):
-            return {k: x if k in KEEP else (fn(x) if v.get("plugin") or str(v.get("file", "")).removeprefix("./") in same else x) if k in ("old", "new") and isinstance(x, str)  # 変更案の文は、変更先のファイルと同じ替えだけ
+            return {k: x if k in KEEP else (fn(x) if v.get("plugin") or rewritten(str(v.get("file", "")).removeprefix("./")) else x) if k in ("old", "new") and isinstance(x, str)  # 変更案の文は、変更先のファイルと同じ替えだけ
                     else lib_target(x, fn) if (k in TARGETS and (k == "to" or v.get("plugin")) or k == "rule") and isinstance(x, str) else walk(x) for k, x in v.items()}
         return v
     out = []
@@ -1245,6 +1250,7 @@ def selftest():
         finally:
             os.chdir(cwd)
         assert (w / "recipes" / "slide_checks" / "checks.py").read_text() == 'PATH = "replacement"\n' and "- y" in (w / "recipes" / "a" / "RECIPE.md").read_text()  # 移したあとも、どちらも当たる
+    assert all(rewritten(p) for p in ("AGENTS.md", "rules/x/y.md", "recipes/a/RECIPE.md", "Customers/acme/memory.md")) and not any(rewritten(p) for p in ("recipes/slide_checks/checks.py", "Customers/acme/profile.md", "README.md"))
     with tempfile.TemporaryDirectory() as t:  # 台帳の同じ値は、欄によらず同じ今のパスに（ledger.py は値で数える）
         (Path(t) / "l.jsonl").write_text('{"kind": "review", "rule": "../lib/textlint.py"}\n{"kind": "correction", "to": "../lib/textlint.py"}\n{"kind": "review", "rule": "slides-visual-012"}\n'
                                          '{"kind": "applied", "prev": {"c-0001": "../lib/textlint.py"}, "fix": "python3 ../lib/textlint.py --stats"}\n')
@@ -1730,6 +1736,32 @@ def selftest_index():
 
 def selftest_recipes():
     """2026-10-29: rules/ → recipes/。決まりはフォルダごとのレシピに、paths は step に、台帳と本文の前のパスは今のパスに。何度回してもよい。"""
+    with tempfile.TemporaryDirectory() as t:  # rules/ から recipes/ へ移す md への変更案も、移したあとに当たり、当てた提案は戻せる（PR #57）
+        import contextlib, io
+        w = Path(t)
+        (w / "desk.toml").write_text("")
+        (w / "rules").mkdir()
+        (w / "rules" / "a.md").write_text("---\ndescription: a\n---\n- Read rules/b.md\n")
+        (w / "rules" / "b.md").write_text("---\ndescription: b\n---\n- Keep rules/a.md\n")
+        (w / ".desk").mkdir()
+        cwd = os.getcwd()
+        try:
+            os.chdir(w)
+            with contextlib.redirect_stdout(io.StringIO()):
+                ledger.main(["propose", "--file", "rules/a.md", "--old", "Read rules/b.md", "--new", "See rules/b.md", "--why", "試し"])
+                ledger.main(["propose", "--file", "rules/b.md", "--old", "Keep rules/a.md", "--new", "Keep rules/a.md and more", "--why", "試し"])
+                ids = {r["file"]: r["id"] for r in ledger.state(w)[1].values()}
+                ledger.main(["apply", ids["rules/b.md"]])
+            assert "recipes/" not in (w / "rules" / "a.md").read_text()
+            apply(w)
+            a_md, b_md = w / "recipes" / "a" / "RECIPE.md", w / "recipes" / "b" / "RECIPE.md"
+            assert "Read recipes/b/RECIPE.md" in a_md.read_text() and "Keep recipes/a/RECIPE.md and more" in b_md.read_text(), (a_md.read_text(), b_md.read_text())
+            with contextlib.redirect_stdout(io.StringIO()):
+                ledger.main(["apply", ids["rules/a.md"]])
+                ledger.main(["undo", ids["rules/b.md"]])
+        finally:
+            os.chdir(cwd)
+        assert "See recipes/b/RECIPE.md" in a_md.read_text() and "- Keep recipes/a/RECIPE.md\n" in b_md.read_text() and "and more" not in b_md.read_text()  # 移した md への提案が当たり、当てた提案が戻る
     with tempfile.TemporaryDirectory() as tmp:  # 和文の名前は残し、つないだ名前がほかの名前と重なっても、1 つのレシピに 2 つを移さない
         ws = Path(tmp)
         for f in ("rules/顧客向け.md", "rules/x/顧客向け.md", "rules/a/b.md", "rules/c/b.md", "rules/a_b.md", "rules/---.md", "rules/cxo.md", "recipes/cxo/RECIPE.md", "rules/logo.png", "recipes/logo.png"):
