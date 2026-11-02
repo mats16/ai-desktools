@@ -173,7 +173,10 @@ def rebuild(w, folders, pages=None, keep=False):
                 made.append(fid)
                 cmd = [sys.executable, s / ("gslides.py" if slides else "docs.py"), "check", fid] + (["--pages", pages] if pages and slides else [])
                 outs.append(sh(*cmd, cwd=build, env={"DESK_VERIFY": "1"}, check=False).stdout)
-                shots[side] = {p.name: p for p in sorted(Path(f"/tmp/{'slides' if slides else 'docs'}_{fid[:8]}").glob("p-*.png"))}
+                cj = Path(f"/tmp/slides_{fid[:8]}/changed.json")
+                if slides and cj.is_file() and any(x["image"] is None for x in json.loads(cj.read_text())["pages"]):  # 画像のないページ（WebP にできなかった）を、変わらなかったページと取り違えない
+                    sys.exit(f"{side} のページの画像を WebP にできなかった（gslides.py check の出力）。uv と Pillow を確かめてから回し直す")
+                shots[side] = {p.name: p for p in sorted(Path(f"/tmp/{'slides' if slides else 'docs'}_{fid[:8]}").glob("p-*.webp" if slides else "p-*.png"))}  # スライドのページの画像は WebP（gslides.py check）
         finally:
             for fid in made if not keep else []:
                 gapi.trash(fid)

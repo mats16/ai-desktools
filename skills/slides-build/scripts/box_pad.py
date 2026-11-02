@@ -3,7 +3,7 @@
 # dependencies = ["pillow"]
 # ///
 """usage: uv run -q box_pad.py <deck.json> <画像のフォルダ> [ページ ...]   （--selftest で自己確認）
-箱の中の文字と、箱の下端の間を、Google が描いたページの画像（gslides.py check の p-NN.png）で測る。
+箱の中の文字と、箱の下端の間を、Google が描いたページの画像（gslides.py check の p-NN.webp）で測る。
 1 字分（その枠でいちばん小さい文字の大きさ）より狭いものを出す（slides-visual-027、deck-design「枠と文字の間は 1 字分」）。
 [slides-lint-019] JSON の行の高さの見積もりは ±0.4 in ずれるので、画像で測る。
 見るのは、塗りの箱の中にある、上寄せの 2 行以上の文字の枠と、白いカードの下端の真上にある 1 行の文字の枠。gslides.py check が呼ぶ。
@@ -80,7 +80,7 @@ PARALLEL = 4  # これより多くのページは、ページごとにプロセ�
 def check(p, folder, pages=None, workers=None):
     """戻りは [(見出し, 1 件), …]（ページの順）。"""
     rule, card = slides.theme_fixed(slides.mark_values(p))["RULE"], slides.deck_card(p)  # カードの地と枠線の色。デッキのテーマの値
-    todo = [i for i in range(1, len(p["slides"]) + 1) if (not pages or i in pages) and os.path.exists(f"{folder}/p-{i:02d}.png")]
+    todo = [i for i in range(1, len(p["slides"]) + 1) if (not pages or i in pages) and os.path.exists(f"{folder}/p-{i:02d}.webp")]
     if len(todo) <= PARALLEL and not workers:
         return [h for i in todo for h in page_hits(p, folder, i, rule, card)]
     from concurrent.futures import ProcessPoolExecutor
@@ -105,7 +105,7 @@ def page_hits(p, folder, i, rule, card):
     """i ページ目（1 から）の画像で測った指摘。"""
     out, s = [], p["slides"][i - 1]
     page_w = p["pageSize"]["width"]["magnitude"]
-    img = Image.open(f"{folder}/p-{i:02d}.png").convert("L")
+    img = Image.open(f"{folder}/p-{i:02d}.webp").convert("L")
     px = img.width / page_w  # EMU あたりの画素
     scheme = lint.scheme_of(p, s.get("slideProperties", {}).get("masterObjectId"))
     els = list(flatten(s.get("pageElements", [])))
@@ -194,7 +194,7 @@ def selftest():
             dr.rectangle((100, 100, 700, card_bottom), fill=255, outline=220)
             for y in (150, 190, 230, 255):
                 dr.rectangle((130, y, 600, y + 15), fill=60)
-            im.save(f"{d}/p-{n:02d}.png")
+            im.save(f"{d}/p-{n:02d}.webp", lossless=True)
         emu = lambda v: {"magnitude": v * 914400 / 120, "unit": "EMU"}
         frame = {"size": {"width": emu(600), "height": emu(160)}, "transform": {"scaleX": 1, "scaleY": 1, "translateX": 100 * 914400 / 120,
                                                                               "translateY": 120 * 914400 / 120, "unit": "EMU"},
@@ -212,7 +212,7 @@ def selftest():
         dr.rectangle((100, 100, 700, 420), fill=255, outline=220)
         for y in (150, 190, 230, 255, 400):  # 400 px の行は、枠（120〜280 px）の外の別の要素
             dr.rectangle((130, y, 600, y + 15), fill=60)
-        im.save(f"{d}/p-03.png")
+        im.save(f"{d}/p-03.webp", lossless=True)
         p["slides"] += [slide, slide]
         hits = check(p, d)
         assert len(hits) == 2 and hits[0][1].startswith("p1: 0.07") and hits[1][0] == CARD and hits[1][1].startswith("p4:"), hits
@@ -223,7 +223,7 @@ def selftest():
             dr = ImageDraw.Draw(im)
             dr.rectangle((100, 100, 700, bottom), fill=255, outline=220)
             dr.rectangle((130, 262, 300, 277), fill=60)
-            im.save(f"{d}/p-{n:02d}.png")
+            im.save(f"{d}/p-{n:02d}.webp", lossless=True)
         one = json.loads(json.dumps(frame))
         one["shape"]["text"]["textElements"][1]["textRun"]["content"] = "あ" * 10 + "\n"
         lows = []
@@ -239,7 +239,7 @@ def selftest():
         dr.rectangle((100, 100, 700, 420), fill=238)
         for y in (150, 190):
             dr.rectangle((130, y, 600, y + 15), fill=60)
-        im.save(f"{d}/p-01.png")
+        im.save(f"{d}/p-01.webp", lossless=True)
         panel = json.loads(json.dumps(card))
         panel["size"]["height"] = emu(320)
         panel["shape"]["shapeProperties"]["shapeBackgroundFill"]["solidFill"]["color"]["rgbColor"] = {"red": 238 / 255, "green": 237 / 255, "blue": 233 / 255}
@@ -256,7 +256,7 @@ def selftest():
             dr.rectangle((100, top, 700, bot), fill=238)
             for y in ys:
                 dr.rectangle((130, y, 600, y + 15), fill=60)
-            im.save(f"{d}/p-{n:02d}.png")
+            im.save(f"{d}/p-{n:02d}.webp", lossless=True)
         band = json.loads(json.dumps(panel))
         mid = json.loads(json.dumps(frame))
         mid["shape"]["shapeProperties"]["contentAlignment"] = "MIDDLE"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Google Slides の決まった操作（作るのは slides.py。ここは確かめると流用）。
 usage:
-  gslides.py check  <URL か ID> [--talk] [--all | --pages 3,5]   組んだあとの確認。JSON・テキスト・lint と、前に取ったときから変わったページの画像を /tmp/slides_<ID の先頭 8 字>/ に出し、
+  gslides.py check  <URL か ID> [--talk] [--all | --pages 3,5]   組んだあとの確認。JSON・テキスト・lint と、前に取ったときから変わったページの画像（p-NN.webp）を /tmp/slides_<ID の先頭 8 字>/ に出し、
                    画像で箱の下の余白を測る（box_pad.py）。取ったページと指摘を changed.json に書く。--all で全ページの画像（/deck-review の前などの区切り）
   gslides.py pages  <URL か ID>                    ページ番号・objectId・最初の文字を一覧にする
   gslides.py thumb  <URL か ID> <ページ番号> <出力.png>   Google が描いたページの画像（1600 × 900）を保存する
@@ -20,6 +20,7 @@ import gapi, lint, textlint
 from slides import STAMP, page_numbers, revision
 from gapi import DRIVE, PPTX, SLIDES, batch, file_id, folder_id, request, run, slide_ids, thumbnail, trash
 
+SHEET = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib", "sheet.py")
 THREADS = 6  # サムネイルを並べて取る数。12 枚で約 5 秒（2026-10-07 に測った。PDF に書き出して画像にするのと同じ）
 
 
@@ -57,16 +58,16 @@ def write_json(path, obj):
 
 
 def reuse_shots(d, ids, prev):
-    """前に取った画像（prev は p-NN.png ごとの、取ったときのページの objectId）のうち、今もあるページのものを今の番号に移し、古いものは消す。
+    """前に取った画像（prev は p-NN.webp ごとの、取ったときのページの objectId）のうち、今もあるページのものを今の番号に移し、古いものは消す。
     戻り: (取るページの番号, 前の画像を使ったページのうち番号の変わった数)。build は中身の変わったページを新しい ID で作るので、ID が同じなら中身も同じ。"""
-    have = {o: f"{d}/p-{m:02d}.png" for m, o in enumerate(prev, 1) if o and os.path.exists(f"{d}/p-{m:02d}.png")}
+    have = {o: f"{d}/p-{m:02d}.webp" for m, o in enumerate(prev, 1) if o and os.path.exists(f"{d}/p-{m:02d}.webp")}
     keep = {n: have[o] for n, o in enumerate(ids, 1) if o in have}
     for n, f in keep.items():
-        os.replace(f, f"{d}/.p-{n:02d}.png")  # 番号がずれると、移す先がまだ移していない画像のことがあるので、いったん別の名前にする
-    for f in glob.glob(f"{d}/p-*.png"):
+        os.replace(f, f"{d}/.p-{n:02d}.webp")  # 番号がずれると、移す先がまだ移していない画像のことがあるので、いったん別の名前にする
+    for f in glob.glob(f"{d}/p-*.webp"):
         os.remove(f)
     for n in keep:
-        os.replace(f"{d}/.p-{n:02d}.png", f"{d}/p-{n:02d}.png")
+        os.replace(f"{d}/.p-{n:02d}.webp", f"{d}/p-{n:02d}.webp")
     return [n for n in range(1, len(ids) + 1) if n not in keep], sum(n != prev.index(ids[n - 1]) + 1 for n in keep)
 
 
@@ -104,12 +105,14 @@ def cmd_check(src, *opts):
         textlint.log_run(r, pid)  # 要確認の残り方を textlint.py --stats で数える（desk-dreaming/run.md の 5）
     gapi.CLOCK.lap("lint")
     ids = [s["objectId"] for s in p["slides"]]
-    shots = f"{d}/shots.json"  # p-NN.png ごとの、取ったときのページの objectId
+    shots = f"{d}/shots.json"  # p-NN.webp ごとの、取ったときのページの objectId
     try:
         prev = json.load(open(shots))
     except (OSError, ValueError):  # ない、か書きかけで切れた（止まったときなど）。記録がないものとして全ページを取る
         prev = []
-    old = glob.glob(f"{d}/p-*.png")
+    for f in glob.glob(f"{d}/p-*.png") + glob.glob(f"{d}/p-*.webp.tmp"):  # WebP にする前やその途中で止まった回の PNG と書きかけ、前のバージョンの PNG。使わない
+        os.remove(f)
+    old = glob.glob(f"{d}/p-*.webp")
     moved, why = 0, None
     if "--pages" in opts and len(old) != len(ids):  # ページが増えたり減ったりしたあとは、番号がずれるので全部を取り直す
         print(f"ページの数が変わった（画像 {len(old)} 枚 → {len(ids)} 枚）ので、--pages を使わずに全ページを取り直す")
@@ -138,10 +141,27 @@ def cmd_check(src, *opts):
         man = ids
     write_json(shots, [None if n in want else o for n, o in enumerate(man, 1)])  # 取り終えるまで、取るページの画像は記録に入れない
     gapi.CLOCK.lap("リビジョンの確認")
+    for n in want:  # 取り直すページの前の画像（--pages では reuse_shots を通らないので残っている）。WebP にできなかったとき、古い画像を今の画像と取り違えない
+        if os.path.exists(f := f"{d}/p-{n:02d}.webp"):
+            os.remove(f)
     with ThreadPoolExecutor(THREADS) as ex:
         list(ex.map(lambda n: save_thumb(pid, ids[n - 1], f"{d}/p-{n:02d}.png"), want))
+    failed = []  # WebP にできず、画像のないページ
+    if want:  # Slides API は PNG でしか返さない。同じ画素の WebP（PNG の 4 割ほど）にして、会話に積もるバイトを減らす（Pillow が要るので uv）
+        try:
+            conv = subprocess.run(["uv", "run", "-q", SHEET, "--webp", *(f"{d}/p-{n:02d}.png" for n in want)], capture_output=True, text=True)
+        except OSError as e:  # uv がない・動かせない
+            conv = subprocess.CompletedProcess([], 1, "", f"uv を動かせない（{e}）")
+        if conv.returncode:  # 画像は p-NN.webp だけにする（PNG を混ぜると、読む側がどちらを読むかで取り違える）。この回のページは画像なし。記録に入れないので、次の check が取り直す
+            for n in want:
+                for f in (f"{d}/p-{n:02d}.png", f"{d}/p-{n:02d}.webp"):  # sheet.py が置き換えの途中で止まると、両方あるページも残る
+                    if os.path.exists(f):
+                        os.remove(f)
+            print(f"\n（ページの画像を WebP にできなかったので、この回に取ったページの画像はない: {conv.stderr.strip()[-300:]}。uv が要る。desk-doctor で確かめる）")
+            want, failed = [], want
     gapi.CLOCK.lap(f"画像 {len(want)} 枚")
-    write_json(shots, man)
+    if not failed:
+        write_json(shots, man)
     pad = subprocess.run(["uv", "run", "-q", os.path.join(os.path.dirname(os.path.abspath(__file__)), "box_pad.py"), f"{d}/deck.json", d, *map(str, want)],
                          capture_output=True, text=True) if want else None  # 箱の下端と文字の間は、JSON では見積もれないので画像で測る（Pillow が要るので uv）
     gapi.CLOCK.lap("box_pad")
@@ -151,12 +171,14 @@ def cmd_check(src, *opts):
         shown = f"全ページ（{why}）"
     else:
         shown = f"{len(want)} 枚（{'指定したページ' if '--pages' in opts else '前に取ったときから変わったページ'}）"
-        if len(want) < len(ids):
-            shown += f"。ほかの {len(ids) - len(want)} 枚は前の画像" + (f"（うち {moved} 枚は番号が変わったので、右下のページ番号だけ古い）" if moved else "")
-    print(f"\nテキスト: {d}/deck.md\n画像: {d}/p-NN.png。取ったのは {shown}: {', '.join(f'p{n}' for n in want) or 'なし'}\nJSON: {d}/deck.json\n変えたページ: {d}/changed.json")
+        if len(want) + len(failed) < len(ids):
+            shown += f"。ほかの {len(ids) - len(want) - len(failed)} 枚は前の画像" + (f"（うち {moved} 枚は番号が変わったので、右下のページ番号だけ古い）" if moved else "")
+    if failed:
+        shown += "。WebP にできず、この回の画像はない"
+    print(f"\nテキスト: {d}/deck.md\n画像: {d}/p-NN.webp。取ったのは {shown}: {', '.join(f'p{n}' for n in want) or 'なし'}" + (f"\n画像のないページ（WebP にできなかった）: {', '.join(f'p{n}' for n in failed)}" if failed else "") + f"\nJSON: {d}/deck.json\n変えたページ: {d}/changed.json")
     hits, pads = by_page((k, h) for k, hs in r.hits.items() for h in hs), by_page(re.findall(r"^\[(.+?)\] (.*)$", pad.stdout if pad else "", re.M))
     json.dump({"url": f"https://docs.google.com/presentation/d/{pid}/edit", "by": "check", "slides": len(ids), "lint_hard": hard, "deck_md": f"{d}/deck.md",
-               "pages": [{"page": n, "objectId": ids[n - 1], "image": f"{d}/p-{n:02d}.png", "lint": hits.get(n, []), "box_pad": pads.get(n, [])} for n in want]},
+               "pages": [{"page": n, "objectId": ids[n - 1], "image": f"{d}/p-{n:02d}.webp" if n in want else None, "lint": hits.get(n, []), "box_pad": pads.get(n, [])} for n in sorted(want + failed)]},
               open(f"{d}/changed.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     gapi.CLOCK.show("check ")
     if hard:
@@ -226,10 +248,10 @@ def selftest():
     import tempfile
     with tempfile.TemporaryDirectory() as d:
         for n, o in enumerate("abc", 1):
-            open(f"{d}/p-{n:02d}.png", "w").write(o)
+            open(f"{d}/p-{n:02d}.webp", "w").write(o)
         want, moved = reuse_shots(d, ["c", "x", "a"], ["a", "b", "c"])  # c を先頭に、b を消して x を足した
-        assert want == [2] and moved == 2 and sorted(os.listdir(d)) == ["p-01.png", "p-03.png"]
-        assert open(f"{d}/p-01.png").read() == "c" and open(f"{d}/p-03.png").read() == "a"
+        assert want == [2] and moved == 2 and sorted(os.listdir(d)) == ["p-01.webp", "p-03.webp"]
+        assert open(f"{d}/p-01.webp").read() == "c" and open(f"{d}/p-03.webp").read() == "a"
     check_selftest()
     hits = by_page([(lint.TWO_LINES, "p3 の見出し: 「x」"), ("絵文字", "p12: 「✅」"), ("扉", "13 枚。…")])
     assert hits == {3: [f"[{lint.TWO_LINES}] p3 の見出し: 「x」（見積もり）"], 12: ["[絵文字] p12: 「✅」"]}
@@ -250,9 +272,19 @@ def check_selftest():
 
     globals().update(request=lambda m, u, *a, **k: {"appProperties": {STAMP: "rev"}} if "/files/" in u else
                      {"title": "tmp", "slides": [{"objectId": o} for o in deck["ids"]]}, save_thumb=thumb, revision=lambda pid: "rev")
-    lint.lint_slides, subprocess.run = lambda *a, **k: 0, lambda *a, **k: subprocess.CompletedProcess(a, 0, "", "")
+    nowebp = []  # 中身があれば、sheet.py --webp が失敗する（uv か Pillow がない）
+
+    def run(cmd, **_):  # sheet.py --webp の代わりに、名前だけ変える（box_pad.py は何も出さない）
+        if "--webp" in cmd and nowebp:  # 置き換えの途中で止まった形（1 枚目は WebP にして PNG を消した）
+            os.replace(cmd[cmd.index("--webp") + 1], cmd[cmd.index("--webp") + 1][:-4] + ".webp")
+            return subprocess.CompletedProcess(cmd, 1, "", "Pillow がない")
+        for f in cmd[cmd.index("--webp") + 1:] if "--webp" in cmd else []:
+            os.replace(f, f[:-4] + ".webp")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    lint.lint_slides, subprocess.run = lambda *a, **k: 0, run
     shutil.rmtree(d, ignore_errors=True)
-    page = lambda n: open(f"{d}/p-{n:02d}.png").read()
+    page = lambda n: open(f"{d}/p-{n:02d}.webp").read()
     try:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             cmd_check(pid)
@@ -279,6 +311,16 @@ def check_selftest():
                 globals().update(revision=lambda pid: (_ for _ in ()).throw(gapi.ApiError("403")), request=req)
                 cmd_check(pid)
                 assert len(json.load(open(f"{d}/changed.json"))["pages"]) == 2
+            files = lambda: sorted(f for f in os.listdir(d) if f.startswith("p-"))
+            globals().update(revision=lambda pid: "rev", request=stamped)
+            cmd_check(pid, "--all")
+            nowebp.append(1)  # WebP にできなければ止まらず、この回のページは画像なし。--pages で残っていた古い画像も消す
+            cmd_check(pid, "--pages", "2")
+            assert [(x["page"], x["image"]) for x in json.load(open(f"{d}/changed.json"))["pages"]] == [(2, None)] and files() == ["p-01.webp"]
+            assert json.load(open(f"{d}/shots.json")) == ["c", None]  # 記録に入れないので、次の check が取り直す
+            nowebp.clear()
+            cmd_check(pid)
+            assert [x["page"] for x in json.load(open(f"{d}/changed.json"))["pages"]] == [2] and files() == ["p-01.webp", "p-02.webp"]
     finally:
         globals().update(real[0])
         lint.lint_slides, subprocess.run = real[1], real[2]

@@ -14,7 +14,7 @@ You are the reviewer of this material. Look with eyes other than the maker's and
 - Outline: <outline path>
 - Text: <text path> (below `### Notes:` are the speaker notes)
 - Images: open all p-* in <image folder>
-- Contact sheet: sheet*.png in <image folder> (all pages in 4 columns, with the number above each page)
+- Contact sheet: sheet*.webp in <image folder> (all pages in 4 columns, with the number above each page)
 
 ## Material type and audience
 <customer-facing, internal, or community>. The audience is <department, role, technical level>. <If the material aligns understanding with the customer (a regular meeting deck, a schedule, a progress list, a summary of action items), add the following sentence; for other materials, delete it: 「顧客と認識を合わせる資料なので、観点 3 で、こちらが紹介・提案しただけのもの（顧客と合意しておらず、顧客が言った・持ち帰ったものでもないもの）が、合意した予定と見分けられない形で本文・表・チャート・宿題に載っていないかも見る（`deck-writing` の customer-facing materials の deck-content-042）。」>
