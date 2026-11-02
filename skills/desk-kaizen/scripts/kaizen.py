@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""プラグインの改善を、過去の資料で確かめてから Issue にする（手順は ../SKILL.md）。ワークスペース（探し方は ../../../lib/desk.py）で回す。
+"""プラグインの改善を、過去の資料で確かめてから Issue にする（手順は ../SKILL.md）。ワークスペース（探し方は desk.py。desk-init のものの写し）で回す。
 usage:
   kaizen.py start   <名前>                          元のリポジトリ（plugin.json の repository）を clone して kaizen/<名前> のブランチを作る。前の版（main）も写す
   kaizen.py lint    <名前> <資料の URL ...>          いまの資料の JSON に、前の版と変えた版の lint をかけて比べる
@@ -18,16 +18,17 @@ from functools import cached_property
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gapi
 
 SECTIONS = ("## 変えること", "## 理由", "## 背景", "## 過去資料での検証", "## 影響", "## 迷ったところ")
 MAX_BODY = 60000  # GitHub の Issue の本文は 65536 字まで
-DESIGN = re.compile(r"skills/(deck-design/(slides|docs)\.md|slides-build/(scripts/(slides|template|box_pad)\.py|assets/)|docs-build/scripts/(docs|doc_layout)\.py)|lib/brand\.py")  # 見た目が変わりうるファイル
+DESIGN = re.compile(r"skills/(deck-design/(slides|docs)\.md|google-slides/(scripts/(slides|template|box_pad|brand|notes)\.py|assets/)|google-docs/(scripts/(docs|doc_layout)\.py|assets/))")  # 見た目が変わりうるファイル
 URL_ID = re.compile(r"https://docs\.google\.com/(?:presentation|document)/d/([\w-]+)")
 COUNT = re.compile(r"^== (要修正|要確認)[^:]*: (\d+)(?:（[^）]*）)? ==$", re.M)  # 「== 要確認: 16（うち見積もり 11。画像で確定する） ==」も
 HIT = re.compile(r"^\[(.+?)\] (.*)$", re.M)
-REPO = json.loads((Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json").read_text())["repository"].removeprefix("https://github.com/")  # Issue を出すリポジトリ
+MANIFEST = Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json"  # プラグインとして入れたときの定義。スキルを 1 つずつ入れた先（Unity Gateway skills など）にはないので、そのときは元のリポジトリ
+REPO = (json.loads(MANIFEST.read_text())["repository"] if MANIFEST.is_file() else "https://github.com/mats16/ai-desktools").removeprefix("https://github.com/")  # Issue を出すリポジトリ
 MAIN = "origin/main"  # 差分の起点（start が REPO から clone する）
 AUTH = ("-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential")  # git に設定がなくても、gh のログインで push する
 SIDES = ("base", "head")
@@ -42,7 +43,7 @@ CHANGED_ID = re.compile(r"\[((?:ws-)?[a-z][\w-]*?-\d{3})\]")
 SKIP = shutil.ignore_patterns(".git", "docs", "tests", "sandbox", "__pycache__")  # 子に渡すプラグインの写し。docs/fixtures の「見るところ」（答えの基準）を子に見せない
 SELECT = Path(__file__).resolve().parents[1] / "prompt_select.md"
 UNATTENDED = "\n\n人のいない実行なので、確かめたいことがあっても聞かずに、依頼に書いてあることから決めて最後まで書く。決めたことは最後の返事に書く。"  # 確かめの決まり（deck-flow-003）をそのまま守って止まる子がいた（2026-10-30、GPT）
-REPLAY = ("desk-tools のスキル（deck-workflow と slides-build）に従い、{folder}/{outline} の構成で、スライドを JSON のページで書き直してください。"
+REPLAY = ("desk-tools のスキル（deck-workflow と google-slides）に従い、{folder}/{outline} の構成で、スライドを JSON のページで書き直してください。"
           "構成はもう決まっています。聞き手への確認、構成案のレビュー、代表の 3 枚のレビュー、/deck-review はせず、Google で組むことも画像を取ることもしないでください。"
           "{folder}/build/ に deck.json と各ページの JSON を書き、slides.py lint deck.json の要修正を 0 にしたところで止めてください。")
 
@@ -92,7 +93,7 @@ class Work:
         f.write_text(json.dumps(labels, ensure_ascii=False, indent=1))
         return labels[key]
 
-    def scripts(self, side, skill="slides-build"):
+    def scripts(self, side, skill="google-slides"):
         return (self.base if side == "base" else self.repo) / "skills" / skill / "scripts"
 
     def log(self, detail, public):
@@ -138,7 +139,7 @@ def lint_cmd(w, urls):
         kind, data = ("ドキュメント", gapi.request("GET", f"{gapi.DOCS}/{fid}")) if "/document/" in url else ("スライド", gapi.request("GET", f"{gapi.SLIDES}/{fid}"))
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
             json.dump(data, f)
-        skill, script = ("docs-build", "doc_lint.py") if kind == "ドキュメント" else ("slides-build", "lint.py")
+        skill, script = ("google-docs", "doc_lint.py") if kind == "ドキュメント" else ("google-slides", "lint.py")
         outs = [sh(sys.executable, w.scripts(side, skill) / script, f.name, cwd=w.ws, env={"DESK_VERIFY": "1"}, check=False).stdout for side in ("base", "head")]
         os.unlink(f.name)
         detail, public = report(w.label(url), kind, *compare(*outs), title=f"{data.get('title', '')} {url}")
@@ -167,7 +168,7 @@ def rebuild(w, folders, pages=None, keep=False):
         made, outs, shots = [], [], {}
         try:
             for side in ("base", "head"):
-                s = w.scripts(side, "slides-build" if slides else "docs-build")
+                s = w.scripts(side, "google-slides" if slides else "google-docs")
                 r = sh(sys.executable, s / ("slides.py" if slides else "docs.py"), "new", out_dir, f"{time.strftime('%Y%m%d')}_検証_{w.name}_{label.replace(' ', '')}_{side}", cwd=build, env={"DESK_VERIFY": "1"})
                 fid = URL_ID.findall(r.stdout)[-1]
                 made.append(fid)
@@ -184,7 +185,7 @@ def rebuild(w, folders, pages=None, keep=False):
                 continue  # 選んでいないページと、前後で同じ画像のページ
             num = re.sub(r"\D", "", label)  # f-string の中の \ は Python 3.12 から
             out = img / f"deck{num}_p{page}.png"  # エージェントが読み書きするファイルは英数字の名前
-            sh("uv", "run", "-q", w.repo / "lib" / "sheet.py", out, shots["base"][n], shots["head"][n], "--cols", "2", "--width", "800")
+            sh("uv", "run", "-q", w.repo / "skills" / "google-slides" / "scripts" / "sheet.py", out, shots["base"][n], shots["head"][n], "--cols", "2", "--width", "800")
             changed.append((page, out))
         detail, public = report(label, "スライド" if slides else "ドキュメント", *compare(*outs), title=str(folder))
         pics = "変わったページ: " + (", ".join(f"p{p}" for p, _ in changed) or "なし") + "（左が前の版、右が変えた版）\n\n" + "".join(f"<!-- img:{o.name} -->\n" for _, o in changed)
@@ -366,7 +367,7 @@ def lint_build(plugin, build):
     """変えた版の lint を、組まずに手元で（どちらの出力も同じ物差しで数える）。回らなければ None。"""
     if not build:
         return None
-    out = sh(sys.executable, plugin / "skills" / "slides-build" / "scripts" / "slides.py", "lint", "deck.json", "--all", cwd=build, env={"DESK_VERIFY": "1", "DESK_CONFIG": ""}, check=False).stdout  # --all: 既定は前に回したときから変わったページだけで、書く役の最後の lint のあとでは、ほとんどのページを見ない
+    out = sh(sys.executable, plugin / "skills" / "google-slides" / "scripts" / "slides.py", "lint", "deck.json", "--all", cwd=build, env={"DESK_VERIFY": "1", "DESK_CONFIG": ""}, check=False).stdout  # --all: 既定は前に回したときから変わったページだけで、書く役の最後の lint のあとでは、ほとんどのページを見ない
     return out if COUNT.search(out) else None
 
 
@@ -664,14 +665,14 @@ def selftest():
     detail, public = report("資料 1", "スライド", cb, ca, delta, gone, new, title="Acme様_秘密の資料")
     assert "Acme" in detail and "Acme" not in public and "✅" not in public  # Issue には資料の名前も本文も出さない
     body = "\n".join(SECTIONS)
-    assert check_body(body, ["skills/slides-build/scripts/lint.py"], "x", []) == []
+    assert check_body(body, ["skills/google-slides/scripts/lint.py"], "x", []) == []
     assert len(check_body(body, ["skills/deck-design/slides.md"], "x", [])) == 2  # 見た目なのに画像がない。決まりの文なのに走らせていない
     probe_ok = f"{PROBE}（claude、モデル: x、変えた版 abc1234）\n\n- 比べた依頼: 2 本（両方が出し切って lint が回ったもの）\n- 見立て: 効いた\n"
     assert len(check_body(body, ["skills/deck-design/slides.md"], probe_ok, [], "abc1234")) == 1  # 画像がないだけ
     assert len(check_body(body, ["skills/deck-design/slides.md"], probe_ok, [], "def5678")) == 2  # 前の commit の probe は数えない
     assert len(check_body(body, ["skills/deck-design/slides.md"], probe_ok.replace("2 本", "0 本").replace("効いた", "害が出た（変えた版だけ出し切れなかった: 試し）"), [], "abc1234")) == 2  # 比べた依頼がなければ数えない
     assert COUNT.findall("== 要修正: 0 ==\n== 要確認: 16（うち見積もり 11。画像で確定する） ==\n") == [("要修正", "0"), ("要確認", "16")]
-    assert len(check_body("## 理由", ["skills/slides-build/scripts/lint.py"], "", [])) == 6  # 節が 5 つと、検証がない
+    assert len(check_body("## 理由", ["skills/google-slides/scripts/lint.py"], "", [])) == 6  # 節が 5 つと、検証がない
     assert check_body(body + "\n検証しない理由: 文の直しだけ", ["skills/desk-dreaming/SKILL.md"], "", []) == []
     urls = {"deck1_p2.png": "u1", "sample_p1.png": "u2"}
     placed = place_images("### 組み直し\n\n<!-- img:deck1_p2.png -->\n", urls)
@@ -679,7 +680,7 @@ def selftest():
     assert place_images("x\n<!-- img:deck1_p2.png -->\n", {"deck1_p2.png": "u1"}) == "x\n![deck1_p2.png](u1)\n"  # みな目印があれば、末尾には足さない
     full = issue_body(body, ["skills/x.md"], "abc1234", "### lint\n", "+++ b/skills/x.md\n+顧客向けの資料\n")
     assert full.index("## 検証の記録") < full.index("`abc1234`") < full.index("## 変更案の差分") and "+顧客向けの資料" in full
-    assert binary_files("3\t1\tskills/x.md\n-\t-\tskills/slides-build/assets/gcp/a b.png\n") == ["skills/slides-build/assets/gcp/a b.png"]
+    assert binary_files("3\t1\tskills/x.md\n-\t-\tskills/google-slides/assets/gcp/a b.png\n") == ["skills/google-slides/assets/gcp/a b.png"]
     long = issue_body(body, [], "abc1234", "", "+x\n" * MAX_BODY)
     assert "載せていない" in long and "+x" not in long  # 長い差分は載せない
     fenced = issue_body(body, [], "abc1234", "", " ````` 前からある行\n+x\n")

@@ -6,7 +6,7 @@
 
 ## 中身
 
-スキルは、中身の種類で 6 つの組に分ける。ほかのスキルはスキルの名前で呼び、その中のファイルは指さない（[決めたこと](docs/decisions.md) の 2026-10-31）。スキルで共有するコードは `lib/` に置く。
+スキルは、中身の種類で 6 つの組に分ける。ほかのスキルはスキルの名前で呼び、その中のファイルは指さない（[決めたこと](docs/decisions.md) の 2026-10-31）。どのスキルも、1 つだけ入れても動く（Unity Gateway skills のように、スキルを 1 つずつ配っても動かすため。2026-11-02）。いくつかのスキルが使うスクリプト（Google の API の `gapi.py`、ワークスペースの探し方の `desk.py` など）は、持ち主のスキルに 1 つ置き、ほかのスキルは同じ中身の写しを自分の `scripts/` に持つ（直すのは持ち主だけで、`tests/skills/check.py --sync` が写す）。道具のスキルは、動かす先の名前にする（`google-slides`・`google-docs`・`google-vids`。2026-11-02 まで `slides-build`・`docs-build`・`vids-build`）。
 
 | 組 | スキル | すること |
 |---|---|---|
@@ -14,10 +14,9 @@
 | 進め方 | `deck-review` | 返す前の全体のレビュー。会話を渡さない新しいサブエージェント（メインと同じモデルと effort）に頼む。`SKILL.md` はラウンドの流れと手順ごとに開くファイルの表だけで、頼み方は `ask.md`、指摘の確かめと直し方は `fix.md`、直しを子に分けるときは `prompt_fix.md`。子への依頼文は形式ごと（`prompt_slides.md`・`prompt_doc.md`）と出典の照合（`prompt_sources.md`） |
 | 知見 | `deck-writing` | どの資料にも効く、中身と言葉の判断の軸と、良い資料とは何をするものかの企画書（鉄則と 6 つに聞き手の立場に合わせることを足したもの、初見の読み手が少ない手間で分かる、言い切る範囲は根拠まで、口に出して通じる言葉、聞き手に要るものだけ）。決まりが決めていないこと（何をつかませるか、どの関係を図で見せるか）を決める。資料の種類ごとの中身・見出し・1 ページの中身・言葉と「文体」・出典の書き方（`content.md`、種類ごとの `content_customer.md`・`content_internal.md`・`content_explain.md`）も持つ |
 | 知見 | `deck-design` | どの資料にも効く、見た目（意匠）の知見。デザインの専門家の考え方から出した原則（そのページで最も伝えたいことに最も合うデザインを探る、強調は相対的、同じか、はっきり違うか、効く範囲でいちばん小さい差、空きでまとめる、ひと目で要点）と、そこから出るベストプラクティス（強調の 1 点、分類と強調の色、形はページごとで枠はそろえる〔slides-visual-048・049〕、強調の手段、階層、配色、地、矢印）。指示として残すのは、測れるものは部品と lint に任せることと、何から順に従うかだけ。形式ごとの値と、和文の組み方・AI が作ったように見えるくせは `slides.md`（スライド）・`docs.md`（ドキュメント） |
-| 道具 | `slides-build` | Google Slides を、宣言的に書くページの JSON から組む（`slides.py`）・確かめる（`gslides.py check`・`lint.py`）。ページの JSON は `pages.md`、図・矢印・ガント・棒グラフの書き方は `diagrams.md`、コマンドは `commands.md`、テーマは `themes.md`、画像は `images.md`、lint の読み方は `lint.md`、Slides API の落とし穴は `api.md`、pages.py と pptx の古いデッキは `legacy.md`。会社のテンプレートから AI Desk Tools のテンプレート（テーマ）を作る・既定のテーマを替える（`template.md`、3 つの場合は `template_create.md`、暗い本文は `template_dark.md`、書体は `template_fonts.md`。`template.py audit`）。使い回す画像は `assets/`、一通りの書き方を入れた JSON のページの見本は `samples/json/` |
-| 道具 | `docs-build` | Google Docs を `build/doc.md` から組む・確かめる（`docs.py`・`doc_lint.py`・`doc_layout.py`）。lint の読み方は `lint.md`、Docs API の落とし穴は `api.md`、テーマのファイルは `themes.md`、テンプレートから書く・作るは `templates.md`。テンプレートはワークスペースのレシピのフォルダ（`recipes/<レシピ>/templates/`） |
-| 道具 | `vids-voice` | Google Vids の AI の読み上げ（voiceover）の台本を書く。台本の置き場所は、元の Google Slides の各ページのスピーカーノート。声の長さと間も、Vids の画面でなく台本（字数・audio tags）で直す。資料はノートなしで組み、ノートは頼まれたときだけ、組んだあとに資料全体の台本としてまとめて書く。ノートのある資料も、この手順で書き直す。スライドを読み上げず動画全体の筋を通し、Vids が読む audio tags を入れる。言語によらない決まりは `SKILL.md`、言語に結びつく決まり（文体、字数、読み、記号、ほかのシーンの指し方、タグの置き場所）は `ja.md`・`en.md`（lint は `--lang`）。スライドは組み直さず、ノートだけを書き換える（`speaker_notes.py pull`・`lint`・`push`。前のノートは `build/notes_before_<日付>.json` に控える） |
-| 道具 | `vids-build` | ベータ版（Vids の編集の公開の API がまだないので、Vids の画面と同じ内部の呼び出しを使う。呼び出しは 1 つのファイルにまとめてあり、公開の API が出たら、そのファイルだけを差し替える）。動画は、作るとはっきり頼まれたときだけ、組んだ Google Slides から Google Vids で作る。スピーカーノートが変わったら、頼まれなくても、その資料から作った動画の変わったシーンだけを差し替える。ページを足した・消した・直したときは動画を追わせず、頼まれたら作り直す（新しい Vids に作るか、`--vids` で同じ Vids の中身を消して組み直す）（`vids.py create`・`update`・`check`・`voices`・`download`）。動画は資料そのものから作り、動画のための Slides の写しを作らない。全ページをシーンにし、各ページのスピーカーノートを Conversational voice（既定は Elio。audio tags が効く）で読ませる。指定したページだけ AI avatar（Conversational voices で話す 30 体）に読ませることもでき、ページの空いた隅に丸く置く（`vids.py layout` で置き方を決め、円を描いた一覧の画像で確かめる）。動画は Slides と同じフォルダに作る。Vids の編集には公開の API がないので、対象の Google アカウントにログイン済みの Chrome のタブの中から、Vids の画面と同じ内部の呼び出しを使う（`internal_api.md`） |
+| 道具 | `google-slides` | Google Slides を、宣言的に書くページの JSON から組む（`slides.py`）・確かめる（`gslides.py check`・`lint.py`）。ページの JSON は `pages.md`、図・矢印・ガント・棒グラフの書き方は `diagrams.md`、コマンドは `commands.md`、テーマは `themes.md`、画像は `images.md`、lint の読み方は `lint.md`、Slides API の落とし穴は `api.md`、pages.py と pptx の古いデッキは `legacy.md`。会社のテンプレートから AI Desk Tools のテンプレート（テーマ）を作る・既定のテーマを替える（`template.md`、3 つの場合は `template_create.md`、暗い本文は `template_dark.md`、書体は `template_fonts.md`。`template.py audit`）。使い回す画像は `assets/`、一通りの書き方を入れた JSON のページの見本は `samples/json/` |
+| 道具 | `google-docs` | Google Docs を `build/doc.md` から組む・確かめる（`docs.py`・`doc_lint.py`・`doc_layout.py`）。lint の読み方は `lint.md`、Docs API の落とし穴は `api.md`、テーマのファイルは `themes.md`、テンプレートから書く・作るは `templates.md`。テンプレートはワークスペースのレシピのフォルダ（`recipes/<レシピ>/templates/`） |
+| 道具 | `google-vids` | ベータ版（Vids の編集の公開の API がまだないので、Vids の画面と同じ内部の呼び出しを使う。呼び出しは 1 つのファイルにまとめてあり、公開の API が出たら、そのファイルだけを差し替える）。動画は、作るとはっきり頼まれたときだけ、組んだ Google Slides から Google Vids で作る。スピーカーノートが変わったら、頼まれなくても、その資料から作った動画の変わったシーンだけを差し替える。ページを足した・消した・直したときは動画を追わせず、頼まれたら作り直す（新しい Vids に作るか、`--vids` で同じ Vids の中身を消して組み直す）（`vids.py create`・`update`・`check`・`voices`・`download`）。動画は資料そのものから作り、動画のための Slides の写しを作らない。全ページをシーンにし、各ページのスピーカーノートを Conversational voice（既定は Elio。audio tags が効く）で読ませる。指定したページだけ AI avatar（Conversational voices で話す 30 体）に読ませることもでき、ページの空いた隅に丸く置く（`vids.py layout` で置き方を決め、円を描いた一覧の画像で確かめる）。動画は Slides と同じフォルダに作る。Vids の編集には公開の API がないので、対象の Google アカウントにログイン済みの Chrome のタブの中から、Vids の画面と同じ内部の呼び出しを使う（`internal_api.md`）。動画の台本（`voice.md`）: Google Vids の AI の読み上げ（voiceover）の台本を書く。台本の置き場所は、元の Google Slides の各ページのスピーカーノート。声の長さと間も、Vids の画面でなく台本（字数・audio tags）で直す。資料はノートなしで組み、ノートは頼まれたときだけ、組んだあとに資料全体の台本としてまとめて書く。ノートのある資料も、この手順で書き直す。スライドを読み上げず動画全体の筋を通し、Vids が読む audio tags を入れる。言語によらない決まりは `voice.md`、言語に結びつく決まり（文体、字数、読み、記号、ほかのシーンの指し方、タグの置き場所）は `voice_ja.md`・`voice_en.md`（lint は `--lang`）。失敗したときの見方は `failures.md`。スライドは組み直さず、ノートだけを書き換える（`speaker_notes.py pull`・`lint`・`push`。前のノートは `build/notes_before_<日付>.json` に控える） |
 | 材料 | `customer-profile` | 顧客の profile（`Customers/<顧客>/profile.md`。事業、組織、技術の構成、エンジニアの好みと文化、いまの取り組み）を `[sources]` と公開の情報から作る・取り直す・書き足す。ユーザーが言った行は残す |
 | 材料 | `desk-crawl` | 定期に回す集めの作業で、どの先をいつ読むかを決め、回ごとに学ぶ（`crawl.py`）。読む先は Slack のチャンネルと検索、メールの検索、RSS・Atom、web のページと検索、wiki のページ。値打ちの低い先は間を空けて読み（前に読んだ所から取り戻すので落とさない）、取りこぼしの元と新しい先を先に試し、子に浅く読ませて（題・リンク・要約・見えた先）候補を 1 つにまとめる。使う側が返す、使ったものと取りこぼしから学ぶ。何を選ぶか・何を書くか（関心）と、調べて出典を残すことは持たない。記録は `.desk/crawl/<話題>/` |
 | 指摘から育てる | `desk-feedback` | ユーザーの修正の指示から学ぶ。その指示が誰にとって正しいか（この資料だけ・この顧客・この人や組織の環境・誰にでも効く知見）を見立て、台帳に見立てごと残し（`ledger.py add --scope`）、それぞれの置き場所（構成案、顧客の memory、レシピ、プラグインへの提案）に、合う形（知見なら原則と理由、個別の事情なら「〜のときは〜する（理由）」、数えられるものは点検）で書く（`SKILL.md`）。記録と戻し先・決まりの ID・hook のレシピの出し方・顧客の memory・決まりの確かめ方は `routing.md`、レシピの分け方と書き方・組み直しは `recipes.md` |
@@ -25,16 +24,17 @@
 | 指摘から育てる | `desk-kaizen` | プラグインの改善を、過去の資料で前後を比べてから Issue にする（理由・背景・検証の結果・見た目なら画像・変更案の差分）。PR は持ち主が作る |
 | 指摘から育てる | `desk-research` | 資料づくりのベストプラクティスの調べ直し。調べた記録（`state.md`・`log/`）はワークスペースの `Research/deck_research/` |
 | 環境 | `desk-init` | ワークスペースを作る（desk.toml・references_index.md・drive_folders.md・recipes/ の雛形と資料のフォルダ。AGENTS.md・CLAUDE.md は置かない。どのフォルダに何を置くかも持つ。設定の desk.toml は、ワークスペースか `~/.desk.toml` に置く。あるファイルは上書きしない） |
-| 環境 | `desk-doctor` | 前提を確かめる（Python・uv、使っている設定とワークスペース、スキルの重なり、Google の認証、テンプレートと Drive のフォルダ、gh） |
-| 環境 | `desk-migrate` | 前の版で作ったワークスペースを今の版へ移す（`rules/` の移動、決まりの ID とパスの書き換え、`rules/` から `recipes/<名前>/RECIPE.md` への移し。先に `.desk/migrate/` に控えを取る）。全体に入れるときは、ワークスペースの `desk.toml` を `~/.desk.toml` に移す（`to-user`）。2026-10-31 のスキルの組み直しで変わった名前とパスも、ワークスペースの文と台帳で書き換える |
+| 環境 | `desk-doctor` | 前提を確かめる（Python・uv、使っている設定とワークスペース、スキルの重なり、Google の認証、Drive のフォルダ、gh）。テーマとテンプレートは、道具のスキルの `slides_doctor.py`（`google-slides`）と `docs_doctor.py`（`google-docs`）が見る |
+| 環境 | `desk-migrate` | 前の版で作ったワークスペースを今の版へ移す（`rules/` の移動、決まりの ID とパスの書き換え、`rules/` から `recipes/<名前>/RECIPE.md` への移し。先に `.desk/migrate/` に控えを取る）。全体に入れるときは、ワークスペースの `desk.toml` を `~/.desk.toml` に移す（`to-user`）。2026-10-31 のスキルの組み直しと、2026-11-02 のスキルの名前の替え（`google-*`）と `lib/` をやめたことで変わった名前とパスも、ワークスペースの文と台帳で書き換える |
 
 ```
 INSTALL.md                        会話で入れるときに、エージェントが読む手順（README の「会話で入れる」）
 .claude-plugin/plugin.json        Claude Code のプラグイン（Codex もこれを読む）
 .claude-plugin/marketplace.json   このリポジトリをそのままマーケットプレイスにする
 package.json                      pi のパッケージ（pi.skills: ./skills）
-skills/                           上の 17 個（Claude Code・Codex・pi で共通）
-lib/                              スキルと hook で共有するコード（desk.py・gapi.py・brand.py・textlint.py・sheet.py・ledger.py・refs.py、subtree で取り込んだ yomiyasu/）。スキルではない
+skills/                           上の 16 個（Claude Code・Codex・pi で共通）
+vendor/yomiyasu/                  subtree で取り込んだ yomiyasu（中は直さない）。スキルではない。動かすのに要るファイルだけを、使うスキルの scripts/yomiyasu/ に写す
+tests/skills/check.py             スキルの形の点検。--sync で、共有のスクリプトを持ち主から写しへ写す
 hooks/hooks.json                  Claude Code と Codex の hook（プラグインのファイルを読むかスキルを呼んだら、その作業のレシピ〔recipes/〕を、顧客の資料を読んだら memory.md を続けて出す）
 hooks/rules_overlay.py            その中身（Claude Code・Codex・pi で共有）
 extensions/rules.ts               pi の拡張（同じことを pi の read・bash で）
@@ -105,17 +105,17 @@ pi install git:github.com/mats16/ai-desktools        # git から
 
 ## ワークスペース
 
-資料を置くフォルダ（例: `~/Documents`）。スクリプトと hook は、今いるフォルダから上へたどって最初に見つかった `desk.toml` のフォルダをワークスペースとして扱う。見つからなければ `~/.desk.toml`（環境変数 `DESK_CONFIG` で場所を替えられる）を読み、その `workspace` をワークスペースにする。見つかった 1 つだけを読み、混ぜない（`lib/desk.py`）。`desk-init` が置くもの:
+資料を置くフォルダ（例: `~/Documents`）。スクリプトと hook は、今いるフォルダから上へたどって最初に見つかった `desk.toml` のフォルダをワークスペースとして扱う。見つからなければ `~/.desk.toml`（環境変数 `DESK_CONFIG` で場所を替えられる）を読み、その `workspace` をワークスペースにする。見つかった 1 つだけを読み、混ぜない（`desk-init` の `scripts/desk.py`）。`desk-init` が置くもの:
 
-- `desk.toml`（`~/.desk.toml` に置くときは、ワークスペースには置かない）: 人ごとに変わる値（資料を作る言語〔`[desk] default_language`。書かなければ `ja`〕、認証、テンプレート〔`[slides.templates]`: テーマの名前 = テンプレートの URL〕と社名、Drive の置き場所、材料を集める道具〔`[sources]`: 社内の検索・チャット・会議の記録・wiki など〕、レビューの進め方〔`[review]`: 構成を決めたあとを誰が見るか、`/deck-review` のラウンドの上限〕、返したあとにコメントを見張る期間〔`[feedback.google_comments] watch_hours`。0 か書かなければ見張らない〕）。テンプレートは `slides-build/scripts/template.py navy --from-base`（`white`・`blue` も）で作ると URL が書き込まれる。元にするテンプレートは `desk.toml` に持たず、`--from-base <元の URL>` で渡す。渡さなければ、白紙の pptx（`slides-build/assets/blank.pptx`）を Google Slides に変換して上げ、そこから作る。会社で配るテーマは全社の共有テーマのフォルダ（`[drive] shared_themes`）に置き、使う人は `slides.py themes` で見つけて `slides.py theme <url>` で写す（`slides-build/themes.md`）。
-- `themes/slides/<名前>.json`: テーマのファイル（`kind: theme`。色・書体・著作権表示・表紙と扉のパターンと、使い分けの `description`。エージェントが `slides.py themes` の一覧から資料ごとに選ぶ）。組み込みの navy・white・blue はプラグインの `slides-build/themes/` にあり、同じ名前のファイルを置くとそちらが勝つ。desk-init は置かない（会社のテーマを作るとき〔`slides-build` の `template.md`〕と、共有のテーマを写すときにできる）。
+- `desk.toml`（`~/.desk.toml` に置くときは、ワークスペースには置かない）: 人ごとに変わる値（資料を作る言語〔`[desk] default_language`。書かなければ `ja`〕、認証、テンプレート〔`[slides.templates]`: テーマの名前 = テンプレートの URL〕と社名、Drive の置き場所、材料を集める道具〔`[sources]`: 社内の検索・チャット・会議の記録・wiki など〕、レビューの進め方〔`[review]`: 構成を決めたあとを誰が見るか、`/deck-review` のラウンドの上限〕、返したあとにコメントを見張る期間〔`[feedback.google_comments] watch_hours`。0 か書かなければ見張らない〕）。テンプレートは `google-slides/scripts/template.py navy --from-base`（`white`・`blue` も）で作ると URL が書き込まれる。元にするテンプレートは `desk.toml` に持たず、`--from-base <元の URL>` で渡す。渡さなければ、白紙の pptx（`google-slides/assets/blank.pptx`）を Google Slides に変換して上げ、そこから作る。会社で配るテーマは全社の共有テーマのフォルダ（`[drive] shared_themes`）に置き、使う人は `slides.py themes` で見つけて `slides.py theme <url>` で写す（`google-slides/themes.md`）。
+- `themes/slides/<名前>.json`: テーマのファイル（`kind: theme`。色・書体・著作権表示・表紙と扉のパターンと、使い分けの `description`。エージェントが `slides.py themes` の一覧から資料ごとに選ぶ）。組み込みの navy・white・blue はプラグインの `google-slides/themes/` にあり、同じ名前のファイルを置くとそちらが勝つ。desk-init は置かない（会社のテーマを作るとき〔`google-slides` の `template.md`〕と、共有のテーマを写すときにできる）。
 - `recipes/<名前>/RECIPE.md`: 資料を作る・材料を集めるときだけ要る、このワークスペースの決まり（レシピ）。頭の frontmatter に、いつ使うか（`description`）を書く。作るもの（`targets`）と資料の種類（`audience`）で絞り、出し方（資料ごとに選ぶ `per_material: true`、材料集めの `step: gather`、組むときの `step: build`、書かなければどの作業でも）を書く。同じフォルダに、使うテンプレート（`templates/`）と点検（`checks.py`）を置く（下の「決まりの置き場所と育て方」）。
 - `Customers/<顧客>/memory.md`: その顧客の資料への好み（どう作るか。相手が何者かは `profile.md`）（顧客の memory）。その顧客の資料の `構成案*.md` などを開くと、hook が続けて出す。
 - `Customers/<顧客>/profile.md`: その顧客の事業・組織・技術の構成・エンジニアの好み（顧客の profile。行ごとに出典と日付）。`customer-profile` が作り、顧客向けの資料の作り始めに読む。30 日より古ければ取り直す。
-- `Customers/`・`Internal/`・`Research/`、`references_index.md`・`drive_folders.md`: 資料と台帳。資料のフォルダの `references.md`（出典の台帳。出典ごとに S の ID。資料に結びつかない出典は `Research/references.md`）と構成案の「出典の表」（ページに出す事実の台帳。事実ごとに F の ID）は `lib/refs.py` が足し、確かめる。全体の索引 `references_index.md` は、`refs.py index` がすべての `references.md` から作り直す（手で直さない）。`drive_folders.md` は Google Drive の置き場所と上げた資料で、手で足す。`Research/deck_research/` は `desk-research` の調べ直しの記録（`state.md`・`log/`。代表の 3 枚の選び方の記録も）。
-- `.desk/`: スクリプトが書く記録。`ledger.jsonl`（決まりの台帳。修正の指示、決まりの ID ごとの出典と再発、desk-dreaming の提案・適用・却下とプラグインへの提案の Issue、判断待ちと答え、deck-review の指摘の結果。`lib/ledger.py` が読み書きする）、`lint_runs.jsonl`（`lint.py --stats` が読む）、`spec_raw.jsonl`（JSON のページの形の外の書き方の数。`slides.py stats` が読む）、`dreaming/last_run`・`dreaming/log/`・`dreaming/backup/`、`profile/`（`customer-profile` が取り直す前の顧客の profile）、`comments.json`（`deck-workflow` の `comments.py` が前に取った時刻・送った返信・見張りの起点・見張りの知らせのコメントを残す）、`crawl/<話題>/`（`desk-crawl` の読む先の台帳 `sources.json`、回の記録 `runs.jsonl`、その回の読み方 `plan.json`）。
+- `Customers/`・`Internal/`・`Research/`、`references_index.md`・`drive_folders.md`: 資料と台帳。資料のフォルダの `references.md`（出典の台帳。出典ごとに S の ID。資料に結びつかない出典は `Research/references.md`）と構成案の「出典の表」（ページに出す事実の台帳。事実ごとに F の ID）は `deck-workflow` の `scripts/refs.py` が足し、確かめる。全体の索引 `references_index.md` は、`refs.py index` がすべての `references.md` から作り直す（手で直さない）。`drive_folders.md` は Google Drive の置き場所と上げた資料で、手で足す。`Research/deck_research/` は `desk-research` の調べ直しの記録（`state.md`・`log/`。代表の 3 枚の選び方の記録も）。
+- `.desk/`: スクリプトが書く記録。`ledger.jsonl`（決まりの台帳。修正の指示、決まりの ID ごとの出典と再発、desk-dreaming の提案・適用・却下とプラグインへの提案の Issue、判断待ちと答え、deck-review の指摘の結果。`desk-feedback` の `scripts/ledger.py` が読み書きする）、`lint_runs.jsonl`（`lint.py --stats` が読む）、`spec_raw.jsonl`（JSON のページの形の外の書き方の数。`slides.py stats` が読む）、`dreaming/last_run`・`dreaming/log/`・`dreaming/backup/`、`profile/`（`customer-profile` が取り直す前の顧客の profile）、`comments.json`（`deck-workflow` の `comments.py` が前に取った時刻・送った返信・見張りの起点・見張りの知らせのコメントを残す）、`crawl/<話題>/`（`desk-crawl` の読む先の台帳 `sources.json`、回の記録 `runs.jsonl`、その回の読み方 `plan.json`）。
 
-自分だけの画像は `assets/` に置く。`slides.asset()` はここを先に探し、なければ `slides-build/assets/` を使う。
+自分だけの画像は `assets/` に置く。`slides.asset()` はここを先に探し、なければ `google-slides/assets/` を使う。
 
 ワークスペースの直下の `AGENTS.md`・`CLAUDE.md` は、プラグインもスキルも前提にしない（[決めたこと](docs/decisions.md) の 2026-10-31）。`desk-init` は置かず、スクリプトも読まず、修正の指示も戻さない。持ち主が自分で置くのは止めない。ただ、エージェントはこれをどの会話にも、スキルより強く読み込むので、書いた決まりは、資料を作らない作業にも効く。資料を作るための決まりはレシピに書く。2026-10-31 までの `desk-init` が置いた写しは、`desk-doctor` が「前の雛形の AGENTS.md」として知らせ、`desk-migrate` の手順で持ち主と一緒にレシピへ移す。
 
@@ -125,7 +125,7 @@ pi install git:github.com/mats16/ai-desktools        # git から
 
 | 使うところ | 書く場所 | 既定 | 書ける書体 |
 |---|---|---|---|
-| スライドの本文 | テーマのファイル（`themes/slides/<名前>.json`）の `font`（`template.py` がマスターに書く） | Noto Sans JP | 下の「本文の書体」の 18 個（`lib/brand.py` の `JP_FONTS`）と、欧文の DM Sans（`FONT_EM`）。ほかは `slides.py lint` と `template.py` が止める |
+| スライドの本文 | テーマのファイル（`themes/slides/<名前>.json`）の `font`（`template.py` がマスターに書く） | Noto Sans JP | 下の「本文の書体」の 18 個（`google-slides` の `scripts/brand.py` の `JP_FONTS`）と、欧文の DM Sans（`FONT_EM`）。ほかは `slides.py lint` と `template.py` が止める |
 | スライドのコード | テーマのファイルの `mono` | Cascadia Mono | Google Fonts の等幅の書体。リガチャのある書体（`LIGATURE_MONO`）は止める |
 | ドキュメントの本文 | ドキュメントのテーマのファイル（`themes/docs/<名前>.json`）の `font` | Noto Sans JP | スライドの本文と同じ |
 | ドキュメントのコード | ドキュメントのテーマのファイルの `mono` | Cascadia Mono | スライドのコードと同じ |
@@ -134,7 +134,7 @@ pi install git:github.com/mats16/ai-desktools        # git から
 - **Google Fonts にない名前は、API が受け付けて黙って別の書体で描く。** 書いたら見本のページ（`template.py <名前>`、ドキュメントはそのテーマの文書）を組み、画像で確かめる。
 - lint の「書体が … でない」「等幅の … に和文」は、テーマの書体と比べる。
 
-**本文の書体（和文あり）:** 2026-10-07 に、テンプレートを複製した試しのデッキで同じ文を書体ごとに描き、Google Slides で描けることを確かめた。Google Docs で組んでいるのは Noto Sans JP だけで、ほかは Docs では確かめていない。印象ごとの選び方は `slides-build/template_fonts.md`。
+**本文の書体（和文あり）:** 2026-10-07 に、テンプレートを複製した試しのデッキで同じ文を書体ごとに描き、Google Slides で描けることを確かめた。Google Docs で組んでいるのは Noto Sans JP だけで、ほかは Docs では確かめていない。印象ごとの選び方は `google-slides/template_fonts.md`。
 
 | 分け | 書体 |
 |---|---|
@@ -180,7 +180,7 @@ pi install git:github.com/mats16/ai-desktools        # git から
 
 ## Google の認証
 
-API を直接呼ぶ（MCP は使わない）。トークンは `lib/gapi.py` が次の順に取る。gcloud も、ほかの Google のスキルも、動かすときには要らない。
+API を直接呼ぶ（MCP は使わない）。トークンは `gapi.py`（`google-slides` が持ち主で、Google を呼ぶスキルはみな写しを持つ）が次の順に取る。gcloud も、ほかの Google のスキルも、動かすときには要らない。
 
 1. 環境変数 `GOOGLE_OAUTH_ACCESS_TOKEN`（ほかの仕組みで取ったトークンを渡すとき）
 2. `authorized_user` の認証情報の JSON（`GOOGLE_APPLICATION_CREDENTIALS`、なければ gcloud の ADC のファイル）の refresh_token。作るのは `gcloud auth application-default login --scopes=…`（`desk-doctor` がコマンドを出す）

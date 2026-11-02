@@ -13,7 +13,7 @@ import argparse, contextlib, functools, hashlib, io, json, posixpath, re, sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import desk, ledger, refs  # noqa: E402  ワークスペースの探し方・決まりの台帳・出典の台帳
 
 try:
@@ -408,7 +408,7 @@ def report(folder):
             if moved[step]:
                 print(f"  - 済んだと記録したあとに中身が変わった（か、なくなった）: {short(moved[step])}")
         print(*(f"  - {x}" for x in items), sep="\n")
-    print("\nコマンドで確かめる（結果は会話の中にしかない）: slides.py lint・gslides.py check <URL> --all（slides-build）か docs.py check <URL>（docs-build）の要修正、"
+    print("\nコマンドで確かめる（結果は会話の中にしかない）: slides.py lint・gslides.py check <URL> --all（google-slides）か docs.py check <URL>（google-docs）の要修正、"
           f"refs.py check {folder} --fetch（10 の前）")
     return rows
 

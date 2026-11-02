@@ -3,13 +3,22 @@
 スキルの形を確かめる（AGENTS.md の「Rules for changes」）: SKILL.md の name がフォルダの名前、description が 1,000 字以内、
 本文が約 5,000 トークン以内（コンパクションのあと Claude Code が付け直すのは先頭の 5,000 トークン）、スキルのフォルダの直下の md がみな
 SKILL.md から指されている（ほかのファイルからしか届かないファイルは、一部だけ読まれやすい）、md がみな 50 KB・2,000 行未満（pi の read はそこで切れ、続きを読まないモデルがいる。mats16/ai-desktools#38）、
-md がほかのスキルの中のファイルを指さない（ほかのスキルは名前で呼び、その SKILL.md の表から開く。スキルで共有するコードは lib/。2026-10-31。前のパスを今のパスへ書き換える desk-migrate は除く）、「`<スキル>` → <場面>」で指した場面が、そのスキルの SKILL.md の表の太字の見出しか # の見出しにある、ほかのスキルのファイルを名前だけで指さない。desk-kaizen の open も、変えるバージョンでこれを回す。標準ライブラリだけ。"""
-import fnmatch, re, sys, tempfile
+md がほかのスキルの中のファイルを指さない（ほかのスキルは名前で呼び、その SKILL.md の表から開く。2026-10-31。前のパスを今のパスへ書き換える desk-migrate は除く）、スクリプトがほかのスキルの中か lib/ を指すパスを組まない、共有のスクリプトの写しが持ち主と同じ中身（2026-11-02。--sync で写す）、「`<スキル>` → <場面>」で指した場面が、そのスキルの SKILL.md の表の太字の見出しか # の見出しにある、ほかのスキルのファイルを名前だけで指さない。desk-kaizen の open も、変えるバージョンでこれを回す。標準ライブラリだけ。"""
+import ast, fnmatch, re, shutil, sys, tempfile
 from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parents[2] / "skills"
+sys.path.insert(0, str(SKILLS / "desk-init" / "scripts"))
+import desk  # noqa: E402  写しの表（desk.SHARED・desk.COPIES）は desk.py にだけ書く（ledger.py も同じ表で、写しの中の決まりの ID を数えない）
+
+# スキルのあいだで同じ中身を持つもの（AGENTS.md の「Shared code」。2026-11-02）。SHARED はスクリプトの名前 → 持ち主のスキル、FILES はスクリプトでない写し → 持ち主。
+# 直すのは持ち主だけ。ほかのスキル（と hooks/）の scripts/ の同じ名前のファイルは写しで、--sync が持ち主から写し、点検が同じ中身かを見る。写しを足すときは、一度 cp してから --sync
+SHARED, FILES = desk.SHARED, desk.COPIES
+VENDOR = SKILLS.parent / "vendor" / "yomiyasu"  # 上流の yomiyasu（git subtree。中は直さない）。スキルには、動かすのに要るものだけを scripts/yomiyasu/ に写す
+VENDOR_FILES = ("LICENSE", "UNICODE-LICENSE.txt", "scripts/markdown_visibility.py", "scripts/yomiyasu_lint.py", "scripts/yomiyasu_diff.py", "references/lists/*.txt")
 MAX_TOKENS, MAX_DESC, MAX_BYTES, MAX_LINES = 5000, 1000, 50 * 1024, 2000
 OPEN = ("desk-migrate",)  # ほかのスキルのファイルを名前で書いてよいスキル（前のバージョンのパスを今のパスへ書き換える表を持つ）
+REPO = ("desk-kaizen",)  # スクリプトが、リポジトリの clone の中をリポジトリの形（skills/<スキル>/…）で読むスキル（入れたほかのスキルは読まない）
 WORKSPACE_FILES = Path("desk-init", "templates")  # ワークスペースに写す雛形（ワークスペースのファイルなので、プラグインのパスを書いてよい）
 COMMON = {"SKILL.md", "README.md"}  # どのスキルにもある名前（名前だけで書いても、ほかのスキルのファイルとは言えない）
 GONE = {"visual.md", "visual_doc.md", "workflow.md", "rules.md"}  # 2026-10-31 の組み直しでなくなった名前（名前だけで残ると、どこも指さない。今の名前はスキルと場面で指す）
@@ -64,6 +73,118 @@ def bare(files, name, text, qualified=False):
     return out
 
 
+def copies(skills=SKILLS):
+    """[(写し, 持ち主のファイル)]。写しは、ほかのスキルの scripts/ と、スキルのフォルダの隣の hooks/ にある同じ名前のファイル。"""
+    out = []
+    for f, src in FILES.items():  # 表に書いた写しは、なくなっても出す（--sync が作る）
+        if (skills / src).is_dir():  # フォルダは、持ち主のファイルをみな
+            out += [(skills / f / x.relative_to(skills / src), x) for x in sorted((skills / src).rglob("*")) if x.is_file()]
+        elif (skills / src).is_file():
+            out.append((skills / f, skills / src))
+    for name, owner in SHARED.items():
+        src = skills / owner / "scripts" / name
+        for f in sorted([*skills.glob(f"*/scripts/{name}"), skills.parent / "hooks" / name]):
+            if f.is_file() and f != src:
+                out.append((f, src))
+    return out
+
+
+def vendored(vendor=VENDOR):
+    """yomiyasu の写しにするファイル {scripts/yomiyasu/ からのパス: 上流のファイル}。"""
+    return {f.relative_to(vendor).as_posix(): f for g in VENDOR_FILES for f in sorted(vendor.glob(g)) if f.is_file()}
+
+
+def copy_problems(skills=SKILLS, vendor=VENDOR):
+    """写しが持ち主・上流と同じ中身か。違えば、持ち主を直して --sync する。"""
+    out = [f"{f.relative_to(skills.parent)}: {src.relative_to(skills.parent)} の写しと中身が違う（直すのは持ち主だけ。check.py --sync で写す）"
+           for f, src in copies(skills) if not src.is_file() or not f.is_file() or f.read_bytes() != src.read_bytes()]
+    for f, src in FILES.items():  # 持ち主にないファイルが写しのフォルダに残っている
+        if (skills / src).is_dir() and (skills / f).is_dir():  # 持ち主にないものは消す
+            out += [f"{x.relative_to(skills.parent)}: 持ち主の {src} にない（check.py --sync で消す）" for x in sorted((skills / f).rglob("*"))
+                    if x.is_file() and not (skills / src / x.relative_to(skills / f)).is_file()]
+    want = vendored(vendor)
+    for d in sorted(skills.glob("*/scripts/yomiyasu")):
+        have = {f.relative_to(d).as_posix() for f in d.rglob("*") if f.is_file() and "__pycache__" not in f.parts}
+        bad = sorted(have ^ set(want)) + sorted(k for k in have & set(want) if (d / k).read_bytes() != want[k].read_bytes())
+        if bad:
+            out.append(f"{d.relative_to(skills.parent)}: vendor/yomiyasu の写しと違う（{'・'.join(bad[:5])}。check.py --sync で写す）")
+    return out
+
+
+def sync(skills=SKILLS, vendor=VENDOR):
+    """持ち主のスクリプトを写しへ、上流の yomiyasu を scripts/yomiyasu/ へ写す。写したファイルを返す。"""
+    done = []
+    for f, src in copies(skills):
+        if not src.is_file():  # 持ち主にない（名前を替えた・消した）。写せないので、check.py が出す
+            continue
+        if not f.is_file() or f.read_bytes() != src.read_bytes():
+            f.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, f)
+            done.append(f)
+    for f, src in FILES.items():
+        if (skills / src).is_dir() and (skills / f).is_dir():
+            for x in [x for x in (skills / f).rglob("*") if x.is_file() and not (skills / src / x.relative_to(skills / f)).is_file()]:
+                x.unlink()
+                done.append(x)
+    want = vendored(vendor)
+    for d in sorted(skills.glob("*/scripts/yomiyasu")):
+        for f in [f for f in d.rglob("*") if f.is_file() and f.relative_to(d).as_posix() not in want]:
+            f.unlink()
+            done.append(f)
+        for k, src in want.items():
+            if not (d / k).is_file() or (d / k).read_bytes() != src.read_bytes():
+                (d / k).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, d / k)
+                done.append(d / k)
+    return done
+
+
+GONE_1102 = re.compile(rf"(?<![{A}])(?<!rules/)(?:slides-build|docs-build|vids-build)(?![{A}])|(?<![{A}])(?<!rules/)vids-voice(?![{A}])"  # 決まりの ID（vids-voice-004・vids-voice-ja-002）は後ろの - で外れる
+                       rf"|(?<![.{A}])(?:(?:<plugin>|<プラグインのフォルダ>|\$[A-Za-z_]+)/|(?:\.\./)+)lib(?![{A}])|(?<![./{A}])lib/(?:desk|gapi|brand|textlint|sheet|ledger|refs|yomiyasu)(?![{A}])")
+# 2026-11-02 になくした名前（slides-build・docs-build・vids-build・スキルの vids-voice）と lib/。決まりの ID（vids-voice-004）と、前のワークスペースの rules/<名前>/ は除く
+
+
+def gone(text):
+    """text の中の、2026-11-02 になくしたスキルの名前と lib/ のパス。前の名前を書くのは、前のパスを今のパスへ書き換える desk-migrate だけ（OPEN）。"""
+    return GONE_1102.findall(text)
+
+
+FOLDER = r"<(?:this skill's folder|(?P<skill>[a-z][a-z-]*) folder)>/scripts"  # md がスクリプトのフォルダを書く形（<this skill's folder>/scripts、<google-slides folder>/scripts）
+
+
+def commands(root, skills, name, texts):
+    """スキル name の md（texts）が動かす、ないスクリプト。「<X folder>/scripts/<ファイル>」と、「V=<X folder>/scripts」と決めた $V の「$V/<ファイル>」。
+    変数は、そのスキルの md のどれかで決めたもの（SKILL.md で決めて fix.md で使う）を見る。"""
+    var = {}
+    for t in texts:
+        for m in re.finditer(rf"(?m)^\s*([A-Z])={FOLDER}\s", t):
+            var[m.group(1)] = m.group("skill") or name
+    out = []
+    for t in texts:
+        refs = [(m.group("skill") or name, m.group("f")) for m in re.finditer(rf"{FOLDER}/(?P<f>[\w./-]+\.(?:py|sh|js))", t)]
+        refs += [(var[m.group(1)], m.group(2)) for m in re.finditer(r"\$\{?([A-Z])\}?/([\w./-]+\.(?:py|sh|js))", t) if m.group(1) in var]
+        out += [f"{s}/scripts/{f}" for s, f in refs if s in skills and not (root / s / "scripts" / f).is_file()]
+    return out
+
+
+def tests_of(text):
+    """selftest で始まる名前の関数の行（仮のプラグインやワークスペースを組むので、ほかのスキルの名前のパスを書いてよい）。読めなければ空。"""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return set()
+    return {i for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith("selftest") for i in range(n.lineno, (n.end_lineno or n.lineno) + 1)}
+
+
+def reach(skills, name, text):
+    """スクリプトの中の、ほかのスキルの中か lib/ を組み立てるパス（"<スキル>" / …、…/ "<スキル>"、../<スキル>/、"lib"）。ほかのスキルは名前で呼ぶ（md から）。
+    コメントと selftest の関数の中は見ない。"""
+    skip = tests_of(text)
+    others = "|".join(map(re.escape, sorted((s for s in skills if s != name), key=len, reverse=True)))
+    pats = [rf"/\s*[\"'](?:{others})[\"']", rf"[\"'](?:{others})[\"']\s*/", rf"[\"'][^\"'\n]*\.\./(?:{others})/", r"/\s*[\"']lib[\"']", r"[\"'][^\"'\n]*\.\./lib[\"'/]"] if others else [r"/\s*[\"']lib[\"']"]
+    return [m.group(0) for p in pats for i, line in enumerate(text.splitlines(), 1) if i not in skip and not line.lstrip().startswith("#") for m in re.finditer(p, line.split("  #")[0])]
+
+
 def tokens(text):
     """ponytail: 見積もり。ASCII は 4 字で 1、ほかは 1 字で 1 トークンと数える。4,500 を超えたら、API の数え方で確かめ直す"""
     a = sum(c.isascii() for c in text)
@@ -111,7 +232,20 @@ def problems(skills=SKILLS):
             own = rf"(?:(?<![\w./-])|(?<![\w.-]){re.escape(name)}/)"  # 名前だけか <このスキル>/名前。prompt_run.md や ../ほかのスキル/run.md では指したことにしない
             if f.name != "SKILL.md" and not re.search(own + re.escape(f.name), t):
                 out.append(f"{name}/{f.name}: SKILL.md から指されていない（SKILL.md の表に足す）")
-    return out
+    for n in sorted(names):  # md が動かすスクリプトが、そのフォルダにある（写しを持たないスキルが、持ち主のスクリプトを自分のフォルダで動かさない）
+        texts = [f.read_text(encoding="utf-8", errors="ignore") for f in sorted((skills / n).rglob("*.md")) if "yomiyasu" not in f.parts]
+        out += [f"{n}: md が動かす {x} がない（そのスクリプトのあるスキルのフォルダで書く。写しなら持ち主から写す）" for x in sorted(set(commands(skills, names, n, texts)))]
+    for f in sorted(x for x in [*skills.glob("*/**/*.md"), *skills.glob("*/scripts/*.js"), *skills.glob("*/scripts/*.sh")] if "yomiyasu" not in x.parts):
+        name = f.relative_to(skills).parts[0]
+        if name not in OPEN and name in names:
+            for ref in sorted(set(gone(f.read_text(encoding="utf-8", errors="ignore")))):
+                out.append(f"{f.relative_to(skills)}: なくした名前かパス {ref}（2026-11-02 に google-slides・google-docs・google-vids にし、lib/ をやめた。今の名前と、持ち主のスキルの scripts/ で書く）")
+    for f in sorted([*skills.glob("*/scripts/*.py"), *skills.glob("*/scripts/*.sh")]):
+        name = f.parent.parent.name
+        if name not in OPEN + REPO and name in names:
+            for ref in sorted(set(reach(names, name, f.read_text(encoding="utf-8", errors="ignore")))):
+                out.append(f"{name}/scripts/{f.name}: ほかのスキルの中か lib/ を組み立てるパス {ref}（スクリプトは自分のスキルの中だけを読む。共有の部品は写しを持つ。SHARED）")
+    return out + copy_problems(skills)
 
 
 def selftest():
@@ -151,8 +285,8 @@ def selftest():
         (root / "d" / "ref" / "deep.md").write_text("x" * MAX_BYTES)
         assert any(x.startswith("d/ref/deep.md: ") for x in problems(root))  # スキルのフォルダの下の深い md も見る
         (root / "e").mkdir()
-        (root / "e" / "SKILL.md").write_text("---\nname: e\ndescription: x\n---\n\nsee d/SKILL.md. `d` と `../d/SKILL.md`、d/SKILL.md、<d folder>/x、`../../lib/desk.py`、rules/d/x.md、./rules/d/x.md、$WS/rules/d/x.md、Customers/x/recipes/d/y.md\n")
-        assert not (_e := [x for x in problems(root) if x.startswith("e")]), _e  # スキルの名前、その SKILL.md、共有の lib/、ワークスペースの前のバージョンの rules/ は指してよい
+        (root / "e" / "SKILL.md").write_text("---\nname: e\ndescription: x\n---\n\nsee d/SKILL.md. `d` と `../d/SKILL.md`、d/SKILL.md、<d folder>/x、rules/d/x.md、./rules/d/x.md、$WS/rules/d/x.md、Customers/x/recipes/d/y.md\n")
+        assert not (_e := [x for x in problems(root) if x.startswith("e")]), _e  # スキルの名前、その SKILL.md、ワークスペースの前のバージョンの rules/ は指してよい
         (root / "e" / "SKILL.md").write_text("---\nname: e\ndescription: x\n---\n\n`../d/run.md` と skills/d/ref/deep.md、d/scripts/x.py、<plugin>/skills/d/a.md、~/p/skills/d/b.md、./d/c.md、<plugin>/d/e.md、$P/d/f.md、../d/、recipes/d/RECIPE.md\n")
         got = [x for x in problems(root) if x.startswith("e")]
         assert len(got) == 9 and all("ほかのスキルのファイル" in x for x in got) and any(" d/run.md " in x for x in got), got
@@ -176,7 +310,49 @@ def selftest():
         (root / "f" / "SKILL.md").write_text((root / "f" / "SKILL.md").read_text() + "\n```\n# Leftover\n")
         got = [x for x in problems(root) if x.startswith("i")]
         assert len(got) == 3 and any("（visual.md）" in x for x in got) and any("`f` → leftover" in x for x in got) and any("なくなったスキル" in x for x in got), got  # なくなった名前と、閉じていない囲みの中の見出し
+        (root / "j" / "scripts").mkdir(parents=True)
+        (root / "j" / "SKILL.md").write_text("---\nname: j\ndescription: x\n---\n")
+        (root / "j" / "scripts" / "x.py").write_text('import sys\nsys.path.insert(0, str(HERE.parents[2] / "lib"))\nP = HERE.parents[1] / "f" / "scripts"\nQ = "../../f/a.md"\n# HERE / "f" はコメント\nR = HERE / "j" / "x"  # "f" / はコメント\n\n\ndef selftest_x():\n    (root / "f" / "SKILL.md").write_text("x")\n')
+        got = [x for x in problems(root) if x.startswith("j")]
+        (root / "j" / "scripts" / "run.sh").write_text('ROOT=$(python3 "$(dirname "$0")/../../../lib/desk.py")\n')
+        got = [x for x in problems(root) if x.startswith("j")]
+        assert len(got) == 6 and any("run.sh" in x and "../lib/" in x for x in got) and any("run.sh: なくした名前" in x for x in got), got  # シェルのスクリプトも見る（パスの組み立てと、なくした名前の両方）
+        (root / "j" / "scripts" / "run.sh").unlink()
+        got = [x for x in problems(root) if x.startswith("j")]
+        assert len(got) == 4 and any('/ "lib"' in x for x in got) and any('/ "f"' in x for x in got) and any("../f/" in x for x in got), got  # 自分のスキルの名前とコメントは通す
+        (root / "j" / "x.md").write_text("`slides-build` → pages、vids-voice、<plugin>/lib/ledger.py、../../lib/desk.py\n- [vids-voice-004] と vids-voice-ja-002、rules/slides-build/a.md\n")
+        (root / "j" / "SKILL.md").write_text("---\nname: j\ndescription: x\n---\n[x.md](x.md)\n")
+        got = [x for x in problems(root) if x.startswith("j/x.md")]
+        assert sorted(x.split("パス ")[1].split("（")[0] for x in got) == ["../../lib", "<plugin>/lib", "slides-build", "vids-voice"], got  # 決まりの ID と前の rules/ は通す
+        (root / "j" / "x.md").unlink()
+        (root / "j" / "SKILL.md").write_text("---\nname: j\ndescription: x\n---\n")
+        (root / "m" / "scripts").mkdir(parents=True)
+        (root / "m" / "scripts" / "own.py").write_text("")
+        (root / "m" / "SKILL.md").write_text("---\nname: m\ndescription: x\n---\n[run.md](run.md)\n```sh\nC=<m folder>/scripts\nK=<j folder>/scripts\n$C/own.py\n```\n")
+        (root / "m" / "run.md").write_text("python3 $C/ledger.py review・$K/x.py・$K/nothing.py・<this skill's folder>/scripts/gone.py・<j folder>/scripts/x.py\n")
+        got = [x for x in problems(root) if x.startswith("m:")]
+        assert sorted(x.split("動かす ")[1].split(" ")[0] for x in got) == ["j/scripts/nothing.py", "m/scripts/gone.py", "m/scripts/ledger.py"], got  # 変数で書いたものも、ほかの md で使ったものも（あるものは通す）
+        (root / "k").mkdir()
+        (root / "k" / "SKILL.md").write_text("---\nname: k\ndescription: x\n---\n")
+        (root / "desk-init" / "scripts").mkdir()
+        (root / "desk-init" / "scripts" / "desk.py").write_text("a")
+        (root / "k" / "scripts").mkdir()
+        (root / "k" / "scripts" / "desk.py").write_text("b")
+        assert any("k/scripts/desk.py: " in x for x in copy_problems(root)), copy_problems(root)
+        assert any("desk-migrate/templates/recipes/README.md" in x for x in copy_problems(root))  # 表に書いた写しは、なくても出す
+        assert root / "k" / "scripts" / "desk.py" in sync(root) and (root / "k" / "scripts" / "desk.py").read_text() == "a" and not copy_problems(root)  # --sync が写し、ない写しも作る
+        assert (root / "desk-migrate" / "templates" / "recipes" / "README.md").is_file()
+        y = root / "k" / "scripts" / "yomiyasu"
+        (y / "old").mkdir(parents=True)
+        (y / "old" / "x.py").write_text("x")
+        assert copy_problems(root) and sync(root) and not copy_problems(root) and not (y / "old" / "x.py").exists() and (y / "scripts" / "yomiyasu_lint.py").is_file()  # 要らないものを消し、要るものだけ写す
     assert tokens("abcd") == 1 and tokens("和文") == 2
+    sys.path.insert(0, str(SKILLS / "deck-workflow" / "scripts"))  # スキルをまたぐ確かめは、配らない tests/ に置く
+    import refs
+    with tempfile.TemporaryDirectory() as tmp:  # desk-init の雛形は、出典のない索引と同じ頭（雛形は手で直すので、ずれたら止める）
+        assert refs.index(tmp) == 0
+        tpl = SKILLS / "desk-init" / "templates" / refs.INDEX
+        assert tpl.read_text().split("0 件")[0] == (Path(tmp) / refs.INDEX).read_text().split("0 件")[0] and refs.generated(tpl)
     bad = problems()
     assert not bad, "\n".join(bad)  # プラグインのスキル
     print("selftest ok")
@@ -186,6 +362,9 @@ if __name__ == "__main__":
     a = sys.argv[1:]
     if a == ["--selftest"]:
         sys.exit(selftest())
+    if a == ["--sync"]:
+        print("\n".join(str(f.relative_to(SKILLS.parent)) for f in sync()) or "写し: 変わりなし")
+        a = []
     bad = problems(Path(a[0]) if a else SKILLS)
     print("\n".join(bad) or "スキルの形: 問題なし")
     sys.exit(1 if bad else 0)

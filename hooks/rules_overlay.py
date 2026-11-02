@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ワークスペースの決まり（レシピ。recipes/<名前>/RECIPE.md で frontmatter に description のあるもの。探し方は lib/desk.py の rules）を、要る場面で続けて出す（開き忘れを防ぐ）。
+"""ワークスペースの決まり（レシピ。recipes/<名前>/RECIPE.md で frontmatter に description のあるもの。探し方は desk.py の rules。hooks/desk.py は desk-init のものの写し）を、要る場面で続けて出す（開き忘れを防ぐ）。
 - step のないレシピは、資料を作るどの作業でも出す: 資料づくりのスキル（desk.py の TRIGGERS の make）のファイルが読まれたときと、資料のファイルが読まれたとき。
 - step: gather は材料を集めるとき（TRIGGERS の gather のファイルと、ワークスペースの Research/・references_index.md。資料の references.md はレビューや照合の子も開くので入れない）、step: build は組むとき（TRIGGERS の build）に出す。
   読んだかは、読んだパスとコマンドに書いた <スキル>/<ファイル> の文字と、道具の出力に出たそのファイルの行で見る（スキルのフォルダへ cd して名前だけで開いても）。
@@ -15,12 +15,12 @@ Claude Code は自動のコンパクションのあと、呼んだスキルの S
 usage: rules_overlay.py claude   （標準入力に Claude Code か Codex の hook の JSON）
        rules_overlay.py pi       （標準入力に {"cwd", "text", "isPath", "seen", "output"}。isPath は text が読んだファイルのパスのとき。seen は今の文脈に残る、前に出したもの。output は道具の出力。出力は {"context": …}）
        rules_overlay.py --selftest
-標準ライブラリだけ。ワークスペースが見つからない（探し方は lib/desk.py）か、決まりと memory.md がないときは何も出さない。"""
+標準ライブラリだけ。ワークスペースが見つからない（探し方は desk.py）か、決まりと memory.md がないときは何も出さない。"""
 import functools, hashlib, json, os, re, shlex, shutil, stat, sys, tempfile
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # プラグインの scripts/ に __pycache__ を残さない
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import desk  # noqa: E402  ワークスペースの探し方（スキルのスクリプトと同じ）
 
 PLUGIN = Path(__file__).resolve().parent.parent / "skills"
@@ -469,16 +469,16 @@ def selftest():
             (Path(t) / "x" / ".#a.md").symlink_to(Path(t) / "nowhere"), (Path(t) / "x" / "._a.md").write_bytes(b"\x00\x05\x16\x07\xff\xfe" * 20)
             assert sorted(set(plugin_lines(Path(t)).values())) == ["x/a.md"]
         assert printed((PLUGIN / "desk-init" / "templates" / "recipes" / "README.md").read_text(encoding="utf-8")) == []  # ワークスペースの recipes/README.md（雛形の写し）を読んでも、雛形を読んだことにしない
-        assert printed("\n".join(f.read_text(encoding="utf-8") for f in (PLUGIN / "slides-build" / "samples" / "json").glob("*.json"))) == []  # 見本の JSON は、pages.md のコードの囲みの例と同じ行でも数えない
-        assert overlays(ws, f"cat {ws}/recipes/slides-build/x.md") == ""  # プラグインにない名前のワークスペースのファイルは、プラグインのファイルでない（前のバージョンの rules/slides-build/visual.md のように同じ名前なら、作業のレシピを出す）
+        assert printed("\n".join(f.read_text(encoding="utf-8") for f in (PLUGIN / "google-slides" / "samples" / "json").glob("*.json"))) == []  # 見本の JSON は、pages.md のコードの囲みの例と同じ行でも数えない
+        assert overlays(ws, f"cat {ws}/recipes/google-slides/x.md") == ""  # プラグインにない名前のワークスペースのファイルは、プラグインのファイルでない（前のバージョンの rules/slides-build/visual.md のように同じ名前なら、作業のレシピを出す）
         mk = overlays(ws, "/plug/skills/deck-writing/content.md")
         assert "最初に聞くこと" in mk and "16pt" not in mk and overlays(ws, "/plug/skills/desk-doctor/SKILL.md") == ""  # step のないものは資料づくりのどの作業でも。資料づくりの外では出さない
         assert overlays(ws, "ls", seen=lambda: 1 / 0) == "" and "16pt" in overlays(ws, "deck-design/slides.md", seen=set)  # 出すものがなければ、会話の記録を読まない
         assert "最初に聞くこと" in overlays(ws, skill_md(["desk-tools:deck-workflow"])) and overlays(ws, skill_md(["other:x"])) == overlays(ws, skill_md(["other:deck-workflow"])) == ""  # ほかのプラグインの同じ名前のスキルは出さない
-        assert CALL.findall("/desk-tools:slides-build と $desk-tools:deck-review、desk-tools:docs-build、$desk-tools:slides-builds") == ["slides-build", "deck-review"]  # 呼んだものだけ
-        assert CALL.findall("さっきの /desk-tools:slides-build は x/$desk-tools:docs-build") == []  # 文の途中の / とパスの中は呼んでいない
-        assert CALL.findall("資料を$desk-tools:slides-buildで作る") == ["slides-build"] and CALL.findall("/desk-tools:docs-buildで") == ["docs-build"]  # 和文が続いても切る
-        assert "最初に聞くこと" in called(ws, "/desk-tools:deck-workflow を回して") and "16pt" in called(ws, "$desk-tools:slides-build") and called(ws, "$desk-tools:desk-doctor") == ""
+        assert CALL.findall("/desk-tools:google-slides と $desk-tools:deck-review、desk-tools:google-docs、$desk-tools:slides-builds") == ["google-slides", "deck-review"]  # 呼んだものだけ
+        assert CALL.findall("さっきの /desk-tools:google-slides は x/$desk-tools:google-docs") == []  # 文の途中の / とパスの中は呼んでいない
+        assert CALL.findall("資料を$desk-tools:google-slidesで作る") == ["google-slides"] and CALL.findall("/desk-tools:google-docsで") == ["google-docs"]  # 和文が続いても切る
+        assert "最初に聞くこと" in called(ws, "/desk-tools:deck-workflow を回して") and "16pt" in called(ws, "$desk-tools:google-slides") and called(ws, "$desk-tools:desk-doctor") == ""
         assert called(ws, "/desk-tools:deck-workflow $desk-tools:deck-workflow").count("最初に聞くこと") == 1
         assert overlays("/", "/plug/skills/deck-design/slides.md") == ""  # ワークスペースの外
         with tempfile.TemporaryDirectory() as home:  # 上に desk.toml がなければ、~/.desk.toml の workspace の recipes/ を出す
@@ -592,7 +592,7 @@ def selftest():
         many = [f"x{i:02d}" for i in range(40)]
         for x in many:
             put(x, fm("build") + "お" * 300)
-        cut40 = overlays(ws, "slides-build/pages.md")
+        cut40 = overlays(ws, "google-slides/pages.md")
         assert len(cut40) <= LIMIT and "ほか" in cut40 and "ここで切った" in cut40  # 添え書きも上限に入れる（長ければ数にする）
         for x in many:
             shutil.rmtree(r / x)
@@ -612,17 +612,17 @@ def selftest():
         tempfile.gettempdir = gettemp
         assert sorted(x.name for x in (Path(ws) / "Customers").iterdir()) == ["Acme Corp", "acme", "x"]  # リンクの先は消さない
         tempfile.tempdir = ws
-        log.write_text('{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Skill","input":{"skill":"desk-tools:slides-build"}}]}}\n'
-                       '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"Launching skill: desk-tools:slides-build"}]}}\n'
+        log.write_text('{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Skill","input":{"skill":"desk-tools:google-slides"}}]}}\n'
+                       '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"Launching skill: desk-tools:google-slides"}]}}\n'
                        '{"type":"user","message":{"content":"<command-name>/desk-tools:deck-workflow</command-name>"}}\n'
-                       '{"type":"user","message":{"content":"<command-name>/other:deck-review</command-name> \\"skill\\":\\"desk-tools:docs-build\\""}}\n'
-                       '{"type":"user","message":{"content":[{"type":"tool_result","content":"<command-name>/desk-tools:docs-build</command-name>"}]}}\n'
-                       '{"type":"user","isCompactSummary":true,"message":{"content":"<command-name>/desk-tools:docs-build</command-name>"}}\n'
-                       '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"Skill","input":{"skill":"desk-tools:docs-build"}}]}}\n'
+                       '{"type":"user","message":{"content":"<command-name>/other:deck-review</command-name> \\"skill\\":\\"desk-tools:google-docs\\""}}\n'
+                       '{"type":"user","message":{"content":[{"type":"tool_result","content":"<command-name>/desk-tools:google-docs</command-name>"}]}}\n'
+                       '{"type":"user","isCompactSummary":true,"message":{"content":"<command-name>/desk-tools:google-docs</command-name>"}}\n'
+                       '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"Skill","input":{"skill":"desk-tools:google-docs"}}]}}\n'
                        '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t2","is_error":true,"content":"denied"}]}}\n')
-        assert invoked(read(log)) == ["deck-workflow", "slides-build"] and invoked(b"") == []  # 新しい順。ほかのプラグイン、文字列の中の写し、道具の結果、要約、断られた Skill は数えない
+        assert invoked(read(log)) == ["deck-workflow", "google-slides"] and invoked(b"") == []  # 新しい順。ほかのプラグイン、文字列の中の写し、道具の結果、要約、断られた Skill は数えない
         again = overlays(ws, skill_md(invoked(read(log))))
-        assert "最初に聞くこと" in again and "16pt" in again  # 付け直される SKILL.md（deck-workflow と slides-build）を読んだときと同じもの
+        assert "最初に聞くこと" in again and "16pt" in again  # 付け直される SKILL.md（deck-workflow と google-slides）を読んだときと同じもの
         put("tools", "---\ndescription: 社内の道具\nstep: gather\n---\n- Glean で探す")
         (r / "tools" / "templates" / "poc").mkdir(parents=True)
         (r / "tools" / "templates" / "poc" / "doc.md").write_text("---\ndescription: テンプレート\n---\n# PoC")
@@ -634,14 +634,14 @@ def selftest():
         assert "Glean で探す" in got and "recipes/tools/ のファイル: templates/poc/doc.md。" in got and HEAD.findall(got).count("recipes/tools/RECIPE.md") == 1  # 資源は名前だけ（テンプレートの md は決まりとして出さない。中のレシピのファイルは、そのレシピのもの）
         shutil.rmtree(r / "tools" / "sub")
         assert "Glean" in overlays(ws, "/home/u/recipes/plug/skills/deck-workflow/materials.md")  # プラグインを recipes という名前のフォルダの下に入れても
-        assert "Glean" in overlays(ws, "grep -rln Vercel Research/ references_index.md") and "Glean" not in overlays(ws, "grep -r Vercel Research/") and "Glean" not in overlays(deck, "cat references.md") and "Glean" not in overlays(ws, "slides-build/pages.md")  # 調べものでも。資料の出典の台帳（レビューの子も開く）と組むときは出さない
-        assert overlays(ws, f"cat {ws}/recipes/tools/templates/slides-build/x.md") == "" == overlays(ws, "recipes/tools/deck-review/a.md")  # レシピの下のスキルの名前のパスは、プラグインのファイルでない
+        assert "Glean" in overlays(ws, "grep -rln Vercel Research/ references_index.md") and "Glean" not in overlays(ws, "grep -r Vercel Research/") and "Glean" not in overlays(deck, "cat references.md") and "Glean" not in overlays(ws, "google-slides/pages.md")  # 調べものでも。資料の出典の台帳（レビューの子も開く）と組むときは出さない
+        assert overlays(ws, f"cat {ws}/recipes/tools/templates/google-slides/x.md") == "" == overlays(ws, "recipes/tools/deck-review/a.md")  # レシピの下のスキルの名前のパスは、プラグインのファイルでない
         assert overlays(ws, "cd recipes/tools && cat deck-review/a.md") == "" == overlays(ws, f"cat '{ws}/recipes/tools/my dir/deck-review/a.md'")  # cd のあとの相対パス・空白のあるパスでも（プラグインにないファイル）
         assert "Glean" in overlays(ws, "/plug/skills/customer-profile/SKILL.md") and "最初に聞くこと" not in overlays(ws, "/plug/skills/customer-profile/SKILL.md")  # 顧客の profile は集める作業（資料づくりの step のないものは出さない）
         (Path(ws) / "rules").mkdir()
         (Path(ws) / "rules" / "old.md").write_text("---\ndescription: 前の形\n---\n- 前の決まり")
         legacy = overlays(ws, "/plug/skills/deck-workflow/start.md")
-        assert "desk-migrate" in legacy and "前の決まり" not in legacy and "desk-migrate" in overlays(ws, "slides-build/pages.md") and "desk-migrate" not in overlays(ws, "desk-doctor/SKILL.md")  # 前のバージョンの rules/ は出さず、資料を作る作業のたびに知らせる（スキルを直に呼んで組むときも）
+        assert "desk-migrate" in legacy and "前の決まり" not in legacy and "desk-migrate" in overlays(ws, "google-slides/pages.md") and "desk-migrate" not in overlays(ws, "desk-doctor/SKILL.md")  # 前のバージョンの rules/ は出さず、資料を作る作業のたびに知らせる（スキルを直に呼んで組むときも）
         shutil.rmtree(Path(ws) / "rules")
         put("customer", "---\ndescription: 顧客向けの資料\naudience: [顧客向け]\nper_material: true\n---\n- 顧客の言葉で書く")
         put("update", "---\ndescription: 製品のアップデートをまとめるとき\ntargets: [slides]\nper_material: true\n---\n- 効くものだけ選ぶ")
@@ -673,7 +673,7 @@ def selftest():
         head = fm("build")
         put("bigp", head + "ぱ" * (desk.RULE_MAX - len(head)))
         outline.write_text("# 構成案\n")
-        both = overlays(ws, f"cat {shlex.quote(str(outline))} /plug/skills/slides-build/pages.md")
+        both = overlays(ws, f"cat {shlex.quote(str(outline))} /plug/skills/google-slides/pages.md")
         assert HEAD.findall(both)[0] == INDEX and "recipes/bigp/RECIPE.md" in both and len(both) <= LIMIT  # 選ぶ一覧を先に丸ごと出す（作業に当たるレシピは次の作業でも出る。入りきらなければ開くパスを添える）
         mem_file.write_text(keep_mem)
         outline.write_text("- **使う決まり:** recipes/mid/RECIPE.md、recipes/nope/RECIPE.md\n")

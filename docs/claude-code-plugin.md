@@ -45,12 +45,12 @@ for d in <ワークスペース> /tmp; do
   (cd $d && claude plugin list --json) | python3 -c "import json,sys; [print(p['id'], p['scope'], p['enabled']) for p in json.load(sys.stdin) if p['id']=='desk-tools@desk-tools']"
 done
 
-# 会話に読み込まれるスキル: ワークスペースでは desk-tools:* の 17 個、ほかのフォルダでは 0
+# 会話に読み込まれるスキル: ワークスペースでは desk-tools:* の 16 個、ほかのフォルダでは 0
 cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-format stream-json --verbose \
   | python3 -c "import json,sys; e=next(e for e in map(json.loads, sys.stdin) if e.get('subtype')=='init'); print(sorted(s for s in e['skills'] if s.startswith('desk-tools:')))"
 ```
 
-2026-10-12 に `~/adf-plugin-test` で確かめた結果（そのときの 19 個。2026-10-31 にスキルを組み直して 17 個になった）:
+2026-10-12 に `~/adf-plugin-test` で確かめた結果（そのときの 19 個。2026-10-31 にスキルを組み直して 17 個に、2026-11-02 に vids-voice を google-vids に寄せて 16 個になった）:
 
 | フォルダ | `plugin list` の enabled | 読み込まれたスキル |
 |---|---|---|
@@ -70,11 +70,11 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 /desk-tools:desk-doctor
 ```
 
-doctor の要修正が 0 になれば使える。ワークスペースの決まり（レシピ。`recipes/<名前>/RECIPE.md` で、frontmatter に `description` のあるもの）は、資料づくりのプラグインのファイルを Read で開くと、その作業（`step`）に当たるものを hook が続けて出す（2026-10-12 に、そのときの形〔同じパスの `rules/deck-practices/visual.md`〕で確かめた。サブフォルダで開いた会話では出ない）。`per_material: true` のレシピは、構成案の頭の「使う決まり」に書いたものを、構成案を開くと出す。`/desk-tools:<スキル>` で呼んだときは、道具を通らずに SKILL.md が入るので、UserPromptSubmit の hook が、その SKILL.md を開いたときと同じものを出す（2026-10-20 に確かめた）。自動のコンパクションのあと、Claude Code は呼んだスキルの SKILL.md を付け直すので、SessionStart（`compact`）の hook がその決まりを出し直す（2026-10-25 に `/compact` で確かめた）。frontmatter の `paths`（2026-10-29 からは `step`）、`deck-practices/start.md`（今の `deck-workflow/start.md`）を開いたときの一覧、構成案の「使う決まり」は、2026-10-27 に sandbox の会話の記録で確かめた（Read と `/desk-tools:deck-review`）。スキルは `desk-tools:` を付けた名前で呼ぶ（`/desk-tools:slides-build` など）。
+doctor の要修正が 0 になれば使える。ワークスペースの決まり（レシピ。`recipes/<名前>/RECIPE.md` で、frontmatter に `description` のあるもの）は、資料づくりのプラグインのファイルを Read で開くと、その作業（`step`）に当たるものを hook が続けて出す（2026-10-12 に、そのときの形〔同じパスの `rules/deck-practices/visual.md`〕で確かめた。サブフォルダで開いた会話では出ない）。`per_material: true` のレシピは、構成案の頭の「使う決まり」に書いたものを、構成案を開くと出す。`/desk-tools:<スキル>` で呼んだときは、道具を通らずに SKILL.md が入るので、UserPromptSubmit の hook が、その SKILL.md を開いたときと同じものを出す（2026-10-20 に確かめた）。自動のコンパクションのあと、Claude Code は呼んだスキルの SKILL.md を付け直すので、SessionStart（`compact`）の hook がその決まりを出し直す（2026-10-25 に `/compact` で確かめた）。frontmatter の `paths`（2026-10-29 からは `step`）、`deck-practices/start.md`（今の `deck-workflow/start.md`）を開いたときの一覧、構成案の「使う決まり」は、2026-10-27 に sandbox の会話の記録で確かめた（Read と `/desk-tools:deck-review`）。スキルは `desk-tools:` を付けた名前で呼ぶ（`/desk-tools:google-slides` など）。
 
 ## 注意
 
-- **同じ名前のスキルを二重に入れない。** ワークスペースの `.agents/skills/` や `.claude/skills/` に slides-build などがあると、プラグインのスキルと両方が読み込まれる（`slides-build` と `desk-tools:slides-build`）。doctor が「スキルの重なり」として要確認に出すので、どちらかを外す。
+- **同じ名前のスキルを二重に入れない。** ワークスペースの `.agents/skills/` や `.claude/skills/` に google-slides などがあると、プラグインのスキルと両方が読み込まれる（`google-slides` と `desk-tools:google-slides`）。doctor が「スキルの重なり」として要確認に出すので、どちらかを外す。
 - **直したプラグインを届ける。** 手元のパスで足したなら、保存して会話を開き直すだけでよい。GitHub から入れたなら、`plugin.json` に版を書いていないので commit の SHA が版になる。push してから `claude plugin update desk-tools@desk-tools --scope project` で届け、会話を開き直す。
 - **手元で直しながら試す。** 入れずに `claude --plugin-dir ~/Projects/ai-desktools` で開いてもよい。その会話だけで効き、入れてあるものより優先される。worktree で直して検証用のワークスペースで試す手順は [development.md](development.md)。
 

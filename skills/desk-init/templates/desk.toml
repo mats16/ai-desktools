@@ -34,9 +34,9 @@ quota_project = ""  # gcloud の既定の OAuth クライアントで取った�
 # "docs.googleapis.com" = ""    # Docs
 
 [slides]
-default_theme = "navy"  # 説明で決まらないときのテーマ。テーマは資料ごとに選ぶ（slides.py themes が名前と説明を出す）。切り替えはスキル slides-build の templates の「Choosing the default theme」
+default_theme = "navy"  # 説明で決まらないときのテーマ。テーマは資料ごとに選ぶ（slides.py themes が名前と説明を出す）。切り替えはスキル google-slides の templates の「Choosing the default theme」
 
-[brand]  # 表紙の社名と著作権表示（ドキュメントのフッターも）、ドキュメントの表紙のロゴ。copyright は要る（desk-doctor が見る）
+[brand]  # 表紙の社名と著作権表示（ドキュメントのフッターも）、ドキュメントの表紙のロゴ。copyright は要る（google-slides の slides_doctor.py と google-docs の docs_doctor.py が見る。desk-doctor から回す）
 # company = "アクメ・ジャパン株式会社"  # 表紙の左下。書かなければ置かない
 # copyright = "© 2026 Acme, Inc. All rights reserved."  # 全ページの左下。lint が 9pt を通すのは「© <年> <社名> All rights reserved.」の形だけ
 # logo = "acme/logo.png"  # ドキュメントの表紙のロゴ。ワークスペースの assets/ の中のパスか URL。書かなければ置かない
@@ -47,9 +47,9 @@ default_theme = "navy"  # 説明で決まらないときのテーマ。テーマ
 # [docs]
 # default_theme = "acme"  # doc.md に theme: を書かないときのテーマ（themes/docs/acme.json）。書かなければ既定（A4）
 
-# ドキュメントのテーマ（版面・見出しの大きさと色・書体）は、ワークスペースの themes/docs/<名前>.json に書く（スキル docs-build の SKILL.md を開いてから、その themes.md の docs-write-010）。doc.md の頭に theme: <名前>
+# ドキュメントのテーマ（版面・見出しの大きさと色・書体）は、ワークスペースの themes/docs/<名前>.json に書く（スキル google-docs の SKILL.md を開いてから、その themes.md の docs-write-010）。doc.md の頭に theme: <名前>
 
-[docs.templates]  # ドキュメントのテンプレート（Google Docs）。正本は rules/docs-build/templates/<名前>/doc.md。そのフォルダで docs.py new して URL を書く
+[docs.templates]  # ドキュメントのテンプレート（Google Docs）。正本はワークスペースの recipes/<レシピ>/templates/<名前>/doc.md。そのフォルダで docs.py new して URL を書く
 
 [review]  # レビューの進め方（deck-workflow の 5 と 9）。既定のままでよい
 plan_reviewer = "ai"        # 構成を決めたあと、誰が見るか。"ai"（AI がレビューして、そのまま作る）か "human"（人が確かめてから作る）。資料ごとに言われたら、そちらを使う

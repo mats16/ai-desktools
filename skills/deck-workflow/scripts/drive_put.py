@@ -8,7 +8,7 @@ usage: drive_put.py <ファイル> <フォルダの URL か ID> <Drive 上の名
 import mimetypes, os, re, sys, urllib.parse
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))  # gapi.py（スキルで共有する部品）
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # gapi.py（google-slides のものの写し）
 from gapi import DRIVE, GDOCS, config, folder_id, request, run, subfolder, upload
 
 FIELDS = "id,name,webViewLink,modifiedTime"
@@ -41,7 +41,7 @@ def research(path):
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--selftest"]:  # Google を使わない。lib/ の部品が読めることと、名前の確認（2026-10-31 に lib/ へ移したとき、読めずに起動で落ちていた）
+    if sys.argv[1:] == ["--selftest"]:  # Google を使わない。写しの gapi.py が読めることと、名前の確認（2026-10-31 に lib/ へ移したとき、読めずに起動で落ちていた）
         for bad in (lambda: main("x", "y", "名前"), lambda: research("Research/x.md")):
             try:
                 bad()

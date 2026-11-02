@@ -6,7 +6,7 @@ Steps 10–11 of "Overall flow" in [SKILL.md](SKILL.md), for decks and documents
 
 [deck-flow-020] **Before the report, check the ledger.** Run `refs.py check <material folder> --fetch`. Reread the sources it lists as stale or updated after the date checked, fix what changed (rows and pages), and run `refs.py seen`. Resolve the rows still `未`: open the source, or take the fact off the pages and ask. Also run it when a request after delivery changes the facts of a material checked more than 14 days ago. Stale sources caused wrong model generations, prices, and descriptions of our own tools in past corrections.
 
-[deck-flow-022] **When the request also asks for speaker notes or a video, go on to them right after the deck is finished, without stopping.** Run in this order: finish the deck (9 and deck-flow-020, which can still change pages) → write the notes for the whole deck (`vids-voice`) → make the video (`vids-build`), only if a video was asked for → deliver everything in one report. Keep the order, because the notes are written from the finished pages and the video reads the notes. A request for a video alone also runs the notes first. Do not report or wait for the user between the steps. If a step would ask the user (such as moving content from the notes to the pages in step 2 of vids-build), skip that part and put the question in the final report. Do not ask about the video: it uses a Conversational voice unless the request names a voice or avatar scenes (step 1 of vids-build).
+[deck-flow-022] **When the request also asks for speaker notes or a video, go on to them right after the deck is finished, without stopping.** Run in this order: finish the deck (9 and deck-flow-020, which can still change pages) → write the notes for the whole deck (`google-vids` → voiceover scripts) → make the video (`google-vids`), only if a video was asked for → deliver everything in one report. Keep the order, because the notes are written from the finished pages and the video reads the notes. A request for a video alone also runs the notes first. Do not report or wait for the user between the steps. If a step would ask the user (such as moving content from the notes to the pages in step 2 of google-vids), skip that part and put the question in the final report. Do not ask about the video: it uses a Conversational voice unless the request names a voice or avatar scenes (step 1 of google-vids).
 
 Put the final report in one message. Include:
 
@@ -16,7 +16,7 @@ Put the final report in one message. Include:
 - The key points of the three-representative-pages log (up to 3 lines; slides-flow-009)
 - Which correction was routed to which rule (`desk-feedback` → recording a correction)
 - What the source check changed, and the rows still 「照合中」 or `確かめられない` (deck-flow-019)
-- If notes or a video were asked for: what step 7 of `vids-voice` lists, and the Vids URL (deck-flow-022)
+- If notes or a video were asked for: what step 7 of `google-vids` → voiceover scripts lists, and the Vids URL (deck-flow-022)
 
 If `[feedback.google_comments] watch_hours` in `desk.toml` is greater than 0, start watching comments after delivery (deck-comments-004 in `comments.md`). If it is 0 or unset, do not watch.
 

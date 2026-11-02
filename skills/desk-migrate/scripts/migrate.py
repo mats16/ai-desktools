@@ -23,14 +23,16 @@ paths にそのパスを書いた frontmatter を足す（出る場面は前と�
 作り直した索引に出ない行を Research/references.md に移し、同じ出典が出る行は消して（控えに残す）、作り直す。
 2026-10-31 の版で、スキルを中身の種類で組み直した（deck-practices → deck-workflow など。RESTRUCTURE）。本文・台帳の中のプラグインのパスとスキルの名前を書き換え、
 ワークスペースの rules/・recipes/ の下のパスと決まりの ID は替えない。
-何度回してもよい。標準ライブラリだけ。"""
+何度回してもよい。標準ライブラリだけ。2026-11-02 のバージョンで、道具のスキルの名前を、動かす先の名前にした（slides-build → google-slides、docs-build → google-docs、vids-build → google-vids。RENAMED_1102）。
+lib/ をやめ、共有のスクリプトを持ち主のスキルの scripts/ に置いた（lib/ledger.py → desk-feedback/scripts/ledger.py など。LIB_1102）。どちらも RESTRUCTURE の最後に当てる。
+"""
 import fnmatch, json, os, re, shutil, subprocess, sys, tempfile, time
 from collections import Counter
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PLUGIN = HERE.parents[1]  # プラグインの skills/
-sys.path.insert(0, str(PLUGIN.parent / "lib"))
+sys.path.insert(0, str(HERE))  # desk.py・ledger.py・refs.py は、持ち主（desk-init・desk-feedback・deck-workflow）のものの写し
 import desk  # noqa: E402  ワークスペースの探し方
 import ledger  # noqa: E402  台帳の提案の状態（state）
 import refs  # noqa: E402  出典の台帳と全体の索引（2026-10-29 から作るもの）
@@ -56,7 +58,7 @@ SPLIT = {  # 中身を場面ごとに分けたプラグインのファイル。�
     "desk-dreaming/SKILL.md": "desk-dreaming/SKILL.md・run.md・apply.md",
     "desk-dreaming/run.md": "desk-dreaming/run.md・prompt_propose.md（4 の a〜d の案の出し方。2026-10-25）",
     "slides-template/SKILL.md": "slides-template/SKILL.md・create.md・dark.md・fonts.md",
-    "vids-build/SKILL.md": "vids-build/SKILL.md・avatars.md",
+    "vids-build/SKILL.md": "vids-build/SKILL.md・avatars.md、vids-build/failures.md（失敗したときの節。2026-11-02）",
     "deck-practices/content.md": "deck-practices/content.md・content_customer.md・content_internal.md・content_explain.md（§1 の資料の種類ごとの決まり）、deck-writing/SKILL.md（§0 のどの資料でも同じこと。2026-10-30）",
     "slides-build/visual.md": "slides-build/visual.md、deck-design/SKILL.md（§3・§4 の色と形のベストプラクティスと、§6 の slides-visual-048・049。2026-10-30）"}
 B = "A-Za-z0-9_-"  # ID とスキルの名前の前後の区切り（和文は続けて書いてもよいので、英数字だけを見る）
@@ -66,11 +68,19 @@ MOVED_31 = {"deck-practices/rules.md": "desk-feedback/routing.md", **{f"deck-pra
             "slides-build/prompt_pages.md": "deck-workflow/prompt_pages.md", "slides-build/reuse.md": "deck-workflow/reuse.md", "deck-comments/SKILL.md": "deck-workflow/comments.md",
             "slides-template/SKILL.md": "slides-build/template.md", **{f"slides-template/{x}.md": f"slides-build/template_{x}.md" for x in ("create", "dark", "fonts")},
             "desk-recipes/SKILL.md": "desk-feedback/recipes.md"}  # 2026-10-31 に動かしたファイル（<スキル>/<ファイル>）
-LIBS_31 = "desk|gapi|brand|textlint|sheet|ledger|refs"  # 2026-10-31 に deck-practices/scripts/ から lib/ へ移したスクリプト
 LIB_SCRIPT = r"(?!/scripts(?![A-Za-z0-9_-]))(?!`? の `?scripts/)"  # deck-practices/scripts は 1 つのまとまり。スキルの名前だけの替えを、その後ろに当てない（フォルダ・glob・cd の形も。deck-workflow/scripts/ には drive_put.py と comments.py しかない）
 OLD_LAYOUT_31 = ('deck-comments/SKILL.md', 'deck-comments/prompt_watch.md', 'deck-practices/SKILL.md', 'deck-practices/agents.md', 'deck-practices/content.md', 'deck-practices/content_customer.md', 'deck-practices/content_explain.md', 'deck-practices/content_internal.md', 'deck-practices/deliver.md', 'deck-practices/drive.md', 'deck-practices/materials.md', 'deck-practices/revise.md', 'deck-practices/rules.md', 'deck-practices/start.md', 'deck-research/SKILL.md', 'deck-research/sources.md', 'desk-recipes/SKILL.md', 'docs-build/SKILL.md', 'docs-build/api.md', 'docs-build/lint.md', 'docs-build/templates.md', 'docs-build/themes.md', 'docs-build/visual.md', 'slides-build/SKILL.md', 'slides-build/api.md', 'slides-build/commands.md', 'slides-build/diagrams.md', 'slides-build/images.md', 'slides-build/legacy.md', 'slides-build/lint.md', 'slides-build/pages.md', 'slides-build/prompt_pages.md', 'slides-build/reuse.md', 'slides-build/themes.md', 'slides-build/visual.md', 'slides-build/workflow.md', 'slides-template/SKILL.md', 'slides-template/create.md', 'slides-template/dark.md', 'slides-template/fonts.md')  # 2026-10-31 の前に、組み直したスキルにあった md（古い glob を、前に実際にあったファイルでだけ当てる）
 WS_PATH = r"(?<![A-Za-z0-9_-])[^\s`'\"()（）「」、。・,]*?(?<![A-Za-z0-9_-])(?:rules|recipes)/[^\s`'\"()（）「」、。・,]*"  # ワークスペースのパス（rules/・recipes/ の下は、深さによらず 2026-10-31 の替えを当てない）
 RENAMED_31 = {"deck-practices": "deck-workflow", "deck-comments": "deck-workflow", "slides-template": "slides-build", "desk-recipes": "desk-feedback", "deck-research": "desk-research"}  # 2026-10-31 のスキルの名前の替え
+LIB_ANCHOR = r"((?:<plugin>|<プラグインのフォルダ>)/|(?<![^\s`'\"(（「・、=:|*])(?:\$[A-Za-z_]+/)?(?:\.\./)+)"  # プラグインの lib/ と分かる前の形（2026-11-02 の替え）
+RENAMED_1102 = {"slides-build": "google-slides", "docs-build": "google-docs", "vids-build": "google-vids"}  # vids-voice は google-vids に寄せたが、ファイルの名前も替えたので、名前だけは替えない（下の決まった形だけ）  # 2026-11-02 のスキルの名前の替え（道具のスキルを、動かす先の名前に。vids-voice は google-vids に寄せた）
+OLD_LAYOUT_1102 = ('docs-build/SKILL.md', 'docs-build/api.md', 'docs-build/lint.md', 'docs-build/templates.md', 'docs-build/themes.md', 'slides-build/SKILL.md', 'slides-build/api.md',
+                   'slides-build/commands.md', 'slides-build/diagrams.md', 'slides-build/images.md', 'slides-build/legacy.md', 'slides-build/lint.md', 'slides-build/pages.md',
+                   'slides-build/template.md', 'slides-build/template_create.md', 'slides-build/template_dark.md', 'slides-build/template_fonts.md', 'slides-build/themes.md',
+                   'vids-build/SKILL.md', 'vids-build/avatars.md', 'vids-build/internal_api.md', 'vids-voice/SKILL.md', 'vids-voice/en.md', 'vids-voice/ja.md', 'vids-voice/prompt_review.md')  # 2026-11-02 の前の、名前を替えたスキルの md（前のファイルにしか当たらない glob を見分ける）
+MOVED_1102 = {"vids-voice/SKILL.md": "google-vids/voice.md", "vids-voice/ja.md": "google-vids/voice_ja.md", "vids-voice/en.md": "google-vids/voice_en.md",
+              "vids-voice/prompt_review.md": "google-vids/prompt_voice_review.md"}  # 2026-11-02 に動かしたファイル（名前の替えの前に当てる。決まりの ID の vids-voice-… は替えない）
+LIB_1102 = {"desk": "desk-init", "gapi": "google-slides", "brand": "google-slides", "textlint": "google-slides", "sheet": "google-slides", "ledger": "desk-feedback", "refs": "deck-workflow"}  # 2026-11-02 に lib/ から持ち主のスキルの scripts/ へ移したスクリプト（desk.SHARED と同じ持ち主）
 
 
 def moved_phrase(m):
@@ -85,15 +95,28 @@ def moved_phrase(m):
 
 
 RESTRUCTURE = [  # 2026-10-31: 進め方・知見・道具でスキルを分け直した。決まりの ID は変えない（deck-research-・deck-comments- の ID は、後ろの - で替えない）
-    (rf"(?<![.{B}])(`?)(deck-practices|deck-comments|slides-template|desk-recipes|slides-build|docs-build)\1 の (`?)([\w.]+\.md)\3", moved_phrase),
+    (rf"(?<![.{B}])(`?)(deck-practices|deck-comments|slides-template|desk-recipes|slides-build|docs-build|vids-voice)\1\s*の\s*(`?)([\w.]+\.md)\3", moved_phrase),  # の の前後の空きはあってもなくても
     (r"<スキル deck-practices のフォルダ>/scripts/(desk|gapi|brand|textlint|sheet|ledger|refs)\.py", r"<プラグインのフォルダ>/lib/\1.py"),
     (r"<deck-practices folder>/scripts/(desk|gapi|brand|textlint|sheet|ledger|refs)\.py", r"<plugin>/lib/\1.py"),
     *((rf"(?<![.{B}]){re.escape(a)}(?![{B}])", b) for a, b in MOVED_31.items()),  # 前後がほかの語につながったもの（my-slides-build/visual.md、rules.mdx）は替えない
     (rf"(?<![.{B}])deck-practices/scripts/(drive_put)\.py(?![{B}])", r"deck-workflow/scripts/\1.py"),  # deck-workflow に残ったスクリプト（同じ相対の形のまま替わる）
-    *((rf"(?<![.{B}]){a}(?![{B}])" + (LIB_SCRIPT if a == "deck-practices" else ""), b) for a, b in RENAMED_31.items())]
+    *((rf"(?<![.{B}]){a}(?![{B}])" + (LIB_SCRIPT if a == "deck-practices" else ""), b) for a, b in RENAMED_31.items()),
+    # 2026-11-02: lib/ をやめ、共有のスクリプトを持ち主のスキルの scripts/ に置いた。道具のスキルの名前を google-slides・google-docs・google-vids にした（上の 10-31 の替えのあとに当てる）
+    # lib/ はプラグインの根元で skills/ と並んでいたので、lib/<名前>.py を skills/<持ち主>/scripts/<名前>.py に替えれば、前に付いたものはそのままで同じところを指す。
+    # 替えるのは、プラグインのものと分かる形だけ（<plugin>/・<プラグインのフォルダ>/ のあと、語の頭の ../ の並び〔$D/ のあとも〕のあと）。ほかの lib/（顧客のリポジトリの src/lib/ など）は替えない。
+    # 台帳の変更先の値（skills/ からのパスの ../lib/<名前>.py）は、文と違うので lib_target が替える
+    (LIB_ANCHOR + rf"lib/({'|'.join(LIB_1102)})\.py(?![{B}]|\.[{B}])", lambda m: f"{m.group(1)}skills/{LIB_1102[m.group(2)]}/scripts/{m.group(2)}.py"),
+    (LIB_ANCHOR + rf"lib/yomiyasu/(scripts/(?:yomiyasu_lint|yomiyasu_diff|markdown_visibility)\.py|references/lists/[.{B}]+\.txt|LICENSE|UNICODE-LICENSE\.txt)(?![{B}])",
+     r"\1skills/google-slides/scripts/yomiyasu/\2"),  # スキルに写した yomiyasu のファイルだけ（google-slides・google-docs・deck-review）
+    (rf"(?<![{B}])(`?)vids-voice\1\s*→\s*", "`google-vids` → voiceover scripts: "),  # 「`vids-voice` → steps」も「vids-voice → steps」も
+    (rf"(<(?:スキル )?)vids-voice( folder>| のフォルダ>)/({'|'.join(re.escape(k.split('/')[1]) for k in MOVED_1102)})(?![{B}])",
+     lambda m: f"{m.group(1)}google-vids{m.group(2)}/{MOVED_1102['vids-voice/' + m.group(3)].split('/')[1]}"),  # <vids-voice folder>/SKILL.md → <google-vids folder>/voice.md  # 前の台本のスキルの場面（「`vids-voice` → steps」）は、google-vids の台本の場面に（前の場面の名前はそのあとに残す）
+    *((rf"(?<![.{B}]){re.escape(a)}(?![{B}])", b) for a, b in MOVED_1102.items()),
+    (rf"(?<![.{B}])vids-voice/scripts/", "google-vids/scripts/"), (rf"(<(?:スキル )?)vids-voice( folder>| のフォルダ>)/scripts/", r"\1google-vids\2/scripts/"),  # speaker_notes.py は名前のまま
+    *((rf"(?<![.{B}])(?<![{B}]`){a}(?![{B}])", b) for a, b in RENAMED_1102.items())]  # ほかの語に `…` でつながったもの（a-`slides-build`）も替えない
 # deck-practices/scripts のほかの形（lib/ へ移したスクリプト、フォルダ、glob、cd）は、どこを指すか文から分からない（$K/・./・.agents/skills/ など）ので、
 # 雛形が書く形（上の <… のフォルダ>/scripts/）と台帳の値（skills/ から。rewrite の頭）だけを替え、ほかはどの形も old_scripts が要判断にする
-OLD_SKILLS = set(RENAMED_31)  # 2026-10-31 の前のスキルの名前（前の版の rules/<スキル>/ の上書きを見分ける）
+OLD_SKILLS = set(RENAMED_31) | set(RENAMED_1102) | {"vids-voice"}  # 2026-10-31・2026-11-02 の前のスキルの名前（前の版の rules/<スキル>/ の上書きを見分ける）
 PATHS = [  # 本文の中のパスとスキルの名前（決まりの ID は先に替えるので、deck-build-005 などはもう残っていない）
     (r"deck-practices/visual_doc\.md", "docs-build/visual.md"), (r"deck-practices/visual\.md", "slides-build/visual.md"),
     (r"deck-practices/reuse\.md", "slides-build/reuse.md"), (r"deck-build/slides\.md", "slides-build/pages.md"),
@@ -342,7 +365,7 @@ def move_index(ws):
             have = set(dst.read_text(encoding="utf-8", errors="replace").splitlines())  # 見るだけ。書き戻さない
             unplaced.extend(x for x in block if x.strip() and not x.startswith("#") and x not in have)  # 見出しは日付が替わるので比べない
             out.append(f"移していない（もう移してある。塊の最後の印の行を消すと、また移す）: references_index.md の{what} → {dst.relative_to(ws)}（{k} 行）")
-    move("「Google Drive の置き場所」", ws / DRIVE, (PLUGIN / "desk-init" / "templates" / DRIVE).read_text(encoding="utf-8").rstrip("\n") + "\n\n", drive, sum(bool(x.strip()) for x in drive))
+    move("「Google Drive の置き場所」", ws / DRIVE, (HERE.parent / "templates" / DRIVE).read_text(encoding="utf-8").rstrip("\n") + "\n\n", drive, sum(bool(x.strip()) for x in drive))
     move("作り直した索引に出ない行", ws / "Research" / "references.md", RESEARCH_HEAD, research_block(moved), sum(map(len, moved.values())))
     filled = fill_uses(ws, [x for _, x in dropped])
     if unplaced:
@@ -470,11 +493,15 @@ def texts(ws):
 TARGETS = {"file", "to"}  # 台帳の変更先の欄（プラグインへの提案の file、指摘の戻し先の to）。どちらも skills/ からのパス
 
 
+LIB_VALUE = re.compile(rf"(?:deck-practices/scripts|(?:\.\./)?lib)/({'|'.join(LIB_1102)})\.py|(?:\.\./)?lib/(yomiyasu/(?:scripts/(?:yomiyasu_lint|yomiyasu_diff|markdown_visibility)\.py|references/lists/[.{B}]+\.txt))")  # ledger.py の plugin_path と同じく、lib/<名前>.py も  # 台帳の変更先の値のまるごとが、2026-10-31 に lib/ へ移し、2026-11-02 に持ち主の scripts/ へ移したスクリプト
+
+
 def lib_target(value, fn=None):
     """台帳の変更先の値が、まるごと前の deck-practices/scripts/ の lib/ へ移したスクリプトなら ../lib/<名前>.py（skills/ からのパス）。ほかは rewrite。
     変更案の old・new（ワークスペースの文そのもの）には当てない。当てると、書き換えないワークスペースの文と食い違い、apply・undo が止まる。"""
-    m = re.fullmatch(rf"deck-practices/scripts/({LIBS_31})\.py", value)
-    return f"../lib/{m.group(1)}.py" if m else (fn or rewrite)(value)
+    if not (m := LIB_VALUE.fullmatch(value)):
+        return (fn or rewrite)(value)
+    return f"{LIB_1102[m.group(1)]}/scripts/{m.group(1)}.py" if m.group(1) else f"google-slides/scripts/{m.group(2)}"  # yomiyasu は写したファイルだけ  # skills/ からのパスのまま、持ち主の scripts/ に
 
 
 VERBATIM = {"quote", "a", "reason"}  # 台帳の、人の言葉をそのまま持つ欄（修正の指示の原文、判断待ちの答え、却下の理由）。書き換えない
@@ -484,12 +511,13 @@ KEEP = VERBATIM | {"by"}  # by は書いた者の種類（session・dreaming・i
 def ledger_lines(path, fn):
     """台帳の行ごとに、文字列の値を fn で書き換える（JSON の形は変えない。人の言葉の欄 VERBATIM はそのまま）。"""
     def walk(v):
-        if isinstance(v, str):
-            return fn(v)
+        if isinstance(v, str):  # まるごと前の lib/ のスクリプトの値（route の前後の戻し先 prev・after なども）は、欄によらず skills/ からの今のパスに
+            return lib_target(v, fn) if v.startswith("../lib/") and LIB_VALUE.fullmatch(v) else fn(v)  # skills/ からの ../lib/ だけ（lib/x.py はワークスペースのパスでもある）
         if isinstance(v, list):
             return [walk(x) for x in v]
         if isinstance(v, dict):
-            return {k: x if k in KEEP else lib_target(x, fn) if k in TARGETS and (k == "to" or v.get("plugin")) and isinstance(x, str) else walk(x) for k, x in v.items()}
+            return {k: x if k in KEEP else fn(x) if k in ("old", "new") and isinstance(x, str)  # 変更案の文は、ワークスペースの文と同じ替えだけ（apply・undo が文で探す）
+                    else lib_target(x, fn) if (k in TARGETS and (k == "to" or v.get("plugin")) or k == "rule") and isinstance(x, str) else walk(x) for k, x in v.items()}
         return v
     out = []
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -645,7 +673,7 @@ def decide(ws, i, target):
 
 def old_scripts(ws):
     """書き換えたあとも残る、前の deck-practices/scripts の形 [「<ファイル>:<行>: <パス>」]（フォルダ・glob・cd・「`deck-practices` の `scripts/…`」も。
-    どこを指すか分からないので替えない。人が <plugin>/lib/<名前>.py か <スキル deck-workflow のフォルダ>/scripts/ に直す）。"""
+    どこを指すか分からないので替えない。人が持ち主のスキルの scripts/<名前>.py（desk-feedback/scripts/ledger.py など）か <スキル deck-workflow のフォルダ>/scripts/ に直す）。"""
     pat = re.compile(rf"[^\s'\"()（）「」]*(?<![.{B}])deck-practices(?:/|`? の `?)scripts[^\s'\"()（）「」]*")
     out = []
     for p in texts(ws):
@@ -654,7 +682,7 @@ def old_scripts(ws):
     return out
 
 
-GLOB_31 = rf"(?<![.{B}])[{B}]+/[*.{B}]*\*[*.{B}]*\.md"  # パスの glob（slides-build/visual*.md）
+GLOB_31 = rf"(?<![.{B}])[{B}]+/[*.{B}]*\*(?:[*./{B}]*[*{B}])?"  # パスの glob（slides-build/visual*.md、vids-voice/*、vids-voice/**/*.py）。文の終わりの . は入れない  # パスの glob（slides-build/visual*.md）
 
 
 def restructured(text):
@@ -667,7 +695,9 @@ def restructured(text):
 def dead_glob(g):
     """前の版のファイルに当たり、2026-10-31 の替えを当てると今のどのファイルにも当たらない glob（今のどこを指すか決められない）。"""
     now = [str(f.relative_to(PLUGIN)) for f in PLUGIN.glob("*/*.md")]
-    return bool(fnmatch.filter(OLD_LAYOUT_31, g)) and not fnmatch.filter(now, restructured(g))
+    if g.startswith("vids-voice/"):  # 2026-11-02 にフォルダのファイルの名前をみな替えた（SKILL.md → voice.md など）ので、今の google-vids のどれに当てるかは決められない（**/ の glob も）
+        return True
+    return bool(fnmatch.filter(OLD_LAYOUT_31 + OLD_LAYOUT_1102, g)) and not fnmatch.filter(now, restructured(g))
 
 
 def old_globs(ws):
@@ -679,14 +709,42 @@ def old_globs(ws):
     return out
 
 
+PLUGIN_VALUE = re.compile(r"(\.\./)?(?:skills/)?([a-z][a-z-]*)/([\w./-]+\.(?:md|py|sh|js|json|txt))")  # skills/<スキル>/… の形も（ledger.py の plugin_path が読む）  # 台帳の変更先の値のうち、プラグインのファイルのパスの形（skills/ から）
+
+
+def unresolved(ws):
+    """台帳の変更先（指摘の今の戻し先 to と、当てていないプラグインへの提案の file）のうち、書き換えたあとも今のプラグインにないファイルを指すもの [「台帳の <ID> の <欄>: <値>」]。
+    台帳は足していくだけなので、行でなく今の状態（ledger.state。あとの route で替えた戻し先、閉じた提案は見ない）で確かめる。
+    形の決まった値だけを今のファイルで確かめる（文の中のパスは、決まった形だけを替え、確かめない。desk-migrate の SKILL.md の 2026-11-02）。"""
+    if not (ws / ".desk" / "ledger.jsonl").is_file():
+        return []
+    cs, ps, _, _ = ledger.state(ws)
+    skills = {p.parent.name for p in PLUGIN.glob("*/SKILL.md")}
+    vals = [(c["id"], "to", c.get("to")) for c in cs.values()] + [(q["id"], "file", q.get("file")) for q in ps.values() if q.get("plugin") and q.get("status") == "未適用"]
+    out = []
+    for i, k, v in vals:
+        if not isinstance(v, str) or not (m := PLUGIN_VALUE.fullmatch(now := lib_target(v))):
+            continue
+        if now == v and m.group(2) != "lib" and m.group(2) not in OLD_SKILLS:  # 移行が触っていない今の形の値（作るファイルへのプラグインへの提案など）は、残りものでない
+            continue
+        if m.group(2) == "lib" or m.group(2) in OLD_SKILLS or m.group(2) in skills and (m.group(1) or not (PLUGIN / m.group(2) / m.group(3)).is_file()):
+            out.append(f"台帳の {i} の {k}: {now}")
+    return out
+
+
+def ledger_asks(ws):
+    """台帳の変更先の要判断（check と、書き換える apply が一度だけ出す。台帳はまだないファイルも指すので、書き換えたあとは出し続けない）。"""
+    return [f"要判断: {x} は今のプラグインにないファイルを指す。今のどのファイルのことか決めて、台帳の値を直す（2026-11-02）" for x in unresolved(ws)]
+
+
 def stale_asks(ws):
-    """書き換えられずに残る前の参照の要判断（apply は、ほかに移すものがないときも出す）。"""
+    """書き換えられずに残る前の参照の要判断（apply は、ほかに移すものがないときも、check もいつも出す。決めるまで消えない）。"""
     return ([f"要判断: {x} は前の版のファイルにしか当たらない glob。今のどのファイルを指すか決めて、手で直す（2026-10-31）" for x in old_globs(ws)]
-            + [f"要判断: {x} は lib/ へ移したスクリプトの前のパス。どこからの相対か分からないので替えていない。<plugin>/lib/ の同じ名前を指すように手で直す（2026-10-31）" for x in old_scripts(ws)])
+            + [f"要判断: {x} は lib/ へ移したスクリプトの前のパス。どこからの相対か分からないので替えていない。持ち主のスキルの scripts/ の同じ名前（desk-feedback/scripts/ledger.py など。2026-11-02 に lib/ をやめた）を指すように手で直す（2026-10-31）" for x in old_scripts(ws)])
 
 
 def needs(ws):
-    """前の版のまま残っているもの（desk-doctor が出す）。"""
+    """前の版のまま残っているもの（移すもの・書き換えるもの・要判断）。check が出すものと同じ範囲で、selftest が「移しきった」を確かめるのに使う（desk-doctor は check を回す）。"""
     moves, edit, _, _ = plan(ws)
     return ([str(a.relative_to(ws)) for a, _ in data_moves(ws)] + [".desk/scout/（desk-crawl の .desk/crawl/ へ）"] * (ws / ".desk" / "scout").is_dir()
             + [f"{refs.INDEX}（手で書いた前の形。refs.py index が作るものにする）"] * (not refs.generated(ws / refs.INDEX))
@@ -694,7 +752,8 @@ def needs(ws):
             + [f"{p.relative_to(ws)}（frontmatter）" for p, _ in fronts(ws, {f for f, _ in moves})]
             + [f"台帳の {i} の変更先（{a} → {b or '要判断'}）" for i, a, b, _ in relinks(ws)] + id_needs(ws)
             + [f"rules/{s.relative_to(ws / 'rules')}（recipes/ へ）" for s, _ in (recipe_moves(ws) if RECIPES else [])]
-            + [f"{x}（前のスクリプトのパス）" for x in old_scripts(ws)] + [f"{x}（前のファイルへの glob）" for x in old_globs(ws)])
+            + [f"{x}（前のスクリプトのパス）" for x in old_scripts(ws)] + [f"{x}（前のファイルへの glob）" for x in old_globs(ws)]
+            + [f"{x}（今のプラグインにないパス）" for x in unresolved(ws)])
 
 
 def id_needs(ws):
@@ -717,7 +776,8 @@ def fronts(ws, skip=()):
         if p in have or p in skip or rel == Path("README.md") or "templates" in rel.parts[:-1] or not p.is_file() or not (text := p.read_text(encoding="utf-8", errors="ignore")).strip():
             continue  # 中身のないファイルは、出すものがない
         plain = len(rel.parts) > 1 and rel.parts[0] in skills and not text.startswith("---")
-        out.append((p, f"---\ndescription: プラグインの {rel.as_posix()} への足しと上書き\npaths: [{rel.as_posix()}]\n---\n\n" if plain else None))
+        now = rewrite(rel.as_posix(), ids=False)  # 今のファイルで書く（2026-10-31・2026-11-02 に動かしたもの。書いたあとの回し直しで、また書き換えない）
+        out.append((p, f"---\ndescription: プラグインの {now} への足しと上書き\npaths: [{now}]\n---\n\n" if plain else None))
     return out
 
 
@@ -946,7 +1006,7 @@ def recipe_front(text):
         head.append("per_material: true")
     else:
         plugin = [str(f.relative_to(PLUGIN)) for f in PLUGIN.glob("*/**/*.md")]
-        before = {f: {f, *(o for o in OLD_LAYOUT_31 if rewrite(o, ids=False) == f)} for f in plugin}  # 2026-10-31 の前に実際にあった名前でも当てる（glob は今のパスに書き換えられない: slides-build/visual*.md）
+        before = {f: {f, *(o for o in OLD_LAYOUT_31 + OLD_LAYOUT_1102 if rewrite(o, ids=False) == f)} for f in plugin}  # 2026-10-31 の前に実際にあった名前でも当てる（glob は今のパスに書き換えられない: slides-build/visual*.md）
         hit = [desk.triggers(f) for f in plugin if any(fnmatch.fnmatchcase(f, g) or any(fnmatch.fnmatchcase(x, o) for x in before[f]) for g, o in zip(globs, olds))]
         step = next((s for s in desk.STEPS if hit and all(s in h for h in hit)), None)
         head += [f"step: {step}"] if step else []
@@ -1000,7 +1060,7 @@ def to_recipes(ws, backup):
         readme.unlink()  # 控えにある。雛形の今の README を置く
         out.append("消した: rules/README.md（控えに残した。recipes/README.md は desk-init の雛形）")
     if not (ws / "recipes" / "README.md").exists() and (ws / "recipes").is_dir():
-        shutil.copy2(PLUGIN / "desk-init" / "templates" / "recipes" / "README.md", ws / "recipes" / "README.md")
+        shutil.copy2(HERE.parent / "templates" / "recipes" / "README.md", ws / "recipes" / "README.md")  # desk-init の雛形の写し
     for d in sorted((p for p in [ws / "rules", *(ws / "rules").rglob("*")] if p.is_dir()), key=lambda p: len(p.parts), reverse=True):
         if not any(d.iterdir()):
             d.rmdir()
@@ -1031,6 +1091,7 @@ def to_recipes(ws, backup):
 
 
 def apply(ws):
+    dangling = ledger_asks(ws)  # 台帳を書き換える前に（書き換えたあとは、今の形の値と見分けられない）
     data = move_data(ws) + move_scout(ws) + move_index(ws)  # 台帳（.desk/ledger.jsonl）を書き換える前に、名前を今の版にする
     moves, edit, split, ws_map = plan(ws)
     # 前の名前で整理を回していた。移すもの（rules/dreaming/ のファイルか、前の名前の残る本文）があるときだけ。前の名前が何も残らなければ、登録し直したあとと見分けられない
@@ -1038,7 +1099,7 @@ def apply(ws):
     heads = fronts(ws)  # 移すものがあれば、移したあとで見直す
     ids, new, open_ = ws_ids(ws)  # 書き換えるものがなければ、今の形の ID のまま
     if not moves and not edit and not any(h for _, h in heads) and not new and not strip_plan(ws, ids) and not (RECIPES and (ws / "rules").is_dir()):
-        return data + relink(ws) + by_hand(ws, heads) + id_asks(ws, ids, open_) + stale_asks(ws) or ["移すものはない（今の版）"]
+        return data + relink(ws) + by_hand(ws, heads) + id_asks(ws, ids, open_) + stale_asks(ws) + dangling or ["移すものはない（今の版）"]
     backup = ws / ".desk" / "migrate" / time.strftime("%Y%m%d-%H%M%S")
     n = 1
     while backup.exists():  # 同じ秒に回し直しても、前の控え（前の版の中身）を上書きしない
@@ -1084,7 +1145,7 @@ def apply(ws):
     for p, head in heads:  # 移したあとのパスで、前の版の同じパスへの上書きに frontmatter を足す
         if head:
             p.write_text(head + p.read_text(encoding="utf-8"), encoding="utf-8")
-            out.append(f"frontmatter を足した: {p.relative_to(ws)}（paths は前と同じパス。description は、何に効くかが分かるように直してよい）")
+            out.append(f"frontmatter を足した: {p.relative_to(ws)}（paths は、前に上書きしていたファイルの今のパス。description は、何に効くかが分かるように直してよい）")
     out += by_hand(ws, heads)
     for rel, where in plan(ws)[2] if (moves or edit) and not RECIPES else []:  # 分けた件は、前の版から移すときだけ（frontmatter を足すだけのときは、もう分けてある。check と同じ）。recipes/ に移すなら、レシピは作業ごとに出るので、どのファイルへの足しかは要らない
         out += [f"要判断: rules/{rel} は、プラグインで {rewrite(where)} に分けた。決まりごとに、足しているプラグインの節のファイルを frontmatter の paths に足す"
@@ -1096,8 +1157,8 @@ def apply(ws):
     out += [] if RECIPES else asks(relinks(ws))  # recipes/ に移すと、分けたファイルの提案は、前の文を丸ごと持つレシピについていく（決めることがない）
     ids, new, open_ = ws_ids(ws)  # 2026-10-27: ワークスペースの決まりの ID を外す（ほかの書き換えのあとの、今の形の ID で）
     out += hand_edits(ws) + strip_ids(ws, ids, new) + baselines(ws) + id_asks(ws, ids, open_)
-    out += stale_asks(ws)
-    if off := off_topic(ws):
+    out += stale_asks(ws) + dangling
+    if off := off_topic(ws):  # 一度だけの知らせ（ID と言い切れないので、決めるものではない。顧客の品番のような語にも当たる）
         out.append(f"要判断: 角括弧なしで書いた、もうプラグインにない前の ID がある（{'・'.join(off)}）。ids_*.json の prefixes で今の主題を見て、"
                    "その文を直すか、要らなければ消す（ID だと言い切れないので、ここでは替えない）")
     if RECIPES and ws_ids(ws)[2]:  # 決められない ID は rules/ のファイルで探す（relink-id）。決めるまで移さない
@@ -1128,8 +1189,45 @@ def selftest():
     RECIPES = False  # 前の段（2026-10-24〜27）は、rules/ の中の結果で確かめる。最後の段は selftest_recipes
     assert all(m["ids"].get(n, n) == n for m in MAPS for n in m["ids"].values())  # 今の ID は、前の ID として読んでも替わらない（何度回してもよい）
     # 2026-10-31: プラグインのパスとスキルの名前だけを替え、ワークスペースのパスと決まりの ID は替えない
-    assert rewrite("deck-practices/rules.md と `slides-template` の create.md") == "desk-feedback/routing.md と `slides-build` の template_create.md"
-    assert rewrite("deck-practices/scripts/brand.py") == "deck-practices/scripts/brand.py" and lib_target("deck-practices/scripts/brand.py") == "../lib/brand.py"  # まるごと一致で替えるのは台帳の変更先の欄だけ（変更案の文は、ワークスペースの文と同じに保つ）
+    assert rewrite("vids-voice/ja.md・vids-voice/scripts/speaker_notes.py・vids-voice-ja-002・vids-voice-004・`vids-voice` の `en.md`") == "google-vids/voice_ja.md・google-vids/scripts/speaker_notes.py・vids-voice-ja-002・vids-voice-004・`google-vids` の `voice_en.md`"  # 2026-11-02。決まりの ID は替えない
+    assert rewrite(SPLIT["vids-build/SKILL.md"]) == "google-vids/SKILL.md・avatars.md、google-vids/failures.md（失敗したときの節。2026-11-02）"  # 分けた先は今のファイルで知らせる
+    assert rewrite("Run <plugin>/lib/ledger.py.・x:../lib/refs.py・a|../lib/desk.py") == "Run <plugin>/skills/desk-feedback/scripts/ledger.py.・x:../skills/deck-workflow/scripts/refs.py・a|../skills/desk-init/scripts/desk.py"  # 文の終わりの . と、: | のあとも
+    assert rewrite("python3 ../lib/ledger.py trace x・$D/../../lib/refs.py index・<plugin>/lib/gapi.py・<plugin>/lib/yomiyasu/scripts/yomiyasu_diff.py・mylib/desk.py") == "python3 ../skills/desk-feedback/scripts/ledger.py trace x・$D/../../skills/deck-workflow/scripts/refs.py index・<plugin>/skills/google-slides/scripts/gapi.py・<plugin>/skills/google-slides/scripts/yomiyasu/scripts/yomiyasu_diff.py・mylib/desk.py"  # 前に付いたものはそのまま
+    assert rewrite("<plugin>/lib/yomiyasu/scripts/yomiyasu_diff.py・<plugin>/lib/yomiyasu/SKILL.md") == "<plugin>/skills/google-slides/scripts/yomiyasu/scripts/yomiyasu_diff.py・<plugin>/lib/yomiyasu/SKILL.md"  # 写したものだけ替える
+    with tempfile.TemporaryDirectory() as t:  # 台帳の変更先で、書き換えたあとも今のファイルにないものは知らせる（文の中のパスは確かめない）
+        (Path(t) / "desk.toml").write_text("")
+        (Path(t) / ".desk").mkdir()
+        recs = [{"id": "P0001", "kind": "proposal", "plugin": True, "file": "../lib/yomiyasu/SKILL.md", "old": "", "new": "y"}, {"id": "c-0001", "kind": "correction", "to": "vids-voice/prompt.md"},
+                {"id": "c-0002", "kind": "correction", "to": "google-slides/pages.md"}, {"id": "c-0003", "kind": "correction", "to": "slides-visual-012"},
+                {"id": "c-0004", "kind": "correction", "to": "recipes/a/RECIPE.md"}, {"id": "P0002", "kind": "proposal", "file": "AGENTS.md", "old": "lib/x.py", "new": "y"},
+                {"id": "c-0005", "kind": "correction", "to": "vids-voice/prompt.md"}, {"kind": "route", "ref": "c-0005", "to": "google-vids/voice.md"},
+                {"id": "P0003", "kind": "proposal", "plugin": True, "file": "lib/brand.py", "old": "", "new": "y"},
+                {"id": "P0004", "kind": "proposal", "plugin": True, "file": "vids-voice/gone.md", "old": "", "new": "y"}, {"kind": "withdrawn", "ref": "P0004"},
+                {"id": "P0005", "kind": "proposal", "plugin": True, "file": "google-slides/new_topic.md", "old": "", "new": "y"},
+                {"id": "c-0006", "kind": "correction", "to": "skills/vids-voice/gone.md"}, {"id": "c-0007", "kind": "correction", "to": "slides-build/gone.md"}]  # 作るファイルへの今の形の提案は出さない
+        (Path(t) / ".desk" / "ledger.jsonl").write_text("".join(json.dumps({"ts": "2026-11-02T00:00:00Z", "rule": "", **r}) + "\n" for r in recs))
+        (Path(t) / "AGENTS.md").write_text("src/lib/sheet.py・`lib/desk.py`・cd <plugin>/lib・deck-writing/content_*.md\n")
+        got = unresolved(Path(t))
+        assert sorted(got) == ["台帳の P0001 の file: ../lib/yomiyasu/SKILL.md", "台帳の c-0001 の to: vids-voice/prompt.md", "台帳の c-0006 の to: skills/vids-voice/gone.md", "台帳の c-0007 の to: google-slides/gone.md"], got  # vids-voice の決まった形でないものは名前を替えず、知らせる  # 替えた戻し先（c-0005）・閉じた提案（P0004）・lib/<名前>.py（P0003）は出さない
+        assert any("今のプラグインにないパス" in x for x in needs(Path(t))) and sum("今のプラグインにないファイルを指す" in x for x in ledger_asks(Path(t))) == 4
+        assert sum("今のプラグインにないファイルを指す" in x for x in apply(Path(t))) == 4  # 書き換える apply が、書き換える前の値で出す
+        assert sorted(x.split(": ")[0] for x in unresolved(Path(t))) == ["台帳の P0001 の file", "台帳の c-0001 の to", "台帳の c-0006 の to"]  # 前の形のまま残るものは出し続け、書き換えた c-0007 は出さない（作るファイルへの今の形の提案と見分けられない）
+        out = subprocess.run([sys.executable, str(Path(__file__).resolve()), "check"], cwd=t, capture_output=True, text=True, env={**os.environ, "DESK_CONFIG": ""}).stdout
+        assert "今のプラグインにないファイルを指す" in out and "移すものはない" not in out, out  # check も、決めるまで出し続ける（desk-doctor が check で見る）
+    with tempfile.TemporaryDirectory() as t:  # 台帳の同じ値は、欄によらず同じ今のパスに（ledger.py は値で数える）
+        (Path(t) / "l.jsonl").write_text('{"kind": "review", "rule": "../lib/textlint.py"}\n{"kind": "correction", "to": "../lib/textlint.py"}\n{"kind": "review", "rule": "slides-visual-012"}\n'
+                                         '{"kind": "applied", "prev": {"c-0001": "../lib/textlint.py"}, "fix": "python3 ../lib/textlint.py --stats"}\n')
+        got = [json.loads(x) for x in ledger_lines(Path(t) / "l.jsonl", rewrite).splitlines()]
+        assert got[0]["rule"] == got[1]["to"] == got[3]["prev"]["c-0001"] == "google-slides/scripts/textlint.py" and got[2]["rule"] == "slides-visual-012", got
+        assert got[3]["fix"] == "python3 ../skills/google-slides/scripts/textlint.py --stats", got  # 文の中は文の替え（前に付いたものはそのまま）
+    assert rewrite("src/lib/sheet.py・`lib/desk.py`・a/../lib/desk.py") == "src/lib/sheet.py・`lib/desk.py`・a/../lib/desk.py"  # プラグインのものと分からない lib/ は替えない
+    assert dead_glob("vids-voice/**/*.md") and rewrite("vids-voice/**/*.md・vids-voice/*・vids-voice/**/*.py") == "vids-voice/**/*.md・vids-voice/*・vids-voice/**/*.py"  # フォルダをまたぐ glob も、md でない glob も
+    assert rewrite("`vids-voice` → steps・vids-voice/S*.md") == "`google-vids` → voiceover scripts: steps・vids-voice/S*.md" and dead_glob("vids-voice/S*.md")
+    assert rewrite("<vids-voice folder>/SKILL.md・<スキル vids-voice のフォルダ>/ja.md・`vids-voice`の`SKILL.md`・vids-voice → steps・<vids-voice folder>/scripts/speaker_notes.py") == (
+        "<google-vids folder>/voice.md・<スキル google-vids のフォルダ>/voice_ja.md・`google-vids` の `voice.md`・`google-vids` → voiceover scripts: steps・<google-vids folder>/scripts/speaker_notes.py")  # 台本のファイルは、どの書き方でも voice の方へ
+    assert dead_glob("vids-voice/ja*.md") and dead_glob("vids-voice/*.md") and not dead_glob("slides-build/pages*.md") and rewrite("vids-voice/ja*.md") == "vids-voice/ja*.md"  # 今のどれにも当たらない glob は残して知らせる
+    assert rewrite("deck-practices/rules.md と `slides-template` の create.md") == "desk-feedback/routing.md と `google-slides` の template_create.md"
+    assert rewrite("deck-practices/scripts/brand.py") == "deck-practices/scripts/brand.py" and lib_target("deck-practices/scripts/brand.py") == "google-slides/scripts/brand.py" == lib_target("../lib/brand.py")  # 2026-11-02 に lib/ から持ち主の scripts/ へ。まるごと一致で替えるのは台帳の変更先の欄だけ（変更案の文は、ワークスペースの文と同じに保つ）
     assert rewrite("deck-practices/content*.md・slides-build/visual*.md・deck-practices/*.md") == "deck-practices/content*.md・slides-build/visual*.md・deck-workflow/*.md"  # 書き換えると今のどれにも当たらない glob は残す
     with tempfile.TemporaryDirectory() as d:  # needs → apply → needs。台帳の変更案は文と同じまま、変更先は lib/ へ。直せない前の参照は、移したあとも知らせ続ける
         w = Path(d)
@@ -1142,7 +1240,7 @@ def selftest():
         before = needs(w)
         out = apply(w)
         led = {r["id"]: r for r in map(json.loads, (w / ".desk" / "ledger.jsonl").read_text().splitlines()) if r.get("kind") == "proposal"}
-        assert led["P0001"]["old"] in (w / "AGENTS.md").read_text() and led["P0002"]["file"] == "../lib/brand.py", led
+        assert led["P0001"]["old"] in (w / "AGENTS.md").read_text() and led["P0002"]["file"] == "google-slides/scripts/brand.py", led  # 2026-11-02 に lib/ から持ち主の scripts/ へ
         assert "deck-practices/content*.md" in (w / "AGENTS.md").read_text() and any("前のファイルへの glob" in x for x in before) and any("前のファイルへの glob" in x for x in needs(w)), (before, needs(w))
         assert any(o.startswith("要判断: AGENTS.md:1: deck-practices/content*.md") for o in out), out
         (w / "AGENTS.md").write_text("python3 $K/deck-practices/scripts/desk.py\n")
@@ -1153,7 +1251,8 @@ def selftest():
     assert rewrite("rules/deck-practices/SKILL.md・recipes/slides-template/RECIPE.md・deck-research-001・deck-comments-002") == "rules/deck-practices/SKILL.md・recipes/slides-template/RECIPE.md・deck-research-001・deck-comments-002"
     assert rewrite(rewrite("deck-practices/content.md")) == rewrite("deck-practices/content.md") == "deck-writing/content.md"
     assert rewrite("x.deck-practices・deck-practices/rules.mdx") == "x.deck-practices・deck-workflow/rules.mdx"
-    assert recipe_front("---\ndescription: x\npaths: [slides-build/visual*.md, slides-build/prompt_*.md]\n---\n- y\n").count("step: build") == 1  # 移したファイルへの glob も、前の名前で当てる
+    assert recipe_front("---\ndescription: x\npaths: [slides-build/visual*.md, slides-build/prompt_*.md]\n---\n- y\n").count("step: build") == 1
+    assert "step: build" in recipe_front("---\ndescription: x\npaths: [vids-voice/ja*.md]\n---\n- y\n")  # 2026-11-02 に名前を替えた voice のファイルへの glob も、前の名前で当てる  # 移したファイルへの glob も、前の名前で当てる
     assert recipe_front("---\ndescription: x\npaths: [deck-practices/materials*.md]\n---\n- y\n").count("step: gather") == 1
     assert "step: build" not in recipe_front("---\ndescription: x\npaths: [deck-practices/start*.md, deck-practices/slides_steps*.md]\n---\n- y\n")  # 前の版になかった名前（deck-practices/slides_steps.md）では当てない
     assert rewrite("./recipes/x/deck-practices/y.md・rules/a/slides-build/visual.md・deck-practices/start.md・my-rules/deck-practices/start.md・\ue0000\ue000") == "./recipes/x/deck-practices/y.md・rules/a/slides-build/visual.md・deck-workflow/start.md・my-rules/deck-workflow/start.md・\ue0000\ue000"  # ワークスペースのパスは深さによらず替えない
@@ -1169,7 +1268,7 @@ def selftest():
         assert old_globs(w) == ["AGENTS.md:1: slides-build/visual*.md", "AGENTS.md:2: deck-practices/content*.md"], old_globs(w)  # 書き換えると今のどれにも当たらない前の glob（スキルの名前が替わったものも）  # 前のファイルにしか当たらない glob だけ（今のファイルに当たるもの・ワークスペースのパスは出さない）  # フォルダ・glob・cd・分けて書いたものも、替えずに要判断  # 前が . のものは替えない。動かしたファイルでない rules.mdx は、スキルの名前だけ替わる
     assert rewrite("my-slides-build/visual.md・x-deck-practices/rules.md・old_deck-practices/rules.md・a-`slides-build` の `visual.md`") == "my-slides-build/visual.md・x-deck-practices/rules.md・old_deck-practices/rules.md・a-`slides-build` の `visual.md`"  # ほかの語の後ろにつながったものは替えない
     assert rewrite("スキル `deck-practices` の `rules.md` の「Workspace rules」、deck-practices の materials.md、`slides-build` の `visual.md`") == "スキル `desk-feedback` の `routing.md` の「Workspace rules」、deck-workflow の materials.md、`deck-design` の `slides.md`"
-    assert rewrite("`python3 <スキル deck-practices のフォルダ>/scripts/ledger.py add`・<スキル deck-practices のフォルダ>/scripts/drive_put.py") == "`python3 <プラグインのフォルダ>/lib/ledger.py add`・<スキル deck-workflow のフォルダ>/scripts/drive_put.py"
+    assert rewrite("`python3 <スキル deck-practices のフォルダ>/scripts/ledger.py add`・<スキル deck-practices のフォルダ>/scripts/drive_put.py") == "`python3 <プラグインのフォルダ>/skills/desk-feedback/scripts/ledger.py add`・<スキル deck-workflow のフォルダ>/scripts/drive_put.py"  # 2026-10-31 に lib/ へ、2026-11-02 に持ち主の scripts/ へ
     IDS = {k: rewrite(k, paths=False) for m in MAPS[:1] for k in m["ids"]}
     with tempfile.TemporaryDirectory() as tmp:
         ws = Path(tmp)
@@ -1204,23 +1303,16 @@ def selftest():
         r = ws / "rules"
         body = lambda f: re.sub(r"\A---\n.*?\n---\n\n", "", f.read_text(), flags=re.S)  # 足した frontmatter のあとの、前の中身
         assert body(r / "slides-build" / "visual.md") == "`deck-design/slides.md` に足す。\n\n- 本文は 16pt（slides-visual-012より優先）。\n"  # ID を外した
-        assert desk.front((r / "slides-build" / "visual.md").read_text())["paths"] == ["slides-build/visual.md"] and any(o == "frontmatter を足した: rules/slides-build/visual.md（paths は前と同じパス。description は、何に効くかが分かるように直してよい）" for o in out)
+        assert desk.front((r / "slides-build" / "visual.md").read_text())["paths"] == ["deck-design/slides.md"] and any(o == "frontmatter を足した: rules/slides-build/visual.md（paths は、前に上書きしていたファイルの今のパス。description は、何に効くかが分かるように直してよい）" for o in out)
         assert not desk.front((r / "docs-build" / "templates" / "a" / "doc.md").read_text()) and any(o.startswith("要判断: rules/deck-template/SKILL.md に frontmatter") for o in out)  # テンプレートには足さない。スキルでないフォルダは手で書く
         assert "slides-visual-012" in (r / "slides-build" / "visual.md").read_text() and (r / "docs-build" / "templates" / "a" / "doc.md").is_file()
         assert (r / "slides-build" / "checks.py").is_file() and (r / "docs-build" / "checks.py").is_file() and not (r / "deck-build").exists() and not (r / "doc-build").exists()
         assert (r / "slides-build" / "checks.py").read_text().startswith("import lint ") and (r / "docs-build" / "checks.py").read_text().startswith("import doc_lint as lint ")
-        (ws / "recipes" / "doc_checks").mkdir(parents=True)  # 最後の段で移す先（lint は recipes/ の下の checks.py を読む）
-        shutil.copy2(r / "docs-build" / "checks.py", ws / "recipes" / "doc_checks" / "checks.py")
-        run = subprocess.run([sys.executable, "-c", "import sys; sys.path[:0] = sys.argv[1:3]; import doc_lint, textlint; r = textlint.Report(); "
-                              "doc_lint.workspace_checks('doc', {'body': {'content': []}}, r); print(r.hits['段落'])",
-                              str(PLUGIN / "docs-build" / "scripts"), str(PLUGIN.parent / "lib")], cwd=ws, capture_output=True, text=True)
-        assert run.returncode == 0 and "['0']" in run.stdout, run.stderr  # 写したドキュメントの点検が、ドキュメントの lint から読めて動く
-        shutil.rmtree(ws / "recipes")
         assert body(r / "vids-voice" / "en.md") == "- x\n- y\n"  # 主題の表にない ID も外す
         assert not any("主題の表にない" in o and "visual-012" in o for o in out)  # 原文の中の古い ID は、主題の表にない ID として出さない
         assert body(r / "vids-voice" / "ja.md") == "- 間を長く（vids-voice-ja-002 より優先）。\n"
         assert (r / "deck-template" / "SKILL.md").is_file() and any("移していない" in o for o in out)  # 移す先にあるものは上書きしない
-        assert (ws / "AGENTS.md").read_text() == f"スキル slides-build の {IDS['deck-build-005']} と、{IDS['doc-build-010']}。スキルslides-buildの手順。"  # 和文が続いても替える（2026-10-31 に slides-template を slides-build に寄せた）
+        assert (ws / "AGENTS.md").read_text() == f"スキル google-slides の {IDS['deck-build-005']} と、{IDS['doc-build-010']}。スキルgoogle-slidesの手順。"  # 和文が続いても替える（2026-10-31 に slides-template を slides-build に寄せ、2026-11-02 に google-slides にした）
         led = [json.loads(x) for x in (ws / ".desk" / "ledger.jsonl").read_text().splitlines()]
         assert led[:10] == [{"ts": "2026-10-01T00:00:00Z", "kind": "correction", "id": "c-0001", "to": "ws-slides-visual-001", "file": "rules/slides-build/visual.md", "rule": "slides-visual-012"},
                        {"ts": "2026-10-01T00:00:00Z", "kind": "proposal", "id": "P0009", "file": "rules/a.md", "old": "", "new": "x", "rule": "desk-dreaming-001"},  # 台帳の値がまるごと ID なら、もうない ID も接頭辞で替える
@@ -1258,7 +1350,8 @@ def selftest():
         put("rules/slides-build/workflow.md", moved)
         (r / "deck-practices" / "SKILL.md").write_text("")
         assert any(x.startswith("台帳の P0001") for x in needs(ws)) and [(i, b) for i, _, b, _ in relinks(ws)] == [("P0001", "rules/slides-build/workflow.md")]
-        assert apply(ws) == ["台帳を合わせた: P0001 の変更先 rules/deck-practices/SKILL.md → rules/slides-build/workflow.md"]
+        got = apply(ws)
+        assert got == ["台帳を合わせた: P0001 の変更先 rules/deck-practices/SKILL.md → rules/slides-build/workflow.md"], got
         assert next(json.loads(x) for x in (ws / ".desk" / "ledger.jsonl").read_text().splitlines() if '"P0001"' in x)["file"] == "rules/slides-build/workflow.md"
         put("rules/slides-build/workflow.md", "")  # 決まりを分けた先にまたがって書き直し、どこにも元の文がない
         put(".desk/ledger.jsonl", (ws / ".desk" / "ledger.jsonl").read_text().replace("rules/slides-build/workflow.md", "rules/deck-practices/SKILL.md"))
@@ -1276,10 +1369,10 @@ def selftest():
         ws = Path(tmp)
         (ws / "desk.toml").write_text("")
         (ws / "rules" / "slides-build").mkdir(parents=True)
-        (ws / "rules" / "slides-build" / "pages.md").write_text("---\ndescription: x\npaths: [slides-build/pages.md]\n---\n- x\n")
+        (ws / "rules" / "slides-build" / "pages.md").write_text("---\ndescription: x\npaths: [google-slides/pages.md]\n---\n- x\n")
         (ws / ".desk").mkdir()
         (ws / ".desk" / "ledger.jsonl").write_text(json.dumps({"ts": "2026-10-25T00:00:00Z", "kind": "proposal", "id": "P0001", "rule": "", "file": "rules/slides-build/pages.md", "old": "", "new": "y"}, ensure_ascii=False) + "\n")
-        assert relinks(ws) == [] and needs(ws) == []
+        assert relinks(ws) == [] and needs(ws) == [], needs(ws)
         (ws / "rules" / "deck-practices").mkdir()  # プラグインへの提案は、分けたファイルと同じパスでも、ワークスペースの上書きから文を探さない
         (ws / "rules" / "deck-practices" / "content.md").write_text("---\ndescription: x\n---\n足す。\n")
         with open(ws / ".desk" / "ledger.jsonl", "a", encoding="utf-8") as f:
@@ -1708,7 +1801,7 @@ if __name__ == "__main__":
                         + [f"台帳を合わせる: {i} の変更先 {a} → {b}" for i, a, b, _ in relinks(ws) if b] + asks(relinks(ws))
                         + [f"決まりの ID を外す: {p.relative_to(ws)}（{len(WS_ID.findall(t)) - len(WS_ID.findall(n))} 個）" for p, t, n in strip_plan(ws, ids)]
                         + [f"台帳をつなぐ: {x} → {f}" for x, f in sorted(new.items())] + id_asks(ws, ids, open_)
-                        + [f"移す（recipes/ へ）: {s.relative_to(ws)} → {d.relative_to(ws)}" for s, d in recipe_moves(ws)]) or "移すものはない（今の版）")
+                        + [f"移す（recipes/ へ）: {s.relative_to(ws)} → {d.relative_to(ws)}" for s, d in recipe_moves(ws)] + stale_asks(ws) + ledger_asks(ws)) or "移すものはない（今の版）")  # 書き換えずに残る前の参照も、決めるまで出し続ける（desk-doctor が check で見る）
     elif a == ["apply"]:
         print("\n".join(apply(ws)))
     elif len(a) == 3 and a[0] == "relink":
