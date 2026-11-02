@@ -13,7 +13,7 @@ You are the reviewer of this material. Look with eyes other than the maker's and
 - Outline: <outline path>
 - Text: <text path> (headings are #, a table row is its cells joined with ` | `, `［画像］` marks the position of a figure, links are [text](URL))
 - Images: open all p-* in <image folder> (pages of the PDF exported by Drive)
-- Contact sheet: sheet*.png in <image folder> (all pages in 4 columns, with the number above each page)
+- Contact sheet: sheet*.webp in <image folder> (all pages in 4 columns, with the number above each page)
 
 ## Material type and audience
 <customer-facing, internal, or community>. The audience is <department, role, technical level>. They read it by <reading it alone after it is sent by email, reading it together in a meeting, or referring to it later>.

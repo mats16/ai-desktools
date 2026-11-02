@@ -5,7 +5,7 @@ usage（sandbox のようなワークスペースの中で回す。desk.toml の
   --keep   組んだデッキを残す（既定は、画像を取ったらゴミ箱に移す）
   --judge  claude -p に report.md と画像を読ませ、ページごとに OK・NG を出させる（judge.md）。NG があれば終わりの状態を 1 にする
   --selftest  見本のどのページにも expect.json の見るところがあるかだけを見る（Google を読まない）
-出すもの: <ワークスペース>/.desk/render/（build/ に組んだページ、png/ に画像、report.md、judge.md）。
+出すもの: <ワークスペース>/.desk/render/（build/ に組んだページ、img/ に画像、report.md、judge.md）。
 lint（手元と組んだあと）の要修正が 1 つでもあれば、終わりの状態を 1 にする。"""
 import json, re, shutil, subprocess, sys, time
 from pathlib import Path
@@ -19,7 +19,7 @@ sys.dont_write_bytecode = True
 import gapi  # noqa: E402
 
 COMMON = "文字のはみ出し・重なり・切れがなく、本文がフッターと結論バンドに重ならず、矢印が箱から外れていない"  # どのページにも見るところ
-JUDGE = """{report} を読み、ページごとに画像（png の行のパス）を Read で開いて、「見るところ」と「どのページにも」をすべて満たすかを確かめる。
+JUDGE = """{report} を読み、ページごとに画像（「画像:」の行のパス）を Read で開いて、「見るところ」と「どのページにも」をすべて満たすかを確かめる。
 答えは次の形だけにする（前置きを書かない）。どのページも 1 行ずつ、番号とファイル名は report.md の見出しのとおり。
 - p<番号> <ファイル>: OK
 - p<番号> <ファイル>: NG — <満たさない見るところと、画像で見えたこと>"""
@@ -79,7 +79,7 @@ def main():
     out = ws / ".desk" / "render"
     shutil.rmtree(out, ignore_errors=True)
     (build := out / "build").mkdir(parents=True)
-    (png := out / "png").mkdir()
+    (img := out / "img").mkdir()
     for f in SAMPLES.glob("*.json"):
         shutil.copy(f, build)
     c = json.loads((SAMPLES / "component.json").read_text())  # 部品 1 つのファイルはデッキに並べられないので、型のないページに置く
@@ -99,11 +99,11 @@ def main():
     try:
         print("\n== 画像を取る ==")
         _, check = sh(K / "gslides.py", "check", pid, "--all", cwd=build)  # 要修正があっても、画像は取ってある
-        shots = sorted(Path(f"/tmp/slides_{pid[:8]}").glob("p-*.png"))
+        shots = sorted(Path(f"/tmp/slides_{pid[:8]}").glob("p-*.webp"))
         if len(shots) != len(pages()):
             sys.exit(f"画像が {len(shots)} 枚（ページは {len(pages())} 枚）")
         for s in shots:
-            shutil.copy(s, png)
+            shutil.copy(s, img)
     finally:
         if "--keep" in a:
             print(f"\nデッキを残した: https://docs.google.com/presentation/d/{pid}/edit")
@@ -116,7 +116,7 @@ def main():
     lines = [f"# 見本を組んだ画像の確認（{time.strftime('%Y-%m-%d %H:%M')}）", "",
              f"- 手元の lint: {said(local)}、組んだあとの lint（gslides.py check）: {said(check)}。要確認は画像で見る", ""]
     for i, p in enumerate(pages(), 1):
-        lines += [f"## p{i} {p}", f"png: {png / f'p-{i:02d}.png'}", "", *[f"- {x}" for x in e[p]], ""]
+        lines += [f"## p{i} {p}", f"画像: {img / f'p-{i:02d}.webp'}", "", *[f"- {x}" for x in e[p]], ""]
     lines += ["## どのページにも", "", f"- {COMMON}", ""]
     (report := out / "report.md").write_text("\n".join(lines))
     print(f"\n見るところと画像: {report}")

@@ -22,6 +22,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True  # プラグインの scripts/ に __pycache__ を残さない
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import desk  # noqa: E402  ワークスペースの探し方（スキルのスクリプトと同じ）
+from desk import LIMIT, index, workspace  # noqa: E402  差し込みの上限、資料ごとに選ぶレシピの一覧、hook が使うワークスペース（desk-feedback の recipe_menu.py も同じものを使う）
 
 PLUGIN = Path(__file__).resolve().parent.parent / "skills"
 SKILLS = {p.parent.name for p in PLUGIN.glob("*/SKILL.md")}
@@ -30,7 +31,7 @@ REF = re.compile(rf"(?<![\w-])({NAMES})/([\w./-]+\.md)")  # スキルの名前�
 MEMORY_FROM = re.compile(r"(?:^|/)(?:構成案[^/]*|社内メモ_[^/]*|references)\.md$")  # 資料を始めるときとコンパクションのあとに読むもの（組む途中に何度も開く build/ は入れない）
 RULE_PATH = r"recipes/[\w./-]+?/RECIPE\.md"  # 「使う決まり」に書くレシピのパス
 USE = re.compile(r"(?m)^[ \t]*(?:[-*][ \t]*)?\**使う決まり\**[ \t]*[:：]\**(.*)$")  # 構成案の先頭の「使う決まり」の行（- **使う決まり:** recipes/a/RECIPE.md、recipes/b/RECIPE.md）
-INDEX, START, STALE, LEGACY = "recipes/*/RECIPE.md", "deck-workflow/start.md", "recipes/（使う決まりの確認）", "rules/（前のバージョン）"  # 選ぶ一覧の見出しのパス（ファイルではない）、資料を作り始めるときに開くファイル（ここで一覧を出す）、「使う決まり」の名前の知らせと、前のバージョンの rules/ の知らせ（ファイルではない）
+INDEX, START, STALE, LEGACY = desk.MENU, "deck-workflow/start.md", "recipes/（使う決まりの確認）", "rules/（前のバージョン）"  # 選ぶ一覧の見出しのパス（ファイルではない）、資料を作り始めるときに開くファイル（ここで一覧を出す）、「使う決まり」の名前の知らせと、前のバージョンの rules/ の知らせ（ファイルではない）
 RESEARCH = re.compile(r"(?<![\w.-])(?:Research/|references_index\.md)")  # 調べもの（deck-workflow の research.md）。step: gather のレシピを出す
 COMMAND = re.compile(rf"<command-name>/desk-tools:({NAMES})</command-name>")  # Claude Code の記録で、ユーザーが打った /desk-tools:<スキル>
 CALL = re.compile(rf"(?:^\s*/|(?<![\w$/.-])\$)desk-tools:({NAMES})(?![\w-])", re.ASCII)  # プロンプトで呼んだスキル（Claude Code の / は頭だけ、Codex の $ はどこでも。和文は続けて書いても呼んだことになる）
@@ -38,26 +39,10 @@ PUNCT = "();<>|&`"  # コマンドの区切り
 HEAD = re.compile(r'## (?:ワークスペースの決まり(?:の一覧)?|顧客の memory): ([^`"\\\n]+?\.md)(?=\\|\n|$)')  # 出したものの見出し。会話の記録では改行が \n（hook の出力の写しでは \\n）になる
 CUT_BY_HOST = ("<persisted-output>", "<truncated-output>", "persist-to-disk failed", "writing it to disk failed")  # Claude Code が 1 万字を超える差し込みを、頭だけにして渡した印（ファイルに逃がした・書けずに切った）
 COMPACTED = (b'"subtype":"compact_boundary"', b'"type":"compacted"')  # コンパクションの目印（Claude Code・Codex の会話の記録）
-LIMIT = 9000  # 1 回に差し込む字数の上限（決まりと memory の合計。切ったときの添え書きも含む）。Claude Code は 1 万字を超える差し込みをファイルに逃がし、頭の 2,000 字だけを見せる（Codex は hooks.json の additionalContextLimit で逃がさない）
 NOTE = 500  # 切ったときの添え書きの字数の上限（切ったほうの字数に含める）
 LINE, KEY = 24, 48  # 出力でプラグインのファイルを見分ける行の字数の下限と、比べる頭の字数（cut -c で切った行も合う）
 COPIED = "desk-init/templates/"  # ワークスペースへ写す雛形（写しを読んでも、プラグインのファイルを読んだことにしない）
 NUMBERED = re.compile(r"^(?:[^\s:]*\.md[:-])?\s*\d+(?:[:\t-]|→)\s?|^[^\s:]*\.md[:-]")  # 出力の行頭の、grep -n・cat -n・Read の行番号と grep のファイルの名前
-
-
-def workspace(cwd):
-    """スクリプトが cwd で使うワークスペース（desk.locate）。cwd がその中になければ（プラグインのフォルダなど）、会話を開いたフォルダ（Claude Code の CLAUDE_PROJECT_DIR）から探したもの。
-    Claude Code は会話の中で cd した先を cwd に渡すので、プラグインのフォルダへ cd したあとも、開いたワークスペースを見つける（2026-10-27 に資料を作る会話で見つけた）。
-    前のバージョンのワークスペース（factory.toml）の中では、どこへも進まない（desk.locate と同じ）。個人の設定が読めなくても止めない（スクリプトが止めて知らせる）。"""
-    def find(d):
-        try:
-            return desk.locate(d)
-        except SystemExit:
-            return None
-    f = find(cwd)
-    if not (f and Path(cwd).resolve().is_relative_to(f[1])) and not desk.old(cwd) and (p := os.environ.get("CLAUDE_PROJECT_DIR")):
-        f = find(p) or f
-    return f[1] if f else None
 
 
 def words(command):
@@ -114,14 +99,6 @@ def chosen(p):
     if names or extra:
         return names + extra
     return [] if "なし" in line else [line.strip(" \t*") or "（空）"]  # レシピのパスのない行は、書いた値をそのまま返す（レシピにないと知らせる）
-
-
-def index(ws, files):
-    """資料ごとに選ぶレシピ（per_material: true のもの）の一覧。"""
-    rows = [f"- {p.relative_to(ws)}（{'・'.join(desk.listed(m, 'targets')) or '全部'}、{'・'.join(desk.listed(m, 'audience')) or '全部'}）: {m['description']}" for p, m in files]
-    return (f"## ワークスペースの決まりの一覧: {INDEX}\n\n資料ごとに選ぶレシピ（frontmatter に per_material: true のもの。行は「パス（作るもの、資料の種類）: いつ使うか」）。"
-            "この資料に合うものを選び、構成案の先頭に「- **使う決まり:** recipes/a/RECIPE.md、recipes/b/RECIPE.md」（合うものがなければ「なし」）と書いて、構成案を開き直す。"
-            "構成案を開くたびに hook が中身を出す（desk-feedback/routing.md の「Workspace rules」）。\n\n" + "\n".join(rows))
 
 
 def transcript(ev):

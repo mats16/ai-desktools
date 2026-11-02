@@ -31,10 +31,10 @@ K=<google-slides folder>/scripts   # the scripts/ folder of the skill google-sli
 J=<google-docs folder>/scripts     # the scripts/ folder of the skill google-docs
 C=<deck-review folder>/scripts    # this skill's copies of sheet.py and yomiyasu/ (the owner of sheet.py is google-slides)
 python3 $K/gslides.py check <URL> --all [--talk] # Slides. Images of all pages (the checkpoint for cross-page review)
-D=/tmp/slides_<first 8 chars of ID>              # Output of check (deck.json from presentations.get [not build/deck.json], deck.md, p-NN.png)
+D=/tmp/slides_<first 8 chars of ID>              # Output of check (deck.json from presentations.get [not build/deck.json], deck.md, p-NN.webp)
 python3 $J/docs.py check <URL>                    # Document (Google Docs)
 D=/tmp/docs_<first 8 chars of ID>                # Output of check (doc.json, text.md, p-N.png)
-uv run -q $C/sheet.py $D/sheet.png $(ls $D/p-*.png | sort -V) --cols 4 --width 400 --per 16   # Contact sheet (16 pages each: sheet-1.png …; sheet.png if 16 pages or fewer)
+uv run -q $C/sheet.py $D/sheet.webp $(ls $D/p-* | sort -V) --cols 4 --width 400 --per 16   # Contact sheet (16 pages each: sheet-1.webp …; sheet.webp if 16 pages or fewer)
 ```
 
 1. **Check all pages again.** For slides, run `gslides.py check --all` and the contact sheet; for documents, run `docs.py check` and the contact sheet. If you just built the whole material and ran `check --all` (step 8 in `deck-workflow` → steps 6–8 for decks) and have not rebuilt since, reuse that output (`$D`) and contact sheet; do not run them again. If lint `要修正` items remain, fix them first.

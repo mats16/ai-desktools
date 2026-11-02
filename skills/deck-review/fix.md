@@ -6,7 +6,7 @@ Open when the review children's findings return (every round; steps 4–5 of `SK
 
 Review children also report defects that do not occur. Fixing without verifying changes places that need no change and creates new defects. Before fixing, check one by one whether each finding really occurs.
 
-- Check visual findings (overflow, misalignment, overlap) on the full-size image (`$D/p-NN.png`; crop details with `sips -c`) or by the coordinates in the JSON in `$D` (`deck.json`, `doc.json`). If it does not occur, mark it 「残した（誤り）」 (that count is used to fix rules and aspects that miss often; `desk-feedback` → routing and rule IDs).
+- Check visual findings (overflow, misalignment, overlap) on the full-size image (`$D/p-NN.webp` for slides, `$D/p-N.png` for documents; crop details with `sips -s format png -c`, because sips cannot write WebP) or by the coordinates in the JSON in `$D` (`deck.json`, `doc.json`). If it does not occur, mark it 「残した（誤り）」 (that count is used to fix rules and aspects that miss often; `desk-feedback` → routing and rule IDs).
 - Put lint `要確認` items into the same table, one per row. For each verified finding, write the matching rule in the 「決まり」 column ("Finding format" below).
 - Before putting in a finding, check that it does not stray from the one sentence that page wants to say. Put ones that stray into 「聞く」.
 

@@ -24,7 +24,7 @@ You fix slides. Fix only the rows under "Your rows", editing your page files (<y
 - Rules: from the table in <deck-design folder>/SKILL.md: slides; from the table in <google-slides folder>/SKILL.md: writing pages (JSON pages), and diagrams if your rows touch a frame diagram, arrows, a Gantt chart, a bar chart, or a gridded diagram (a comparison table or a matrix)
 - Outline: <outline path> (the agreed claims, numbers, and order)
 - Corrections: the output of `ledger.py list --deck <material folder>` (`desk-feedback`) (the corrections received from the user on this material; run it in <workspace>)
-- Images of your pages: <p-05.png etc.> in <image folder> (drawn by Google before the fix)
+- Images of your pages: <p-05.webp etc.> in <image folder> (drawn by Google before the fix)
 
 ## Your rows
 <your rows>
@@ -54,7 +54,7 @@ You fix slides. Fix only the rows under "Your rows", and write the fixed page fu
 - Outline: <outline path> (the agreed claims, numbers, and order)
 - Corrections: the output of `ledger.py list --deck <material folder>` (`desk-feedback`) (the corrections received from the user on this material; run it in <workspace>)
 - Current pages.py: <build>/pages.py (read only; use the shared functions, constants, and imports found here)
-- Images of your pages: <p-05.png etc.> in <image folder> (drawn by Google before the fix)
+- Images of your pages: <p-05.webp etc.> in <image folder> (drawn by Google before the fix)
 
 ## Your rows
 <your rows>

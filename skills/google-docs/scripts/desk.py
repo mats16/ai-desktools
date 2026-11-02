@@ -211,6 +211,33 @@ def old_agents(ws):
     heads = {m.group(1).strip() for m in re.finditer(r"(?m)^#{2,3}\s+(.+?)\s*$", text)}
     return len(heads & set(AGENTS_TEMPLATE)) > len(AGENTS_TEMPLATE) // 2
 
+LIMIT = 9000  # 1 回に差し込む字数の上限（決まりと memory の合計。切ったときの添え書きも含む）。Claude Code は 1 万字を超える差し込みをファイルに逃がし、頭の 2,000 字だけを見せる（Codex は hooks.json の additionalContextLimit で逃がさない）
+MENU = "recipes/*/RECIPE.md"  # hook が出す、資料ごとに選ぶレシピの一覧の見出しのパス（ファイルではない）
+
+
+def workspace(cwd):
+    """スクリプトが cwd で使うワークスペース（desk.locate）。cwd がその中になければ（プラグインのフォルダなど）、会話を開いたフォルダ（Claude Code の CLAUDE_PROJECT_DIR）から探したもの。
+    Claude Code は会話の中で cd した先を cwd に渡すので、プラグインのフォルダへ cd したあとも、開いたワークスペースを見つける（2026-10-27 に資料を作る会話で見つけた）。
+    前のバージョンのワークスペース（factory.toml）の中では、どこへも進まない（desk.locate と同じ）。個人の設定が読めなくても止めない（スクリプトが止めて知らせる）。"""
+    def find(d):
+        try:
+            return locate(d)
+        except SystemExit:
+            return None
+    f = find(cwd)
+    if not (f and Path(cwd).resolve().is_relative_to(f[1])) and not old(cwd) and (p := os.environ.get("CLAUDE_PROJECT_DIR")):
+        f = find(p) or f
+    return f[1] if f else None
+
+
+def index(ws, files):
+    """資料ごとに選ぶレシピ（per_material: true のもの）の一覧。"""
+    rows = [f"- {p.relative_to(ws)}（{'・'.join(listed(m, 'targets')) or '全部'}、{'・'.join(listed(m, 'audience')) or '全部'}）: {m['description']}" for p, m in files]
+    return (f"## ワークスペースの決まりの一覧: {MENU}\n\n資料ごとに選ぶレシピ（frontmatter に per_material: true のもの。行は「パス（作るもの、資料の種類）: いつ使うか」）。"
+            "この資料に合うものを選び、構成案の先頭に「- **使う決まり:** recipes/a/RECIPE.md、recipes/b/RECIPE.md」（合うものがなければ「なし」）と書いて、構成案を開き直す。"
+            "構成案を開くたびに hook が中身を出す（desk-feedback/routing.md の「Workspace rules」）。\n\n" + "\n".join(rows))
+
+
 def selftest():
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp).resolve()
