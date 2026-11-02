@@ -33,7 +33,7 @@ Corrections are written back into rules on the spot, in the conversation that ma
 | `scripts/sessions.py` | Extracts user messages, opened rule files, and tool errors from conversations since the last run (has `--selftest`) |
 | `scripts/snapshot.sh` | Freezes a copy before changes (`save`), shows the diff since then (`diff`), restores it (`restore`) |
 | `scripts/run.sh` | Runs with `claude` or `codex` from launchd or cron |
-| `../../lib/ledger.py` | The rule ledger (`$R/.desk/ledger.jsonl`). Findings, sources per plugin rule ID and workspace rule file, the versions of each workspace rule file, and records of proposals, applies, rejections, and undos (has `--selftest`) |
+| `scripts/ledger.py` | The rule ledger (a copy; the owner is `desk-feedback`, and `scripts/refs.py` is a copy of `deck-workflow`'s sources ledger) (`$R/.desk/ledger.jsonl`). Findings, sources per plugin rule ID and workspace rule file, the versions of each workspace rule file, and records of proposals, applies, rejections, and undos (has `--selftest`) |
 | `$R/.desk/dreaming/last_run` | When the last cleanup finished (UTC). Everything from here down lives in the workspace (anything inside the plugin is lost on reinstall) |
 | `$R/.desk/dreaming/log/<YYYYMMDD>.md` | The report (only for runs that found something). Proposal contents and status are in the rule ledger |
 | `$R/.desk/dreaming/backup/` | Copies taken before changes (`snapshot.sh` keeps only the newest 8) |

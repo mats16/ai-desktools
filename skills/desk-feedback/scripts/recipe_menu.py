@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """資料ごとに選ぶレシピの一覧を、作る会話が手順 5 で hook から受け取る文のとおりに出す。標準ライブラリだけ。
-レシピを試すとき（../recipes.md の "Testing a recipe"）に、子への頼む文に入れる。一覧は hook の index() で作るので、hook が見せる文と食い違わない。
+レシピを試すとき（../recipes.md の "Testing a recipe"）に、子への頼む文に入れる。一覧は hook と同じ desk.index() で作るので、hook が見せる文と食い違わない。
 usage:
   recipe_menu.py [--draft <下書きの RECIPE.md> --as recipes/<名前>/RECIPE.md]
       --draft は、ワークスペースに書き込む前の下書きを、--as のパスのレシピとして一覧に入れる（あれば置き換える、なければ足す）。
@@ -11,10 +11,9 @@ usage:
 import argparse, contextlib, io, os, shutil, sys, tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT / "lib"), str(ROOT / "hooks")]
-import desk  # noqa: E402  ワークスペースとレシピの探し方
-from rules_overlay import LIMIT, index, workspace  # noqa: E402  手順 5 で hook が出す一覧、1 回の差し込みの上限、ワークスペースの探し方
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import desk  # noqa: E402  ワークスペースとレシピの探し方（desk-init の desk.py の写し）
+from desk import LIMIT, index, workspace  # noqa: E402  手順 5 で hook が出す一覧、1 回の差し込みの上限、ワークスペースの探し方（hook も desk.py のこれを使う）
 
 
 def render(ws, files):

@@ -16,7 +16,7 @@ usage（資料のフォルダで）:
 import contextlib, datetime, html, json, math, os, re, shlex, sys, time, urllib.parse
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gapi
 from gapi import DRIVE, SLIDES, file_id, run
 
@@ -294,7 +294,7 @@ def watch_prompt(urls, hours, folder):
     folder = Path(folder or ".").resolve()
     if not folder.is_dir():
         sys.exit(f"資料のフォルダがない: {folder}")
-    os.chdir(folder)  # 設定は、子が watch を回す資料のフォルダから探す（../../../lib/desk.py）
+    os.chdir(folder)  # 設定は、子が watch を回す資料のフォルダから探す（desk.py）
     gapi.config_path()
     watch_hours(hours)  # 見張る時間が決まらなければ、子を起こす前に止める
     head, _, body = PROMPT.read_text().partition("\n")

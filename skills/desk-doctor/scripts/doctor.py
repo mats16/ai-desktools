@@ -2,20 +2,16 @@
 """usage: doctor.py [<ワークスペース>] [--local]   （--selftest で自己確認）
 AI Desk Tools を動かす前提を確かめる。--local は手元だけ見て、Google の API を呼ばない。
 1 行 1 項目で「OK」「要修正」「要確認」を出す。要修正が 1 つでもあれば exit 1。標準ライブラリだけ。"""
-import io, contextlib, json, math, os, re, shutil, subprocess, sys, tempfile, tomllib, urllib.parse
+import io, contextlib, math, os, re, shutil, sys, tempfile, tomllib, urllib.parse
 from pathlib import Path
 
-SKILLS = Path(__file__).resolve().parents[2]  # プラグインの skills/
+SKILLS = Path(__file__).resolve().parents[2]  # このスキルと並ぶスキルのフォルダ（ワークスペースの .agents/skills などとの重なりを、名前だけで見る）
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(SKILLS.parent / "lib"))
-sys.path.insert(0, str(SKILLS / "slides-build" / "scripts"))
-sys.path.insert(0, str(SKILLS / "docs-build" / "scripts"))
-sys.path.insert(0, str(SKILLS / "desk-migrate" / "scripts"))
-import desk  # noqa: E402  ワークスペースと設定のファイルの探し方
-import migrate  # noqa: E402  前のバージョンのワークスペースか（desk-migrate）
-import gapi  # noqa: E402  Google の API（connection を通すときの確かめと、proxy の断りの見分け）
+import desk  # noqa: E402  ワークスペースと設定のファイルの探し方（desk-init のものの写し）
+import gapi  # noqa: E402  Google の API（connection を通すときの確かめと、proxy の断りの見分け。google-slides のものの写し）
 
 
+OLD_NAMES = ("slides-build", "docs-build", "vids-build", "vids-voice")  # 2026-11-02 に google-slides・google-docs・google-vids にしたスキルの前の名前
 CHECKS = "connection にログインしてあるか（人ごとの OAuth）、USE CONNECTION の権限、connection の OAuth の scope（drive・presentations・documents）、databricks auth login"
 
 
@@ -46,7 +42,7 @@ def check(ws, local=False):
         ng("個人の設定", str(e))
         return out
     if not found:
-        if old := migrate.workspace(ws):  # factory.toml だけがある、2026-10-25 より前のワークスペース
+        if old := desk.old(ws):  # factory.toml だけがある、2026-10-25 より前のワークスペース
             ng("前のバージョンのワークスペース", f"{old} は前のバージョン（factory.toml・.factory/）。desk-migrate で desk.toml・.desk/ に移す")
         else:
             ng("desk.toml", desk.missing(ws))
@@ -63,8 +59,8 @@ def check(ws, local=False):
         warn("設定が 2 つ", f"{user[0]} の workspace（{user[1]}）の中では {loc[0]} を読む（外では {user[0]}。混ぜない）。片方にする: 値を {user[0]} に寄せて "
                          f"{loc[0]} を .desk/migrate/ に移すか、{user[0]} を消す（desk-migrate の SKILL.md の「Move the settings to `~/.desk.toml`」の 2）")
     try:
-        cfg = tomllib.loads(conf.read_text())
-    except tomllib.TOMLDecodeError as e:
+        cfg = tomllib.loads(conf.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as e:
         ng(f"{conf.name} の書き方", str(e))
         return out
     for name in ("references_index.md", "drive_folders.md"):
@@ -76,8 +72,6 @@ def check(ws, local=False):
         warn("前の雛形の AGENTS.md", "AGENTS.md が、2026-10-31 までの desk-init が置いた雛形の写しに見える（その節の見出しが半分より多く同じ）。写しなら、プラグインはもう決まりを戻さない。"
              "エージェントはどの会話にもスキルより強く読み込むので、資料を作らない作業にも効く。ワークスペースだけの決まりはレシピに移し、プラグインのスキルにある文は消す"
              "（desk-migrate の SKILL.md の「Move an AGENTS.md from the old template」）")
-    if old := migrate.needs(root):  # 前の名前の rules/ は読まれず、前の ID は台帳とつながらない
-        ng("前のバージョンのワークスペース", f"desk-migrate で今のバージョンへ移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前を変え、2026-10-27 に決まりのファイルの先頭に frontmatter を置き、ワークスペースの決まりの ID を外し、2026-10-29 に rules/ を recipes/<名前>/RECIPE.md にし、source-scout を desk-crawl にし、索引の references_index.md を台帳から作るものにした）: {', '.join(old[:5])}" + (f" ほか {len(old) - 5} 件" if len(old) > 5 else ""))
     odd, top = [], root / desk.RECIPES  # レシピの形と frontmatter（desk-feedback/routing.md の「Workspace rules」）
     for p, m in (rules := desk.rules(root)):
         rel = p.relative_to(root)
@@ -105,15 +99,16 @@ def check(ws, local=False):
     (warn if odd else ok)("ワークスペースの決まり", "、".join(odd) if odd else f"レシピ {len(rules)} 個")
     if cfg.get("desk", {}).get("source"):  # 2026-10-14 まで、desk-kaizen が worktree を作る checkout（前の [factory] source。desk-migrate が [desk] にする）
         warn("desk.source", "使わなくなった（desk-kaizen は .desk/kaizen/ に自分で clone する）。desk.toml から消す")
-    names = sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md"))
+    names = sorted({p.parent.name for p in SKILLS.glob("*/SKILL.md")} | set(OLD_NAMES))  # 前の名前で置いた写しも（名前がぶつからないので、プラグインのものと両方が効く）
     found = {}  # 実体ごとに 1 回（.claude/skills は .agents/skills へのリンクのことが多い）
     for d in (".agents/skills", ".claude/skills"):
         for name in names:
-            if (root / d / name / "SKILL.md").is_file():
+            if (root / d / name / "SKILL.md").is_file() and (root / d / name).resolve() != (SKILLS / name).resolve():  # このスキルを入れた場所そのもの（ワークスペースの .claude/skills に 1 つずつ入れたとき）は重なりでない
                 found.setdefault((root / d / name).resolve(), f"{d}/{name}")
-    dup = list(found.values())
-    (warn if dup else ok)("スキルの重なり", f"ワークスペースにも同じ名前のスキルがある（プラグインと二重に読まれる）: {', '.join(dup)}" if dup else "")
-    g, sl, dr = cfg.get("google", {}), cfg.get("slides", {}), cfg.get("drive", {})
+    dup, old = [x for x in found.values() if x.rsplit("/", 1)[1] not in OLD_NAMES], [x for x in found.values() if x.rsplit("/", 1)[1] in OLD_NAMES]
+    (warn if dup or old else ok)("スキルの重なり", "、".join(x for x in (f"ワークスペースにも同じ名前のスキルがある（プラグインと二重に読まれる）: {', '.join(dup)}" * bool(dup),
+                                                                f"前のバージョンの名前のスキルがある（今の google-slides・google-docs・google-vids と両方が効く）: {', '.join(old)}" * bool(old)) if x))
+    g, dr = cfg.get("google", {}), cfg.get("drive", {})
     try:
         px = gapi.uc(cfg)  # 型の違う設定は gapi.uc が断る（スクリプトも同じところで止まる）
         if cfg.get("uc_connections", {}).get("proxy"):
@@ -125,58 +120,6 @@ def check(ws, local=False):
     bad_uc = px.get("bad", False)
     if not g.get("quota_project") and not all(urllib.parse.urlsplit(u).netloc in via for u in (gapi.DRIVE, gapi.SLIDES, gapi.DOCS)):  # 直接呼ぶホストがある
         warn("google.quota_project", "空。gcloud の既定の OAuth クライアントで取ったトークンなら、Slides・Docs が 403 になる")
-    from brand import COPYRIGHT_FOOTER  # 9pt で通す著作権表示の形（slides.py が全ページに書く）
-    import slides  # 仮の著作権表示（PLACEHOLDER_COPYRIGHT。need_brand と同じ）と、テーマのファイルの読み方（read_theme）
-    brand = cfg.get("brand", {})
-    marks = [("brand.copyright", brand.get("copyright", ""))]  # テーマの copyright は、そのテーマのデッキで [brand] の代わりに書く（slides.py の use_theme）
-    mine = {}  # ワークスペースのテーマのファイル（themes/slides/<名前>.json）。組むときに止まる値（形・色・copyright・書体）を、組む前に出す（slides.py と同じ read_theme で見る）
-    for f in sorted(root.joinpath(*slides.WS_THEMES).glob("*.json")):
-        try:
-            mine[f.stem] = slides.read_theme(f)
-        except SystemExit as e:
-            ng(f"themes/slides/{f.name}", str(e).replace(f"{f}: ", ""))
-    marks += [(f"themes/slides/{n}.json の copyright", t["copyright"]) for n, t in mine.items() if "copyright" in t]
-    import docs as docs_py  # ドキュメントのテーマのファイル（themes/docs/<名前>.json）も、docs.py と同じ read_theme で見る
-    doc_themes = {}
-    for f in sorted(root.joinpath(*docs_py.WS_THEMES).glob("*.json")):
-        try:
-            doc_themes[f.stem] = docs_py.read_theme(f)
-        except SystemExit as e:
-            ng(f"themes/docs/{f.name}", str(e).replace(f"{f}: ", ""))
-    for key, c in marks:
-        if not (c := str(c).strip()):
-            ng(key, "空。スライドもドキュメントも組めない（全ページの左下に書く著作権表示がない）。自分の会社の著作権表示を書く")
-        elif c == slides.PLACEHOLDER_COPYRIGHT:
-            ng(key, f"「{c}」は書いていないときの仮の値。スライドもドキュメントも組めない。自分の会社の著作権表示を書く")
-        elif not COPYRIGHT_FOOTER.fullmatch(c):
-            ng(key, f"「{c}」は「© <年> <社名> All rights reserved.」の形でない。lint が全ページの著作権表示を「11pt 未満の文字」の要確認に出す")
-    if not brand.get("company"):
-        warn("brand.company", "空。表紙の左下に社名を置かない")
-    docs = cfg.get("docs", {})
-    files = {**{f.stem: t for f in slides.BUILTIN_THEMES.glob("*.json") for t in [slides.read_theme(f)]}, **mine}  # ワークスペースのものが勝つ
-    theme, temps = sl.get("default_theme", "navy"), {k: v for k, v in sl.get("templates", {}).items() if v}
-    if old := sl.get("themes"):  # 2026-10-16 までの書き方
-        ng("slides.themes", f"{', '.join(old)} はプラグインが読まない。テーマはワークスペースの themes/slides/<名前>.json（kind theme。色は colors の下に同じ名前で書く）に、"
-                            "テンプレートの url は [slides.templates] の「<名前> = \"<url>\"」に移して消す（テンプレートのある名前は slides.py theme <url> でも写せる。../../slides-build/themes.md）")
-    if "base_template" in sl:  # 2026-10-14 までの書き方
-        ng("slides の base", "slides.base_template を消す。元のテンプレートは desk.toml に持たず、template.py <テーマ> --from-base <元の URL> で渡す（渡さなければ白紙の pptx から作る）")
-    if sl.get("template_folder"):  # 2026-10-12 までの書き方
-        warn("slides.template_folder", "プラグインは読まない。新しく作るテンプレートは [drive] desk の下の Themes に作る（前のバージョンのスクリプトで動かさなくなったら消す）")
-    (ok if temps.get(theme) else warn)("slides.templates", ", ".join(temps) if temps.get(theme) else
-                                       f"既定のテーマ {theme} のテンプレートがない。template.py {theme} --from-base で作るか、共有のテーマ（slides.py themes）を slides.py theme <url> で写す")
-    if bare := [n for n in temps if n not in files]:
-        ng("テーマのファイル", f"{', '.join(bare)} のテンプレートはあるが、themes/slides/<名前>.json がない。組めない。slides.py theme <[slides.templates] の URL> で写す")
-    if theme not in files:
-        ng("slides.default_theme", f"{theme} のテーマのファイルがない（themes/slides/{theme}.json）。テーマを書かない資料が組めない")
-    if no_desc := [n for n in temps if n in files and not files[n].get("description")]:
-        warn("テーマの説明", f"{', '.join(no_desc)} に description がない。エージェントが資料ごとにテーマを選べない（themes/slides/<名前>.json の description に、どの資料・聞き手に使うかを書く）")
-    if old := docs.get("themes"):  # 2026-10-19 までの書き方
-        ng("docs.themes", f"{', '.join(old)} はプラグインが読まない。ワークスペースの themes/docs/<名前>.json（kind theme。見出しの大きさは styles、色は colors）に移して消す"
-                          "（../../docs-build/SKILL.md を開いてから、その themes.md の docs-write-010）")
-    if bad := [n for n, t in doc_themes.items() if not t.get("description")]:
-        warn("ドキュメントのテーマの説明", f"{', '.join(bad)} に description がない。エージェントが資料ごとにテーマを選べない（themes/docs/<名前>.json の description に書く）")
-    if (d := docs.get("default_theme")) and d not in doc_themes and d != "standard":  # standard は組み込み（docs.py の STANDARD）
-        ng("docs.default_theme", f"{d} のテーマのファイルがない（themes/docs/{d}.json）。theme を書かない doc.md が組めない")
     review = cfg.get("review", {})  # 書いていなければ既定。読むのはエージェント（deck-workflow の 5 と 9）
     if (p := review.get("plan_reviewer", "ai")) not in ("ai", "human"):
         ng("review.plan_reviewer", f"{p!r} は使えない。\"ai\" か \"human\" にする")
@@ -222,8 +165,7 @@ def check(ws, local=False):
         fix = "google.quota_project を書く（空だと gcloud の既定の OAuth クライアントのトークンは 403）" if first.startswith("403") and not g.get("quota_project") else f"作り直す: {gapi.LOGIN}"
         ng("Google の認証", f"{how} で通らない: {first}。{fix}")
         return out
-    targets = [(f"slides.templates.{k}", v) for k, v in temps.items()] + [(f"docs.templates.{k}", v) for k, v in cfg.get("docs", {}).get("templates", {}).items()]
-    targets += [(f"drive.{k}", v) for k, v in dr.items() if v]
+    targets = [(f"drive.{k}", v) for k, v in dr.items() if v]  # テンプレートは slides_doctor.py（google-slides）と docs_doctor.py（google-docs）が開く
     for name, url in targets:
         fid = gapi.folder_id(url) if "/folders/" in url else gapi.file_id(url)
         try:
@@ -232,21 +174,6 @@ def check(ws, local=False):
         except Exception as e:  # connection を通すと、回線のエラーや proxy の断り・形の違う返事もここに来る。行ごとに知らせ、ほかの行を落とさない
             w = (str(e) or type(e).__name__).split()[0]
             ng(name, f"開けない（{w}）: {url}" if w[:3].isdigit() else f"開けない: {url}。{proxy_fail(e)}")
-    if dr.get("shared_themes"):  # 全社の共有テーマのフォルダ。探すときだけ読む（使うテーマは slides.py theme <url> で写す）
-        try:
-            files, have = slides.shared_files(), {gapi.file_id(u) for u in temps.values()}  # 自分の Themes は読まない（slides.py themes が出す）
-            names, new = [f["properties"][slides.THEME_PROP] for f in files], [f["properties"][slides.THEME_PROP] for f in files if f["id"] not in have]
-            bare = 0 if names else len(slides.theme_files(gapi.folder_id(dr["shared_themes"]), named=False))  # 名前のあるものが 1 つでもあれば数えない（base の写しのように、名前がなくて正しいものもある）
-        except slides.READ_ERRORS:  # 開けないことは drive.shared_themes に出ている
-            return out
-        if dup := sorted({n for n in names if names.count(n) > 1}):
-            warn("共有テーマ", f"同じ名前のテーマが 2 つ以上ある（どれを写すか迷う。古いほうをフォルダから外す）: {', '.join(dup)}")
-        elif bare:  # テーマの名前を書く前（2026-10-14 より前）の template.py で作ったもの
-            warn("共有テーマ", f"Google Slides が {bare} 個あるが、どれにもテーマの名前（{slides.THEME_PROP}）がない。持ち主が template.py <テーマ> で合わせ直すと書かれる")
-        elif not names:
-            warn("共有テーマ", "テーマがない。管理者が template.py で作ったテンプレートを置く（ほかのファイルは読まない）")
-        else:
-            ok("共有テーマ", ", ".join(names) + (f"（[slides.templates] にない: {', '.join(new)}。使うなら slides.py theme <url> で写す）" if new else ""))
     return out
 
 
@@ -261,7 +188,25 @@ def main(args):
     return 1 if n else 0
 
 
+BASE = ('[desk]\ndefault_language = "ja"\n\n[google]\nquota_project = ""\n\n[review]\nplan_reviewer = "ai"\ndeck_review_max_rounds = 3\n\n'
+        '[feedback.google_comments]\nwatch_hours = 0\n\n[drive]\ndesk = ""\nshared_themes = ""\ncustomers = ""\ninternal = ""\ndocs = ""\n')  # selftest のワークスペース（desk-init の雛形の、ここで見る値だけ）
+
+
+def workspace(ws, user=None):
+    """selftest のワークスペース。user があれば、設定はそのパスに workspace を書いて置く（~/.desk.toml の形）。"""
+    for d in ("Customers", "Internal", "Research", ".desk"):
+        (ws / d).mkdir(parents=True, exist_ok=True)
+    for name in ("references_index.md", "drive_folders.md"):
+        (ws / name).write_text("x\n")
+    if user:
+        user.parent.mkdir(parents=True, exist_ok=True)
+        user.write_text(f'workspace = "{ws}"\n\n' + BASE)
+    else:
+        (ws / "desk.toml").write_text(BASE)
+
+
 def selftest():
+    me = Path(__file__).resolve().parents[1].name  # このスクリプトのスキル（desk-doctor か、写しを持つ google-slides・google-docs）。隣にほかのスキルがなくても回る
     assert "connection にログインする: Please login" in proxy_fail(Exception(f"{gapi.REJECTED}: GET u\nPlease login"))  # 返事のログインの URL を見せる
     m = proxy_fail(Exception('503 GET u\n<html>bad gateway</html>'))
     assert m.startswith("503 GET u（<html>bad gateway</html>）。確かめる: ") and CHECKS in m and proxy_fail(TimeoutError()) == f"TimeoutError。確かめる: {CHECKS}"  # 原因は当てない
@@ -270,9 +215,9 @@ def selftest():
         os.environ["DESK_CONFIG"] = str(conf)
         rows = lambda at: {n: (k, d) for k, n, d in check(at, local=True)}
         assert rows(Path(tmp))["desk.toml"][0] == "要修正"  # どちらもない
-        subprocess.run([sys.executable, str(SKILLS / "desk-init" / "scripts" / "init.py"), str(ws), "--user"], check=True, capture_output=True)
+        workspace(ws, conf)
         r = rows(Path(tmp))  # ワークスペースの外で回しても
-        assert r["設定"] == ("OK", str(conf)) and r["ワークスペース"] == ("OK", str(ws)) and "設定が 2 つ" not in r and "AGENTS.md" not in r and not (ws / "AGENTS.md").exists()
+        assert r["設定"] == ("OK", str(conf)) and r["ワークスペース"] == ("OK", str(ws)) and "設定が 2 つ" not in r and "前の雛形の AGENTS.md" not in r
         (ws / "desk.toml").write_text("")
         r = rows(ws / "Customers")
         assert r["設定"] == ("OK", str(ws / "desk.toml")) and r["設定が 2 つ"][0] == "要確認" and rows(Path(tmp))["設定が 2 つ"][0] == "要確認"
@@ -288,11 +233,14 @@ def selftest():
         (Path(tmp) / "factory.toml").write_text("")
         assert kinds()["前のバージョンのワークスペース"] == "要修正"  # 2026-10-25 より前の名前
         (Path(tmp) / "factory.toml").unlink()
-        subprocess.run([sys.executable, str(SKILLS / "desk-init" / "scripts" / "init.py"), tmp], check=True, capture_output=True)
-        (Path(tmp) / ".agents" / "skills" / "slides-build").mkdir(parents=True)
-        (Path(tmp) / ".agents" / "skills" / "slides-build" / "SKILL.md").write_text("x")
+        workspace(Path(tmp))
+        (Path(tmp) / ".agents" / "skills" / me).mkdir(parents=True)
+        (Path(tmp) / ".agents" / "skills" / me / "SKILL.md").write_text("x")
+        (Path(tmp) / ".claude" / "skills" / "slides-build").mkdir(parents=True)
+        (Path(tmp) / ".claude" / "skills" / "slides-build" / "SKILL.md").write_text("x")
+        assert "前のバージョンの名前のスキルがある（今の google-slides・google-docs・google-vids と両方が効く）: .claude/skills/slides-build" in next(d for _, n, d in check(Path(tmp), local=True) if n == "スキルの重なり")  # 前の名前で置いた写しも
         k = kinds()
-        assert k["スキルの重なり"] == "要確認" and k["slides.templates"] == "要確認" and k["drive.customers"] == "要確認"
+        assert k["スキルの重なり"] == "要確認" and k["drive.customers"] == "要確認"
         (Path(tmp) / "Customers" / "acme").mkdir(parents=True, exist_ok=True)
         (Path(tmp) / "Customers" / "acme" / "CLAUDE.md").write_text("x")
         assert kinds()["顧客の memory"] == "要確認"
@@ -317,10 +265,6 @@ def selftest():
         conf.write_text(base)
         agents = Path(tmp) / "AGENTS.md"
         assert "前の雛形の AGENTS.md" not in kinds() and "前のバージョンのワークスペース" not in kinds()  # 今の雛形は AGENTS.md を置かない
-        (Path(tmp) / "rules" / "deck-build").mkdir(parents=True)
-        (Path(tmp) / "rules" / "deck-build" / "checks.py").write_text("x")
-        assert kinds()["前のバージョンのワークスペース"] == "要修正"  # 前のバージョンの rules/ が残っている
-        shutil.rmtree(Path(tmp) / "rules")
         assert kinds()["ワークスペースの決まり"] == "OK"
         rx = Path(tmp) / "recipes" / "x"
         rx.mkdir(parents=True)
@@ -334,12 +278,12 @@ def selftest():
         assert kinds()["ワークスペースの決まり"] == "OK"  # 資源とテンプレートは決まりでない
         (Path(tmp) / "recipes" / "loose.md").write_text("---\ndescription: 前の形\n---\n")
         (Path(tmp) / "recipes" / "RECIPE.md").write_text("---\ndescription: フォルダがない\n---\n")
-        (Path(tmp) / "recipes" / "slides-build" / "y").mkdir(parents=True)
-        (Path(tmp) / "recipes" / "slides-build" / "y" / "RECIPE.md").write_text("---\ndescription: y\n---\n")
+        (Path(tmp) / "recipes" / me / "y").mkdir(parents=True)
+        (Path(tmp) / "recipes" / me / "y" / "RECIPE.md").write_text("---\ndescription: y\n---\n")
         (Path(tmp) / "recipes" / "z").mkdir()
         (Path(tmp) / "recipes" / "z" / "RECIPE.md").write_text("- description がない\n")
         d = next(d for k, n, d in check(Path(tmp), local=True) if n == "ワークスペースの決まり")
-        assert "recipes/loose.md はレシピでない" in d and "recipes/RECIPE.md はレシピでない" in d and "スキルの名前のフォルダ（slides-build）" in d and "recipes/z/RECIPE.md の先頭に frontmatter の description がない" in d, d
+        assert "recipes/loose.md はレシピでない" in d and "recipes/RECIPE.md はレシピでない" in d and f"スキルの名前のフォルダ（{me}）" in d and "recipes/z/RECIPE.md の先頭に frontmatter の description がない" in d, d
         shutil.rmtree(Path(tmp) / "recipes")
         agents.write_text("# 自分の決まり\n- 社内向けは敬体。\n")
         assert "前の雛形の AGENTS.md" not in kinds()  # 持ち主が書いたものには言わない
@@ -349,54 +293,6 @@ def selftest():
         assert kinds()["前の雛形の AGENTS.md"] == "要確認"  # 頭の題を書き替えた写しも、節で見つける
         agents.unlink()
         toml = Path(tmp) / "desk.toml"
-        assert kinds()["brand.copyright"] == "要修正" and kinds()["brand.company"] == "要確認"
-        toml.write_text(toml.read_text().replace("[brand]", '[brand]\ncopyright = "© Acme 2026"', 1))
-        assert kinds()["brand.copyright"] == "要修正"
-        toml.write_text(toml.read_text().replace('"© Acme 2026"', '"© 2026 Example, Inc. All rights reserved."'))
-        assert kinds()["brand.copyright"] == "要修正"  # 仮の値をそのまま書いた
-        toml.write_text(toml.read_text().replace('"© 2026 Example, Inc. All rights reserved."', '"© 2026 Acme, Inc. All rights reserved."'))
-        assert "brand.copyright" not in kinds()
-        themes = Path(tmp, "themes", "slides")
-        themes.mkdir(parents=True)
-        put = lambda n, o: (themes / f"{n}.json").write_text(json.dumps({"apiVersion": "slides/v1", "kind": "theme", **o}))
-        put("mine", {"copyright": "© Me 2026"})
-        assert kinds()["themes/slides/mine.json の copyright"] == "要修正"  # テーマの copyright にも同じ確かめ
-        put("mine", {"copyright": "© 2026 Me. All rights reserved.", "colors": {"TEXT": "red"}})
-        dthemes = Path(tmp, "themes", "docs")
-        dthemes.mkdir(parents=True)
-        dput = lambda n, o: (dthemes / f"{n}.json").write_text(json.dumps({"apiVersion": "docs/v1", "kind": "theme", **o}))
-        dput("us2", {"mono": "Fira Code"})
-        assert kinds()["themes/slides/mine.json"] == "要修正" and kinds()["themes/docs/us2.json"] == "要修正"  # 6 桁でない色、リガチャの出る等幅
-        (dthemes / "us2.json").unlink()
-        assert "themes/slides/mine.json の copyright" not in kinds()
-        put("mine", {"copyright": 2026})
-        assert kinds()["themes/slides/mine.json"] == "要修正" and "themes/slides/mine.json の copyright" not in kinds()  # 文字列でない copyright は 1 回だけ出す
-        put("mine", {})
-        assert "themes/slides/mine.json" not in kinds() and "slides.themes" not in kinds()
-        toml.write_text(toml.read_text().replace("\n[slides.templates]", '\n[slides.templates]\nmine = "x"\nacme = "y"', 1))
-        k = kinds()
-        assert k["テーマのファイル"] == "要修正" and "acme" in next(d for _, n, d in check(Path(tmp), local=True) if n == "テーマのファイル")  # テンプレートだけで、テーマのファイルがない
-        assert k["テーマの説明"] == "要確認"  # mine に description がない
-        put("mine", {"description": "自分の"})
-        toml.write_text(toml.read_text().replace('mine = "x"\nacme = "y"', 'mine = "x"', 1))
-        assert "テーマのファイル" not in kinds() and "テーマの説明" not in kinds()
-        toml.write_text(toml.read_text() + '\n[slides.themes.visual]\nurl = "x"\n')
-        assert kinds()["slides.themes"] == "要修正"  # 2026-10-16 までの書き方
-        toml.write_text(toml.read_text().replace('\n[slides.themes.visual]\nurl = "x"\n', ""))
-        assert "slides の base" not in kinds() and "slides.default_theme" not in kinds()  # 雛形には書いていない。既定の navy は組み込み
-        toml.write_text(toml.read_text().replace('default_theme = "navy"', 'default_theme = "nope"\nbase_template = ""', 1))
-        assert kinds()["slides の base"] == "要修正" and kinds()["slides.default_theme"] == "要修正"  # 2026-10-14 までの書き方（空でも消す）、ファイルのない既定のテーマ
-        toml.write_text(toml.read_text().replace('default_theme = "nope"\nbase_template = ""', 'default_theme = "navy"', 1))
-        toml.write_text(toml.read_text() + '\n[docs]\ndefault_theme = "acme"\n\n[docs.themes.us]\npage = [215.9, 279.4]\n')
-        dput("us", {"page": [215.9, 279.4]})
-        k = kinds()
-        assert k["docs.default_theme"] == "要修正" and k["ドキュメントのテーマの説明"] == "要確認" and k["docs.themes"] == "要修正"  # 既定のテーマがない、説明がない、前の書き方
-        toml.write_text(toml.read_text().replace("\n[docs.themes.us]\npage = [215.9, 279.4]\n", ""))
-        toml.write_text(toml.read_text().replace('default_theme = "acme"', 'default_theme = "standard"'))
-        assert "docs.default_theme" not in kinds()  # 組み込みの standard
-        toml.write_text(toml.read_text().replace('default_theme = "standard"', 'default_theme = "us"'))
-        dput("us", {"description": "米国向け", "page": [215.9, 279.4]})
-        assert "docs.default_theme" not in kinds() and "ドキュメントのテーマの説明" not in kinds() and "docs.themes" not in kinds()
         assert "review.plan_reviewer" not in kinds() and "review.deck_review_max_rounds" not in kinds()  # 雛形の既定
         toml.write_text(toml.read_text().replace('plan_reviewer = "ai"', 'plan_reviewer = "AI"').replace("deck_review_max_rounds = 3", "deck_review_max_rounds = 5"))
         assert kinds()["review.plan_reviewer"] == "要修正" and kinds()["review.deck_review_max_rounds"] == "要修正"
@@ -415,31 +311,17 @@ def selftest():
             assert ("feedback.google_comments.watch_hours" not in kinds()) == ok, v
         with contextlib.redirect_stdout(io.StringIO()):
             assert main([tmp, "--local"]) == (0 if shutil.which("uv") else 1)
-        toml.write_text(toml.read_text().replace('shared_themes = ""', 'shared_themes = "shared"'))
-        import slides
-        cwd, saved = os.getcwd(), (gapi.request, slides.shared_files, slides.theme_files)
+        cwd, saved = os.getcwd(), gapi.request
         gapi.request = lambda method, url, *a, **k: {"user": {"emailAddress": "me"}} if "/about" in url else {"name": "x"}
-        shared = lambda: next(d for _, n, d in check(Path(tmp)) if n == "共有テーマ")
-
-        def unreadable(folder, named=True):
-            raise gapi.ApiError("404")
         try:
-            slides.shared_files, slides.theme_files = lambda: [], lambda folder, named=True: [{"id": "a"}, {"id": "b"}]
-            assert "2 個あるが" in shared()  # 名前のない Slides だけ
-            slides.theme_files = lambda folder, named=True: []
-            assert shared().startswith("テーマがない")
-            slides.shared_files = lambda: [{"id": "a", "properties": {slides.THEME_PROP: "acme"}}]
-            slides.theme_files = lambda folder, named=True: 1 / 0  # 名前のあるものがあれば、もう 1 回は読まない
-            assert shared().startswith("acme")
-            slides.shared_files, slides.theme_files = lambda: [], unreadable
-            assert "共有テーマ" not in {n for _, n, _ in check(Path(tmp))}  # 読めなければ出さない（止まらない）
+            assert ("OK", "Google の認証", "me") in check(Path(tmp))
             (Path(tmp) / "w").mkdir()  # 外で回して ~/.desk.toml の w を出したら、gapi も同じものを読む（w から探し直すと、上の desk.toml を読む）
             Path(tmp, "u.toml").write_text(f'workspace = "{Path(tmp, "w")}"\n')
             os.environ["DESK_CONFIG"] = str(Path(tmp, "u.toml"))
             assert next(d for _, n, d in check(Path("/")) if n == "設定") == str(Path(tmp, "u.toml")) and gapi.config_path() == Path(tmp, "u.toml")
             os.environ["DESK_CONFIG"] = ""
         finally:
-            gapi.request, slides.shared_files, slides.theme_files = saved
+            gapi.request = saved
             os.chdir(cwd)
     print("selftest ok")
 
