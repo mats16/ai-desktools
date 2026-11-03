@@ -38,7 +38,7 @@ Open the file for the step you are on; do not read ahead. Each file holds the st
 | **Steps 6–8 for decks:** three representative pages, remaining pages, building the whole | [slides_steps.md](slides_steps.md) |
 | **The page-writing prompt:** the request to child agents that write pages (7) | [prompt_pages.md](prompt_pages.md) |
 | Writing, building, and checking a document | `google-docs` |
-| 9 `/deck-review` | `deck-review` (and the paragraph below) |
+| 9 `/deck-review` | the `deck-review` skill (and the paragraph below) |
 | **Delivering** (10–11): delivering, cleaning up, what to keep | [deliver.md](deliver.md) |
 | **Child agents:** starting and waiting for any child agent | [agents.md](agents.md) |
 | **Requests after delivery:** a correction, question, or comments | [revise.md](revise.md) (classify it first; deck-flow-017) |
@@ -46,7 +46,7 @@ Open the file for the step you are on; do not read ahead. Each file holds the st
 | **The comment-watch prompt:** the request to the watcher child agent | [prompt_watch.md](prompt_watch.md) |
 | **Step records:** recording what a piece of work did in its own scope (status, files, outputs), and reading back where the material stands and the next step after a summary | [progress.md](progress.md) (`flow.py record`, the fields and where they come from, when a record helps) |
 
-**9. Review the whole with `/deck-review` before delivering.** Run it by the steps in `deck-review`, and start pass 2 of the source check together with round 1 (deck-flow-019). Another subagent's eyes and the contact sheet of all pages also catch cross-page defects. Run up to the `[review] deck_review_max_rounds` rounds in `desk.toml` (3 rounds if unset); if fixing increases the defects, revert. After fixing, rebuild decks and documents to the same URL ("Deliverables" in `google-slides`). For decks that went through the three representative pages, write the every-page defects found in the review under 「あと」 in the same section of the three-representative-pages log (if something remained even though it was applied in 8, say so).
+**9. Review the whole with `/deck-review` (the `deck-review` skill) before delivering.** Run it by the steps in `deck-review`, and start pass 2 of the source check together with round 1 (deck-flow-019). Another subagent's eyes and the contact sheet of all pages also catch cross-page defects. Run up to the `[review] deck_review_max_rounds` rounds in `desk.toml` (3 rounds if unset); if fixing increases the defects, revert. After fixing, rebuild decks and documents to the same URL ("Deliverables" in `google-slides`). For decks that went through the three representative pages, write the every-page defects found in the review under 「あと」 in the same section of the three-representative-pages log (if something remained even though it was applied in 8, say so).
 
 ## Working practices (every step)
 
