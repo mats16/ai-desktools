@@ -36,7 +36,7 @@ python3 $K/docs.py export <URL> /tmp/<material name>.docx                 # only
 2. Write the content. Write the content agreed in the outline into doc.md without waiting for the user (deck-flow-006 in `deck-workflow`). If the user says they want to settle the content in doc.md, you may do so (what readers see is the built Google Docs).
 3. Build with `docs.py new` (first time) or `docs.py build`, and check with `docs.py check`.
 4. Bring `要修正` to 0, check each `要確認` one by one, and open and look at the images ([lint.md](lint.md)). Put fixes into doc.md or docs.py, and go back to 3.
-5. Before returning a newly made document, run `/deck-review` (`deck-review`). Put the findings into doc.md as well and rebuild. For fixes after delivery, run only the scope decided by deck-flow-017 in `deck-workflow` → requests after delivery.
+5. Before returning a newly made document, run `/deck-review` (the `deck-review` skill). Put the findings into doc.md as well and rebuild. For fixes after delivery, run only the scope decided by deck-flow-017 in `deck-workflow` → requests after delivery.
 
 ### 1.2 doc.md format
 
@@ -107,7 +107,7 @@ It writes the document's JSON, text (`text.md`), PDF, and page images to `/tmp/d
 - **Images:** After building, open and look at the images of all pages yourself, and fix. Look at table column widths and wrapping, figure sizes, whether a figure and its title or a table and its title are split across pages, spacing between paragraphs, and headings left at the end of a page. Judge the finish by these Google-rendered images.
 - **Text:** Read `text.md` for missing content or wrong order.
 - **lint:** Bring `要修正` to 0. Check each `要確認` one by one, and either fix it or be able to say why it stays (example: 「顧客の発言の引用に だ・である が残るのはよい」).
-- **Before delivering:** Review a newly made document as a whole with `/deck-review <Google Docs URL>` (`deck-review`) before returning it to the user. For fixes after delivery, run only the scope decided by deck-flow-017 in `deck-workflow` → requests after delivery.
+- **Before delivering:** Review a newly made document as a whole with `/deck-review <Google Docs URL>` (the `deck-review` skill) before returning it to the user. For fixes after delivery, run only the scope decided by deck-flow-017 in `deck-workflow` → requests after delivery.
 - When checking is done, you may delete `/tmp/docs_<ID>/`. Do not keep it in the material's folder.
 
 ## 4. Deliverables and Drive

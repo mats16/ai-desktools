@@ -1,6 +1,6 @@
 # Steps 6–8 for decks: the three representative pages, the remaining pages, building the whole
 
-Steps 6–8 of "Overall flow" in `SKILL.md`, for decks only. Before this, run steps 1–5 (`start.md`); after this, run step 9 (`/deck-review`) and steps 10–11 (`deliver.md`). How each check layer works is slides-flow-005 in `google-slides`.
+Steps 6–8 of "Overall flow" in `SKILL.md`, for decks only. Before this, run steps 1–5 (`start.md`); after this, run step 9 (`/deck-review`, the `deck-review` skill) and steps 10–11 (`deliver.md`). How each check layer works is slides-flow-005 in `google-slides`.
 
 ## 6. Three representative pages (decks over 10 pages)
 

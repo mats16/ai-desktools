@@ -64,7 +64,7 @@ Basis: 20% of the time spent making materials went to building and checking, and
 - **Images:** After building, open the images of the changed pages (`changed.json`), look at them, and fix (the e2e in "Three layers of checks" above. When you build the whole deck for the first time and go straight into `/deck-review`, the review child agents look at full size. slides-flow-005 above). Look for overflow (text is not clipped even when it leaves its frame), overlaps, collisions with the source line or footer, punctuation at the start of a line, last lines of only 1–2 characters, and line breaks inside a word or phrase. Judge the finish by these Google-rendered images.
 - **Text:** Read `deck.md` for missing content or wrong order.
 - **lint:** Bring `要修正` to 0. Check each `要確認` one by one, and either fix it or be able to say why it stays (example: 「顧客の発言の引用に です・ます が残るのはよい。案内・依頼・注意書きのページ（問い合わせ先、お願い、「ご相談ください」、免責・価格の注記）の です・ます も残してよい。それ以外の説明の文は常体か体言止めに直す。」 `deck-writing` → content §6).
-- **Before delivering:** Review a newly made material as a whole with `/deck-review` (`deck-review`) before returning it to the user. It looks with a separate subagent's eyes and with the contact sheet of all pages. For fixes after delivery, run only the scope decided by deck-flow-017 in `deck-workflow`.
+- **Before delivering:** Review a newly made material as a whole with `/deck-review` (the `deck-review` skill) before returning it to the user. It looks with a separate subagent's eyes and with the contact sheet of all pages. For fixes after delivery, run only the scope decided by deck-flow-017 in `deck-workflow`.
 - When checking is done, you may delete `/tmp/slides_<ID>/`. Do not keep it in the material's folder.
 
 ## Deliverables
