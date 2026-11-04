@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """usage: slides_doctor.py [<ワークスペース>] [--local] [--own]   （--selftest で自己確認）
 スライドを組む前提を確かめる: [brand] の著作権表示と社名、ワークスペースのテーマのファイル（themes/slides/<名前>.json）、[slides] のテーマとテンプレート、
-共有テーマのフォルダ。--local は手元だけ見て、Google の API を呼ばない。desk-doctor の SKILL.md から、ほかの前提と一緒に回す（2026-11-02 に doctor.py から分けた）。
+共有テーマのフォルダ。--local は手元だけ見て、Google の API を呼ばない。desk-init の doctor.md から、ほかの前提と一緒に回す（2026-11-02 に doctor.py から分けた）。
 1 行 1 項目で「OK」「要修正」「要確認」を出す。要修正が 1 つでもあれば exit 1。"""
 import contextlib, io, json, os, sys, tempfile, tomllib
 from pathlib import Path
@@ -12,14 +12,14 @@ from brand import copyright_problem  # noqa: E402  著作権表示の確かめ�
 
 
 def check(ws, local=False, own=False):
-    """(区分, 項目, 詳しく) の並び。区分は OK・要修正・要確認。own が偽なら、desk-doctor の doctor.py（写し）の行から始める。"""
-    out = [] if own else doctor.check(ws, local)  # desk-doctor と同じ前提（設定・道具・Google の認証・Drive）。このスキルだけを入れても足りる。--own は desk-doctor が先に出したとき
+    """(区分, 項目, 詳しく) の並び。区分は OK・要修正・要確認。own が偽なら、desk-init の doctor.py（写し）の行から始める。"""
+    out = [] if own else doctor.check(ws, local)  # desk-init の doctor.py と同じ前提（設定・道具・Google の認証・Drive）。このスキルだけを入れても足りる。--own は desk-init の doctor.py が先に出したとき
     ok = lambda name, detail="": out.append(("OK", name, detail))
     ng = lambda name, detail: out.append(("要修正", name, detail))
     warn = lambda name, detail: out.append(("要確認", name, detail))
     try:
         found = desk.locate(ws)
-    except SystemExit:  # 設定の見つからなさ・読めなさは doctor.check（か、先に回した desk-doctor）が出す
+    except SystemExit:  # 設定の見つからなさ・読めなさは doctor.check（か、先に回した desk-init の doctor.py）が出す
         return out
     if not found:
         return out
@@ -65,7 +65,7 @@ def check(ws, local=False, own=False):
     gapi.find_config = lambda: (conf, root)
     if any(k == "要修正" and (n == "Google の認証" or n.startswith("uc_connections")) for k, n, _ in out):  # 通らない認証では、テンプレートを開けるかは見ない
         return out
-    if own:  # 認証の行は desk-doctor の doctor.py が出した。通らなければ、テンプレートごとに同じ断りを重ねない
+    if own:  # 認証の行は desk-init の doctor.py が出した。通らなければ、テンプレートごとに同じ断りを重ねない
         try:
             gapi.request("GET", f"{gapi.DRIVE}/about?fields=user(emailAddress)")
         except Exception:  # 回線のエラー・形の違う返事も
@@ -82,7 +82,7 @@ def check(ws, local=False, own=False):
             shared, have = slides.shared_files(), {gapi.file_id(u) for u in temps.values()}  # 自分の Themes は読まない（slides.py themes が出す）
             names, new = [f["properties"][slides.THEME_PROP] for f in shared], [f["properties"][slides.THEME_PROP] for f in shared if f["id"] not in have]
             bare = 0 if names else len(slides.theme_files(gapi.folder_id(dr["shared_themes"]), named=False))  # 名前のあるものが 1 つでもあれば数えない（base の写しのように、名前がなくて正しいものもある）
-        except slides.READ_ERRORS:  # 開けないことは desk-doctor の drive.shared_themes に出る
+        except slides.READ_ERRORS:  # 開けないことは desk-init の doctor.py の drive.shared_themes に出る
             return out
         if dup := sorted({n for n in names if names.count(n) > 1}):
             warn("共有テーマ", f"同じ名前のテーマが 2 つ以上ある（どれを写すか迷う。古いほうをフォルダから外す）: {', '.join(dup)}")
@@ -113,7 +113,7 @@ def selftest():
     os.environ["DESK_CONFIG"] = ""  # 手元の ~/.desk.toml に左右されない
     with tempfile.TemporaryDirectory() as tmp:
         kinds = lambda: {n: k for k, n, _ in check(Path(tmp), local=True, own=True)}
-        assert kinds() == {} and ("要修正", "desk.toml") in {(k, n) for k, n, _ in check(Path(tmp), local=True)}  # --own でなければ、desk-doctor と同じ前提も出す（このスキルだけを入れても足りる）
+        assert kinds() == {} and ("要修正", "desk.toml") in {(k, n) for k, n, _ in check(Path(tmp), local=True)}  # --own でなければ、desk-init の doctor.py と同じ前提も出す（このスキルだけを入れても足りる）
         Path(tmp, "desk.toml").write_text("[slides\n")
         assert kinds() == {} and "desk.toml の書き方" in {n for _, n, _ in check(Path(tmp), local=True)}
         toml = Path(tmp) / "desk.toml"

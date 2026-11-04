@@ -24,7 +24,7 @@ python3 $K/gslides.py check <URL> [--talk]          # after building. lint, text
 python3 $K/gslides.py check <URL> --all             # re-fetches images of all pages (once per checkpoint: before /deck-review, or when looking across pages)
 python3 $K/gslides.py check <URL> --pages 3,5       # re-fetches images of those pages only (if the page count changed, all pages automatically)
 uv run -q $K/sheet.py /tmp/<name>.webp /tmp/slides_<ID>/p-0{2,3,4}.webp   # tiles several pages into one image (WebP; a sheet whose long edge exceeds 2000 px is shrunk to it)
-python3 $K/slides_doctor.py <workspace> [--local]     # the prerequisites for building slides: desk-doctor's checks, then [brand], themes, templates, shared themes (--own: only these, when desk-doctor already ran)
+python3 $K/slides_doctor.py <workspace> [--local]     # the prerequisites for building slides: doctor.py's checks (desk-init), then [brand], themes, templates, shared themes (--own: only these, when doctor.py already ran)
 python3 $K/slides.py merge fix_a.py fix_b.py          # for pages.py materials: merges page functions that child agents wrote in separate files into pages.py (does not build. Below)
 ```
 

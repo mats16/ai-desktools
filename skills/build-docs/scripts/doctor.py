@@ -7,12 +7,12 @@ from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parents[2]  # このスキルと並ぶスキルのフォルダ（ワークスペースの .agents/skills などとの重なりを、名前だけで見る）
 sys.dont_write_bytecode = True
-import desk  # noqa: E402  ワークスペースと設定のファイルの探し方（desk-init のものの写し）
+import desk  # noqa: E402  ワークスペースと設定のファイルの探し方
 import gapi  # noqa: E402  Google の API（connection を通すときの確かめと、proxy の断りの見分け。build-slides のものの写し）
 
 
 OLD_1104 = {"google-slides": "scripts/gslides.py", "google-docs": "scripts/doc_lint.py", "google-vids": "scripts/vids_internal.py"}  # 2026-11-02〜11-04 の道具のスキルの名前と、その写しにしかないファイル（ほかのパッケージにも同じ名前のスキルがあるので、これで見分ける）
-OLD_NAMES = ("slides-build", "docs-build", "vids-build", "vids-voice", *OLD_1104)  # 道具のスキルの前の名前（2026-11-02 に google-*、2026-11-04 に build-* にした）
+OLD_NAMES = ("slides-build", "docs-build", "vids-build", "vids-voice", *OLD_1104, "desk-doctor")  # 道具のスキルの前の名前（2026-11-02 に google-*、2026-11-04 に build-* にした）と、2026-11-05 に desk-init に入れた desk-doctor
 CHECKS = "connection にログインしてあるか（人ごとの OAuth）、USE CONNECTION の権限、connection の OAuth の scope（drive・presentations・documents）、databricks auth login"
 
 
@@ -209,7 +209,7 @@ def workspace(ws, user=None):
 
 
 def selftest():
-    me = Path(__file__).resolve().parents[1].name  # このスクリプトのスキル（desk-doctor か、写しを持つ build-slides・build-docs）。隣にほかのスキルがなくても回る
+    me = Path(__file__).resolve().parents[1].name  # このスクリプトのスキル（desk-init か、写しを持つ build-slides・build-docs）。隣にほかのスキルがなくても回る
     assert "connection にログインする: Please login" in proxy_fail(Exception(f"{gapi.REJECTED}: GET u\nPlease login"))  # 返事のログインの URL を見せる
     m = proxy_fail(Exception('503 GET u\n<html>bad gateway</html>'))
     assert m.startswith("503 GET u（<html>bad gateway</html>）。確かめる: ") and CHECKS in m and proxy_fail(TimeoutError()) == f"TimeoutError。確かめる: {CHECKS}"  # 原因は当てない

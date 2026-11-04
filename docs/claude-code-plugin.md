@@ -45,12 +45,12 @@ for d in <ワークスペース> /tmp; do
   (cd $d && claude plugin list --json) | python3 -c "import json,sys; [print(p['id'], p['scope'], p['enabled']) for p in json.load(sys.stdin) if p['id']=='desk-tools@desk-tools']"
 done
 
-# 会話に読み込まれるスキル: ワークスペースでは desk-tools:* の 16 個、ほかのフォルダでは 0
+# 会話に読み込まれるスキル: ワークスペースでは desk-tools:* の 15 個、ほかのフォルダでは 0
 cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-format stream-json --verbose \
   | python3 -c "import json,sys; e=next(e for e in map(json.loads, sys.stdin) if e.get('subtype')=='init'); print(sorted(s for s in e['skills'] if s.startswith('desk-tools:')))"
 ```
 
-2026-10-12 に `~/adf-plugin-test` で確かめた結果（そのときの 19 個。2026-10-31 にスキルを組み直して 17 個に、2026-11-02 に vids-voice を google-vids に寄せて 16 個になった。2026-11-04 に道具のスキルを build-* と改めた）:
+2026-10-12 に `~/adf-plugin-test` で確かめた結果（そのときの 19 個。2026-10-31 にスキルを組み直して 17 個に、2026-11-02 に vids-voice を google-vids に寄せて 16 個になった。2026-11-04 に道具のスキルを build-* と改め、2026-11-05 に desk-doctor を desk-init に入れて 15 個になった）:
 
 | フォルダ | `plugin list` の enabled | 読み込まれたスキル |
 |---|---|---|
@@ -67,7 +67,6 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 
 ```
 /desk-tools:desk-init
-/desk-tools:desk-doctor
 ```
 
 doctor の要修正が 0 になれば使える。ワークスペースの決まり（レシピ。`recipes/<名前>/RECIPE.md` で、frontmatter に `description` のあるもの）は、hook では出さない（2026-11-04 にやめた）。資料を作るスキルの手順の中で、エージェントが `desk.py recipes` で一覧を見て、その作業に当たるものを自分で開く（`desk-feedback` の `routing.md` の「Workspace rules」）。スキルは `desk-tools:` を付けた名前で呼ぶ（`/desk-tools:build-slides` など）。

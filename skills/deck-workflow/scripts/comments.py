@@ -270,7 +270,7 @@ def opt(a, name):
 
 
 def watch_hours(given):
-    """見張る時間（正の数）。--hours の値（文字から読む）か、desk.toml の [feedback.google_comments] watch_hours（desk-doctor と同じく、数の型だけ受ける。
+    """見張る時間（正の数）。--hours の値（文字から読む）か、desk.toml の [feedback.google_comments] watch_hours（desk-init の doctor.py と同じく、数の型だけ受ける。
     true や "48" は受けない）。0 か、ないか、数でなければ止める。"""
     if given is None:
         h = gapi.config().get("feedback", {}).get("google_comments", {}).get("watch_hours", 0)

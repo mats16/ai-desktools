@@ -505,7 +505,7 @@ def reindex(folder):
             return
         if index(ws) is None:
             print(f"（{ws / INDEX} は手で書いた前の形なので、作り直していない。desk-migrate の apply で移す）", file=sys.stderr)
-    except (SystemExit, OSError) as e:  # 個人の設定が読めない（desk-doctor が出す）・書けない
+    except (SystemExit, OSError) as e:  # 個人の設定が読めない（desk-init の doctor.py が出す）・書けない
         print(f"（索引を作り直していない: {e}）", file=sys.stderr)
 
 
