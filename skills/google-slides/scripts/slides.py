@@ -497,7 +497,12 @@ class Deck:
     def spec(self, src):
         """JSON で書いたページ（ファイルのパス、dict、その並び、deck.json、部品 1 つ）を解いて組み、ページの ID の並びを返す。
         書き方は ../pages.md の slides-pages-034。解いた形は self.resolved に残る（slides.py resolve）。"""
-        return [spec_page(self, p, base, loc, name) for p, base, loc, name in spec_files(src, read=self.read_files)]
+        out = []
+        for p, base, loc, name in spec_files(src, read=self.read_files):
+            out.append(sid := spec_page(self, p, base, loc, name))
+            if (f := Path(base) / Path(loc).name) in self.read_files:  # ページを書いたファイル（ページのファイルと部品 1 つのファイル。deck.json の中に書いたページは、そのデッキのファイル）
+                self.page_files[sid] = os.path.relpath(f)
+        return out
 
     # ---- 図形と文字 ----
     def _shape(self, sid, x, y, w, h, fill=None, line=None, kind="RECTANGLE", sx=1, sy=1, dash=False, weight=0.75):
@@ -2412,7 +2417,6 @@ def spec_page(d, p, base, loc, name=None):
         if name in d.page_names:
             sys.exit(f"{loc}: ページの名前「{name}」が 2 つある（ファイル名をページの名前にする。同じファイルを 2 回並べない）")
         d.page_names[name] = sid
-        d.page_files[sid] = os.path.relpath(Path(base) / Path(loc).name)  # deck.json が指した、そのファイル（build/ の別のフォルダの同じ名前のファイルではない）
     sp = SpecPage(base, p.get("bg"))
     sp.index += [(f"{loc}.{k}", p[k]) for k in ("title", "lead", "kicker", "sub") if k in p]
     band = p.get("band")
@@ -4336,7 +4340,8 @@ def selftest_wording():
             got = {(f["rule"], f["file"], f["loc"]) for f in st["last"]["findings"]}
             assert ("動詞を名詞にした語", "p01.json", "title") in got and ("直訳の語", "p01.json", "body[0].rows[1][1]") in got, got  # 見出しと表のセル
             assert ("動詞を名詞にした語", "p01.json", "body[1].items[0].text") in got and ("直訳の語", "p01.json", "speakerNotes") in got, got  # 図の札とノート
-            assert not [f for f in st["last"]["findings"] if "控え" in f["excerpt"]] and {u["key"] for u in st["last"]["units"]} == {"p01", "sub/p02", "#"}  # 部品 1 つのファイルのページは、ファイルの名前を持たないので 1 つの並び
+            assert not [f for f in st["last"]["findings"] if "控え" in f["excerpt"]] and {u["key"] for u in st["last"]["units"]} == {"p01", "sub/p02", "c"}
+            assert [(u["file"], u["loc"]) for u in st["last"]["units"] if u["key"] == "c"] == [("c.json", "text")]  # 部品 1 つのファイルのページも、そのファイルの場所に戻す
             keep = {f["loc"]: f["id"] for f in st["last"]["findings"]}
             with contextlib.redirect_stdout(io.StringIO()):
                 wording.decide(str(folder), "keep", list(keep.values()), "selftest")

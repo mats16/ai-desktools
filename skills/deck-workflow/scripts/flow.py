@@ -357,7 +357,8 @@ def facts(folder, ws):
         if moved:
             items.append(f"日本語の点検のあとに変わったファイル: {short(moved)}（点検し直す）")
         items += [f"日本語の点検の通らない理由: {x}" for x in s.get("通らない理由", [])[:3]]
-        saved = "未実施" if not sv else "古い" if moved or sv.get("checked") != last.get("digest") else "通らない" if sv.get("problems") else "済み"
+        saved = ("未実施" if not sv else "古い" if moved or sv.get("checked") != last.get("digest") else "通らない" if sv.get("problems")
+                 else "済み" if s.get("状態") == "済み" else "古い")  # wording.py の saved_state と同じ
         items.append(f"保存した資料との照合: {saved}" + (f"（{sv.get('url')} リビジョン {sv.get('revision')}・{sv.get('ts')}）" if sv else "（組んで check で画像を見たあとに gslides.py wording <URL> か docs.py wording <URL>）"))
         items += [f"照合の通らない理由: {x}" for x in sv.get("problems", [])[:3]] if saved == "通らない" else []
         return items

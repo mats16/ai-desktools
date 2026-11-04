@@ -1266,7 +1266,7 @@ def wording_selftest():
                 assert e.code == 1 and any("check で見ていない" in x for x in wording.load(d)["last"]["problems"])
             json.dump({"body": body_hash(doc["body"])}, open(f"{seen}/seen.json", "w"))
             wording.decide(d, "ask", [f["id"] for f in fs.values()], "selftest")
-            assert wording.saved_state(wording.load(d), d) == "通らない"  # 判断しただけでは、照合は前の回のまま
+            assert wording.saved_state(wording.load(d), d) != "済み"  # 判断しただけでは、照合は前の回のまま（docs.py wording を回し直す）
             cmd_wording(doc["documentId"])  # check で見た本文で、判断がそろえば通る
             assert wording.saved_state(wording.load(d), d) == "済み" and wording.load(d)["saved"]["url"].endswith("/zzwordingdoc/edit")
             pending["v"] = ["doc.md に、組んでいない直しがある"]  # 組んだあとに doc.md だけを直した

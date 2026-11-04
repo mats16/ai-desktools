@@ -278,7 +278,9 @@ def saved_state(st, folder):
         return "未実施"
     if sv.get("checked") != last.get("digest") or stale(st, folder):
         return "古い"
-    return "済み" if not sv.get("problems") else "通らない"
+    if sv.get("problems"):
+        return "通らない"
+    return "済み" if summarize(st)[0]["状態"] == "済み" else "古い"  # 同じ文でも、点検し直して（規則が増えた・判断が消えた）済みでなくなれば
 
 
 def show(st, tool="wording", folder=None):
@@ -315,10 +317,10 @@ def show(st, tool="wording", folder=None):
         print(f"点検: 未完。ページの JSON（ドキュメントは doc.md）を直して {tool} をもう一度回す。直さないものは "
               f"wording.py keep・ask、変えてよい恐れは wording.py ok（<資料のフォルダ> <ID> … --why …）で閉じる")
     if folder is not None:
-        sv = st.get("saved") or {}
-        print(f"保存した資料との照合: {saved_state(st, folder)}" + (f"（{sv.get('url')} リビジョン {sv.get('revision')}・{sv.get('ts')}）" if sv else "")
+        sv, state = st.get("saved") or {}, saved_state(st, folder)
+        print(f"保存した資料との照合: {state}" + (f"（{sv.get('url')} リビジョン {sv.get('revision')}・{sv.get('ts')}）" if sv else "")
               + "。点検が済んでも、組んで画像を見たあとの照合（gslides.py wording <URL> か docs.py wording <URL>）が済むまでは渡さない")
-        for p in sv.get("problems", [])[:8] if saved_state(st, folder) == "通らない" else []:
+        for p in sv.get("problems", [])[:8] if state == "通らない" else []:
             print(f"[照合が通らない] {p}")
     return s
 
@@ -550,6 +552,14 @@ def selftest():
         assert verify(d, url, "r1", page(*texts)) and load(d)["summary"]["状態"] == "済み"
         run(d, "slides", page("4 つの構成を比べる", "前の版の手順に戻る"), files())  # 点検し直すと、前の照合は古い（ファイルが同じでも、点検した文が違う）
         assert saved_state(load(d), d) == "古い"
+        assert verify(d, url, "r1", page("4 つの構成を比べる", "前の版の手順に戻る")) is False  # 点検が済みでなければ照合も通らない
+        decide(d, "keep", [f["id"] for f in load(d)["last"]["findings"]], "製品の版")
+        decide(d, "ok", [r["id"] for r in load(d)["last"]["risks"]], "同じ")
+        assert verify(d, url, "r1", page("4 つの構成を比べる", "前の版の手順に戻る")) and saved_state(load(d), d) == "済み"
+        run(d, "slides", page("4 つの構成を比べる", "前の版の手順に戻る", "前の版の比べ"), files())
+        run(d, "slides", page("4 つの構成を比べる", "前の版の手順に戻る"), files())  # 同じ文に戻しても、判断の消えた恐れが残れば点検は済みでない
+        assert load(d)["last"]["digest"] == load(d)["saved"]["checked"] and load(d)["summary"]["状態"] == "未完"  # 消した文の読み比べが残る
+        assert saved_state(load(d), d) == "古い"  # 文と指紋が同じでも、点検が済みでない照合は済みにしない
         # 作り直したデッキ（別の URL）の照合も、同じ点検と比べる。比べる相手・判断・書き直しの回数は残る（記録を消させない）
         st0 = load(d)
         assert verify(d, "https://docs.google.com/presentation/d/other/edit", "o1", page("4 つの構成を比べる", "前の版の手順に戻る")) is False  # 点検の判断が残っていない文がある
