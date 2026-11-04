@@ -16,7 +16,7 @@ usage（資料の build/ で。deck.json か pages.py は今いるフォルダ�
   slides.py wording [<URL か ID>]   日本語の点検（build-slides の lint.md の「Japanese check」）。組まずに、deck.json か pages.py から build と同じデッキを作り、
                                           本文・表のセル・図の札・ノートの言い回しの指摘を、ページのファイルと JSON の場所つきで出す。直す前に通した文と比べて意味の変わる恐れを出し、
                                           資料のフォルダの wording.json に残す（wording.py）。テーマは lint と同じ（URL はテーマのファイルがないデッキだけに要る）
-  slides.py dry [<ファイル>] [<URL か ID>]   組まずに make を走らせ、組むときの警告・枚数・ノートのないページを出す（既定は deck.json か pages.py。子が書いた JSON のページの .json か build/pages_<担当>.py を確かめる。
+  slides.py dry [<ファイル>] [<URL か ID>]   組まずに make を走らせ、組むときの警告・枚数・ノートのないページを出す（既定は deck.json か pages.py。サブエージェントが書いた JSON のページの .json か build/pages_<担当>.py を確かめる。
                                           テーマは lint と同じ。../pages.md）
   slides.py resolve [<ファイル>.json] [<URL か ID>]   JSON のページを解いた形（in の位置とすべての値。Deck のメソッドの呼び出し）を出す（../pages.md の slides-pages-034）
   slides.py schema [--brief]   JSON のページの書く形の JSON Schema を出す（--brief は型・キー・色の早見表）
@@ -26,7 +26,7 @@ usage（資料の build/ で。deck.json か pages.py は今いるフォルダ�
                      [drive] shared_themes と [drive] desk の下の Themes の、[slides.templates] にないテンプレートも候補に出す
   slides.py theme <URL か ID> [<名前>] [--force]   テンプレートかデッキが持つテーマ（マスターの配色・書体・目印）を、ワークスペースの themes/slides/<名前>.json に書く。
                      テンプレートなら [slides.templates] にも書く（共有テーマを使い始めるとき、画面で直した色を戻すとき）
-  slides.py merge <ファイル>...   pages.py の資料で、子が別のファイルに書いたページの関数を pages.py に合わせる（組まない。deck-review → splitting fixes）
+  slides.py merge <ファイル>...   pages.py の資料で、サブエージェントが別のファイルに書いたページの関数を pages.py に合わせる（組まない。deck-review → splitting fixes）
   slides.py --selftest
 テンプレートの管理は template.py。色は下の「色の役割」の名前で渡す。役割の名前はテーマの色（マスターの配色）を指すので、テンプレートを替えると色が変わる。
 見た目の決まりは deck-design → slides §1。"""
@@ -40,7 +40,7 @@ import brand, gapi
 from gapi import (DRIVE, GSLIDES, PPTX, SLIDES, batch, carry, delete, config, config_path, file_id, folder_id, png, request, run, slide_ids, thumbnail,
                   trash, u16, upload)
 from textlint import contrast  # 番号の数字の色を塗りから決める（Deck.num）
-from brand import (ASCII_BOLD_EM, ASCII_EM, BRAND_COPYRIGHT, COMPANY, COPYRIGHT_PT, DM_SANS_BOLD_EM, DM_SANS_EM, FONT, FONT_EM, JP_FONTS, LIGATURE_MONO, LOGO,
+from brand import (ASCII_BOLD_EM, ASCII_EM, BRAND_COPYRIGHT, COMPANY as BRAND_COMPANY, COPYRIGHT_PT, DM_SANS_BOLD_EM, DM_SANS_EM, FONT, FONT_EM, JP_FONTS, LIGATURE_MONO, LOGO,
                    MONO_DEFAULT, PLACEHOLDER_COPYRIGHT, RULE, TEXT, WHITE, asset, theme_font, theme_mono)  # 書体・字幅・色の既定・著作権表示はドキュメントと同じ
 from notes import DECK_FIELDS, PAGE_KEY, STAMP, THEME_MARK, deck_font, deck_mark, deck_theme, note_reqs, notes_of, page_key, revision  # スピーカーノートとテーマの目印（build-vids と同じ部品）
 
@@ -63,6 +63,7 @@ BAND_BOTTOM, Y_SRC, Y_FOOT = 6.60, 6.68, 7.08  # 結論バンドの下端、出�
 
 
 COPYRIGHT = BRAND_COPYRIGHT  # 組むデッキの著作権表示。テーマの copyright があればそれ（use_theme）
+COMPANY = BRAND_COMPANY  # 表紙の左下の社名。テーマの company があればそれ（use_theme。"" なら置かない）
 # 結論バンドの内側の余白（in）。枠と文字の間は 1 字分より大きめに取る（見た目 1-8。13pt の 1 字は 0.18 in）。左右は pptx 版と同じ 18pt
 BAND_PAD_X, BAND_PAD_Y = 0.25, 0.2
 # [slides-component-001] 正円の番号の直径（in）と数字（pt）。medium・large は数字の高さが円の 4 割ほど。small は周りの 11pt の文字に合わせて 11pt（11pt の太字なので、赤に白の 3.62:1 で届く。slides-visual-039、deck-design）
@@ -95,7 +96,7 @@ THEMES_DIR = "Themes"  # template.py --from-base がテンプレートを作る 
 # ドキュメントのテーマも、あとで themes/docs/<名前>.json に同じ形で置く
 BUILTIN_THEMES = Path(__file__).resolve().parent.parent / "themes"
 WS_THEMES = ("themes", "slides")
-THEME_KEYS = ("description", "font", "mono", "copyright", "colors", "cover", "section")
+THEME_KEYS = ("description", "font", "mono", "copyright", "company", "colors", "cover", "section")
 READ_ERRORS = (gapi.ApiError, OSError)  # Drive を読めない（権限・URL・認証・回線）。request は HTTP のエラーだけを ApiError にし、取り直しても通らない回線のエラー（URLError・ConnectionError・TimeoutError。どれも OSError）はそのまま上げる
 # 会社のテンプレートから残した表紙・扉のレイアウト（図形・ロゴ・写真付き。パターンごとに番号）。template.py がそのレイアウトのページ番号の枠の
 # 代替テキストに書く。w は元のタイトルの枠の右端までの文字の幅（in）、tone は地の明るさ（文字の色を決める）。なければ表紙・扉も Blank に組む
@@ -1066,7 +1067,7 @@ SPEC_EL = {  # type → (要るキー, 書けるキー)
                          "label_side": ("top", "bottom", "left", "right"), "offset": "f", "num": "pi"}),  # label は線の札、label_side はその置き場所、offset は線を横（縦）にずらす in、num は線の上の番号の丸
     "gantt": ({"cols": "cols", "rows": "grows"}, {"today": "p"}),  # 予定表（slides-pages-010）
     "bars": ({"items": "bitems"}, {"unit": "s", "horizontal": "b", "hot": "ints", "tentative": "btent", "line": "bline", "threshold": "bthr", "series": "bseries", "stack": "b"}),  # 棒グラフ（slides-visual-055、deck-design）。折れ線と直線を重ねられる。series で 2〜4 系列（束ねるか積み上げる）。tentative は確定していない数（点線の枠）
-    "row": ({"items": "kids"}, {"gap": "n", "widths": "nums", "arrows": "b"}),
+    "row": ({"items": "kids"}, {"gap": "n", "widths": "nums", "arrows": "b", "valign": ("top", "middle")}),  # valign は本文の最後の row だけ（余った高さの真ん中に置く）
     "stack": ({"items": "kids"}, {"gap": "n"}),
     "grid": ({"items": "kids", "cols": "pi"}, {"gap": "n"}),
     "frame": ({"items": "kids", "h": "p"}, {}),
@@ -1082,6 +1083,7 @@ BARS_LINE = ({"values": "bvals"}, {"unit": "s", "label": "s"})  # 棒の折れ�
 BARS_THRESHOLD = ({"value": "n"}, {"label": "s"})  # 棒の直線（目標・上限など）: 棒と同じ目盛りの数、何の線か
 OUTLINE = ("text", "box")  # shape が部品そのものの形（num・list・card の shape は番号の形）
 NO_SIZE = ("icon", "num", "arrow")  # w・h を書かない（大きさは size、矢印は両端）
+VALIGN_LAST = "\"valign\": \"middle\" は、ページの本文の最後の row だけに書ける（余った高さの真ん中に置く）"  # row の valign の置き場所（SpecPage.flow と、flow を通さない row・grid の中を見る SpecPage.check）
 CONTAINERS = ("row", "stack", "grid", "frame")  # 並べ方の箱（中の部品を置くだけで、Deck を呼ばない）
 NO_ESC = (*CONTAINERS, "list")  # raw を書けない（並べ方の箱は Deck を呼ばない。list は印と文字で呼ぶメソッドが分かれる）
 NO_H = ("row", "stack", "grid", "gantt", "list")  # h を書かない（高さは中身から決まる。中身より小さい h は次の部品と重なる。frame だけは h が要る）
@@ -1095,7 +1097,7 @@ SPEC_PAGE = {
 SPEC_DECK = ({"name": "s", "pages": "pages"}, {"theme": "s", "authorNotes": "strs"})  # theme はいちばん上のデッキのファイルのもの（slides.py themes の名前）。authorNotes はどこにも組まない（ページの authorNotes と同じ）
 # テーマのファイル（read_theme）。colors は役割の名前（ROLE）・テーマに入れない色（FIXED）・名前で引く役割（NAMED）→ 6 桁。cover・section は
 # 会社のテンプレートから残す表紙・扉のレイアウトの名前の並び（template.py が文字の幅 w と地の明るさ tone を測って書き込む。../template.md）
-SPEC_THEME = ({}, {"description": "s", "font": "s", "mono": "s", "copyright": "s", "colors": "colors", "cover": "layouts", "section": "layouts"})
+SPEC_THEME = ({}, {"description": "s", "font": "s", "mono": "s", "copyright": "s", "company": "s", "colors": "colors", "cover": "layouts", "section": "layouts"})
 # raw に書いた Deck の引数のうち、形のキーで書けるもの（type, 引数 → 形のキー）。lint が知らせ、slides.py upgrade が書き換える。形に足したらここにも足す
 # 同じ名前で同じ意味のもの（数え始めや単位の違う mono_cols・hot・fills・widths と、stat の size・color〔数字の大きさと色〕は入れない。2026-10-16 のレビュー）
 _SAME = {"text": "size color bold align valign mono fill line dash weight radius pad spacing", "label": "size color fill bold align mono pad radius",
@@ -1438,6 +1440,8 @@ class SpecPage:
         for i, c in enumerate(e.get("items", []) if kind in ("row", "stack", "grid", "frame") else []):
             if self.check(c, f"{loc}.items[{i}]", kind == "frame") == "arrow" and kind in ("row", "grid"):
                 sys.exit(f"{loc}.items[{i}]: row・grid の中の矢印は、row の \"arrows\": true で引く")
+            if kind in ("row", "grid") and c.get("type") == "row" and c.get("valign") == "middle":  # row・grid は中の部品を flow に通さない（flow が本文の最後かを見る）
+                sys.exit(f"{loc}.items[{i}]（row）: {VALIGN_LAST}")
         return kind
 
     @staticmethod
@@ -2101,8 +2105,13 @@ class SpecPage:
                 continue
             ew = self.fixed_w(e) if frame else self.slot_w(e, w)
             eh = self.measure(e, ew, l)
-            if e["type"] == "gantt" and loc == self.body and all(c.get("type") == "arrow" for c in items[i + 1:]) and self.room:  # 矢印は場所を取らない  # 本文の最後のガントは、余った高さを行に配る（slides-pages-010）
+            last = loc == self.body and all(c.get("type") == "arrow" for c in items[i + 1:])  # 本文の最後の部品（矢印は場所を取らない）
+            if e["type"] == "gantt" and last and self.room:  # 本文の最後のガントは、余った高さを行に配る（slides-pages-010）
                 eh += min(G_GROW * len(e["rows"]), max(self.room - y - eh, 0))
+            if e["type"] == "row" and e.get("valign") == "middle":  # 選択肢のカードだけのページなど。上に寄せると下が大きく空く
+                if not last:
+                    sys.exit(f"{l}（row）: {VALIGN_LAST}")
+                y += max(self.room - y - eh, 0) / 2
             if frame and (e["x"] + ew > w + 0.01 or e["y"] + eh > frame + 0.01):  # frame の外に描くと、ページの下端の見込みにも入らない
                 sys.exit(f"{l}（{e['type']}）: frame の外に出る（ページの左上から、部品は右端 {x + e['x'] + ew:.2f} in・下端 {y + e['y'] + eh:.2f} in、"
                          f"frame は右端 {x + w:.2f} in・下端 {y + frame:.2f} in）")
@@ -2953,7 +2962,7 @@ def theme_slots(t):
 def theme_extras(t):
     """テーマの表 t のうち、マスターの配色・書体・表紙と扉の目印に入らない値（テーマの目印の JSON。テーマのファイルの形）。"""
     c = {k: t[k] for k in (*FIXED, *NAMED) if k in t}
-    return {k: t[k] for k in ("description", "mono", "copyright") if k in t} | ({"colors": c} if c else {})
+    return {k: t[k] for k in ("description", "mono", "copyright", "company") if k in t} | ({"colors": c} if c else {})
 
 
 def theme_mark(name, t):
@@ -3155,8 +3164,9 @@ def theme_values(t):
 
 def use_theme(t):
     """テーマの表 t（read_theme・theme_from）の固定の色・著作権表示・等幅の書体で組む。make_deck の前に呼ぶ（pages.py が作る要求に効かせる）。"""
-    global COPYRIGHT, MONO
+    global COPYRIGHT, COMPANY, MONO
     colors, COPYRIGHT, MONO = theme_values(t)
+    COMPANY = t.get("company", BRAND_COMPANY)  # 会社と関係ない資料や英語の資料はテーマで社名を替える（"" で消す）
     _SWAP.clear()
     _SWAP.update({FIXED[k]: colors[k] for k in FIXED if colors[k] != FIXED[k]})
     _NAMED.clear()
@@ -3166,6 +3176,11 @@ def use_theme(t):
 def deck_mono(p):
     """デッキの等幅の書体（デッキのテーマの mono。lint が比べる）。マスターにコードの枠がないので、テーマの目印の値から引く。"""
     return theme_mono(mark_values(p))
+
+
+def deck_copyright(p):
+    """デッキの著作権表示（デッキのテーマの copyright。lint がフッターと見分ける。非公式の表記など決まった形でない文字列もそのまま）。"""
+    return theme_values(mark_values(p))[1]  # 組むときと同じ引き方（書いていなければ [brand]。文字列でなければ止める）
 
 
 def deck_card(p):
@@ -3697,7 +3712,8 @@ def lint_scope(path):
 def need_deck_theme(want, mark):
     """deck.json に書いた theme と、組むデッキ（new はテンプレート）のテーマが同じか。違えば止める（テーマを替えるなら new で作り直す）。"""
     if want and mark and want != mark:
-        sys.exit(f"deck.json の theme は {want} だが、デッキのテーマは {mark}。テーマを替えるなら、slides.py new で作り直す（themes.md）")
+        sys.exit(f"deck.json の theme は {want} だが、デッキのテーマは {mark}。2 つをそろえる。テーマを替えるなら、deck.json を新しいテーマにして slides.py new で作り直す（URL が変わる）か、"
+                 f"themes.md の「Pages of a created deck are a copy of the template」の手順で、同じ URL のままデッキのテーマを替える")
 
 
 def default_pages():
@@ -3897,7 +3913,7 @@ def merge(pages, fixes):
             if not isinstance(n, ast.FunctionDef) or n.name == "make":
                 sys.exit(f"{f}:{n.lineno} は関数でないか make なので合わせない（共通のものとページの順は親が pages.py に書く）")
             if n.name in owner:
-                sys.exit(f"{n.name} を {owner[n.name]} と {f} の両方が書いた（同じ関数に当たる行は同じ子に渡す）")
+                sys.exit(f"{n.name} を {owner[n.name]} と {f} の両方が書いた（同じ関数に当たる行は同じサブエージェントに渡す）")
             owner[n.name] = f
             body = "".join(lines[start(n):n.end_lineno]).rstrip("\n") + "\n"
             at = {m.name: m for m in ast.parse(src, pages).body if isinstance(m, ast.FunctionDef)}
@@ -4332,7 +4348,10 @@ def selftest():
                     assert "名前を持つ" in str(e)
         finally:
             globals().update(ws_themes=saved[0], request=saved[1], record_template=saved[2])
+    use_theme({"company": ""})  # テーマの company で表紙の社名を替える（"" で消す）
+    assert COMPANY == "" and theme_extras({"company": "Acme"}) == {"company": "Acme"}
     use_theme({})  # 値がないテーマは、今の値に戻す
+    assert COMPANY == BRAND_COMPANY
     assert not _SWAP and COPYRIGHT == BRAND_COPYRIGHT and theme_fixed({}) == FIXED and paint(TEXT) == {"rgbColor": rgb("303F47")} and MONO == MONO_DEFAULT
     assert load_theme(None) is None and load_theme("ない") is None
     # NAMED の役割: 書かなければ今の色（HEAD は NAVY の枠、CARD・ON_RED は白、SUB_ON_NAVY は RULE。RULE を替えたらそれに付いていく）
@@ -4629,6 +4648,17 @@ def selftest_spec():
     d, els = run(page)
     da, _ = run({**page, "authorNotes": ["外した事実"]})
     assert da.resolved == d.resolved and list(da.notes.values()) == list(d.notes.values())  # authorNotes はページにもノートにも組まない
+    mid = {"title": "t", "body": [{"type": "row", "valign": "middle", "items": [{"type": "card", "head": "A", "id": "a"}, {"type": "card", "head": "B", "id": "b"}]},
+                                  {"type": "arrow", "from": "a", "to": "b"}]}
+    (mc, _) = [e for e in run(mid)[1] if e["call"] == "card"]
+    assert near(mc["y"] - Y_BODY_NOLEAD, Y_SRC - 0.08 - mc["y"] - mc["h"])  # 本文の最後の row は、余った高さの真ん中（矢印は場所を取らない）
+    for bad in ({"title": "t", "body": [mid["body"][0], {"type": "text", "text": "下"}]}, {"type": "slide", "body": [{"type": "frame", "h": 2, "items": [{**mid["body"][0], "x": 0, "y": 0, "w": 4}]}]},
+                {"title": "t", "body": [{"type": "grid", "cols": 1, "items": [mid["body"][0]]}]}):
+        try:
+            run(bad)
+            raise AssertionError("valign の置き場所")
+        except SystemExit as x:
+            assert "本文の最後の row" in str(x)
     cards, (txt,), (arr,) = [e for e in els if e["call"] == "card"], [e for e in els if e["call"] == "text"], [e for e in els if e["call"] == "arrow"]
     h = max(card_h(w, hd, body=b) for (_, w), hd, b in zip(cols(3), "BSG", body))
     assert all(near(c["x"], x) and near(c["w"], w) and near(c["h"], h) for c, (x, w) in zip(cards, cols(3))) and cards[0]["y"] == Y_BODY  # 列は cols、高さは最大にそろえる

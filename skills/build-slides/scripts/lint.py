@@ -12,10 +12,10 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import textlint  # noqa: E402
 from notes import flatten, note_text, paras, ptext  # noqa: E402  要素の位置とノートの文字（build-vids と同じ部品）
-from brand import COPYRIGHT_FOOTER  # noqa: E402
+from brand import CLASSIFICATION, COPYRIGHT_FOOTER  # noqa: E402
 from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, contrast, facts_hit,  # noqa: E402
                       load_facts, lum, not_in_facts, workspace_checks)  # load_facts・lum・JA は slides.py・template.py が lint から引く
-from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMPH_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_KICK, Y_LEAD, deck_card, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
+from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMPH_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_KICK, Y_LEAD, deck_card, deck_copyright, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
 
 MIN_PT = 11  # [slides-lint-001] スライドの文字の下限（slides-visual-002、deck-design）。下回ると要確認（詰まった図の説明など、ページによっては小さくてよい）。社内資料の差し替え用（名前に「差し替え用」）は元の大きさのままなので見ない
 FIG_MIN_PT = MIN_PT - 2  # [slides-lint-022] 塗りのある図形の中の文字（ガントのバー、図のラベル）は本文から 2pt 下まで（slides-visual-037）。表のセル、塗りのない文字、別の図形の塗りに重ねた文字（カードの本文、背景の四角の上の出典）は MIN_PT のまま
@@ -516,7 +516,9 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
     titles, sizes, pairs, chars, dark, foot_secret, bands, claims, wraps = [], Counter(), defaultdict(list), [], [], [], [], [], []
     kicks, div_text, panels = [], [], []  # 本文のページのキッカー (ページ, 文字) と、扉の文字（章の名前のキッカーを見分ける）
     global MONO
-    font, MONO = deck_font(p), deck_mono(p)  # 会社のテンプレートは会社の書体（template.md）。等幅はデッキのテーマの mono
+    font, MONO, cright = deck_font(p), deck_mono(p), deck_copyright(p).strip()
+    crights = {c for c in (cright, CLASSIFICATION.sub("", cright)) if c}  # 空の著作権表示（組めない）は、秘密区分だけの段落を著作権表示にしない。 デッキの著作権表示（秘密区分を外した形も。slides.py の finish は資料名の区分を後ろに足す）
+    # 会社のテンプレートは会社の書体（template.md）。等幅はデッキのテーマの mono
     use_font(font)  # 字幅の見積もり（行数・折り返し）もデッキの書体のもの
     card = deck_card(p)  # カードの地。デッキのテーマの CARD（書かなければ白）
     for i, s in enumerate(p.get("slides", []), 1):
@@ -582,10 +584,12 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                     t = ptext(para)
                     if not t.strip():
                         continue
+                    copyright_footer = footer and bool(COPYRIGHT_FOOTER.fullmatch(t.strip()) or CLASSIFICATION.sub("", t.strip()) in crights)  # テーマの copyright（決まった形でなくても）から組んだ著作権表示は、言い回しの検査にも大きさの下限にもかけない
                     if footer and WARN["社外秘の表示"].search(t):  # フッターの Internal Only は 1 件にまとめる（社内向けなら意図どおり）
                         foot_secret.append(i)
                     mono = all(st.get("fontFamily") == MONO for c, st in para[1] if c.strip())  # コードの行は大文字のラベル・数字の出典の検査から外す
-                    r.scan(f"p{i}", t, {k: v for k, v in {**HARD, **WARN, **SLIDE_ONLY}.items() if not (footer and k == "社外秘の表示") and not (mono and k == "英語の大文字ラベル")})
+                    if not copyright_footer:  # 著作権表示の文はテーマのファイルに書いた値のまま
+                        r.scan(f"p{i}", t, {k: v for k, v in {**HARD, **WARN, **SLIDE_ONLY}.items() if not (footer and k == "社外秘の表示") and not (mono and k == "英語の大文字ラベル")})
                     raw = "".join(c for c, st in para[1] if st.get("fontFamily") != MONO)
                     one_line = False  # 見出しと 1 行の箇条（折り返さない段落）。表のセルは幅を見積もらないので入れない
                     if "shape" in e and not footer and not mono and re.search(f"[{JA}]", t):  # 表のセルは列の幅を見積もりに通していないので見ない
@@ -621,7 +625,6 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                         if sz is None:  # プレースホルダーから継承（ページ番号など）
                             continue
                         sizes[sz] += 1
-                        copyright_footer = footer and COPYRIGHT_FOOTER.fullmatch(t.strip())
                         if copyright_footer:
                             minimum = COPYRIGHT_PT
                         elif "shape" in e and (f or framed):  # 塗りのある図形の中（自分の塗りか、同じグループの塗り）
@@ -934,6 +937,13 @@ def selftest():
                                 (2, 9, copyright_text, (0, 1)), (7.08, 9, "資料名", (0, 1))):  # want は（要修正の数, 11pt 未満の文字の数）
         res, _, hard = run(deck([(NAVY, [title(), shape(1, y=y, size=size, text=[text])])]))
         assert (hard, len(res.hits[f"{MIN_PT}pt 未満の文字"])) == want, (y, size, text)  # 9pt の例外は著作権フッターだけ。9pt 未満の著作権フッターは止め、ほかの小さい字は要確認
+    for mark, text, want in (("Unofficial content.", "Unofficial content.｜Internal Only", 0), ("Unofficial content.", "Unofficial content.", 0), ("Unofficial content.", "Other text.", 1),
+                             ("Unofficial — content.", "Unofficial — content.", 0), ("Unofficial content.｜Confidential", "Unofficial content.｜Confidential", 0),
+                             ("Unofficial content.｜Confidential", "Unofficial content.｜Confidential｜Internal Only", 0)):  # テーマの copyright が決まった形でないデッキ
+        un = deck([(NAVY, [title(), shape(1, y=7.08, size=9, text=[text])])])
+        un["masters"][0]["pageElements"] = [{"description": "ai-deck-factory theme=un " + json.dumps({"copyright": mark}, ensure_ascii=False), "shape": {"placeholder": {"type": "SLIDE_NUMBER"}}}]
+        res, _, hard = run(un)
+        assert (len(res.hits[f"{MIN_PT}pt 未満の文字"]), hard) == (want, 0), (mark, text)  # 長いダッシュ（HARD）も、テーマの値のままなら止めない
     oat = rgb("F9F7F4")
     assert len(run(deck([(NAVY, [title()]), (oat, [title(), shape(1, size=36, text=["55"])])]))[0].hits[NUM_NO_UNIT]) == 1
     assert not run(deck([(NAVY, [title()]), (oat, [title(), shape(1, size=36, text=["55 モデル"])])]))[0].hits[NUM_NO_UNIT]
