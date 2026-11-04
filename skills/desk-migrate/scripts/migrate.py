@@ -125,7 +125,7 @@ RESTRUCTURE = [  # 2026-10-31: 進め方・知見・道具でスキルを分け�
     # （パスの形も、ほかのパッケージの同じ名前のフォルダにありうる）。替えるのは、名前の形でこのプラグインのものと決まる desk-tools: のあとと <… folder> だけ。台帳の変更先の値は lib_target が替える
     (rf"(?<=desk-tools:){G1104}(?![{B}])", lambda m: RENAMED_1104[m.group(1)]),
     (rf"(<(?:スキル )?){G1104}( folder>| のフォルダ>)", lambda m: f"{m.group(1)}{RENAMED_1104[m.group(2)]}{m.group(3)}"),
-    *((rf"(?<![.{B}]){re.escape(a)}(?![{B}])", b) for a, b in MOVED_1105.items())]  # 2026-11-05 に動かしたファイル,
+    *((rf"(?<![.{B}]){re.escape(a)}(?![{B}])", b) for a, b in MOVED_1105.items()),  # 2026-11-05 に動かしたファイル
     # 2026-11-05: desk-doctor を desk-init に入れた（SKILL.md → desk-init/doctor.md。scripts/doctor.py は同じ名前のまま desk-init/scripts/ へ）
     (rf"(?<![.{B}])desk-doctor/SKILL\.md(?![{B}])", "desk-init/doctor.md"), (rf"(?<![.{B}])(?<![{B}]`)desk-doctor(?![{B}])", "desk-init")]
 # deck-practices/scripts のほかの形（lib/ へ移したスクリプト、フォルダ、glob、cd）は、どこを指すか文から分からない（$K/・./・.agents/skills/ など）ので、
