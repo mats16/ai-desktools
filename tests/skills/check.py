@@ -139,13 +139,13 @@ def sync(skills=SKILLS, vendor=VENDOR):
     return done
 
 
-GONE_1102 = re.compile(rf"(?<![{A}])(?<!rules/)(?:slides-build|docs-build|vids-build)(?![{A}])|(?<![{A}])(?:(?<=desk-tools:)|(?<=/skill:)|(?<!:))(?<!rules/)(?:google-slides|google-docs|google-vids)(?![{A}])|(?<![{A}])(?<!rules/)vids-voice(?![{A}])"  # 決まりの ID（vids-voice-004・vids-voice-ja-002）は後ろの - で外れる
+GONE_1102 = re.compile(rf"(?<![{A}])(?<!rules/)(?:slides-build|docs-build|vids-build)(?![{A}])|(?<![{A}])(?:(?<=desk-tools:)|(?<=/skill:)|(?<!:))(?<!rules/)(?:google-slides|google-docs|google-vids)(?![{A}])|(?<![{A}])(?<!rules/)(?:vids-voice|desk-doctor)(?![{A}])"  # 決まりの ID（vids-voice-004・vids-voice-ja-002）は後ろの - で外れる
                        rf"|(?<![.{A}])(?:(?:<plugin>|<プラグインのフォルダ>|\$[A-Za-z_]+)/|(?:\.\./)+)lib(?![{A}])|(?<![./{A}])lib/(?:desk|gapi|brand|textlint|sheet|ledger|refs|yomiyasu)(?![{A}])")
-# 2026-11-02 になくした名前（slides-build・docs-build・vids-build・スキルの vids-voice）と lib/、2026-11-04 になくした名前（google-slides・google-docs・google-vids。ほかのプラグインの接頭辞のあと〔fe-google-tools:google-slides〕は、そのスキルのことなので通す。desk-tools: と pi の /skill: のあとは止める）。決まりの ID（vids-voice-004）と、前のワークスペースの rules/<名前>/ は除く
+# 2026-11-02 になくした名前（slides-build・docs-build・vids-build・スキルの vids-voice）と lib/、2026-11-05 になくした desk-doctor（desk-init に入れた）、2026-11-04 になくした名前（google-slides・google-docs・google-vids。ほかのプラグインの接頭辞のあと〔fe-google-tools:google-slides〕は、そのスキルのことなので通す。desk-tools: と pi の /skill: のあとは止める）。決まりの ID（vids-voice-004）と、前のワークスペースの rules/<名前>/ は除く
 
 
 def gone(text):
-    """text の中の、2026-11-02・2026-11-04 になくしたスキルの名前と lib/ のパス。前の名前を書くのは、前のパスを今のパスへ書き換える desk-migrate だけ（OPEN）。"""
+    """text の中の、2026-11-02・2026-11-04・2026-11-05 になくしたスキルの名前と lib/ のパス。前の名前を書くのは、前のパスを今のパスへ書き換える desk-migrate だけ（OPEN）。"""
     return GONE_1102.findall(text)
 
 
@@ -320,10 +320,10 @@ def selftest():
         (root / "j" / "scripts" / "run.sh").unlink()
         got = [x for x in problems(root) if x.startswith("j")]
         assert len(got) == 4 and any('/ "lib"' in x for x in got) and any('/ "f"' in x for x in got) and any("../f/" in x for x in got), got  # 自分のスキルの名前とコメントは通す
-        (root / "j" / "x.md").write_text("`slides-build` → pages、vids-voice、`google-docs` → api、fe-google-tools:google-slides、/desk-tools:google-vids、<plugin>/lib/ledger.py、../../lib/desk.py\n- [vids-voice-004] と vids-voice-ja-002、rules/slides-build/a.md\n")
+        (root / "j" / "x.md").write_text("`slides-build` → pages、vids-voice、`google-docs` → api、fe-google-tools:google-slides、/desk-tools:google-vids、desk-doctor、<plugin>/lib/ledger.py、../../lib/desk.py\n- [vids-voice-004] と vids-voice-ja-002、rules/slides-build/a.md\n")
         (root / "j" / "SKILL.md").write_text("---\nname: j\ndescription: x\n---\n[x.md](x.md)\n")
         got = [x for x in problems(root) if x.startswith("j/x.md")]
-        assert sorted(x.split("パス ")[1].split("（")[0] for x in got) == ["../../lib", "<plugin>/lib", "google-docs", "google-vids", "slides-build", "vids-voice"], got  # 決まりの ID と前の rules/ は通す
+        assert sorted(x.split("パス ")[1].split("（")[0] for x in got) == ["../../lib", "<plugin>/lib", "desk-doctor", "google-docs", "google-vids", "slides-build", "vids-voice"], got  # 決まりの ID と前の rules/ は通す
         (root / "j" / "x.md").unlink()
         (root / "j" / "SKILL.md").write_text("---\nname: j\ndescription: x\n---\n")
         (root / "m" / "scripts").mkdir(parents=True)

@@ -14,7 +14,7 @@ pi install -l git:github.com/mats16/ai-desktools   # git から
 
 - 書き込まれるのは `<ワークスペース>/.pi/settings.json` の `packages`。手元のパスは `.pi/` からの相対のパスで入るので、ワークスペースか checkout を動かしたら入れ直す。
 - 入るもの（`package.json` の `pi`）: `skills/` のスキルだけ。拡張はない（2026-11-04 に `extensions/rules.ts` をやめた）。ワークスペースのレシピ〔`recipes/<名前>/RECIPE.md`〕と顧客の `memory.md` は、スキルの手順の中でエージェントが `desk.py recipes` で一覧を見て、自分で開く。
-- スキルは `/skill:desk-init` のように呼ぶ。入れたら `desk-init`、続けて `desk-doctor`（README の「入れ方」）。
+- スキルは `/skill:desk-init` のように呼ぶ。入れたら `desk-init`、続けてその doctor（README の「入れ方」）。
 
 ## project trust
 
@@ -48,7 +48,7 @@ cd ~ && pi list                   # User packages にだけ出る（ここに de
 
 ## 同じ名前のスキルがあるとき
 
-パッケージのスキルは、pi の中でいちばん優先が低い。同じ名前のスキルがほかにあると、そちらが勝ち、パッケージのものは読まれない（pi は名前がぶつかると優先の高いものを残して警告を出す）。勝つのは、ワークスペースか親の `.agents/skills/`（git のリポジトリならその根元まで）、`.pi/skills/`、ユーザーの `~/.agents/skills/`・`~/.pi/agent/skills/`、settings.json の `skills` に書いたもの。前から `.agents/skills/slides-build`（今の `build-slides`）などを置いていたフォルダに入れると、古いスキルのまま動く。移すときは `.agents/skills/` の同じ名前のものを外す（`docs/todo.md` の「Documents を移す」）。`desk-doctor` の「スキルの重なり」が見るのはワークスペースの直下の `.agents/skills/`・`.claude/skills/` だけなので、ほかの場所のものは、上の `get_commands` を grep なしで回し、スキルの `sourceInfo.path` と `scope` で出どころを見る。
+パッケージのスキルは、pi の中でいちばん優先が低い。同じ名前のスキルがほかにあると、そちらが勝ち、パッケージのものは読まれない（pi は名前がぶつかると優先の高いものを残して警告を出す）。勝つのは、ワークスペースか親の `.agents/skills/`（git のリポジトリならその根元まで）、`.pi/skills/`、ユーザーの `~/.agents/skills/`・`~/.pi/agent/skills/`、settings.json の `skills` に書いたもの。前から `.agents/skills/slides-build`（今の `build-slides`）などを置いていたフォルダに入れると、古いスキルのまま動く。移すときは `.agents/skills/` の同じ名前のものを外す（`docs/todo.md` の「Documents を移す」）。`desk-init` の `doctor.py` の「スキルの重なり」が見るのはワークスペースの直下の `.agents/skills/`・`.claude/skills/` だけなので、ほかの場所のものは、上の `get_commands` を grep なしで回し、スキルの `sourceInfo.path` と `scope` で出どころを見る。
 
 ## 外す
 

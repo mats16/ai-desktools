@@ -27,7 +27,7 @@ def init(ws, user=False):
     else:  # ワークスペースに置く。既定のワークスペースか、その上に置くと、中で開いたときにこちらが勝つ
         try:
             have = desk.pointed()  # まだないフォルダを指していても、そのパスで確かめる
-        except SystemExit:  # 読めない個人の設定は、ここに desk.toml を置くのを止める理由にならない（desk-doctor が出す）
+        except SystemExit:  # 読めない個人の設定は、ここに desk.toml を置くのを止める理由にならない（desk-init の doctor.py が出す）
             have = None
         if have and have[1].is_relative_to(ws):
             sys.exit(f"{have[0]} の workspace（{have[1]}）が {ws} の中にある。ここに desk.toml を置くと、中で開いたときにこちらを読む（設定が 2 つ）。"

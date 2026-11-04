@@ -21,7 +21,7 @@ The skills fall into six groups by what they hold (2026-10-31 in `docs/decisions
 | Tools | `build-slides`, `build-docs`, `build-vids` | What the page JSON and doc.md can say, how to build and check, themes and templates, API pitfalls |
 | Gathering | `customer-profile`, `desk-crawl` | Customer profiles; recurring collection |
 | Learning from feedback | `desk-feedback`, `desk-dreaming`, `desk-kaizen`, `desk-research` | Judging and routing corrections, writing recipes; the daily cleanup; upstream Issues; re-researching best practices |
-| Environment | `desk-init`, `desk-doctor`, `desk-migrate` | Creating, checking, and migrating a workspace |
+| Environment | `desk-init`, `desk-migrate` | Creating and checking a workspace (`doctor.py` in `desk-init`); migrating one |
 
 | Path | Contents |
 | --- | --- |
@@ -40,11 +40,11 @@ The skills fall into six groups by what they hold (2026-10-31 in `docs/decisions
 
 There is no shared `lib/` (2026-11-02 in `docs/decisions.md`). Each skill must work when it is installed alone, as Unity Gateway skills distribute it (one folder per skill), so a script never imports or reads a file of another skill. Code that several skills need lives in one owner skill, and the others keep byte-identical copies in their own `scripts/`.
 
-- The owners are listed once, in `SHARED` (scripts by name) and `COPIES` (other files and folders, such as `build-docs/assets/gcp`) in `skills/desk-init/scripts/desk.py`. Today: `desk.py` (`desk-init`); `gapi.py`, `brand.py`, `textlint.py`, `sheet.py`, `notes.py`, `wording.py` (`build-slides`); `ledger.py` (`desk-feedback`); `refs.py` (`deck-workflow`); `doctor.py` (`desk-doctor`, so `slides_doctor.py` and `docs_doctor.py` run the same common checks when their skill is installed alone).
+- The owners are listed once, in `SHARED` (scripts by name) and `COPIES` (other files and folders, such as `build-docs/assets/gcp`) in `skills/desk-init/scripts/desk.py`. Today: `desk.py` (`desk-init`); `gapi.py`, `brand.py`, `textlint.py`, `sheet.py`, `notes.py`, `wording.py` (`build-slides`); `ledger.py` (`desk-feedback`); `refs.py` (`deck-workflow`); `doctor.py` (`desk-init`, so `slides_doctor.py` and `docs_doctor.py` run the same common checks when their skill is installed alone).
 - Edit only the owner's file, then run `python3 tests/skills/check.py --sync`. It writes the owner's bytes over every copy (and refreshes `scripts/yomiyasu/` from `vendor/`). `check.py` fails when a copy differs, so CI catches a copy edited by hand.
 - To give a skill a new copy, `cp` the owner's file into its `scripts/` once; `--sync` keeps it from then on. Copy only what the skill's scripts import (follow the imports: `brand.py` needs `gapi.py`, which needs `desk.py`).
 - `ledger.py` counts a rule ID only in the owner's file (`desk.copied`), so a copy never makes a rule look written twice.
-- `check.py` also fails on the names removed on 2026-11-02 (`slides-build`, `docs-build`, `vids-build`, the skill `vids-voice`) and on 2026-11-04 (`google-slides`, `google-docs`, `google-vids`, except after another plugin's prefix such as `fe-google-tools:`) and on plugin `lib/` paths in skill md, js, and sh files (rule IDs such as `vids-voice-004` and workspace paths under `rules/` are fine; only `desk-migrate`, which maps them, may name them).
+- `check.py` also fails on the names removed on 2026-11-02 (`slides-build`, `docs-build`, `vids-build`, the skill `vids-voice`) and on 2026-11-04 (`google-slides`, `google-docs`, `google-vids`, except after another plugin's prefix such as `fe-google-tools:`) and on 2026-11-05 (`desk-doctor`, folded into `desk-init`) and on plugin `lib/` paths in skill md, js, and sh files (rule IDs such as `vids-voice-004` and workspace paths under `rules/` are fine; only `desk-migrate`, which maps them, may name them).
 - A few scripts read other skills' files as data, never as code: `ledger.py` indexes the rule IDs in every skill's md and py (where a rule is written, `trace`), `migrate.py` maps earlier plugin paths to current files, and `doctor.py` lists the skill names to find duplicates in the workspace. They read whatever skills sit beside them, so these features see only the installed skills.
 - Calling another skill is fine: its `SKILL.md` or md files name it and its command ("`ledger.py list --deck <folder>` (`desk-feedback`)"). What is not fine is a script that builds a path into another skill or `lib/`; `check.py` stops on those (except in selftests, `desk-migrate`'s old-path tables, and `desk-kaizen`, which reads a clone of this repository).
 - Workspace files with one format (`.desk/ledger.jsonl`, `.desk/lint_runs.jsonl`, the sources ledgers) are written through the owner's script or its exact copy, so two skills never write different formats.
@@ -127,7 +127,7 @@ Put a test workspace `sandbox/` directly under the worktree, and pass it the wor
    ```sh
    python3 skills/desk-init/scripts/init.py sandbox
    cd sandbox
-   python3 ../skills/desk-doctor/scripts/doctor.py --local   # skips the Google APIs
+   python3 ../skills/desk-init/scripts/doctor.py --local   # skips the Google APIs
    ```
 
    With the template `desk.toml`, nothing can be built on Google (`slides_doctor.py` and `docs_doctor.py` keep reporting `brand.copyright` as `要修正`; `doctor.py` alone no longer does). To build, copy the production settings (the workspace's `desk.toml`, or `~/.desk.toml`; from `~/.desk.toml`, delete the `workspace` line after copying) and point `[drive]` at a test Drive folder, so production files are never overwritten ("Create the sandbox" in docs/development.md). Don't run `git init` in `sandbox/`.
