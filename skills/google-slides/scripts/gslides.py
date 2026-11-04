@@ -248,31 +248,24 @@ def slide_units(p):
     return sorted(units, key=lambda u: (u["page"] or 0, u["kind"] == "ノート"))  # ページの順、ノートはそのページの後ろ（同じページの中は lint が見た順）
 
 
-def unbuilt(src, p):
+def unbuilt(src):
     """手元の原稿に、まだ組んでいない直しがあるか: 通らない理由の文の並び（なければ []）。点検した Google の資料と、記録する手元のファイルを結び付けるため。
-    ページは slides.py plan（build が送るものを出し、Google には書かない）の rebuild・frozen・remove・moves・theme で見る。plan のハッシュはノートを含まないので、
-    ノートは、印のあるページの JSON の speakerNotes と Google のノートを突き合わせる。plan が止まったら、確かめられないとして通さない。"""
-    out = []
+    slides.py plan（build と同じデッキを作り、build が送るものを出す。Google には書かない）の rebuild・frozen・remove・moves・theme と、build が書き換えるノート（notes）で見る。
+    ノートは deck.json が指すページと pages.py の d.note から build と同じに決まり、ないページは空のノートと比べる。plan が止まったら、確かめられないとして通さない。"""
     r = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "slides.py"), "plan", src], capture_output=True, text=True)
     try:
         x = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else None
     except (ValueError, IndexError):
         x = None
     if x is None:
-        out.append(f"slides.py plan が止まり、手元のページと Google の資料が同じかを確かめられない（{(r.stderr or r.stdout).strip()[-200:]}）")
-    elif x.get("rebuild") or x.get("frozen") or x.get("remove") or x.get("moves") or x.get("theme"):
+        return [f"slides.py plan が止まり、手元のページと Google の資料が同じかを確かめられない（{(r.stderr or r.stdout).strip()[-200:]}）"]
+    out = []
+    if x.get("rebuild") or x.get("frozen") or x.get("remove") or x.get("moves") or x.get("theme"):
         pages = sorted(set(x.get("rebuild") or []) | set(x.get("frozen") or []))
         out.append("手元のページの JSON に、組んでいない直しがある（slides.py plan: " + (f"ページ {', '.join(f'p{n}' for n in pages[:12])}" if pages else "ページの並び・テーマ")
                    + "）。slides.py build で組み、check で画像を見てから回す（組んでいない原稿を点検済みにしない）")
-    stems = {page_key(os.path.splitext(os.path.basename(f))[0]): f for f in sorted(glob.glob("**/*.json", recursive=True), key=lambda f: (f.count(os.sep), f))[::-1]}
-    for n, s in enumerate(p.get("slides", []), 1):
-        m = PAGE_KEY.search(s["objectId"])
-        try:
-            spec = json.load(open(stems[m.group(1)], encoding="utf-8")) if m and m.group(1) in stems else None
-        except (OSError, ValueError):
-            spec = None
-        if isinstance(spec, dict) and "speakerNotes" in spec and wording.flat(str(spec["speakerNotes"])) != wording.flat(lint.note_text(s)):
-            out.append(f"p{n} のノートが、手元の JSON（{stems[m.group(1)]} の speakerNotes）と Google で違う。slides.py build で組んでから回す")
+    if x.get("notes"):
+        out.append(f"組んでいないノートの直しがある（slides.py plan: {', '.join(f'p{n}' for n in x['notes'][:12])}）。slides.py build で組んでから回す")
     return out
 
 
@@ -295,7 +288,7 @@ def cmd_wording(src):
     if miss := [n for n, o in enumerate(ids, 1) if n > len(shots) or shots[n - 1] != o]:
         problems.append(f"組んだあとの画像を取っていないページ: {', '.join(f'p{n}' for n in miss[:12])}{' ほか' if len(miss) > 12 else ''}"
                         f"（gslides.py check {src} で取り、直したページの画像を見てから回す）")
-    problems += unbuilt(src, p)
+    problems += unbuilt(src)
     units = locate(slide_units(p), p["slides"])
     ok = wording.run(os.path.dirname(os.getcwd()), "slides", f"https://docs.google.com/presentation/d/{pid}/edit", rev, units, wording.build_files(), problems, f"gslides.py wording {src}")
     if not ok:
@@ -459,7 +452,7 @@ def wording_selftest():
          "slideProperties": {"masterObjectId": "m", "notesPage": {"notesProperties": {"speakerNotesObjectId": "n"}, "pageElements": [shape("n", 0, "前の版の手順を話す") | {"objectId": "n"}]}}}]}
     state = {"rev": "rev", "stamp": "rev"}
     real = {k: globals()[k] for k in ("request", "built", "unbuilt")}, lint.workspace_checks, lint.segment
-    globals()["unbuilt"] = lambda src, p: state.get("unbuilt", [])
+    globals()["unbuilt"] = lambda src: state.get("unbuilt", [])
     globals().update(request=lambda m, u, *a, **k: {"appProperties": {STAMP: state["stamp"]}} if "/files/" in u else deck, built=lambda pid: state["rev"])
     lint.workspace_checks, lint.segment = (lambda *a: 0), (lambda ts: {t: set(range(len(t) + 1)) for t in ts})
     cwd, d, shots = os.getcwd(), tempfile.mkdtemp(), "/tmp/slides_zzwordin/shots.json"
@@ -488,18 +481,22 @@ def wording_selftest():
             assert _exit(lambda: cmd_wording("zzwording")) == 0
             state["rev"] = "rev2"  # 組んだあとに画面で直された
             assert _exit(lambda: cmd_wording("zzwording")) == 1 and any("slides.py build で組んだリビジョンでない" in x for x in wording.load(d)["last"]["problems"])
-            # unbuilt のノートの突き合わせ（plan は止まった形にして、ノートの文だけを見る）
+            # unbuilt は slides.py plan の出力を読む（ページの直しとノートの直しを分けて出す。plan が止まったら通さない）
             globals()["unbuilt"] = real[0]["unbuilt"]
-            saved_run, globals()["subprocess"] = subprocess, type("S", (), {"run": staticmethod(lambda *a, **k: saved_run.CompletedProcess(a, 1, "", "plan できない"))})
+            saved_run = subprocess.run
+            for out_, want in (('{"rebuild": [], "frozen": [], "remove": 0, "moves": 0, "theme": [], "notes": []}', []),
+                               ('{"rebuild": [], "frozen": [], "remove": 0, "moves": 0, "theme": [], "notes": [1, 3]}', ["組んでいないノートの直しがある（slides.py plan: p1, p3）"]),
+                               ('{"rebuild": [2], "frozen": [], "remove": 0, "moves": 0, "theme": [], "notes": null}', ["手元のページの JSON に、組んでいない直しがある（slides.py plan: ページ p2）"])):
+                subprocess.run = lambda *a, **k: subprocess.CompletedProcess(a, 0, out_ + "\n", "")
+                try:
+                    assert [x.split("。")[0] for x in unbuilt("zzwording")] == want, unbuilt("zzwording")
+                finally:
+                    subprocess.run = saved_run
+            subprocess.run = lambda *a, **k: subprocess.CompletedProcess(a, 1, "", "plan できない")
             try:
-                got = unbuilt("zzwording", deck)
-                assert any("plan が止まり" in x for x in got) and not any("ノート" in x for x in got)  # JSON のノートと Google のノートは同じ
-                spec = json.load(open("p01.json", encoding="utf-8"))
-                spec["speakerNotes"] = "手元だけで直したノート"
-                json.dump(spec, open("p01.json", "w", encoding="utf-8"), ensure_ascii=False)
-                assert any("p1 のノートが" in x for x in unbuilt("zzwording", deck))
+                assert any("plan が止まり" in x for x in unbuilt("zzwording"))
             finally:
-                globals()["subprocess"] = saved_run
+                subprocess.run = saved_run
         os.chdir(d)
         assert "build/ で回す" in str(_exit(lambda: cmd_wording("zzwording"), message=True))
     finally:

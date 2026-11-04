@@ -3254,7 +3254,17 @@ def cmd_plan(pid, deck, theme, only):
     screen = gapi.guard(pid, revision(pid), STAMP, "pages.py", stop=False) or []
     x = build_plan(pid, deck, False, theme, only)
     print(json.dumps({"presentationId": pid, "theme": x.themed, "rebuild": x.rebuilt, "frozen": [i for i, s in enumerate(deck.slides, 1) if s in x.frozen],
-                      "kept": len(x.keep) - len(x.frozen), "remove": len(x.old), "moves": len(x.moves), "screen": screen}, ensure_ascii=False))
+                      "kept": len(x.keep) - len(x.frozen), "remove": len(x.old), "moves": len(x.moves), "notes": notes_changed(pid, deck), "screen": screen}, ensure_ascii=False))
+
+
+def notes_changed(pid, deck):
+    """ページの数が同じなら、全部を組んだときに build がノートを書き換えるページの番号（build と同じく、ノートのないページは空のノート）。ページのハッシュはノートを含まないので、
+    plan の rebuild には出ない。ページの数が違えば None（rebuild・remove に出ている）。日本語の点検（gslides.py wording）が、組んでいないノートの直しを見るのに使う。"""
+    p = request("GET", f"{SLIDES}/{pid}?fields=slides(objectId,slideProperties(notesPage(notesProperties,pageElements(objectId,shape(text)))))")
+    if len(p.get("slides", [])) != len(deck.slides):
+        return None
+    before = notes_of(p["slides"])
+    return [i for i, s in enumerate(deck.slides, 1) if (deck.notes.get(s) or "").rstrip("\n") != before[str(i)]]
 
 
 def local_json(reqs, deck, p):
@@ -5259,6 +5269,18 @@ def selftest_diff():
                     for _ in range(n):
                         d.page("同じ")
                 return m
+            def noted(text):  # pages.py の形（make の中で d.note）。本文は同じで、ノートだけを変える
+                def m(d):
+                    d.note(d.page("ノートだけ"), text)
+                return m
+            build("x" * 10, make_deck(noted("前のノート。"), "t"), force=True)
+            guard, gapi.guard = gapi.guard, lambda *a, **k: None
+            for text, want in (("前のノート。", []), ("手元で直したノート。", [1])):
+                with contextlib.redirect_stdout(out := io.StringIO()):
+                    cmd_plan("x" * 10, make_deck(noted(text), "t"), None, None)
+                got = json.loads(out.getvalue())
+                assert got["notes"] == want and got["rebuild"] == [], got  # ノートはページのハッシュに入らないので、rebuild でなく notes に出る
+            gapi.guard = guard
             build("x" * 10, make_deck(twin(2, 3), "t"), force=True)
             first = live[0]
             sent.clear()
@@ -5291,12 +5313,17 @@ def selftest_diff():
                         cmd_plan("x" * 10, dk, None, chosen(["p2.json"], dk, None))
                         gapi.guard = lambda *a, **k: None
                     got = json.loads(out.getvalue())
-                    assert got["rebuild"] == [2] and got["frozen"] == [3] and got["kept"] == 1 and got["screen"] == ["前に組んだあとに画面で直されている"], got
+                    assert got["rebuild"] == [2] and got["frozen"] == [3] and got["kept"] == 1 and got["screen"] == ["前に組んだあとに画面で直されている"] and got["notes"] == [], got
                     Path(t, "p1.json").write_text(json.dumps({**json.loads(Path(t, "p1.json").read_text()), "speakerNotes": "選んでいない。"}))
                     dk = spec()
                     build("x" * 10, dk, only=chosen(["p2.json"], dk, None))
                     assert live[0] == before[0] and live[2] == before[2] and live[1] != before[1] and PAGE_KEY.search(live[1]).group(1) == page_key("p2")
                     assert notes[live[0] + "_sp"] == "ノート。"  # 選んでいないページは、ノートも前のまま
+                    Path(t, "p3.json").write_text(json.dumps({k: v for k, v in json.loads(Path(t, "p3.json").read_text()).items() if k != "speakerNotes"}))  # キーを消したノート
+                    with contextlib.redirect_stdout(out := io.StringIO()):
+                        cmd_plan("x" * 10, spec(), None, None)
+                    assert json.loads(out.getvalue())["notes"] == [1, 3], out.getvalue()  # 組んでいないノートの直し（選ばずに残したページ・キーを消したページは空のノートと比べる）
+                    page("p3", "p3 の後")
                     page("p1", "p1 の前")
                     for bad, want in ((["nope.json"], "読めない"), ([str(Path(t, "deck.json"))], None)):
                         try:
