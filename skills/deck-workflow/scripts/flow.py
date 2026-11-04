@@ -352,8 +352,8 @@ def facts(folder, ws):
             return ["日本語の点検: 未実施（build/ で gslides.py wording <URL> か docs.py wording <URL>）"]
         st = json.loads(p.read_text(encoding="utf-8"))
         s, files = st.get("summary") or {}, (st.get("last") or {}).get("files") or {}
-        rel = [x.relative_to(build).as_posix() for x in build.rglob("*.json") if x.is_file()]
-        now = {f"build/{r}" for r in rel if not any(part.startswith(".") for part in r.split("/"))}  # 点検のあとに足したページ（gslides.py wording と同じく隠しファイルは数えない）。pages.py・doc.md は記録にあれば中身を比べる
+        rel = [x.relative_to(build).as_posix() for x in [*build.rglob("*.json"), build / "pages.py", build / "doc.md"] if x.is_file()]
+        now = {f"build/{r}" for r in rel if not any(part.startswith(".") for part in r.split("/"))}  # wording.py の build_files と同じ組（ページの JSON・pages.py・doc.md。隠しファイルは数えない）
         moved = sorted(k for k in set(files) | (now if files else set()) if k not in files or sha(folder / k) != files[k])
         state_ = "古い" if moved else s.get("状態", "?")
         items = [f"日本語の点検: {state_}（文 {s.get('文', '?')}・指摘 {s.get('指摘', '?')}・未判断 {s.get('未判断', '?')}・残す {s.get('残す', '?')}・聞く {s.get('聞く', '?')}"

@@ -10,7 +10,7 @@ usage: wording.py <資料のフォルダ>                            今の点�
 決め方（2026-11-04 の「決めたこと」）: 指摘と判断は文の中身のハッシュで結ぶ（翻訳の確認の道具が区切りごとの「無視」を、区切りが変わると消すのと同じ）。
 直したあとは、前に通した文（base）と今の文を比べ、守る語（数・URL・コード・英字の語・かぎかっこの中・否定・語と助詞の組）の崩れと、yomiyasu_diff の
 意味の変わる恐れを出す。恐れが残るうちは base を進めない（2 度目に直したときに 1 度目の崩れが見えなくならないように）。"""
-import argparse, collections, contextlib, difflib, functools, hashlib, importlib.util, io, json, os, re, sys, time, unicodedata
+import argparse, collections, contextlib, difflib, functools, glob, hashlib, importlib.util, io, json, os, re, sys, time, unicodedata
 
 sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -78,15 +78,38 @@ KEEP = ("where", "key", "kind", "text", "slides", "one_line", "file", "loc")  # 
 
 def check_unit(u):
     """1 つの文の指摘: [(規則の名前, 抜き出し, 当たった言い方)]。同じ規則の同じ言い方は 1 つにまとめる。"""
-    out = list(textlint.yomi(u["text"], u.get("slides", True), u.get("one_line", False)))
-    text = textlint.wording_text(u["text"])
-    if text and u.get("kind") != "ノート":  # ノートは話す文なので、表記の規則（スペース・約物）と、スライドの空疎な言い回しは見ない
+    return checked(u["text"], u.get("slides", True), u.get("one_line", False), u.get("kind") == "ノート")
+
+
+@functools.cache
+def checked(text_, slides, one_line, notes):
+    out = list(textlint.yomi(text_, slides, one_line))
+    text = textlint.wording_text(text_)
+    if text and not notes:  # ノートは話す文なので、表記の規則（スペース・約物）と、スライドの空疎な言い回しは見ない
         inside = [m.span() for m in textlint.QUOTED.finditer(text)]
         for name in JA_WARN:
             for m in textlint.WARN[name].finditer(text):
                 if not any(a <= m.start() and m.end() <= b for a, b in inside):
                     out.append((name, text[max(0, m.start() - 12):m.end() + 12].strip(), m.group()))
-    return list(dict.fromkeys(out))
+    return tuple(dict.fromkeys(out))
+
+
+def flat(t):
+    """保存版の文と、ページの JSON・doc.md の書き方を突き合わせるための文: Markdown の太字・リンク・コード・見出し・箇条・表の印と空白を外す
+    （slides.py・docs.py が組むときに外すもの）。gslides.py と docs.py が文の場所を探すのに使う。"""
+    t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t)
+    return re.sub(r"\s|\*\*|__|`|\|", "", re.sub(r"^\s*(#+|[-*]|\d+\.)\s+", "", t))
+
+
+def build_files(build="."):
+    """点検したときの build/ のファイル（資料のフォルダからのパス → sha256）: ページの JSON（隠しファイルは除く）・pages.py・doc.md。
+    flow.py（deck-workflow）は同じ組を見て、点検のあとに変わったか増えたかを決める。"""
+    out = {}
+    for f in sorted(glob.glob("**/*.json", root_dir=build, recursive=True) + ["pages.py", "doc.md"]):
+        if os.path.isfile(p := os.path.join(build, f)):
+            with open(p, "rb") as x:
+                out[f"build/{f}"] = hashlib.sha256(x.read()).hexdigest()
+    return out
 
 
 def finding_id(rule, unit_sha, said):
@@ -211,6 +234,14 @@ def summarize(st):
     return s, open_f, open_r
 
 
+def accept_base(st):
+    """前に通した文（base）を今の文に進める。進めるのは、どの恐れも ok で（ask は答えを待つので進めない）、通らない理由がないときだけ。
+    run と decide が同じ決め方を使う（ask した恐れが次の点検で消えないように、画面で直した文を通した文にしないように）。"""
+    last, dec = st.get("last") or {}, st.get("decisions", {})
+    if last and not last.get("problems") and all(dec.get(r["id"], {}).get("status") == "ok" for r in last.get("risks", [])):
+        st["base"] = [{k: u.get(k) for k in KEEP} for u in last.get("units", [])]
+
+
 def place(x):
     return f"{x['where']}" + (f"（build/{x['file']}" + (f" {x['loc']}" if x.get("loc") else "") + "）" if x.get("file") else "（build/ にこの文がない: 直したが組んでいないか、画面で直したか、部品が足した文）")
 
@@ -256,6 +287,7 @@ def run(folder, kind, url, revision, units, files, problems=(), tool="wording"):
     files は点検したときのファイル（資料のフォルダからのパス → sha256）。flow.py が、点検のあとに変わったかを見る。problems は道具が見つけた、通らない理由。"""
     st, t0 = load(folder), time.time()
     if st.get("url") not in (None, url):  # 別の資料の記録は使わない（作り直した資料など）
+        print(f"（{STATE} は別の資料 {st.get('url')} の記録。判断と前に通した文を使わずに始め直す。1 つのフォルダに 2 つの資料を置かない）")
         st = {}
     prev, cache = st.get("last") or {}, st.get("cache", {}) if st.get("rules") == rules_version() else {}
     for u in units:
@@ -291,9 +323,8 @@ def run(folder, kind, url, revision, units, files, problems=(), tool="wording"):
     st = {"version": 1, "kind": kind, "url": url, "rules": rules_version(), "rounds": rounds, "max_rounds": MAX_ROUNDS,
           "base": st.get("base") or [{k: u[k] for k in KEEP} for u in units],
           "decisions": dec, "last": last, "cache": {k: v for k, v in cache.items() if k.split(":")[0] in now}}  # 今の文の結果だけを残す（増え続けない）
-    s, _, open_r = summarize(st)
-    if not open_r and not unreadable:  # 恐れが残るうちは前に通した文を進めない
-        st["base"] = [{k: u[k] for k in KEEP} for u in units]
+    s, _, _ = summarize(st)
+    accept_base(st)  # 恐れが残るうちは、前に通した文を進めない
     if s["状態"] == "済み":
         st["rounds"] = 0
     last["seconds"] = round(time.time() - t0, 2)
@@ -314,9 +345,8 @@ def decide(folder, status, ids, why):
     why.strip() or sys.exit("--why に理由（ask は問い）を書く")
     for i in ids:
         st.setdefault("decisions", {})[i] = {"status": status, "why": " ".join(why.split()), "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-    s, _, open_r = summarize(st)
-    if not open_r and not last.get("problems"):  # 恐れを確かめ終えたら、今の文を前に通した文にする（次の点検は、ここからの違いを見る）
-        st["base"] = [{k: u.get(k) for k in KEEP} for u in last.get("units", [])]
+    s, _, _ = summarize(st)
+    accept_base(st)  # 恐れを確かめ終えたら、今の文を前に通した文にする（次の点検は、ここからの違いを見る）
     if s["状態"] == "済み":
         st["rounds"] = 0
     st["summary"], _, _ = summarize(st)
@@ -330,9 +360,9 @@ def selftest():
     u = lambda key, text, **kw: unit(kw.pop("where", key), text, key, kw.pop("kind", "本文"), **kw)
     # 指摘: lint の要確認と同じ規則。かぎかっこの中・出典の行・英字だけの文は出さない。ノートは表記の規則を見ない
     assert [x[0] for x in check_unit(u("p1", "4 つの構成の比べ"))] == ["動詞を名詞にした語"]
-    assert check_unit(u("p1", "顧客は「前の版の比べ」と言った")) == [] and check_unit(u("p1", "出典: 前の版の比べ")) == [] and check_unit(u("p1", "Run the build")) == []
-    assert [x[0] for x in check_unit(u("p1", "2026年に始める"))] == ["和欧間のスペース抜け"] and check_unit(u("p1", "2026年に始める", kind="ノート")) == []
-    assert [x[0] for x in check_unit(u("p1", "費用は、CU 時間で見積もる", one_line=True))] == [textlint.SLIDE_COMMA] and check_unit(u("p1", "費用は、CU 時間で見積もる")) == []
+    assert check_unit(u("p1", "顧客は「前の版の比べ」と言った")) == () and check_unit(u("p1", "出典: 前の版の比べ")) == () and check_unit(u("p1", "Run the build")) == ()
+    assert [x[0] for x in check_unit(u("p1", "2026年に始める"))] == ["和欧間のスペース抜け"] and check_unit(u("p1", "2026年に始める", kind="ノート")) == ()
+    assert [x[0] for x in check_unit(u("p1", "費用は、CU 時間で見積もる", one_line=True))] == [textlint.SLIDE_COMMA] and check_unit(u("p1", "費用は、CU 時間で見積もる")) == ()
     # 守る語の崩れ（改悪は出し、言い回しだけを直したものは出さない）
     bad = [("検証は不要ではない", "検証は不要だ"), ("価格は月 100 円", "価格は月 120 円"), ("Databricks の Unity Catalog で管理する", "Databricks のカタログで管理する"),
            ("「書き方の取り決め」に書く", "「書き方の決まり」に書く"), ("A 社が B 社に渡す", "B 社が A 社に渡す"), ("詳しくは https://example.com/a", "詳しくは https://example.com/b"),
@@ -401,8 +431,20 @@ def selftest():
         assert [r["kind"] for r in load(d)["last"]["risks"]] == ["数"] and not load(d)["last"]["problems"]
         decide(d, "ok", [load(d)["last"]["risks"][0]["id"]], "価格の行は 10 で聞く")
         assert load(d)["summary"]["状態"] == "済み" and len(load(d)["cache"]) == 4  # 結果の写しは今の文の分だけ
+        # 恐れを ask にしても、次の点検で消えない（答えを待つあいだ、前に通した文を進めない）
+        run(d, "slides", url, "a1", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {})
+        (ra,) = load(d)["last"]["risks"]
+        decide(d, "ask", [ra["id"]], "300 円か 100 円か")
+        for _ in range(2):
+            run(d, "slides", url, "a2", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {})
+            assert [r["id"] for r in load(d)["last"]["risks"]] == [ra["id"]] and load(d)["summary"]["聞く"] == 2  # 前に聞くにした「版」と、この恐れ and load(d)["summary"]["状態"] == "済み"
+        decide(d, "ok", [ra["id"]], "ユーザーが 300 円と答えた")
+        # 通らない理由のある回は、恐れがなくても前に通した文を進めない（画面で直した文を通した文にしない）
+        base = load(d)["base"]
+        run(d, "slides", url, "u1", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円", "画面で足した行"), {}, ["組んだあとに画面で直された"])
+        assert load(d)["base"] == base
         # 道具が見つけた通らない理由（画面で直された・画像を取っていない）は、指摘がなくても通さない
-        assert not run(d, "slides", url, "r10", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 100 円"), {}, ["組んだあとに画面で直された"])
+        assert not run(d, "slides", url, "r10", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {}, ["組んだあとに画面で直された"])
         # 書き直しの上限: 未判断の指摘のある文を書き換え続けても、上限のあとは keep・ask で閉じるように出す（回り続けない）
         for i, t in enumerate(("仕組みの比べ", "仕組みの比べをする", "全体の仕組みの比べ")):
             run(d, "slides", url, f"s{i}", page(t, key="p02"), {})
@@ -412,6 +454,11 @@ def selftest():
         assert load(d)["rounds"] == 0 and load(d)["decisions"] == {} and load(d)["last"]["risks"] == []
     with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(io.StringIO()):
         assert summarize(load(d))[0]["状態"] == "未実施"  # 回していなければ未実施（済みにしない）
+        assert flat("- **前の版**の[比べ](https://x)") == "前の版の比べ" and flat("# 1. 構成") == "1.構成" and flat("| a | b |") == "ab"
+        os.makedirs(f"{d}/b/sub/.hide")
+        for f in ("p01.json", "sub/p02.json", "sub/.hide/x.json", "doc.md", "notes.txt"):
+            open(f"{d}/b/{f}", "w").write("{}")
+        assert sorted(build_files(f"{d}/b")) == ["build/doc.md", "build/p01.json", "build/sub/p02.json"]  # 隠しファイルとページでないファイルは数えない
         report = type("R", (), {})()
         units = []
         collector(report, units, lambda where, kw: "p01")

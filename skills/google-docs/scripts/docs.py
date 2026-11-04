@@ -447,8 +447,7 @@ def batch_doc(did, reqs):
 
 
 def fingerprint(did):
-    body = request("GET", f"{DOCS}/{did}?fields=body")["body"]
-    return hashlib.sha1(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return body_hash(request("GET", f"{DOCS}/{did}?fields=body")["body"])
 
 
 def footer_text(name):
@@ -1169,10 +1168,9 @@ def doc_units(doc, md_lines):
     r = wording.collector(doc_lint.Report(), units, lambda where, kw: "doc", lambda kw: "段落")
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
         doc_lint.lint_gdoc(doc, r)
-    flat = lambda t: re.sub(r"\s|\*\*|__|`|^#+|^[-*] |^\d+\. |\|", "", re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t))
-    lines = [flat(x) for x in md_lines]
+    lines = [wording.flat(x) for x in md_lines]
     for u in units:
-        want = flat(u["text"])[:20]
+        want = wording.flat(u["text"])[:20]
         if n := next((i for i, x in enumerate(lines, 1) if want and want in x), None):
             u["file"], u["loc"] = "doc.md", f"{n} 行"
     return units
@@ -1197,8 +1195,7 @@ def cmd_wording(src):
         problems.append(f"組んだあとの文書を check で見ていない（docs.py check {src} でページの画像を見てから回す）")
     md = open("doc.md", encoding="utf-8").read()
     units = doc_units(doc, md.splitlines())
-    files = {"build/doc.md": hashlib.sha256(md.encode("utf-8")).hexdigest()}
-    if not wording.run(os.path.dirname(os.getcwd()), "docs", f"https://docs.google.com/document/d/{did}/edit", doc.get("revisionId"), units, files, problems, f"docs.py wording {src}"):
+    if not wording.run(os.path.dirname(os.getcwd()), "docs", f"https://docs.google.com/document/d/{did}/edit", doc.get("revisionId"), units, wording.build_files(), problems, f"docs.py wording {src}"):
         sys.exit(1)
 
 

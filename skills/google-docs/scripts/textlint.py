@@ -50,6 +50,7 @@ def yomiyasu():
 
 NUM = re.compile(r"\d[\d,.]*\s?(%|％|倍|億|万|兆|円|ドル|USD|ms|TB|GB|PB|K\b|M\b)|[$＄]\s?\d")  # 統計らしい数字だけ（「2 時間」「3 社」は数えない）
 URL = re.compile(r"https?://\S+")
+COMPOUND = set("方案手書物元先口役")  # 連用形のあとに付いて 1 つの語にする字（直し方・見直し案・書き手・覚え書・入れ物）
 QUOTED = re.compile(r"「[^「」]*」|『[^『』]*』|“[^“”]*”")  # かぎかっこの中（人の言葉・画面の文言・節の名前）。言い回しの候補でも書き換えない
 
 
@@ -77,8 +78,8 @@ def yomi(text, slides=True, one_line=False):
                     break
             if ats and all(any(a < i and i + len(key) <= b for a, b in inside) for i in ats):
                 continue
-            if f["rule"] == "renyo_noun" and ats and all(re.match(r"[一-鿿]", text[i + len(key):i + len(key) + 1]) for i in ats):
-                continue  # 「直し方」「見直し案」のような複合語の中（yomiyasu が語の境目をまたいで拾う）
+            if f["rule"] == "renyo_noun" and ats and all(text[i + len(key):i + len(key) + 1] in COMPOUND for i in ats):
+                continue  # 「直し方」「見直し案」のような複合語の中（yomiyasu が語の境目をまたいで拾う）。「比べ以外」「見直し後」は出す
             at = ats[0] if ats else -1
             out.append((name, text[max(0, at - 12):at + len(said) + 12].strip() if at >= 0 else text[:30], said))
     return out
@@ -274,7 +275,12 @@ def selftest():
     w.wording("段落 1", "費用は、コンピュートの CU 時間で見積もる", slides=False)
     w.wording("p2", "出典: 前の版の仕組みの比べ（https://example.com）")
     w.wording("p5", "顧客は「前の版の比べ」と言った", obj="g1", table=False)
-    w.wording("p6", "資料の直し方は 3 つ")  # 複合語の中の「の直し」は出さない
+    real, fake = yomiyasu, type("Y", (), {"lint_text": staticmethod(lambda t, doc_type=None: {"findings": [{"rule": "renyo_noun", "message": "（当たった言い方: の直し）の候補"}]})})
+    globals()["yomiyasu"] = lambda: fake
+    try:  # 複合語の中の「の直し」（直し方・直し案）は出さない。漢字が続くだけ（直し以外・直し後）では複合語にしない
+        assert yomi("資料の直し方は 3 つ") == [] and yomi("資料の直し案") == [] and yomi("資料の直し以外") and yomi("資料の直し後")
+    finally:
+        globals()["yomiyasu"] = real
     assert yomi("p13 の一覧に、運用で効いてくる項目を足したもの")[0][1:] == ("p13 の一覧に、運用で効いてくる項目を足したもの", "効く")  # たとえの動詞は「」の語を、活用した形でも語幹で探す  # かぎかっこの中は書き換えない（人の言葉・画面の文言）。場所の手がかりは受けて捨てる
     assert {k: len(v) for k, v in w.hits.items() if v} == {"動詞を名詞にした語": 2, "直訳の語": 1, SLIDE_COMMA: 1}, dict(w.hits)
     assert "\v" not in w.hits["動詞を名詞にした語"][1] and w.hits["動詞を名詞にした語"][1].startswith("p4: ")

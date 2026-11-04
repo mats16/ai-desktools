@@ -199,15 +199,11 @@ def json_leaves(o, path=""):
         yield path, o
 
 
-def flat(t):
-    """突き合わせのための文: Markdown の太字・リンク・コードの印と空白を外す（slides.py が組むときに外すもの）。"""
-    return re.sub(r"\s|\*\*|__|`", "", re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t))
-
-
 def locate(units, slides, build="."):
     """保存版の文を、build/ のページのファイルと JSON の場所に戻す（u の file・loc を埋める）。ページの objectId の印（PAGE_KEY）でファイルを決め、
     その中の文字の値から文の先頭 20 字を探す。印のないページ（pages.py・印を付ける前に組んだもの）は、build/ のどのファイルからも探す。見つからなければ空のまま。"""
-    files = sorted(p for p in glob.glob(os.path.join(build, "**", "*.json"), recursive=True) if not os.path.basename(p).startswith("."))
+    files = sorted((p for p in glob.glob(os.path.join(build, "**", "*.json"), recursive=True) if not os.path.basename(p).startswith(".")),
+                   key=lambda p: (p.count(os.sep), p))  # 同じ名前なら build/ の直下を先に（サブフォルダの控えに印を取られない）
     by_key, leaves = {}, {}
     for f in files:
         rel = os.path.relpath(f, build)
@@ -219,14 +215,14 @@ def locate(units, slides, build="."):
     py = os.path.join(build, "pages.py")
     lines = open(py, encoding="utf-8").read().splitlines() if os.path.isfile(py) else []
     for u in units:
-        want = flat(u["text"])[:20]
+        want = wording.flat(u["text"])[:20]
         m = PAGE_KEY.search(slides[u["page"] - 1]["objectId"]) if u["page"] and u["page"] <= len(slides) else None
         for rel in ([by_key[m.group(1)]] if m and m.group(1) in by_key else list(leaves)):
-            if hit := [loc for loc, v in leaves[rel] if want and want in flat(v)]:
+            if hit := [loc for loc, v in leaves[rel] if want and want in wording.flat(v)]:
                 u["file"], u["loc"] = rel, "・".join(dict.fromkeys(hit))
                 break
         else:
-            if (n := next((i for i, x in enumerate(lines, 1) if want and want in flat(x)), None)):
+            if (n := next((i for i, x in enumerate(lines, 1) if want and want in wording.flat(x)), None)):
                 u["file"], u["loc"] = "pages.py", f"{n} 行"
         if m and m.group(1) in by_key:  # 直す前後を組にするページの名前（並べ替えても同じ）。文が JSON に見つからなくても、ページの印で決める
             u["key"] = os.path.splitext(by_key[m.group(1)])[0]
@@ -238,8 +234,13 @@ def slide_units(p):
     units = []
     key = lambda where, kw: "p" + re.match(r"p(\d+)", where).group(1)
     r = wording.collector(lint.Report(), units, key, lambda kw: "表" if kw.get("table") else "本文")
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        lint.lint_slides(p, r, "差し替え用" in p["title"])
+    real = lint.segment, lint.workspace_checks  # 文を集めるだけなので、文節の切れ目（BudouX）とワークスペースの点検は呼ばない（どちらも言い回しを見る文を変えない）
+    lint.segment, lint.workspace_checks = (lambda ts: {t: set(range(len(t) + 1)) for t in ts}), (lambda *a: 0)
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            lint.lint_slides(p, r, "差し替え用" in p["title"])
+    finally:
+        lint.segment, lint.workspace_checks = real
     for i, s in enumerate(p.get("slides", []), 1):
         for line in lint.note_text(s).splitlines():
             if textlint.wording_text(line):
@@ -267,9 +268,7 @@ def cmd_wording(src):
         problems.append(f"組んだあとの画像を取っていないページ: {', '.join(f'p{n}' for n in miss[:12])}{' ほか' if len(miss) > 12 else ''}"
                         f"（gslides.py check {src} で取り、直したページの画像を見てから回す）")
     units = locate(slide_units(p), p["slides"])
-    files = {f"build/{os.path.relpath(f, '.')}": hashlib.sha256(open(f, "rb").read()).hexdigest()
-             for f in sorted(glob.glob("**/*.json", recursive=True) + glob.glob("pages.py")) if os.path.isfile(f)}
-    ok = wording.run(os.path.dirname(os.getcwd()), "slides", f"https://docs.google.com/presentation/d/{pid}/edit", rev, units, files, problems, f"gslides.py wording {src}")
+    ok = wording.run(os.path.dirname(os.getcwd()), "slides", f"https://docs.google.com/presentation/d/{pid}/edit", rev, units, wording.build_files(), problems, f"gslides.py wording {src}")
     if not ok:
         sys.exit(1)
 
@@ -437,6 +436,8 @@ def wording_selftest():
     shutil.rmtree(os.path.dirname(shots), ignore_errors=True)
     try:
         os.makedirs(f"{d}/build")
+        os.makedirs(f"{d}/build/_old")
+        json.dump({"kind": "page", "title": "4 つの構成の比べ"}, open(f"{d}/build/_old/p01.json", "w", encoding="utf-8"), ensure_ascii=False)  # 同じ名前の控え（直下のファイルを先に取る）
         json.dump({"kind": "page", "title": "**4 つの構成の比べ**", "body": {"items": ["顧客は「前の版の比べ」と言った"]}, "speakerNotes": "前の版の手順を話す"},
                   open(f"{d}/build/p01.json", "w", encoding="utf-8"), ensure_ascii=False)
         os.chdir(f"{d}/build")
