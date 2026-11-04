@@ -3,6 +3,8 @@
 usage:
   gslides.py check  <URL か ID> [--talk] [--all | --pages 3,5]   組んだあとの確認。JSON・テキスト・lint と、前に取ったときから変わったページの画像（p-NN.webp）を /tmp/slides_<ID の先頭 8 字>/ に出し、
                    画像で箱の下の余白を測る（box_pad.py）。取ったページと指摘を changed.json に書く。--all で全ページの画像（/deck-review の前などの区切り）
+  gslides.py wording <URL か ID>                  保存した資料との照合（build/ で回す。日本語の点検そのものは組む前に slides.py wording）。Google に保存された資料の文とノートが
+                   点検した文と同じか、組んだリビジョンか、組んだあとの画像を check で取ったか、組んでいない直しがないかを確かめ、wording.json に残す（lint.md の「Japanese check」）
   gslides.py pages  <URL か ID>                    ページ番号・objectId・最初の文字を一覧にする
   gslides.py thumb  <URL か ID> <ページ番号> <出力.png>   Google が描いたページの画像（1600 × 900）を保存する
   gslides.py export <URL か ID> <出力.pptx>          pptx で書き出す（Drive に置かれた pptx はそのまま落とす）。名前と更新日も出す（references.md に書く）
@@ -10,13 +12,13 @@ usage:
   gslides.py jp     <URL か ID> [置き換え.json]     すべての文字を Noto Sans JP にし、置き換え（[["元の文", "訳した文"], …]）を入れる（keep で作った複製に使う）
 python3 gslides.py --selftest で自己確認。
 認証は gapi.py（環境変数 GOOGLE_OAUTH_ACCESS_TOKEN か、gcloud の ADC のファイル）。401・403 なら desk-doctor で確かめる。"""
-import glob, json, os, re, subprocess, sys, urllib.request
+import contextlib, glob, io, json, os, re, subprocess, sys, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 sys.dont_write_bytecode = True  # scripts/ に __pycache__ を残さない
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gapi, lint, textlint
-from slides import STAMP, page_numbers, revision
+import gapi, lint, textlint, wording
+from slides import STAMP, page_numbers, revision, slide_units
 from gapi import DRIVE, PPTX, SLIDES, batch, file_id, folder_id, request, run, slide_ids, thumbnail, trash
 
 SHEET = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sheet.py")  # 隣の sheet.py（このスキルが持ち主）
@@ -184,6 +186,53 @@ def cmd_check(src, *opts):
         sys.exit("lint の要修正が残っている（上の出力を直す）")
 
 
+def unbuilt(src):
+    """手元の原稿に、まだ組んでいない直しがあるか: 通らない理由の文の並び（なければ []）。照合した Google の資料と、点検した手元のファイルを結び付けるため。
+    slides.py plan（build と同じデッキを作り、build が送るものを出す。Google には書かない）の rebuild・frozen・remove・moves・theme と、build が書き換えるノート（notes）で見る。
+    ノートは deck.json が指すページと pages.py の d.note から build と同じに決まり、ないページは空のノートと比べる。plan が止まったら、確かめられないとして通さない。"""
+    r = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "slides.py"), "plan", src], capture_output=True, text=True)
+    try:
+        x = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else None
+    except (ValueError, IndexError):
+        x = None
+    if x is None:
+        return [f"slides.py plan が止まり、手元のページと Google の資料が同じかを確かめられない（{(r.stderr or r.stdout).strip()[-200:]}）"]
+    out = []
+    if x.get("rebuild") or x.get("frozen") or x.get("remove") or x.get("moves") or x.get("theme"):
+        pages = sorted(set(x.get("rebuild") or []) | set(x.get("frozen") or []))
+        out.append("手元のページの JSON に、組んでいない直しがある（slides.py plan: " + (f"ページ {', '.join(f'p{n}' for n in pages[:12])}" if pages else "ページの並び・テーマ")
+                   + "）。slides.py wording で点検してから slides.py build で組み、check で画像を見てから回す（組んでいない原稿を、保存した資料と照合済みにしない）")
+    if x.get("notes"):
+        out.append(f"組んでいないノートの直しがある（slides.py plan: {', '.join(f'p{n}' for n in x['notes'][:12])}）。slides.py wording で点検してから slides.py build で組んで回す")
+    return out
+
+
+def cmd_wording(src):
+    """slides-lint-035 の最後の照合（保存した資料との照合）。日本語の点検そのもの（slides.py wording）は組む前のページの JSON で回し、ここでは Google に保存された
+    資料（presentations.get）の文とノートが、点検した文と同じかを確かめる（同じ集め方の slides.slide_units）。通らない理由: 点検が済んでいない・点検のあとに
+    原稿のファイルが変わった、保存した文が点検した文と違う（画面で直されたか、組んでいない）、組んだリビジョンでない、組んだあとのページの画像を check で取っていない、
+    手元に組んでいない直しがある（slides.py plan。ノートも）。記録は wording.json の照合（saved）で、点検（last）とは別の事実。"""
+    if os.path.basename(os.getcwd()) != "build":
+        sys.exit("wording は資料の build/ で回す（資料のフォルダの wording.json の点検と比べる）")
+    pid = file_id(src)
+    p = request("GET", f"{SLIDES}/{pid}")
+    rev, stamp = built(pid), request("GET", f"{DRIVE}/files/{pid}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(STAMP)
+    problems = []
+    if rev is None or rev != stamp:
+        problems.append("slides.py build で組んだリビジョンでない（画面で直されたか、ほかの道具で変えた）。直しをページの JSON に写し、slides.py wording で点検してから組み直す")
+    ids = [s["objectId"] for s in p["slides"]]
+    try:
+        shots = json.load(open(f"/tmp/slides_{pid[:8]}/shots.json"))
+    except (OSError, ValueError):
+        shots = []
+    if miss := [n for n, o in enumerate(ids, 1) if n > len(shots) or shots[n - 1] != o]:
+        problems.append(f"組んだあとの画像を取っていないページ: {', '.join(f'p{n}' for n in miss[:12])}{' ほか' if len(miss) > 12 else ''}"
+                        f"（gslides.py check {src} で取り、直したページの画像を見てから回す）")
+    problems += unbuilt(src)
+    if not wording.verify(os.path.dirname(os.getcwd()), f"https://docs.google.com/presentation/d/{pid}/edit", rev, slide_units(p), problems, "slides.py wording"):
+        sys.exit(1)
+
+
 def cmd_pages(src):
     p = request("GET", f"{SLIDES}/{file_id(src)}?fields=slides(objectId,pageElements(shape(text(textElements(textRun(content))))))")
     for n, s in enumerate(p["slides"], 1):
@@ -252,6 +301,7 @@ def selftest():
         assert want == [2] and moved == 2 and sorted(os.listdir(d)) == ["p-01.webp", "p-03.webp"]
         assert open(f"{d}/p-01.webp").read() == "c" and open(f"{d}/p-03.webp").read() == "a"
     check_selftest()
+    wording_selftest()
     hits = by_page([(lint.TWO_LINES, "p3 の見出し: 「x」"), ("絵文字", "p12: 「✅」"), ("扉", "13 枚。…")])
     assert hits == {3: [f"[{lint.TWO_LINES}] p3 の見出し: 「x」（見積もり）"], 12: ["[絵文字] p12: 「✅」"]}
     print("selftest ok")
@@ -324,6 +374,89 @@ def check_selftest():
         globals().update(real[0])
         lint.lint_slides, subprocess.run = real[1], real[2]
         shutil.rmtree(d, ignore_errors=True)
+
+
+def wording_selftest():
+    """cmd_wording（保存した資料との照合）: 点検した文と保存した文が同じで、組んだリビジョンで、画像を取っていて、組んでいない直しがないときだけ通す。Google は呼ばない。"""
+    import copy, shutil, tempfile
+    from slides import EMU
+    shape = lambda oid, y, *lines: {"objectId": oid, "size": {"width": {"magnitude": 8 * EMU, "unit": "EMU"}, "height": {"magnitude": 1 * EMU, "unit": "EMU"}},
+                                    "transform": {"scaleX": 1, "scaleY": 1, "translateX": 0.5 * EMU, "translateY": y * EMU, "unit": "EMU"},
+                                    "shape": {"shapeType": "TEXT_BOX", "text": {"textElements": [x for t in lines for x in ({"paragraphMarker": {"style": {}}},
+                                              {"textRun": {"content": t + "\n", "style": {"fontFamily": lint.FONT, "fontSize": {"magnitude": 14, "unit": "PT"}}}})]}}}
+    sid = "x_k0000h0000"
+    deck = {"title": "tmp", "masters": [{"objectId": "m", "pageProperties": {"colorScheme": {"colors": []}}}], "layouts": [], "slides": [
+        {"objectId": sid, "pageElements": [shape("t1", 0.6, "4 つの構成の比べ"), shape("b1", 2, "顧客は「前の版の比べ」と言った", "出典: 前の版の比べ", "Run the build")],
+         "slideProperties": {"masterObjectId": "m", "notesPage": {"notesProperties": {"speakerNotesObjectId": "n"}, "pageElements": [shape("n", 0, "前の版の手順を話す") | {"objectId": "n"}]}}}]}
+    saved = {"deck": deck}
+    state = {"rev": "rev", "stamp": "rev"}
+    real = {k: globals()[k] for k in ("request", "built", "unbuilt")}
+    globals()["unbuilt"] = lambda src: state.get("unbuilt", [])
+    globals().update(request=lambda m, u, *a, **k: {"appProperties": {STAMP: state["stamp"]}} if "/files/" in u else saved["deck"], built=lambda pid: state["rev"])
+    cwd, d, shots = os.getcwd(), tempfile.mkdtemp(), "/tmp/slides_zzwordin/shots.json"
+    shutil.rmtree(os.path.dirname(shots), ignore_errors=True)
+    try:
+        os.makedirs(f"{d}/build")
+        open(f"{d}/build/p01.json", "w").write("{}")
+        os.chdir(f"{d}/build")
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert _exit(lambda: cmd_wording("zzwording")) == 1 and any("点検を回していない" in x for x in wording.load(d)["saved"]["problems"])  # 点検の前に照合だけを済みにしない
+            units = slide_units(deck)  # 点検（slides.py wording）が手元で集めた文の代わり（集め方は同じ）
+            assert {u["kind"] for u in units} == {"本文", "ノート"} and "出典: 前の版の比べ" not in [u["text"] for u in units]
+            wording.run(d, "slides", units, wording.input_files(["p01.json"]), (), "slides.py wording", "build/deck.json")
+            wording.decide(d, "keep", [f["id"] for f in wording.load(d)["last"]["findings"]], "selftest")
+            assert _exit(lambda: cmd_wording("zzwording")) == 1 and any("画像を取っていない" in x for x in wording.load(d)["saved"]["problems"])
+            os.makedirs(os.path.dirname(shots))
+            json.dump([sid], open(shots, "w"))
+            assert _exit(lambda: cmd_wording("zzwording")) == 0 and wording.saved_state(wording.load(d), d) == "済み"
+            assert wording.load(d)["summary"]["状態"] == "済み"  # 照合は点検の記録を変えない
+            saved["deck"] = copy.deepcopy(deck)  # 組んだあとに画面でノートを直した（リビジョンの印は同じでも、文で分かる）
+            saved["deck"]["slides"][0]["slideProperties"]["notesPage"]["pageElements"][0]["shape"]["text"]["textElements"][1]["textRun"]["content"] = "前の版の手順を飛ばす\n"
+            assert _exit(lambda: cmd_wording("zzwording")) == 1
+            bad = " ".join(wording.load(d)["saved"]["problems"])
+            assert "p1 ノート: 保存した資料にだけある「前の版の手順を飛ばす」" in bad and "p1 ノート: 点検した文にだけある「前の版の手順を話す」" in bad
+            saved["deck"] = deck
+            state["unbuilt"] = ["手元のページの JSON に、組んでいない直しがある"]  # 組んだあとに手元だけ直した（Google は前のまま）
+            assert _exit(lambda: cmd_wording("zzwording")) == 1 and "手元のページの JSON に、組んでいない直しがある" in wording.load(d)["saved"]["problems"]
+            state["unbuilt"] = []
+            open("p01.json", "w").write('{"直した": 1}')  # 点検のあとに原稿を直した
+            assert _exit(lambda: cmd_wording("zzwording")) == 1 and any("点検のあとに変わったファイル: build/p01.json" in x for x in wording.load(d)["saved"]["problems"])
+            open("p01.json", "w").write("{}")
+            assert _exit(lambda: cmd_wording("zzwording")) == 0
+            state["rev"] = "rev2"  # 組んだあとに画面で直された
+            assert _exit(lambda: cmd_wording("zzwording")) == 1 and any("slides.py build で組んだリビジョンでない" in x for x in wording.load(d)["saved"]["problems"])
+            # unbuilt は slides.py plan の出力を読む（ページの直しとノートの直しを分けて出す。plan が止まったら通さない）
+            globals()["unbuilt"] = real["unbuilt"]
+            saved_run = subprocess.run
+            for out_, want in (('{"rebuild": [], "frozen": [], "remove": 0, "moves": 0, "theme": [], "notes": []}', []),
+                               ('{"rebuild": [], "frozen": [], "remove": 0, "moves": 0, "theme": [], "notes": [1, 3]}', ["組んでいないノートの直しがある（slides.py plan: p1, p3）"]),
+                               ('{"rebuild": [2], "frozen": [], "remove": 0, "moves": 0, "theme": [], "notes": null}', ["手元のページの JSON に、組んでいない直しがある（slides.py plan: ページ p2）"])):
+                subprocess.run = lambda *a, **k: subprocess.CompletedProcess(a, 0, out_ + "\n", "")
+                try:
+                    assert [x.split("。")[0] for x in unbuilt("zzwording")] == want, unbuilt("zzwording")
+                finally:
+                    subprocess.run = saved_run
+            subprocess.run = lambda *a, **k: subprocess.CompletedProcess(a, 1, "", "plan できない")
+            try:
+                assert any("plan が止まり" in x for x in unbuilt("zzwording"))
+            finally:
+                subprocess.run = saved_run
+        os.chdir(d)
+        assert "build/ で回す" in str(_exit(lambda: cmd_wording("zzwording"), message=True))
+    finally:
+        os.chdir(cwd)
+        globals().update(real)
+        shutil.rmtree(d, ignore_errors=True)
+        shutil.rmtree(os.path.dirname(shots), ignore_errors=True)
+
+
+def _exit(fn, message=False):
+    """fn() の終わり方: sys.exit の値（message なら文）か、止まらなければ 0。"""
+    try:
+        fn()
+    except SystemExit as e:
+        return e.code if not message else str(e)
+    return 0
 
 
 def main():

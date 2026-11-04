@@ -25,7 +25,7 @@ AGENTS_TEMPLATE = ("決まりの優先", "基本方針", "いい資料の考え�
 # スキルのあいだで同じ中身を持つスクリプト → 持ち主のスキル（2026-11-02 に lib/ をやめた）。直すのは持ち主だけで、ほかのスキルの scripts/ の同じ名前のファイルは写し
 # （tests/skills/check.py --sync が写し、同じ中身かを見る）。ledger.py は決まりの ID を持ち主のファイルでだけ数え、前の台帳の ../lib/<名前>.py を持ち主のファイルとして読む
 SHARED = {"desk.py": "desk-init", "gapi.py": "google-slides", "brand.py": "google-slides", "textlint.py": "google-slides", "sheet.py": "google-slides",
-          "notes.py": "google-slides", "ledger.py": "desk-feedback", "refs.py": "deck-workflow", "doctor.py": "desk-doctor"}
+          "notes.py": "google-slides", "wording.py": "google-slides", "ledger.py": "desk-feedback", "refs.py": "deck-workflow", "doctor.py": "desk-doctor"}
 COPIES = {"desk-migrate/templates/drive_folders.md": "desk-init/templates/drive_folders.md",  # スクリプトでない写し（<スキル>/<パス> → 持ち主。フォルダなら中のファイルをみな）
           "desk-migrate/templates/recipes/README.md": "desk-init/templates/recipes/README.md",
           "google-docs/assets/gcp": "google-slides/assets/gcp"}  # google-docs の assets/README.md は自分のもの（google-slides の台帳を名前で指す）

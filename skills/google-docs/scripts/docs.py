@@ -10,6 +10,8 @@ usage（資料の build/ で。doc.md は今いるフォルダのもの）:
                                         未解決のコメントがあれば止まる。直しを doc.md に入れてから --force で組み直す
   docs.py check <URL か ID>   仕上げの確認。JSON・テキスト・lint・ページの画像（Drive が書き出した PDF）・画像でのレイアウトの確認（doc_layout.py）、
                               doc.md と組んだ文書の照合、テンプレートとの照合、元のテンプレートとの骨組みの比較を /tmp/docs_<ID の先頭 8 字>/ に出す
+  docs.py wording <URL か ID>   日本語の点検と、保存した資料との照合。Google の資料の段落の言い回しの指摘を doc.md の行つきで出し、直す前に通した文と比べて
+                                意味の変わる恐れを出し、資料のフォルダの wording.json に残す（wording.py。google-docs の lint.md の「Japanese check」）
   docs.py export <URL か ID> <出力.docx か .pdf>   Word か PDF で書き出す（相手が Word を求めたときだけ。納品は Google Docs の URL）
   docs.py --selftest
 見た目の決まりは deck-design → docs。書体・色・著作権表示はスライドと同じもの（brand.py。google-slides のものの写し）を使う。lint は doc_lint.py。"""
@@ -23,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import doc_lint
 import gapi
 import textlint
+import wording
 from gapi import DOCS, DRIVE, GDOCS, carry, delete, file_id, folder_id, png, request, run, trash, u16
 from brand import BRAND_COPYRIGHT as COPYRIGHT, COPYRIGHT_PT, LOGO, need_brand, FONT, FONT as FONT_DEFAULT, MONO_DEFAULT, MONO_DEFAULT as MONO, theme_font, theme_mono, RULE, TEXT, WHITE, asset  # FONT・MONO はテーマで替わる（load_theme）
 
@@ -444,8 +447,7 @@ def batch_doc(did, reqs):
 
 
 def fingerprint(did):
-    body = request("GET", f"{DOCS}/{did}?fields=body")["body"]
-    return hashlib.sha1(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return body_hash(request("GET", f"{DOCS}/{did}?fields=body")["body"])
 
 
 def footer_text(name):
@@ -1150,9 +1152,72 @@ def cmd_check(src):
     print(lay.stdout.rstrip() if lay.returncode == 0 else f"\n（doc_layout.py が止まった: {lay.stderr.strip()[-300:]}）")
     hard = source_checks(doc, md) or hard
     pages = sorted(glob.glob(f"{d}/p-*.png"))
+    if pages:  # ページの画像を作れたあとに、見た本文を残す（docs.py wording が、組んだあとの文書を check で見たかを、これで決める）
+        json.dump({"body": body_hash(doc["body"])}, open(f"{d}/seen.json", "w"))
     print(f"\nテキスト: {d}/text.md\n画像: {d}/p-N.png（{len(pages)} ページ）\nJSON: {d}/doc.json")
     if hard:
         sys.exit("要修正が残っている（上の出力を直す）")
+
+
+def body_hash(body):
+    """本文の指紋（fingerprint と同じ計算。読んだ文書から求める）。"""
+    return hashlib.sha1(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def doc_units(doc, md_lines):
+    """lint が言い回しを見る段落（lint_gdoc の wording の呼び出し。引用とコードの段落・出典の行は外す）を集め、doc.md の行に戻す（u の file・loc）。"""
+    units = []
+    r = wording.collector(doc_lint.Report(), units, lambda where, kw: "doc", lambda kw: "段落")
+    real, doc_lint.workspace_checks = doc_lint.workspace_checks, (lambda *a: 0)  # 文を集めるだけなので、ワークスペースの点検は呼ばない（スライドの slide_units と同じ）
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            doc_lint.lint_gdoc(doc, r)
+    finally:
+        doc_lint.workspace_checks = real
+    lines = [wording.flat(x) for x in md_lines]
+    for u in units:
+        want = wording.flat(u["text"])[:20]
+        if n := next((i for i, x in enumerate(lines, 1) if want and x == want), None) or next((i for i, x in enumerate(lines, 1) if want and want in x), None):  # 短い文は、同じ文の行を先に
+            u["file"], u["loc"] = "doc.md", f"{n} 行"
+    return units
+
+
+def unbuilt_doc(doc):
+    """doc.md に、まだ組んでいない直しがあるか: 通らない理由の文の並び（なければ []）。check の照合（fidelity）と同じく、doc.md と組んだ文書を同じ形にして比べる。"""
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            diff = fidelity(load_doc(), doc)
+    except (Exception, SystemExit) as e:  # noqa: BLE001  確かめられなければ通さない
+        return [f"doc.md と組んだ文書を照らせない（{type(e).__name__}: {e}）"]
+    return [f"doc.md に、組んでいない直しがある（組んだ文書との差 {sum(x[0] in '+-' for x in diff)} 行）。docs.py build で組み、check で見てから回す（組んでいない原稿を点検済みにしない）"] if diff else []
+
+
+def cmd_wording(src):
+    """docs-lint-020 の日本語の点検（スライドの slides-lint-035 と同じ中身。wording.py）。doc.md から documents.get の形を手元で作る道がないので、
+    Google に保存された資料（documents.get）の段落を読み、doc.md の行に戻す。読んだ文が保存した資料の文なので、点検（last）と保存した資料との照合（saved）を同じ回に書く。
+    通らない理由（どちらにも）: 組んだあとに画面で直された（本文の指紋が組んだときと違う）、組んだあとの文書を docs.py check で見ていない（直して延びた段落の
+    ページ割りを見ていない）、doc.md に組んでいない直しがある（読んだ文が doc.md の文でない）。"""
+    if os.path.basename(os.getcwd()) != "build" or not os.path.isfile("doc.md"):
+        sys.exit("wording は資料の build/（doc.md のあるフォルダ）で回す")
+    did = file_id(src)
+    doc = request("GET", f"{DOCS}/{did}")
+    now = body_hash(doc["body"])
+    problems = []
+    if now != request("GET", f"{DRIVE}/files/{did}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(STAMP):
+        problems.append("docs.py build で組んだ本文でない（画面で直されたか、ほかの道具で変えた）。直しを doc.md に写して docs.py build で組み直す")
+    try:
+        seen = json.load(open(f"/tmp/docs_{did[:8]}/seen.json", encoding="utf-8"))["body"]  # check がページの画像を作ったあとに書く
+    except (OSError, ValueError, KeyError, TypeError):
+        seen = None
+    if seen != now:
+        problems.append(f"組んだあとの文書を check で見ていない（docs.py check {src} でページの画像を見てから回す）")
+    problems += unbuilt_doc(doc)
+    md = open("doc.md", encoding="utf-8").read()
+    units = doc_units(doc, md.splitlines())
+    folder, url = os.path.dirname(os.getcwd()), f"https://docs.google.com/document/d/{did}/edit"
+    ok = wording.run(folder, "docs", units, wording.input_files(["doc.md"]), problems, f"docs.py wording {src}", f"Google の文書（リビジョン {doc.get('revisionId')}。doc.md と照らした）")
+    if not (wording.verify(folder, url, doc.get("revisionId"), units, problems, f"docs.py wording {src}") and ok):  # 読んだ文書が点検した文そのものなので、照合も同じ回に書く（理由も同じ）
+        sys.exit(1)
 
 
 def cmd_export(src, out):
@@ -1161,7 +1226,73 @@ def cmd_export(src, out):
     print(out)
 
 
+def wording_selftest():
+    """cmd_wording: 段落を集めて doc.md の行に戻すこと、画面で直したことと check を回していないことを通らない理由にすること。Google は呼ばない。"""
+    import tempfile
+    gp = lambda text, style="NORMAL_TEXT", **ps: {"paragraph": {"elements": [{"textRun": {"content": text + "\n", "textStyle": {}}}], "paragraphStyle": {"namedStyleType": style, **ps}}}
+    doc = {"documentId": "zzwordingdoc", "revisionId": "r1", "documentStyle": {"pageSize": {"width": {"magnitude": 595.28}, "height": {"magnitude": 841.89}}},
+           "namedStyles": {"styles": [{"namedStyleType": "NORMAL_TEXT", "textStyle": {"weightedFontFamily": {"fontFamily": FONT}, "fontSize": {"magnitude": 10.5}}}]},
+           "body": {"content": [gp("仕組みの比べ", "HEADING_1"), gp("前の版の手順に戻す。"), gp("引用の前の版の比べ", borderLeft={}), gp("出典: 前の版の比べ")]}}
+    md = "# 仕組みの比べ\n\n前の版の手順に**戻す**。\n\n> 引用の前の版の比べ\n"
+    real = request, doc_lint.workspace_checks, doc_lint.theme_pages, unbuilt_doc
+    pending = {"v": []}
+    globals()["unbuilt_doc"] = lambda doc: pending["v"]
+    stamp = {"v": body_hash(doc["body"])}
+    globals()["request"] = lambda m, u, *a, **k: {"appProperties": {STAMP: stamp["v"]}} if "/files/" in u else doc
+    doc_lint.workspace_checks, doc_lint.theme_pages = (lambda *a: 0), (lambda: [])
+    cwd, d = os.getcwd(), tempfile.mkdtemp()
+    seen = f"/tmp/docs_{doc['documentId'][:8]}"
+    shutil.rmtree(seen, ignore_errors=True)
+    try:
+        os.makedirs(f"{d}/build")
+        open(f"{d}/build/doc.md", "w", encoding="utf-8").write(md)
+        os.chdir(f"{d}/build")
+        with contextlib.redirect_stdout(io.StringIO()):
+            try:
+                cmd_wording(doc["documentId"])
+                raise AssertionError("通した")
+            except SystemExit as e:
+                assert e.code == 1
+            st = wording.load(d)
+            fs = {f["rule"]: f for f in st["last"]["findings"]}
+            assert set(fs) == {"動詞を名詞にした語", "直訳の語"} and fs["動詞を名詞にした語"]["loc"] == "1 行" and fs["直訳の語"]["loc"] == "3 行"  # 引用の段落と出典の行は見ない
+            assert any("check で見ていない" in x for x in st["last"]["problems"]) and st["last"]["files"] == {"build/doc.md": hashlib.sha256(md.encode()).hexdigest()}
+            os.makedirs(seen)
+            json.dump(doc, open(f"{seen}/doc.json", "w"))  # 画像を作る前に止まった check（doc.json だけ）は、見たことにしない
+            try:
+                cmd_wording(doc["documentId"])
+                raise AssertionError("通した")
+            except SystemExit as e:
+                assert e.code == 1 and any("check で見ていない" in x for x in wording.load(d)["last"]["problems"])
+            json.dump({"body": body_hash(doc["body"])}, open(f"{seen}/seen.json", "w"))
+            wording.decide(d, "ask", [f["id"] for f in fs.values()], "selftest")
+            assert wording.saved_state(wording.load(d), d) != "済み"  # 判断しただけでは、照合は前の回のまま（docs.py wording を回し直す）
+            cmd_wording(doc["documentId"])  # check で見た本文で、判断がそろえば通る
+            assert wording.saved_state(wording.load(d), d) == "済み" and wording.load(d)["saved"]["url"].endswith("/zzwordingdoc/edit")
+            pending["v"] = ["doc.md に、組んでいない直しがある"]  # 組んだあとに doc.md だけを直した
+            try:
+                cmd_wording(doc["documentId"])
+                raise AssertionError("通した")
+            except SystemExit as e:
+                assert e.code == 1 and "doc.md に、組んでいない直しがある" in wording.load(d)["last"]["problems"] and wording.saved_state(wording.load(d), d) == "通らない"
+            pending["v"] = []
+            assert real[3](doc)  # 手で作ったこの文書は doc.md と形が違うので、本物の照合は差を出す
+            stamp["v"] = "x"  # 組んだあとに画面で直された
+            try:
+                cmd_wording(doc["documentId"])
+                raise AssertionError("通した")
+            except SystemExit as e:
+                assert e.code == 1 and any("docs.py build で組んだ本文でない" in x for x in wording.load(d)["last"]["problems"])
+    finally:
+        os.chdir(cwd)
+        globals()["request"], globals()["unbuilt_doc"] = real[0], real[3]
+        doc_lint.workspace_checks, doc_lint.theme_pages = real[1], real[2]
+        shutil.rmtree(d, ignore_errors=True)
+        shutil.rmtree(seen, ignore_errors=True)
+
+
 def selftest():
+    wording_selftest()
     assert runs("**太字**と[リンク](https://a.b/c)と`x=1`") == [("太字", {"bold": True}), ("と", {}), ("リンク", {"link": {"url": "https://a.b/c"}}), ("と", {}),
                                                                 ("x=1", {"code": True})]
     assert runs("ふつう") == [("ふつう", {})] and runs("") == []
@@ -1405,6 +1536,8 @@ def main():
         return selftest()
     if a[:1] == ["check"] and len(a) == 2:
         return cmd_check(a[1])
+    if a[:1] == ["wording"] and len(a) == 2:
+        return cmd_wording(a[1])
     if a[:1] == ["export"] and len(a) == 3:
         return cmd_export(a[1], a[2])
     if a[:1] == ["init"] and len(a) == 2:

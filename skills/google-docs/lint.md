@@ -41,3 +41,21 @@ The JSON does not tell where pages break or where lines wrap. These are measured
 - **Last lines of only 1–2 characters:** Only short paragraphs (up to 80 characters) such as headings, figure and table titles, and table cells are checked. Do not fix the last line of body paragraphs (`deck-design` → documents §5).
 - **Overflow into the margins:** Anything drawn in the left or right margin (30 mm). Tables with fixed widths, large figures, the left line.
 - **Pages with empty space at the bottom:** Pages where the bottom 30% or more of the body area is empty (except the last page and pages whose next page starts with H1). Suspect a table or figure pushed to the next page.
+
+## Japanese check (docs.py wording)
+
+[docs-lint-020] **After a document is built, check its Japanese on the saved document, fix it in doc.md, and check again.** It is the same check as for slides (`wording.py` is a copy; the owner is `google-slides`): writing-time rules and the review left 56–68% of the wording findings undecided until the last check (2026-11-04 in `docs/decisions.md`). Unlike slides, which are checked on the page JSON before building, a document is checked on the saved document (`documents.get`), because there is no way to turn doc.md into that form without Google; doc.md stays markdown. So one run records both facts that slides keep apart, the check and the match with the saved document, with the same reasons not to pass, and a fix made only in doc.md and never built does not pass.
+
+```sh
+cd <folder>/build
+python3 $K/docs.py check <URL>      # first: the page images of the built document (the check stops without them)
+python3 $K/docs.py wording <URL>    # the Japanese check. exit 1 until 「済み」. Writes <folder>/wording.json
+python3 $K/wording.py keep <folder> <W…> … --why <reason>      # keep a finding unchanged
+python3 $K/wording.py ask  <folder> <W…|R…> … --why <question> # leave it to the user (the questions at delivery)
+python3 $K/wording.py ok   <folder> <R…> … --why <reason>      # a meaning risk you checked and intended
+```
+
+- **What it reads:** the paragraphs the lint's wording rules read (headings, body, list items, table cells), one at a time. Not read: quotes and code (paragraphs with a left border or shading), source lines, text without Japanese, URLs, and anything inside 「」『』“”.
+- **Rules (deck-lint-028):** the three yomiyasu rules for documents (「動詞を名詞にした語」, 「直訳の語」, 「たとえの動詞」) and the Japanese text rules of `textlint.py` (「空疎な言い回し」, 「あおり」, 「和欧間のスペース抜け」, 「約物の前後のスペース」). Each finding has an ID (`W…`), the paragraph, and the line of `build/doc.md`.
+- **The loop:** fix doc.md (rewrite who does what, deck-content-065 in `deck-writing`; keep the claim, numbers, conditions, negation, certainty, quotes, proper nouns, code, and URLs; `ask` when the only rewrite changes what the document says), `docs.py build`, `docs.py check` (look at the pages: a rewrite can move a page break), `docs.py wording` again. After closing the last findings with `keep`, `ask`, or `ok`, run `docs.py wording` once more: for a document the same run also records the match with the saved document, which still holds the earlier run's reasons until then.
+- **Meaning risks, 「済み」, decisions, the limit of 2 rewrites, and the record** work as for slides (`google-slides` → lint, "Japanese check"): risks `R…` (protected words, yomiyasu_diff's meaning risks, and 「書き換えた文を読み比べる」 for a text whose 〔書き換え〕 finding went away) compare with the last accepted text and stay until reverted or `ok`ed; 「済み」 needs no open finding or risk and no reason not to pass (the document was edited in the UI after `docs.py build`, `docs.py check` has not seen the built body, or doc.md has edits that were not built: the same match against the built document as `docs.py check`); decisions are tied to the hash of the text; `flow.py` of `deck-workflow` shows the check and the match with the saved document (「未実施」, 「古い」 when doc.md changed after the run, 「通らない」).

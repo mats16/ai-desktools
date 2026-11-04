@@ -13,6 +13,9 @@ usage（資料の build/ で。deck.json か pages.py は今いるフォルダ�
   slides.py lint [<ファイル>] [<URL か ID>] [--pages 3,5 | --all] [--talk]   組まずに、組む要求を手元で presentations.get の形にして lint をかける（テストの unit。
                                           直すたびに回す）。既定は前に回したときから変わったページ（と要修正が残ったページ。テーマか規則が変わったら全ページ）。テーマはテーマのファイルから読み、Google を読まない
                                           （URL はテーマのファイルがないデッキだけに要る）。テーマのファイル（kind theme）を渡すと、形と役割の組のコントラストを見る
+  slides.py wording [<URL か ID>]   日本語の点検（google-slides の lint.md の「Japanese check」）。組まずに、deck.json か pages.py から build と同じデッキを作り、
+                                          本文・表のセル・図の札・ノートの言い回しの指摘を、ページのファイルと JSON の場所つきで出す。直す前に通した文と比べて意味の変わる恐れを出し、
+                                          資料のフォルダの wording.json に残す（wording.py）。テーマは lint と同じ（URL はテーマのファイルがないデッキだけに要る）
   slides.py dry [<ファイル>] [<URL か ID>]   組まずに make を走らせ、組むときの警告・枚数・ノートのないページを出す（既定は deck.json か pages.py。子が書いた JSON のページの .json か build/pages_<担当>.py を確かめる。
                                           テーマは lint と同じ。../pages.md）
   slides.py resolve [<ファイル>.json] [<URL か ID>]   JSON のページを解いた形（in の位置とすべての値。Deck のメソッドの呼び出し）を出す（../pages.md の slides-pages-034）
@@ -442,6 +445,8 @@ class Deck:
         self.warnings = []   # 組むときの見込みの警告（折り返し、見出しを縮めた、など）
         self.run = new_run()  # 組み直すときに、前の ID（残したページのものも）とぶつけない
         self.page_names = {}  # JSON のページのファイル名（拡張子なし）→ ページの ID。[名前](#p12) のリンク先
+        self.page_files = {}  # ページの ID → そのページを書いた JSON のファイル（今いるフォルダからのパス）。日本語の点検（slides.py wording）が指摘を戻す先
+        self.read_files = []  # spec が読んだ JSON のファイル（中のデッキのファイル・部品 1 つのファイルも）。日本語の点検が組む入力として記録する
         self.resolved, self.spec_index, self.spec_esc = [], {}, []  # JSON のページ（spec）の解いた形、ページごとの (部品の場所, 文字)（lint の指摘に場所を付ける）、
         # 形の外の書き方（ページ, 場所, キー）
         self.anchor = None  # 直前の card・code の箱の文字の枠（矢印をつなぐ先。JSON のページの id）
@@ -492,7 +497,12 @@ class Deck:
     def spec(self, src):
         """JSON で書いたページ（ファイルのパス、dict、その並び、deck.json、部品 1 つ）を解いて組み、ページの ID の並びを返す。
         書き方は ../pages.md の slides-pages-034。解いた形は self.resolved に残る（slides.py resolve）。"""
-        return [spec_page(self, p, base, loc, name) for p, base, loc, name in spec_files(src)]
+        out = []
+        for p, base, loc, name in spec_files(src, read=self.read_files):
+            out.append(sid := spec_page(self, p, base, loc, name))
+            if self.read_files and (f := Path(base) / Path(loc).name) == self.read_files[-1]:  # ページを書いたファイル（ページのファイルと部品 1 つのファイルは、出す直前に読む。Python から渡した dict のページにはない）
+                self.page_files[sid] = os.path.relpath(f)
+        return out
 
     # ---- 図形と文字 ----
     def _shape(self, sid, x, y, w, h, fill=None, line=None, kind="RECTANGLE", sx=1, sy=1, dash=False, weight=0.75):
@@ -2352,10 +2362,11 @@ class SpecPage:
                     self.warns.append(f"{l1} と {l2}: 矢じりの先が 1 点に集まる（{p[0]:.2f}, {p[1]:.2f} in）。入る辺か位置をずらす")
 
 
-def spec_files(src, base=None, where=None, file=False):
+def spec_files(src, base=None, where=None, file=False, read=None):
     """src（ファイルのパス、dict、そのどちらかの並び）から (ページ, 画像のパスの起点, 場所, 名前) を順に出す。デッキのページのファイルは、デッキのファイルのあるフォルダから読む。
     名前はページのファイル名（拡張子なし。[名前](#p12) のリンク先）で、ファイルでないページは None。
-    ファイルの先頭には apiVersion と kind（deck・page・component）が要る。Python から渡した dict は、書いていなければ中身から kind を決める。"""
+    ファイルの先頭には apiVersion と kind（deck・page・component）が要る。Python から渡した dict は、書いていなければ中身から kind を決める。
+    read（並び）を渡すと、読んだファイルのパスをすべて足す（中のデッキのファイルと部品 1 つのファイルも。日本語の点検が、組む入力として記録する）。"""
     base = base or Path.cwd()
     if isinstance(src, (str, Path)):
         path, where = base / src, where or str(src)
@@ -2363,12 +2374,14 @@ def spec_files(src, base=None, where=None, file=False):
             src = json.loads(path.read_text())
         except (OSError, json.JSONDecodeError) as e:
             sys.exit(f"{where}: 読めない（{e}）")
-        yield from spec_files(src, path.parent, where, True)
+        if read is not None:
+            read.append(path)
+        yield from spec_files(src, path.parent, where, True, read)
         return
     where = where or "spec"
     if isinstance(src, list) and not file:
         for i, p in enumerate(src):
-            yield from spec_files(p, base, None if isinstance(p, str) else f"{where}[{i}]")
+            yield from spec_files(p, base, None if isinstance(p, str) else f"{where}[{i}]", read=read)
         return
     if not isinstance(src, dict):
         sys.exit(f'{where}: ファイルの先頭は {{"apiVersion": "{API_VERSION}", "kind": "deck"・"page"・"component", …}}')
@@ -2384,7 +2397,7 @@ def spec_files(src, base=None, where=None, file=False):
     if kind == "deck":
         spec_check(src, SPEC_DECK, f"{where}（deck）")
         for p in src["pages"]:
-            yield from spec_files(p, base, p)
+            yield from spec_files(p, base, p, read=read)
     elif kind == "theme":
         sys.exit(f"{where}: テーマのファイルはページに並べない（deck.json の theme に名前を書く。テーマのファイルだけを見るなら slides.py lint <ファイル>）")
     elif kind == "component":  # 部品 1 つだけのファイルは、型のないページに置く
@@ -3254,7 +3267,17 @@ def cmd_plan(pid, deck, theme, only):
     screen = gapi.guard(pid, revision(pid), STAMP, "pages.py", stop=False) or []
     x = build_plan(pid, deck, False, theme, only)
     print(json.dumps({"presentationId": pid, "theme": x.themed, "rebuild": x.rebuilt, "frozen": [i for i, s in enumerate(deck.slides, 1) if s in x.frozen],
-                      "kept": len(x.keep) - len(x.frozen), "remove": len(x.old), "moves": len(x.moves), "screen": screen}, ensure_ascii=False))
+                      "kept": len(x.keep) - len(x.frozen), "remove": len(x.old), "moves": len(x.moves), "notes": notes_changed(pid, deck), "screen": screen}, ensure_ascii=False))
+
+
+def notes_changed(pid, deck):
+    """ページの数が同じなら、全部を組んだときに build がノートを書き換えるページの番号（build と同じく、ノートのないページは空のノート）。ページのハッシュはノートを含まないので、
+    plan の rebuild には出ない。ページの数が違えば None（rebuild・remove に出ている）。日本語の点検（gslides.py wording）が、組んでいないノートの直しを見るのに使う。"""
+    p = request("GET", f"{SLIDES}/{pid}?fields=slides(objectId,slideProperties(notesPage(notesProperties,pageElements(objectId,shape(text)))))")
+    if len(p.get("slides", [])) != len(deck.slides):
+        return None
+    before = notes_of(p["slides"])
+    return [i for i, s in enumerate(deck.slides, 1) if (deck.notes.get(s) or "").rstrip("\n") != before[str(i)]]
 
 
 def local_json(reqs, deck, p):
@@ -3631,6 +3654,83 @@ def lint_local(path="pages.py", url=None, talk=False, pages=None):
     print(f"\n{LOCAL_ONLY}\n" + json.dumps({"file": path, "slides": len(deck.slides), "pages": sorted(pages), "warnings": warnings}, ensure_ascii=False))
     if hard:
         sys.exit("lint の要修正が残っている（上の出力を直す）")
+
+
+def slide_units(p, notes=None):
+    """日本語の点検（wording.py）が見る文: lint が言い回しを見る文（lint_slides の wording の呼び出し）と、ノートの行。p は presentations.get の形
+    （手元で組んだ local_json か、Google に保存したデッキ）。notes はページの順のノートの文字（build が書くもの）で、None なら p のノートを読む。
+    手元の点検（slides.py wording）と保存した資料との照合（gslides.py wording）が同じものを使うので、2 つは同じ規則で同じ文を集める。"""
+    import lint, textlint, wording
+    units = []
+    r = wording.collector(lint.Report(), units, lambda where, kw: "#", lambda kw: "表" if kw.get("table") else "本文")
+    real = lint.segment, lint.workspace_checks  # 文を集めるだけなので、文節の切れ目（BudouX）とワークスペースの点検は呼ばない（どちらも言い回しを見る文を変えない）
+    lint.segment, lint.workspace_checks = (lambda ts: {t: set(range(len(t) + 1)) for t in ts}), (lambda *a: 0)
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            lint.lint_slides(p, r, "差し替え用" in p["title"])
+    finally:
+        lint.segment, lint.workspace_checks = real
+    for i, s in enumerate(p.get("slides", []), 1):
+        for line in (lint.note_text(s) if notes is None else notes[i - 1] or "").splitlines():
+            if textlint.wording_text(line):
+                units.append(wording.unit(f"p{i} ノート", line, "#", "ノート", slides=False, page=i))
+    return sorted(units, key=lambda u: (u["page"] or 0, u["kind"] == "ノート"))  # ページの順、ノートはそのページの後ろ（同じページの中は lint が見た順）
+
+
+def json_leaves(o, path=""):
+    """JSON の文字の値と、その場所（body[2].text）。"""
+    if isinstance(o, dict):
+        for k, v in o.items():
+            yield from json_leaves(v, f"{path}.{k}" if path else k)
+    elif isinstance(o, list):
+        for i, v in enumerate(o):
+            yield from json_leaves(v, f"{path}[{i}]")
+    elif isinstance(o, str):
+        yield path, o
+
+
+def wording_places(units, deck, py=("pages.py",)):
+    """点検する文（slide_units）を、そのページを書いたファイル（deck.page_files。deck.json が指したもの）と JSON の場所に戻す（u の key・file・loc）。
+    JSON のページは、そのファイルの文字の値から文の先頭 20 字を探す（短い文〔表のセル〕は、同じ文の値を先に）。ファイルのないページ（pages.py の関数）は py のファイル
+    （pages.py と、make が読み込んだ build/ の pages_<担当>.py）の行。
+    key は直す前後を組にするページの名前: JSON のページはファイルのパス（並べ替えても同じ）、ファイルのないページは 1 つの並び（ページを足しても消してもずれない）。"""
+    import wording
+    leaves = {}
+    lines = [(f, n, wording.flat(x)) for f in py if Path(f).is_file() for n, x in enumerate(Path(f).read_text(encoding="utf-8").splitlines(), 1)]
+    for u in units:
+        f = deck.page_files.get(deck.slides[u["page"] - 1]) if u["page"] and u["page"] <= len(deck.slides) else None
+        want = wording.flat(u["text"])[:20]
+        if f:
+            u["key"] = os.path.splitext(f)[0]
+            if f not in leaves:
+                leaves[f] = [(loc, wording.flat(v)) for loc, v in json_leaves(json.loads(Path(f).read_text(encoding="utf-8")))]
+            hit = [loc for loc, v in leaves[f] if want and v == want] or [loc for loc, v in leaves[f] if want and want in v]
+            u["file"], u["loc"] = f, "・".join(dict.fromkeys(hit)) or None  # 部品が数と単位から組んだ文（「16 モデル」）は、場所なしでファイルだけ
+        if not u.get("file") and want and (hit := next(((f, n) for f, n, x in lines if want in x), None)):
+            u["file"], u["loc"] = hit[0], f"{hit[1]} 行"
+    return units
+
+
+def cmd_wording(path, url=None):
+    """slides-lint-035 の日本語の点検を、組む前のデッキで回す（Google に書かず、保存した資料も画像も要らない）。build と同じく deck.json か pages.py から
+    デッキを作り（deck.json が指したページだけ。ノートは build が書くもの）、local_json の形にして、lint が言い回しを見る文とノートの行を wording.py に渡す。
+    テーマは deck_context（テーマのファイルがあれば Google を読まない。なければ url のデッキを読む）。記録は資料のフォルダの wording.json の点検（last）。
+    保存した資料との照合は別の事実で、組んで画像を見たあとに gslides.py wording <URL> で確かめる。済みでなければ 1 で終わる。"""
+    import wording
+    if Path.cwd().name != "build" or path not in ("deck.json", "pages.py"):
+        sys.exit("slides.py wording は資料の build/ で、デッキ全体（deck.json か pages.py）に回す（ページのファイルだけでは、記録がデッキの点検にならない）")
+    name, _, p = deck_context(path, url)
+    m = load_make(path)
+    with contextlib.redirect_stderr(io.StringIO()):  # 組むときの警告は slides.py lint が出す
+        deck = make_deck(m.make, getattr(m, "NAME", "dry"))
+    q = local_json(json.loads(resolved(deck, p)), deck, p)
+    here = Path.cwd().resolve()
+    py = sorted({os.path.relpath(f) for m in list(sys.modules.values()) if (f := getattr(m, "__file__", None)) and f.endswith(".py") and Path(f).resolve().is_relative_to(here)},
+                key=lambda f: f != "pages.py")  # make が読み込んだ build/ の Python（pages.py と、make の中で読む pages_<担当>.py）
+    units = wording_places(slide_units(q, [deck.notes.get(s) or "" for s in deck.slides]), deck, py)
+    files = wording.input_files([path, *py, *(os.path.relpath(f) for f in deck.read_files)])  # 組む入力だけ（deck.json か pages.py と、実際に読んだ Python と JSON のファイル）
+    if not wording.run(str(Path.cwd().parent), "slides", units, files, (), "slides.py wording", f"build/{path}（手元の JSON。テーマ {name}）"):
+        sys.exit(1)
 
 
 def merge(pages, fixes):
@@ -4203,7 +4303,96 @@ def selftest():
     selftest_diff()
     selftest_spec()
     selftest_sample()
+    selftest_wording()
     print("selftest ok")
+
+
+def selftest_wording():
+    """slides.py wording（日本語の点検を組む前のデッキで回す）: deck.json が指したファイルだけを、build と同じデッキにして見る。本文・表のセル・図の札・ノートの指摘を
+    ファイルと JSON の場所に戻す。直したら判断は消え、意味の変わる恐れが出る。ノートのキーを消しても取りこぼさない。Google は呼ばない（request を止める）。"""
+    import wording
+    real, cwd = globals()["request"], os.getcwd()
+    globals()["request"] = lambda *a, **k: (_ for _ in ()).throw(AssertionError(f"Google を呼んだ: {a[:2]}"))
+    page = lambda **kw: {"apiVersion": API_VERSION, "kind": "page", **kw}
+    w = lambda f, o: Path(f).write_text(json.dumps(o, ensure_ascii=False), encoding="utf-8")
+    def go(path="deck.json"):
+        with contextlib.redirect_stdout(io.StringIO()):
+            try:
+                cmd_wording(path)
+                return 0
+            except SystemExit as e:
+                return e.code
+    try:
+        with tempfile.TemporaryDirectory() as t:
+            folder = Path(t) / "資料"
+            (folder / "build" / "sub").mkdir(parents=True)
+            (folder / "build" / "old").mkdir()
+            os.chdir(folder / "build")
+            p1 = page(title="4 つの構成の比べ", body=[{"type": "table", "rows": [["項目", "内容"], ["移行", "前の版の手順"]]},
+                                                {"type": "frame", "h": 1, "items": [{"type": "label", "text": "取り込みの直し", "x": 0, "y": 0, "w": 3, "h": 0.6}]}],
+                      speakerNotes="ここでは前の版の手順を話す。")
+            w("p01.json", p1)
+            w("sub/p02.json", page(title="仕組みを確かめる", body=[{"type": "text", "text": "検証は不要ではない"}]))
+            w("p02.json", page(title="使わない控えの比べ"))  # deck.json が指していない同じ名前のファイル（混ぜない）
+            w("old/p01.json", page(title="4 つの構成の比べ"))
+            w("deck.json", {"apiVersion": API_VERSION, "kind": "deck", "name": "t", "theme": "navy", "pages": ["p01.json", "pages_a.json"]})
+            w("pages_a.json", {"apiVersion": API_VERSION, "kind": "deck", "name": "a", "pages": ["sub/p02.json", "c.json"]})  # 子の担当のデッキのファイルと、部品 1 つのファイル
+            w("c.json", {"apiVersion": API_VERSION, "kind": "component", "type": "text", "text": "部品だけのページ"})
+            assert go() == 1  # 未判断の指摘がある
+            st = wording.load(str(folder))
+            assert sorted(st["last"]["files"]) == ["build/c.json", "build/deck.json", "build/p01.json", "build/pages_a.json", "build/sub/p02.json"]  # 組む入力だけ（中のデッキと部品のファイルも）
+            got = {(f["rule"], f["file"], f["loc"]) for f in st["last"]["findings"]}
+            assert ("動詞を名詞にした語", "p01.json", "title") in got and ("直訳の語", "p01.json", "body[0].rows[1][1]") in got, got  # 見出しと表のセル
+            assert ("動詞を名詞にした語", "p01.json", "body[1].items[0].text") in got and ("直訳の語", "p01.json", "speakerNotes") in got, got  # 図の札とノート
+            assert not [f for f in st["last"]["findings"] if "控え" in f["excerpt"]] and {u["key"] for u in st["last"]["units"]} == {"p01", "sub/p02", "c"}
+            assert [(u["file"], u["loc"]) for u in st["last"]["units"] if u["key"] == "c"] == [("c.json", "text")]  # 部品 1 つのファイルのページも、そのファイルの場所に戻す
+            keep = {f["loc"]: f["id"] for f in st["last"]["findings"]}
+            with contextlib.redirect_stdout(io.StringIO()):
+                wording.decide(str(folder), "keep", list(keep.values()), "selftest")
+            assert go() == 0 and wording.load(str(folder))["summary"]["状態"] == "済み"
+            # 見出しを直す: その判断は消え、直したに数え、読み比べの恐れが出る。表のセルの判断は残る
+            w("p01.json", {**p1, "title": "4 つの構成を比べる"})
+            assert go() == 1
+            st = wording.load(str(folder))
+            assert keep["title"] not in st["decisions"] and keep["body[0].rows[1][1]"] in st["decisions"] and st["last"]["fixed"] == 1
+            assert [(r["kind"], r["file"], r["loc"]) for r in st["last"]["risks"]] == [(wording.REREAD, "p01.json", "title")]
+            with contextlib.redirect_stdout(io.StringIO()):
+                wording.decide(str(folder), "ok", [r["id"] for r in st["last"]["risks"]], "比べる対象は同じ")
+            # 否定を落とした直しは、別のフォルダのページでも場所つきの恐れになる
+            w("sub/p02.json", page(title="仕組みを確かめる", body=[{"type": "text", "text": "検証は不要だ"}]))
+            assert go() == 1
+            assert [(r["kind"], r["file"]) for r in wording.load(str(folder))["last"]["risks"]] == [("否定の数", "sub/p02.json")]
+            w("sub/p02.json", page(title="仕組みを確かめる", body=[{"type": "text", "text": "検証は不要ではない"}]))
+            assert go() == 0
+            w("c.json", {"apiVersion": API_VERSION, "kind": "component", "type": "text", "text": "部品だけのページを直す"})  # 中のファイルを直せば、点検は古い
+            assert wording.stale(wording.load(str(folder)), str(folder)) == ["build/c.json"]
+            assert go() == 0
+            # ノートのキーを消す: ノートの文がなくなったことを、読み比べの恐れとして出す（取りこぼさない）
+            w("p01.json", {k: v for k, v in p1.items() if k != "speakerNotes"} | {"title": "4 つの構成を比べる"})
+            assert go() == 1
+            st = wording.load(str(folder))
+            assert [(r["kind"], r["detail"], r["where"]) for r in st["last"]["risks"]] == [(wording.REREAD, "直訳の語（文を消した）", "p1 ノート")]
+            assert "デッキ全体" in str(go("p01.json"))  # ページのファイルだけでは回さない
+        with tempfile.TemporaryDirectory() as t:  # 前の資料の pages.py: ページの関数の文とノート（d.note）を、pages.py の行に戻す
+            (Path(t) / "build").mkdir()
+            os.chdir(Path(t) / "build")
+            Path("pages.py").write_text('from slides import *\nNAME = "t"\n\n\ndef make(d):\n    s = d.page("仕組みの比べ")\n    d.note(s, "前の版の手順を話す")\n'
+                                        '    import pages_a\n    pages_a.make(d)\n', encoding="utf-8")
+            Path("pages_a.py").write_text('def make(d):\n    d.page("子の担当の比べ")\n', encoding="utf-8")  # 子が書いたページ（make の中で読み込む。google-slides の slides-pages-031）
+            for m in ("pages", "pages_a"):
+                sys.modules.pop(m, None)
+            try:
+                assert go("pages.py") == 1
+                st = wording.load(t)
+                assert {(f["rule"], f["file"], f["loc"]) for f in st["last"]["findings"]} == {("動詞を名詞にした語", "pages.py", "6 行"), ("直訳の語", "pages.py", "7 行"),
+                                                                                         ("動詞を名詞にした語", "pages_a.py", "2 行")}
+                assert sorted(st["last"]["files"]) == ["build/pages.py", "build/pages_a.py"]  # 子のファイルも組む入力
+            finally:
+                for m in ("pages", "pages_a"):
+                    sys.modules.pop(m, None)
+    finally:
+        os.chdir(cwd)
+        globals()["request"] = real
 
 
 def selftest_sample():
@@ -5259,6 +5448,18 @@ def selftest_diff():
                     for _ in range(n):
                         d.page("同じ")
                 return m
+            def noted(text):  # pages.py の形（make の中で d.note）。本文は同じで、ノートだけを変える
+                def m(d):
+                    d.note(d.page("ノートだけ"), text)
+                return m
+            build("x" * 10, make_deck(noted("前のノート。"), "t"), force=True)
+            guard, gapi.guard = gapi.guard, lambda *a, **k: None
+            for text, want in (("前のノート。", []), ("手元で直したノート。", [1])):
+                with contextlib.redirect_stdout(out := io.StringIO()):
+                    cmd_plan("x" * 10, make_deck(noted(text), "t"), None, None)
+                got = json.loads(out.getvalue())
+                assert got["notes"] == want and got["rebuild"] == [], got  # ノートはページのハッシュに入らないので、rebuild でなく notes に出る
+            gapi.guard = guard
             build("x" * 10, make_deck(twin(2, 3), "t"), force=True)
             first = live[0]
             sent.clear()
@@ -5291,12 +5492,17 @@ def selftest_diff():
                         cmd_plan("x" * 10, dk, None, chosen(["p2.json"], dk, None))
                         gapi.guard = lambda *a, **k: None
                     got = json.loads(out.getvalue())
-                    assert got["rebuild"] == [2] and got["frozen"] == [3] and got["kept"] == 1 and got["screen"] == ["前に組んだあとに画面で直されている"], got
+                    assert got["rebuild"] == [2] and got["frozen"] == [3] and got["kept"] == 1 and got["screen"] == ["前に組んだあとに画面で直されている"] and got["notes"] == [], got
                     Path(t, "p1.json").write_text(json.dumps({**json.loads(Path(t, "p1.json").read_text()), "speakerNotes": "選んでいない。"}))
                     dk = spec()
                     build("x" * 10, dk, only=chosen(["p2.json"], dk, None))
                     assert live[0] == before[0] and live[2] == before[2] and live[1] != before[1] and PAGE_KEY.search(live[1]).group(1) == page_key("p2")
                     assert notes[live[0] + "_sp"] == "ノート。"  # 選んでいないページは、ノートも前のまま
+                    Path(t, "p3.json").write_text(json.dumps({k: v for k, v in json.loads(Path(t, "p3.json").read_text()).items() if k != "speakerNotes"}))  # キーを消したノート
+                    with contextlib.redirect_stdout(out := io.StringIO()):
+                        cmd_plan("x" * 10, spec(), None, None)
+                    assert json.loads(out.getvalue())["notes"] == [1, 3], out.getvalue()  # 組んでいないノートの直し（選ばずに残したページ・キーを消したページは空のノートと比べる）
+                    page("p3", "p3 の後")
                     page("p1", "p1 の前")
                     for bad, want in ((["nope.json"], "読めない"), ([str(Path(t, "deck.json"))], None)):
                         try:
@@ -5441,6 +5647,8 @@ def main():
         return print(spec_brief())
     if a[:1] in (["dry"], ["resolve"]) and len(a) <= 3:
         return dry(next((x for x in a[1:] if x.endswith(PAGE_FILES)), None) or default_pages(), next((x for x in a[1:] if not x.endswith(PAGE_FILES)), None), a[0] == "resolve")
+    if a[:1] == ["wording"] and len(a) <= 3:
+        return cmd_wording(next((x for x in a[1:] if x.endswith(PAGE_FILES)), None) or default_pages(), next((x for x in a[1:] if not x.endswith(PAGE_FILES)), None))
     if a[:1] == ["lint"]:
         if bad := [x for x in a[1:] if x.startswith("--") and x not in ("--pages", "--all", "--talk")]:
             sys.exit(f"slides.py lint が知らないフラグ: {' '.join(bad)}（--pages 3,5・--all・--talk）")
