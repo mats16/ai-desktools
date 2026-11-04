@@ -12,7 +12,7 @@ If the conversation was opened under `sandbox/`, ignore this file. That folder i
 
 ## Layout
 
-The 15 skills fall into six groups by what they hold (2026-10-31 in `docs/decisions.md`; the tool skills are named `build-*` for what they do since 2026-11-04, because `google-*` collided with other packages in pi). Keep the weight of dependencies one way: how the work runs calls the knowledge and the tools, and the knowledge and the tools work without it. A tool or knowledge file may still point the reader to a step of `deck-workflow` that happens around it (Drive, delivering, child agents), but never to rules it needs to do its own job.
+The skills fall into six groups by what they hold (2026-10-31 in `docs/decisions.md`; the tool skills are named `build-*` for what they do since 2026-11-04, because `google-*` collided with other packages in pi). Keep the weight of dependencies one way: how the work runs calls the knowledge and the tools, and the knowledge and the tools work without it. A tool or knowledge file may still point the reader to a step of `deck-workflow` that happens around it (Drive, delivering, child agents), but never to rules it needs to do its own job.
 
 | Group | Skills | Holds |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ Find the owner first, and change it there only. To find where a plugin rule is w
 | How the workspace, settings, or recipes are found and listed (`desk.py recipes`); which plugin files belong to which step | `desk.py` of `desk-init` (`TRIGGERS`; then `check.py --sync`) | The skill md files that tell the agent to open each step's recipes, and the step lists in `desk-feedback/routing.md` ("Workspace rules") |
 | How corrections are judged, recorded, or routed | `desk-feedback`, and its `scripts/ledger.py` for the ledger | `desk-dreaming`'s `run.md` if the daily cleanup reads it |
 | A rule ID | New: `python3 ../skills/desk-feedback/scripts/ledger.py next <prefix>` in `sandbox/` (the prefix from `TOPICS` in `ledger.py`). Never change one, even when the rule moves | — |
-| A skill's file is split, moved, or renamed; a skill is added, removed, or renamed | The files themselves | `RESTRUCTURE` (paths and names) or `SPLIT` (splits) in `desk-migrate/scripts/migrate.py`, `TRIGGERS` in `desk.py` of `desk-init` (then `check.py --sync`), `SHARED`/`COPIES` there if a shared file moves, `TABLE` in `desk-dreaming/scripts/sessions.py` (keep the old names too), the groups above, the table in README, the count in `docs/` ("15") |
+| A skill's file is split, moved, or renamed; a skill is added, removed, or renamed | The files themselves | `RESTRUCTURE` (paths and names) or `SPLIT` (splits) in `desk-migrate/scripts/migrate.py`, `TRIGGERS` in `desk.py` of `desk-init` (then `check.py --sync`), `SHARED`/`COPIES` there if a shared file moves, the groups above, the table in README |
 
 ## Rules for changes
 

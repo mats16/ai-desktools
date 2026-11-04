@@ -14,23 +14,16 @@ import desk  # noqa: E402  ワークスペースの探し方
 ROOT = str(f[1]) if (f := desk.locate()) else os.getcwd()  # ワークスペース（今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace）
 AREAS = ("customers", "internal", "research", ".agents")
 RULE = re.compile(r"skills/([\w-]+/[\w./-]+\.(?:md|py|sh))|(AGENTS\.md|references_index\.md)|(?<![\w-])((?:recipes/[\w./-]+/RECIPE|rules/[\w-]+/[\w./-]+)\.md)")  # 最後はワークスペースのレシピ（recipes/ と前のバージョンの rules/ を付けたまま数え、プラグインのファイルと分ける）
-TABLE = ("deck-workflow/SKILL.md", "deck-workflow/start.md", "deck-writing/SKILL.md", "deck-design/SKILL.md", "build-slides/SKILL.md", "build-slides/pages.md", "deck-workflow/slides_steps.md", "deck-design/slides.md",
-         "build-slides/commands.md", "build-slides/lint.md", "deck-writing/content.md", "build-docs/SKILL.md", "deck-design/docs.md", "build-docs/lint.md",
-         "google-slides/pages.md", "google-slides/commands.md", "google-slides/lint.md", "google-docs/lint.md",
-         "slides-build/SKILL.md", "slides-build/pages.md", "slides-build/commands.md", "slides-build/lint.md", "docs-build/SKILL.md", "docs-build/lint.md",
-         "deck-build/slides.md", "deck-practices/visual.md", "doc-build/SKILL.md", "deck-practices/visual_doc.md", "doc-build/docx.md", "deck-build/docx.md",
-         "deck-practices/SKILL.md", "deck-practices/start.md", "slides-build/workflow.md", "slides-build/visual.md", "deck-practices/content.md", "docs-build/visual.md",
-         "office-jp/slides.md", "office-jp/docx.md")  # 2026-10-07 に pptx.md から slides.md へ。office-jp は 2026-10-08 に deck-build と改名した。
-# docx.md は 2026-10-09 に deck-build から doc-build へ移した。2026-10-24 に deck-build を slides-build、doc-build を docs-build と改め、
-# visual.md を slides-build へ、visual_doc.md を docs-build/visual.md へ移し、slides.md を pages.md などに分けた。2026-10-31 に、進め方・知見・道具でスキルを分け直した
-# （deck-practices → deck-workflow、visual.md → deck-design/slides.md・docs.md、content.md → deck-writing/。前の会話の記録のため、前の名前も残す）。
-# 2026-11-02 に slides-build を google-slides、docs-build を google-docs、vids-build を google-vids と改め、2026-11-04 に build-slides・build-docs・build-vids と改めた（pi で、ほかのパッケージの google-slides などと名前がぶつかるため。google-* の SKILL.md は、ほかのパッケージのものも数えてしまうので入れない）
 SKIP = ("<", "# AGENTS.md instructions", "Another Claude session sent a message", "Base directory for this skill",
         "This session is being continued", "Caveat:", "Delegated task ")  # 最後は、任せた仕事が終わったという T3 Code の知らせ
 
 
 def rules(text):
     return [m.group(m.lastindex) for m in RULE.finditer(text)]
+
+
+def read_table(opened):  # 作り方の表を開いたか。表は、資料を作るどの作業でも開くプラグインのファイル（desk.TRIGGERS の make）。名前を変えたとき、ここは直さなくてよい
+    return any("make" in desk.triggers(k) for k in opened)
 
 
 def text_content(value):
@@ -424,7 +417,7 @@ def report(root, since):
           if s.said and not is_dreaming(s.said) and not is_delegated(s.said)]
     ss.sort(key=lambda s: s.start)
     built = [s for s in ss if s.built]
-    unknown = [s for s in built if not any(k in s.opened for k in TABLE)]
+    unknown = [s for s in built if not read_table(s.opened)]
     print(f"# 会話の抜き出し（{since} から。{len(ss)} 本）\n")
     print(f"- 確認（gslides.py check・docs.py check・check.sh）への言及あり: {sum(s.check_mentioned for s in ss)} 本。資料を対象にした実行の呼び出し: {sum(s.check_calls for s in ss)} 件")
     print(f"- 資料を仕上げた会話（確認の成功確認）: {len(built)} 本。うち作り方の表の読み取りを確認できないもの: {len(unknown)} 本"
@@ -492,6 +485,8 @@ def selftest_decks():
 def selftest():
     assert rules("cat ~/ws/rules/slides-build/visual.md ~/p/skills/deck-design/slides.md AGENTS.md") == ["rules/slides-build/visual.md", "deck-design/slides.md", "AGENTS.md"]
     assert rules("cat ~/ws/recipes/cxo/RECIPE.md ~/ws/recipes/customer/cxo/RECIPE.md") == ["recipes/cxo/RECIPE.md", "recipes/customer/cxo/RECIPE.md"]
+    assert read_table({"deck-design/slides.md": 1}) and read_table({"build-docs/SKILL.md": 1})
+    assert not read_table({"recipes/cxo/RECIPE.md": 1, "AGENTS.md": 1, "desk-research/SKILL.md": 1, "google-slides/pages.md": 1, "slides-build/SKILL.md": 1})  # レシピ・集める作業だけのファイル・前の名前（ほかのパッケージの同じ名前もある）は数えない
     import tempfile
     from pathlib import Path
     root = "/x/Documents"
