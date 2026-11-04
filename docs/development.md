@@ -71,7 +71,7 @@ pi                                     # the first time, save trust with /trust 
 
 The last command prints the 16 skills loaded from the worktree.
 
-- The worktree is added to `.pi/settings.json` as `../..` (relative to `.pi/`), and its 16 skills and `extensions/rules.ts` load. `pi -p` children (desk-dreaming's `run.sh pi`, review requests) read the same. Verified by starting `pi -p` in `sandbox/`: google-slides's `SKILL.md` appears with the worktree path, and reading `../skills/slides-build/visual.md` appends `sandbox/rules/slides-build/visual.md` (with the `rules/` form of 2026-10-27; the `recipes/` form is verified in "Check that recipes are appended").
+- The worktree is added to `.pi/settings.json` as `../..` (relative to `.pi/`), and its 16 skills and `extensions/rules.ts` load. `pi -p` children (desk-dreaming's `run.sh pi`, review requests) read the same. Verified by starting `pi -p` in `sandbox/`: google-slides's `SKILL.md` (now `build-slides`) appears with the worktree path, and reading `../skills/slides-build/visual.md` appends `sandbox/rules/slides-build/visual.md` (with the `rules/` form of 2026-10-27; the `recipes/` form is verified in "Check that recipes are appended").
 - Save trust by opening interactive pi in `sandbox/` and running `/trust`. `pi -p` children can't ask, so do this first. A decision saved for a parent folder applies to its subfolders too: with the home folder trusted, the package loaded in `pi -p` and `--mode rpc` without `--approve`. Trusting the whole folder that holds the worktrees (`~/.t3/worktrees` for T3 Code) stops the prompts, but it also silently loads the extensions of any other repository placed there later (「project trust」 in [pi.md](pi.md)).
 - If another skill has the same name, the package's skill loses (「同じ名前のスキルがあるとき」 in [pi.md](pi.md)). Check that `sourceInfo.path` in `get_commands` points to the worktree.
 
@@ -87,11 +87,11 @@ echo "{\"cwd\":\"$PWD\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$
 
 ## Build materials
 
-In a `sandbox/` conversation, go through a scene that uses the changed skill (`/desk-tools:google-slides` in Claude Code, `$desk-tools:google-slides` in Codex, `/skill:google-slides` in pi, and so on), and check with lint and with images of the pages Google drew.
+In a `sandbox/` conversation, go through a scene that uses the changed skill (`/desk-tools:build-slides` in Claude Code, `$desk-tools:build-slides` in Codex, `/skill:build-slides` in pi, and so on), and check with lint and with images of the pages Google drew.
 
 ## Render the samples
 
-After changing the JSON page schema or components, run `tests/render/run.py` in `sandbox/`. It builds the samples (every page in `skills/google-slides/samples/json/` and the single-component `component.json`) as a temporary deck in `[drive] internal`, runs lint (locally and after building), takes an image of every page, and writes `sandbox/.desk/render/report.md`, which sets each image beside its checks from `tests/render/expect.json`. After taking the images, it moves the deck to the trash (`--keep` keeps it).
+After changing the JSON page schema or components, run `tests/render/run.py` in `sandbox/`. It builds the samples (every page in `skills/build-slides/samples/json/` and the single-component `component.json`) as a temporary deck in `[drive] internal`, runs lint (locally and after building), takes an image of every page, and writes `sandbox/.desk/render/report.md`, which sets each image beside its checks from `tests/render/expect.json`. After taking the images, it moves the deck to the trash (`--keep` keeps it).
 
 ```sh
 python3 ../tests/render/run.py            # writes report.md; open the images yourself
@@ -113,7 +113,7 @@ claude --plugin-dir /tmp/adf-plugin -p "$(sed -n '/^```text$/,/^```$/p' <worktre
 
 Leave `docs/` and `tests/` out of the copy, so the child can't read 「見るところ」 (the checks you grade it by) or `tests/render/expect.json`. A child that can reach the answer key may read it without being told to: Harness² found a Codex run fetching its own task's rubric (2026-10-25 in `docs/decisions.md`). The fixtures are also public on GitHub, so keep web tools away from the child: `claude -p` inherits the allow rules in your `~/.claude/settings.json` (such as `WebFetch(domain:github.com)`), and `--allowedTools` only adds to them, so deny them with `--disallowedTools`, which wins over allow rules.
 
-Look at the files the child wrote and the lint results, and where it hesitated over how to write something, fix the schema or the descriptions. Make each prompt differ in content from the samples (`skills/google-slides/samples/json/`); otherwise you can't tell whether the child only copied a sample. Delete `/tmp/adf-plugin` and `/tmp/adf-fixture` when done.
+Look at the files the child wrote and the lint results, and where it hesitated over how to write something, fix the schema or the descriptions. Make each prompt differ in content from the samples (`skills/build-slides/samples/json/`); otherwise you can't tell whether the child only copied a sample. Delete `/tmp/adf-plugin` and `/tmp/adf-fixture` when done.
 
 To compare a change against `main` on the same fixtures, `kaizen.py probe` in `desk-kaizen` does this for both versions and has a blind child pick one. It compares `.desk/kaizen/<name>/repo` with `base/` (GitHub's `main`, both made by `kaizen.py start`), not the worktree, so commit the change in `repo/` first.
 

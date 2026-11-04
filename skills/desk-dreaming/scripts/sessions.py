@@ -14,8 +14,9 @@ import desk  # noqa: E402  ワークスペースの探し方
 ROOT = str(f[1]) if (f := desk.locate()) else os.getcwd()  # ワークスペース（今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace）
 AREAS = ("customers", "internal", "research", ".agents")
 RULE = re.compile(r"skills/([\w-]+/[\w./-]+\.(?:md|py|sh))|(AGENTS\.md|references_index\.md)|(?<![\w-])((?:recipes/[\w./-]+/RECIPE|rules/[\w-]+/[\w./-]+)\.md)")  # 最後はワークスペースのレシピ（recipes/ と前のバージョンの rules/ を付けたまま数え、プラグインのファイルと分ける）
-TABLE = ("deck-workflow/SKILL.md", "deck-workflow/start.md", "deck-writing/SKILL.md", "deck-design/SKILL.md", "google-slides/SKILL.md", "google-slides/pages.md", "deck-workflow/slides_steps.md", "deck-design/slides.md",
-         "google-slides/commands.md", "google-slides/lint.md", "deck-writing/content.md", "google-docs/SKILL.md", "deck-design/docs.md", "google-docs/lint.md",
+TABLE = ("deck-workflow/SKILL.md", "deck-workflow/start.md", "deck-writing/SKILL.md", "deck-design/SKILL.md", "build-slides/SKILL.md", "build-slides/pages.md", "deck-workflow/slides_steps.md", "deck-design/slides.md",
+         "build-slides/commands.md", "build-slides/lint.md", "deck-writing/content.md", "build-docs/SKILL.md", "deck-design/docs.md", "build-docs/lint.md",
+         "google-slides/pages.md", "google-slides/commands.md", "google-slides/lint.md", "google-docs/lint.md",
          "slides-build/SKILL.md", "slides-build/pages.md", "slides-build/commands.md", "slides-build/lint.md", "docs-build/SKILL.md", "docs-build/lint.md",
          "deck-build/slides.md", "deck-practices/visual.md", "doc-build/SKILL.md", "deck-practices/visual_doc.md", "doc-build/docx.md", "deck-build/docx.md",
          "deck-practices/SKILL.md", "deck-practices/start.md", "slides-build/workflow.md", "slides-build/visual.md", "deck-practices/content.md", "docs-build/visual.md",
@@ -23,7 +24,7 @@ TABLE = ("deck-workflow/SKILL.md", "deck-workflow/start.md", "deck-writing/SKILL
 # docx.md は 2026-10-09 に deck-build から doc-build へ移した。2026-10-24 に deck-build を slides-build、doc-build を docs-build と改め、
 # visual.md を slides-build へ、visual_doc.md を docs-build/visual.md へ移し、slides.md を pages.md などに分けた。2026-10-31 に、進め方・知見・道具でスキルを分け直した
 # （deck-practices → deck-workflow、visual.md → deck-design/slides.md・docs.md、content.md → deck-writing/。前の会話の記録のため、前の名前も残す）。
-# 2026-11-02 に slides-build を google-slides、docs-build を google-docs、vids-build を google-vids と改めた
+# 2026-11-02 に slides-build を google-slides、docs-build を google-docs、vids-build を google-vids と改め、2026-11-04 に build-slides・build-docs・build-vids と改めた（pi で、ほかのパッケージの google-slides などと名前がぶつかるため。google-* の SKILL.md は、ほかのパッケージのものも数えてしまうので入れない）
 SKIP = ("<", "# AGENTS.md instructions", "Another Claude session sent a message", "Base directory for this skill",
         "This session is being continued", "Caveat:", "Delegated task ")  # 最後は、任せた仕事が終わったという T3 Code の知らせ
 

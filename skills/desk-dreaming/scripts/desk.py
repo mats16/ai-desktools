@@ -24,16 +24,16 @@ RECIPES, RECIPE = "recipes", "RECIPE.md"  # ワークスペースの決まりの
 AGENTS_TEMPLATE = ("決まりの優先", "基本方針", "いい資料の考え方", "資料を作る・直すとき", "修正の指示", "調べもの", "社外秘と顧客の情報", "書き方", "フォルダの置き方")  # 2026-10-31 までの desk-init の AGENTS.md の節（## か ###。題を書き替えた写しにも残る）
 # スキルのあいだで同じ中身を持つスクリプト → 持ち主のスキル（2026-11-02 に lib/ をやめた）。直すのは持ち主だけで、ほかのスキルの scripts/ の同じ名前のファイルは写し
 # （tests/skills/check.py --sync が写し、同じ中身かを見る）。ledger.py は決まりの ID を持ち主のファイルでだけ数え、前の台帳の ../lib/<名前>.py を持ち主のファイルとして読む
-SHARED = {"desk.py": "desk-init", "gapi.py": "google-slides", "brand.py": "google-slides", "textlint.py": "google-slides", "sheet.py": "google-slides",
-          "notes.py": "google-slides", "wording.py": "google-slides", "ledger.py": "desk-feedback", "refs.py": "deck-workflow", "doctor.py": "desk-doctor"}
+SHARED = {"desk.py": "desk-init", "gapi.py": "build-slides", "brand.py": "build-slides", "textlint.py": "build-slides", "sheet.py": "build-slides",
+          "notes.py": "build-slides", "wording.py": "build-slides", "ledger.py": "desk-feedback", "refs.py": "deck-workflow", "doctor.py": "desk-doctor"}
 COPIES = {"desk-migrate/templates/drive_folders.md": "desk-init/templates/drive_folders.md",  # スクリプトでない写し（<スキル>/<パス> → 持ち主。フォルダなら中のファイルをみな）
           "desk-migrate/templates/recipes/README.md": "desk-init/templates/recipes/README.md",
-          "google-docs/assets/gcp": "google-slides/assets/gcp"}  # google-docs の assets/README.md は自分のもの（google-slides の台帳を名前で指す）
+          "build-docs/assets/gcp": "build-slides/assets/gcp"}  # build-docs の assets/README.md は自分のもの（build-slides の台帳を名前で指す）
 STEPS = ("gather", "build")  # frontmatter の step の値。書かなければ、資料を作るどの作業でも出す（per_material: true は、資料ごとに選ぶ）
 TRIGGERS = {  # プラグインのファイル（<スキル>/<ファイル>）→ そのファイルを開いたときに出すレシピの種類。make は step のないもの（資料を作るどの作業でも）
     "gather": ("deck-workflow/materials.md", "deck-workflow/start.md", "deck-workflow/research.md", "customer-profile/*", "desk-crawl/*", "desk-research/*"),
-    "build": ("google-slides/*", "google-docs/*", "google-vids/*", "deck-design/slides.md", "deck-design/docs.md", "deck-workflow/slides_steps.md", "deck-workflow/prompt_pages.md", "deck-workflow/reuse.md"),
-    "make": ("deck-workflow/*", "deck-writing/*", "deck-design/*", "deck-review/*", "desk-feedback/SKILL.md", "desk-feedback/routing.md", "google-slides/*", "google-docs/*", "google-vids/*")}
+    "build": ("build-slides/*", "build-docs/*", "build-vids/*", "deck-design/slides.md", "deck-design/docs.md", "deck-workflow/slides_steps.md", "deck-workflow/prompt_pages.md", "deck-workflow/reuse.md"),
+    "make": ("deck-workflow/*", "deck-writing/*", "deck-design/*", "deck-review/*", "desk-feedback/SKILL.md", "desk-feedback/routing.md", "build-slides/*", "build-docs/*", "build-vids/*")}
 
 
 def loads(text, where):
@@ -313,9 +313,9 @@ def selftest():
             (r / f).write_text(t)
         assert [str(p.relative_to(r)) for p, _ in rules(ws)] == ["a/RECIPE.md", "s/c/RECIPE.md", "templates/RECIPE.md"] and rules(other) == []  # RECIPE.md だけ（description のないもの・資源・テンプレート・前の形の .md は入れない）
         assert [kind(m) for m in ({}, {"step": "gather"}, {"step": "build"}, {"step": "x"}, {"per_material": "true", "step": "build"})] == ["make", "gather", "build", "make", "material"]
-        assert copied("x/google-docs/assets/gcp/a.png") and not copied("/p/skills/google-docs/assets/README.md") and not copied("x/google-slides/assets/README.md")
-        assert copied("x/google-docs/scripts/gapi.py") and not copied("x/google-slides/scripts/gapi.py") and copied("x/deck-review/scripts/yomiyasu/scripts/yomiyasu_diff.py") and not copied("x/google-docs/scripts/docs.py")
-        assert triggers("deck-workflow/materials.md") == {"gather", "make"} and triggers("google-slides/pages.md") == {"build", "make"} and triggers("deck-review/SKILL.md") == {"make"}
+        assert copied("x/build-docs/assets/gcp/a.png") and not copied("/p/skills/build-docs/assets/README.md") and not copied("x/build-slides/assets/README.md")
+        assert copied("x/build-docs/scripts/gapi.py") and not copied("x/build-slides/scripts/gapi.py") and copied("x/deck-review/scripts/yomiyasu/scripts/yomiyasu_diff.py") and not copied("x/build-docs/scripts/docs.py")
+        assert triggers("deck-workflow/materials.md") == {"gather", "make"} and triggers("build-slides/pages.md") == {"build", "make"} and triggers("deck-review/SKILL.md") == {"make"}
         assert triggers("customer-profile/SKILL.md") == {"gather"} and triggers("desk-doctor/SKILL.md") == set()  # 資料づくりの外の作業では、step のないものは出さない
     print("selftest ok")
 

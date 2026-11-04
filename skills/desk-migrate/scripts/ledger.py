@@ -203,6 +203,12 @@ def to_arg(s):
                                      "点検に下ろした決まりも、その決まりの ID かファイルにする。その資料だけの直しは 戻さない にし、理由は --fix に書く）")
 
 
+def renamed_1104(name):
+    """プラグインのファイルの名前（skills/ からのパス）のうち、2026-11-02〜11-04 の道具のスキルの名前（google-*/…）を、今の build-* に。
+    ワークスペースのパスにもなりうる値（戻し先、ワークスペースへの提案の file）には当てない（そこは desk-migrate が、プラグインのものと決まる欄だけを替える）。"""
+    return re.sub(r"^((?:\.\./)?(?:skills/)?)google-(slides|docs|vids)/", r"\1build-\2/", name)
+
+
 def key(to):
     """数える単位。ファイルの戻し先は、頭の ./ と後ろの（）の注を外したパス。"""
     return re.sub(r"^\./|（[^）]*）$", "", to) if re.search(r"\.\w+(?:（[^）]*）)?$", to) else to
@@ -722,9 +728,11 @@ def plugin_files():
 def plugin_path(name, exists=True):
     """プラグインのファイルの名前（skills/ からのパス）→ そのファイル。plugin_roots の外か、exists でなければ None。
     プラグインのファイルを名前から引くところ（取り込み・表示・--plugin --file の確かめ）は、みなこれを通す。
-    2026-11-02 より前の台帳の ../lib/<名前>.py（と lib/<名前>.py）は、持ち主のスキルのスクリプト（desk.SHARED）として読む。"""
+    2026-11-02 より前の台帳の ../lib/<名前>.py（と lib/<名前>.py）は、持ち主のスキルのスクリプト（desk.SHARED）として読む。
+    2026-11-02〜11-04 の道具のスキルの名前（google-*/…）は、今の build-* のファイルとして読む（数える単位の key は替えない。desk-migrate が台帳を書き換える）。"""
     if (m := re.fullmatch(r"(?:\.\./)?lib/([\w]+\.py)", name)) and m.group(1) in desk.SHARED:
         name = f"{desk.SHARED[m.group(1)]}/scripts/{m.group(1)}"
+    name = renamed_1104(name)
     f = (PLUGIN.parent if name.startswith("skills/") else PLUGIN) / name  # plugin_label の形（skills/x/y.md）で書いてもよい
     f = f.resolve()
     return f if any(f.is_relative_to(r.resolve()) for r in plugin_roots()) and (f.is_file() or not exists) else None
@@ -755,7 +763,7 @@ def propose(ws, a):
     full = a.rewrite is not None
     if a.plugin:  # 当てないので、skills/ の中を指していることだけ見る
         full and sys.exit("--rewrite はワークスペースのファイルだけ")
-        plugin_path(a.file, exists=False) or sys.exit(f"--plugin の --file は skills/ からのパス（deck-design/slides.md、スキルで同じスクリプトは持ち主のもの google-slides/scripts/textlint.py など）: {a.file}")
+        plugin_path(a.file, exists=False) or sys.exit(f"--plugin の --file は skills/ からのパス（deck-design/slides.md、スキルで同じスクリプトは持ち主のもの build-slides/scripts/textlint.py など）: {a.file}")
         file = a.file
     else:
         file = target(ws, a.file).relative_to(ws).as_posix()
@@ -940,7 +948,7 @@ def gate(ws, f, before, after):
     レシピは、frontmatter の description をなくさない（新しいレシピにも書く。ないと hook が出さない。前の版の frontmatter のないファイルを直すときは見ない）。
     レシピの step は gather・build のどれか（書かなければ、資料を作るどの作業でも）。前の版の paths は書かない（hook はもう読まない）。
     ワークスペースのファイルに [ID] を新しく書き入れない（ID はプラグインの決まりだけ。プラグインの決まりを指すときは角括弧なし）。
-    新しいレシピを、スキルの名前のフォルダ（recipes/google-slides/ など）に作らない（目的ごとのレシピにする。desk-feedback/recipes.md の §2）。"""
+    新しいレシピを、スキルの名前のフォルダ（recipes/build-slides/ など）に作らない（目的ごとのレシピにする。desk-feedback/recipes.md の §2）。"""
     bad = []
     rel = f.relative_to(ws)
     if rel.parts[0] == desk.RECIPES and f.name == desk.RECIPE and "templates" not in rel.parts[2:-1]:
@@ -1415,9 +1423,11 @@ def selftest():
             cs = state(ws)[0]
             assert cs["c-0001"]["deck"] == "Customers/acme/deck_202610" and cs["c-0001"]["to"] == "未"
             assert next_id(ws, "nothing") == "nothing-001" and next_id(ws, "slides-visual") != "slides-visual-001"  # プラグインの ID も数える
-            assert plugin_path("google-slides/scripts/brand.py") and plugin_path("../README.md") is None and plugin_label("google-slides/scripts/brand.py") == "skills/google-slides/scripts/brand.py" and plugin_label("deck-design/slides.md") == "skills/deck-design/slides.md"
-            assert plugin_path("../lib/brand.py") == plugin_path("lib/brand.py") == plugin_path("google-slides/scripts/brand.py")  # 2026-11-02 より前の台帳の lib/ は、持ち主のスクリプト
-            assert next_id(ws, "deck-brand") != "deck-brand-001" and "deck-brand-003" in rule_texts() and where("deck-brand-003") == [w for w in where("deck-brand-003") if w.startswith("google-slides/scripts/brand.py:")]  # 写し（google-docs の brand.py など）は数えない
+            assert plugin_path("build-slides/scripts/brand.py") and plugin_path("../README.md") is None and plugin_label("build-slides/scripts/brand.py") == "skills/build-slides/scripts/brand.py" and plugin_label("deck-design/slides.md") == "skills/deck-design/slides.md"
+            assert plugin_path("../lib/brand.py") == plugin_path("lib/brand.py") == plugin_path("build-slides/scripts/brand.py")  # 2026-11-02 より前の台帳の lib/ は、持ち主のスクリプト
+            assert plugin_path("google-slides/scripts/brand.py") == plugin_path("build-slides/scripts/brand.py") == plugin_path("skills/google-slides/scripts/brand.py")  # 2026-11-04 より前の名前も
+            assert key("google-docs/memo.md") == "google-docs/memo.md" and renamed_1104("../skills/google-docs/x.md") == "../skills/build-docs/x.md"  # 数える単位はワークスペースのパスでもあるので替えない
+            assert next_id(ws, "deck-brand") != "deck-brand-001" and "deck-brand-003" in rule_texts() and where("deck-brand-003") == [w for w in where("deck-brand-003") if w.startswith("build-slides/scripts/brand.py:")]  # 写し（build-docs の brand.py など）は数えない
             assert "ID を付けない" in fails(["next", "ws-slides-visual"]) and "--rule はプラグインへの提案" in fails(["propose", "--file", V, "--new", "x", "--rule", "slides-visual-099", "--why", "y"])
             fails(["add", "--deck", ".", "--quote", "x", "--to", "ws-slides-visual-001"], 2)  # ワークスペースの ID は戻し先にしない
             (ws / "AGENTS.md").write_text("# 自分のメモ\n")
@@ -1695,7 +1705,7 @@ def selftest():
             selftest_review(ws, quiet)
             # プラグインのファイルは変更先にしない
             try:
-                target(ws, str(PLUGIN / "skills" / "google-slides" / "visual.md"))
+                target(ws, str(PLUGIN / "skills" / "build-slides" / "visual.md"))
                 raise AssertionError("プラグインを変更先にした")
             except SystemExit:
                 pass
@@ -1711,7 +1721,7 @@ def selftest_auto(ws, quiet):
     """--auto: 会話を出典にしない片付けで、箇条書きの項目を丸ごと消すだけ・消す文が、そのレシピが出る作業のプラグインの md のどれにもあるものを、出してすぐ当てる。ほかは台帳に書かずに止める。"""
     g = globals()
     real_plugin, g["PLUGIN"] = PLUGIN, ws / ".plug" / "skills"  # 試しのプラグイン: 作る作業（make）と組む作業（build）の両方に出る md を 2 本
-    for f, extra in (("google-slides/pages.md", ""), ("deck-design/slides.md", "- Neon colors on dark backgrounds, gradients\n")):
+    for f, extra in (("build-slides/pages.md", ""), ("deck-design/slides.md", "- Neon colors on dark backgrounds, gradients\n")):
         (g["PLUGIN"] / f).parent.mkdir(parents=True, exist_ok=True)
         (g["PLUGIN"] / f).write_text("- 本文は 16pt。\n- 表は分ける。続きの行。\n- 次の指示は使わない：「表は左から読む。」\n```\n- 図は右から読む。\n```\n- 会社名や製品名を替えてもそのまま使える文\n" + extra, encoding="utf-8")
     try:
@@ -1827,10 +1837,10 @@ def selftest_review(ws, quiet):
         assert review(ws, ".", t) == 1
         s = summary(ws)
     assert (s[Q]["直した"], s[Q]["残した"]) == (1, 1)  # あとで取り込んだ結果に替わる
-    t.write_text("p4 | テキスト | 2 | 直す | 見出しの句点 | 外す | 直した | google-slides/scripts/textlint.py「見出しの句点」\n")  # スクリプトに書いたプラグインの決まりの行も取り込む
+    t.write_text("p4 | テキスト | 2 | 直す | 見出しの句点 | 外す | 直した | build-slides/scripts/textlint.py「見出しの句点」\n")  # スクリプトに書いたプラグインの決まりの行も取り込む
     with quiet():
         assert review(ws, ".", t) == 1
-    assert summary(ws)["google-slides/scripts/textlint.py"]["直した"] == 1
+    assert summary(ws)["build-slides/scripts/textlint.py"]["直した"] == 1
     q = ws / "review_q.md"
     q.write_text(f"p1 | 画像 | 5 | 直す | 見出しが文 | 名詞句に | 直した | {Q}「見出しは、短い名詞句」\n"
                  f"p2 | 画像 | 5 | 直す | 言い切りが多い | 減らす | 直した | [./{Q}]「言い切りは 2〜3 枚」\n"
@@ -1989,7 +1999,7 @@ def selftest_effects(quiet):
         V = "rules/slides-build/visual.md"
         v = ws / V
         v.write_text("- 表は分ける。\n- 図は左から右。\n")
-        (plug / "google-slides").mkdir(parents=True)
+        (plug / "build-slides").mkdir(parents=True)
         # 当てる前の検査: ワークスペースのファイルに [ID] を書き入れない
         x = ws / "recipes" / "x" / "RECIPE.md"
         assert any("[ws-…] は消す" in b for b in gate(ws, x, "", "- [ws-slides-visual-001] 写し\n")) and any("slides-visual-012 のように" in b for b in gate(ws, v, v.read_text(), v.read_text() + "- [slides-visual-012] 写し\n"))
@@ -2000,7 +2010,7 @@ def selftest_effects(quiet):
         fm = "---\ndescription: 試し\n---\n"  # 新しい決まりのファイルの頭（ないと gate が止める）
         assert not desk.rules(ws) and any("description がない" in b for b in gate(ws, x, "", "- 足す\n")) and gate(ws, x, "", fm + "- 足す\n") == []  # 新しいファイルにも frontmatter（決まりのファイルがまだないワークスペースでも）
         assert any("description がない" in b for b in gate(ws, x, "", "---\ndescription: >\n  長い\n---\n- 足す\n"))
-        sk, cu = ws / "recipes" / "google-slides" / "new" / "RECIPE.md", ws / "recipes" / "customer" / "new" / "RECIPE.md"
+        sk, cu = ws / "recipes" / "build-slides" / "new" / "RECIPE.md", ws / "recipes" / "customer" / "new" / "RECIPE.md"
         assert any("スキルの名前のフォルダ" in b for b in gate(ws, sk, "", fm + "- 足す\n")) and gate(ws, cu, "", fm + "- 足す\n") == []  # 新しいレシピは目的ごと。目的の名前で集めるフォルダはよい
         assert not any("スキルの名前のフォルダ" in b for b in gate(ws, sk, fm + "- 前から\n", fm + "- 前から\n- 足す\n"))  # 前からあるレシピへの足しは止めない（組み直しは desk-feedback の recipes.md の §5）
         assert any("step が" in b for b in gate(ws, x, "", "---\ndescription: 試し\nstep: review\n---\n")) and gate(ws, x, "", "---\ndescription: 試し\nstep: gather\n---\n") == []
@@ -2089,14 +2099,14 @@ def selftest_trace(quiet):
         (plug / "deck-design" / "slides.md").write_text("- [slides-visual-012] 本文は 16pt（見た目 1-4）。\n- [slides-visual-013] 線は 1pt。\n- [slides-visual-014] 余白は広く。\n")
         (plug / "deck-review").mkdir()
         (plug / "deck-review" / "fix.md").write_text("slides-visual-014 を見る。\n")
-        (plug / "google-slides" / "scripts").mkdir(parents=True)
-        (plug / "google-slides" / "scripts" / "lint.py").write_text(
+        (plug / "build-slides" / "scripts").mkdir(parents=True)
+        (plug / "build-slides" / "scripts" / "lint.py").write_text(
             "MIN = 16  # [slides-lint-001] 本文の字の大きさ（slides-visual-012）\n\n\ndef selftest():\n    assert 'slides-visual-013'\n")
         (root / "plugin" / "docs").mkdir()
         (root / "plugin" / "docs" / "decisions.md").write_text("- 2026-11-01: 決まりslides-visual-012を決めた。\n")  # 和文に続けて書いた ID も拾う
         nodes = graph(plug)
-        assert nodes["slides-visual-012"]["code"] == ["google-slides/scripts/lint.py:1"] and nodes["slides-visual-013"]["code"] == []  # selftest の中は数えない
-        assert nodes["slides-lint-001"]["file"] == "google-slides/scripts/lint.py" and nodes["slides-visual-014"]["refs"] == {"deck-review/fix.md"}
+        assert nodes["slides-visual-012"]["code"] == ["build-slides/scripts/lint.py:1"] and nodes["slides-visual-013"]["code"] == []  # selftest の中は数えない
+        assert nodes["slides-lint-001"]["file"] == "build-slides/scripts/lint.py" and nodes["slides-visual-014"]["refs"] == {"deck-review/fix.md"}
         assert [x[:2] for x in nodes["slides-visual-012"]["docs"]] == [("decisions.md", 1)] and EVIDENCE.search(nodes["slides-visual-012"]["text"])
         cwd = os.getcwd()
         os.chdir(ws)
@@ -2132,7 +2142,7 @@ def selftest_trace(quiet):
             assert "ユーザーの指摘 0 件・レビューで直した資料 2 本。" in got["slides-visual-014"] and "ユーザーの指摘 2 件・レビューで直した資料 0 本。" in got["slides-visual-013"]
             with contextlib.redirect_stdout(io.StringIO()) as out:
                 trace(ws, "slides-visual-012", plugin=plug)
-            assert "google-slides/scripts/lint.py:1" in out.getvalue() and "decisions.md:1" in out.getvalue() and "指摘 2 件" in out.getvalue()
+            assert "build-slides/scripts/lint.py:1" in out.getvalue() and "decisions.md:1" in out.getvalue() and "指摘 2 件" in out.getvalue()
             with contextlib.redirect_stdout(io.StringIO()) as out:
                 trace(ws, "slides-visual-014", plugin=plug)
             assert "ユーザーの指摘 0 件・レビューで直した資料 2 本。最後のユーザーの指摘: 2020-01-01" in out.getvalue()
