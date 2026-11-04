@@ -68,7 +68,7 @@ def check(ws, local=False):
         (ok if (root / name).is_file() else warn)(name, "" if (root / name).is_file() else "ない。desk-init で置く")
     if old := sorted((root / "Customers").glob("*/CLAUDE.md")):
         how = lambda p: f"{p.relative_to(root)}（{'memory.md に中身を移して消す' if (p.parent / 'memory.md').exists() else 'memory.md に名前を変える'}）"
-        warn("顧客の memory", f"前の形の CLAUDE.md がある。Claude Code しか読まない（hook が Claude Code・Codex・pi で続けて出すのは memory.md）: {', '.join(map(how, old))}")
+        warn("顧客の memory", f"前の形の CLAUDE.md がある。Claude Code しか読まない（作る会話が資料を作り始めるときに開くのは memory.md）: {', '.join(map(how, old))}")
     if desk.old_agents(root):  # 持ち主が書いた AGENTS.md・CLAUDE.md には何も言わない
         warn("前の雛形の AGENTS.md", "AGENTS.md が、2026-10-31 までの desk-init が置いた雛形の写しに見える（その節の見出しが半分より多く同じ）。写しなら、プラグインはもう決まりを戻さない。"
              "エージェントはどの会話にもスキルより強く読み込むので、資料を作らない作業にも効く。ワークスペースだけの決まりはレシピに移し、プラグインのスキルにある文は消す"
@@ -77,26 +77,28 @@ def check(ws, local=False):
     for p, m in (rules := desk.rules(root)):
         rel = p.relative_to(root)
         if "paths" in m:
-            odd.append(f"{rel} に paths がある（前のバージョンの書き方で、hook は読まない。材料を集めるときなら step: gather、組むときなら step: build、資料を作るどの作業でもなら書かない）")
+            odd.append(f"{rel} に paths がある（前のバージョンの書き方で、もう読まない。材料を集めるときなら step: gather、組むときなら step: build、資料を作るどの作業でもなら書かない）")
         if m.get("step", "") not in ("", *desk.STEPS):
-            odd.append(f"{rel} の step の {m['step']}（{'・'.join(desk.STEPS)} のどれか。資料を作るどの作業でも出すなら書かない）")
+            odd.append(f"{rel} の step の {m['step']}（{'・'.join(desk.STEPS)} のどれか。資料を作るどの作業でも開くなら書かない）")
         if desk.kind(m) == "material" and m.get("step"):
-            odd.append(f"{rel} に per_material と step の両方がある（資料ごとに選ぶレシピは、構成案を開いたときだけ出る。step は効かない）")
+            odd.append(f"{rel} に per_material と step の両方がある（資料ごとに選ぶレシピは、構成案の「使う決まり」で開く。step は効かない）")
         odd += [f"{rel} の {k} の {v}（{'・'.join(vals)} のどれか）" for k, vals in (("targets", desk.TARGETS), ("audience", desk.AUDIENCES)) for v in desk.listed(m, k) if v not in vals]
         if (n := len(p.read_text(encoding="utf-8"))) > desk.RULE_MAX:
-            odd.append(f"{rel} が {n:,} 字（{desk.RULE_MAX:,} 字まで。memory と並ぶと hook が途中で切るので、もっと狭い目的のレシピに分ける）")
+            odd.append(f"{rel} が {n:,} 字（{desk.RULE_MAX:,} 字まで。もっと狭い目的のレシピに分ける）")
         if skill := next((x for x in p.relative_to(top).parts[:-1] if (SKILLS / x / "SKILL.md").is_file()), None):
             odd.append(f"{rel} がスキルの名前のフォルダ（{skill}）にある（目的の名前にする。desk-feedback の recipes.md の §2）")
         if p.parent != top and (p.parent.parent / desk.RECIPE).is_file():
-            odd.append(f"{rel} がほかのレシピのフォルダの中にある（hook は両方を別々のレシピとして出す。資源なら RECIPE.md の名前を替える）")
+            odd.append(f"{rel} がほかのレシピのフォルダの中にある（desk.py recipes は両方を別々のレシピとして並べる。資源なら RECIPE.md の名前を替える）")
     have = {p for p, _ in rules}
-    for p in sorted(top.rglob("*.md")) if top.is_dir() else []:  # 決まりとして出ないもの: レシピのフォルダの外の .md と、description のない RECIPE.md
+    for p in sorted(top.rglob("*.md")) if top.is_dir() else []:  # 一覧に出ないもの: レシピのフォルダの外の .md と、description のない RECIPE.md
         rel = p.relative_to(root)
         inside = any((d / desk.RECIPE).is_file() for d in p.parents if d.is_relative_to(top) and d != top)
         if p.name == desk.RECIPE and p.parent != top and p not in have and "templates" not in p.relative_to(top).parts[1:]:
-            odd.append(f"{rel} の先頭に frontmatter の description がない（ないと hook が出さない）")
+            odd.append(f"{rel} の先頭に frontmatter の description がない（ないと desk.py recipes の一覧に出ない）")
         elif not inside and p != top / "README.md" and "templates" not in p.relative_to(top).parts[1:]:
-            odd.append(f"{rel} はレシピでない（決まりは recipes/<名前>/RECIPE.md に書く。hook は出さない）")
+            odd.append(f"{rel} はレシピでない（決まりは recipes/<名前>/RECIPE.md に書く。desk.py recipes の一覧に出ない）")
+    if (top / "README.md").is_file() and re.search(r"hook (?:が|は名前)", (top / "README.md").read_text(encoding="utf-8", errors="ignore")):  # 2026-11-03 までの雛形の写し（hook が出すと書いてある）
+        odd.append("recipes/README.md が前の雛形（hook がレシピと memory を出すと書いてある。2026-11-04 から、作る会話が desk.py recipes を見て自分で開く）。desk-init の雛形の recipes/README.md で置き換える")
     (warn if odd else ok)("ワークスペースの決まり", "、".join(odd) if odd else f"レシピ {len(rules)} 個")
     if cfg.get("desk", {}).get("source"):  # 2026-10-14 まで、desk-kaizen が worktree を作る checkout（前の [factory] source。desk-migrate が [desk] にする）
         warn("desk.source", "使わなくなった（desk-kaizen は .desk/kaizen/ に自分で clone する）。desk.toml から消す")
@@ -255,6 +257,12 @@ def selftest():
         (Path(tmp) / "Customers" / "acme" / "memory.md").unlink()
         (Path(tmp) / "Customers" / "acme" / "CLAUDE.md").rename(Path(tmp) / "Customers" / "acme" / "memory.md")
         assert "顧客の memory" not in kinds()
+        readme = Path(tmp) / "recipes" / "README.md"
+        readme.parent.mkdir(exist_ok=True)
+        readme.write_text("構成案を開くたびに hook が出す。\n")
+        assert "recipes/README.md が前の雛形" in next(d for _, n, d in check(Path(tmp), local=True) if n == "ワークスペースの決まり")  # hook が出すと書いた前の雛形
+        readme.write_text("作る会話が開く。\n")
+        assert "前の雛形" not in next(d for _, n, d in check(Path(tmp), local=True) if n == "ワークスペースの決まり")
         conf, base = Path(tmp) / "desk.toml", (Path(tmp) / "desk.toml").read_text()
         for bad in ('uc_connections = "on"\n', '[uc_connections]\nenabled = "false"\n', '[uc_connections]\nprofile = 5\n', '[uc_connections]\nhost = 5\n',
                     '[uc_connections.proxy]\n"slides.googleapis.com" = 5\n'):  # 表でない・型の違う設定は要修正（トレースバックにしない）

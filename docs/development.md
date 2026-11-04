@@ -21,7 +21,7 @@ Change the copied `desk.toml` so that nothing on the Google side of production g
 - Don't run `git init` in `sandbox/` (desk-init asks about it). It would become a nested repository that `git clean` in the worktree doesn't remove.
 - `desk-kaizen` is the one skill that doesn't test this worktree: `kaizen.py start` clones GitHub's `main` into `sandbox/.desk/kaizen/<name>/repo`.
 
-With `~/.desk.toml` in place, scripts and hooks run outside `sandbox/` (such as at the worktree root) use the production workspace: its settings, `recipes/`, and `.desk/`. Run them in `sandbox/`, or start them with `DESK_CONFIG=` (an empty value skips `~/.desk.toml`; `desk.py` of `desk-init`). Inside `sandbox/`, its own `desk.toml` is found first, so nothing from `~/.desk.toml` mixes in.
+With `~/.desk.toml` in place, scripts run outside `sandbox/` (such as at the worktree root) use the production workspace: its settings, `recipes/`, and `.desk/`. Run them in `sandbox/`, or start them with `DESK_CONFIG=` (an empty value skips `~/.desk.toml`; `desk.py` of `desk-init`). Inside `sandbox/`, its own `desk.toml` is found first, so nothing from `~/.desk.toml` mixes in.
 
 ## Claude Code
 
@@ -56,7 +56,6 @@ codex debug prompt-input ok | grep -oE 'desk-tools:[a-z-]+: ' | sort -u
 - Don't run `codex plugin marketplace add ..` with the usual `~/.codex`. Only one marketplace named `desk-tools` can exist, so it collides with the one added in the production workspace.
 - Conversations read the copy in `$CODEX_HOME/plugins/cache/desk-tools/desk-tools/local/`. Codex copies even a marketplace added by local path, so after each change, rerun `codex plugin add desk-tools@desk-tools`.
 - The separate `CODEX_HOME` has no login. To run conversations, copy `~/.codex/auth.json` (the ChatGPT login), or `model_provider` and `[model_providers.<name>]` from `~/.codex/config.toml`. Session logs also go to `$CODEX_HOME/sessions/`, so desk-dreaming's `sessions.py` (which reads `~/.codex/sessions/`) doesn't see them.
-- Hooks don't run until trusted. Trust them with `/hooks` in interactive Codex, or run `codex exec --dangerously-bypass-hook-trust`. Verified (with the `rules/` form of 2026-10-27): the `sandbox/rules/` marker is injected after Codex runs `sed -n 1,3p ../skills/slides-build/visual.md` (also from inside code mode's `exec`), not again when the same file is read later, and when the skill is invoked as `$desk-tools:desk-doctor`.
 
 ## pi
 
@@ -71,19 +70,22 @@ pi                                     # the first time, save trust with /trust 
 
 The last command prints the 16 skills loaded from the worktree.
 
-- The worktree is added to `.pi/settings.json` as `../..` (relative to `.pi/`), and its 16 skills and `extensions/rules.ts` load. `pi -p` children (desk-dreaming's `run.sh pi`, review requests) read the same. Verified by starting `pi -p` in `sandbox/`: google-slides's `SKILL.md` (now `build-slides`) appears with the worktree path, and reading `../skills/slides-build/visual.md` appends `sandbox/rules/slides-build/visual.md` (with the `rules/` form of 2026-10-27; the `recipes/` form is verified in "Check that recipes are appended").
+- The worktree is added to `.pi/settings.json` as `../..` (relative to `.pi/`), and its 16 skills load. `pi -p` children (desk-dreaming's `run.sh pi`, review requests) read the same. Verified by starting `pi -p` in `sandbox/`: build-slides's `SKILL.md` appears with the worktree path.
 - Save trust by opening interactive pi in `sandbox/` and running `/trust`. `pi -p` children can't ask, so do this first. A decision saved for a parent folder applies to its subfolders too: with the home folder trusted, the package loaded in `pi -p` and `--mode rpc` without `--approve`. Trusting the whole folder that holds the worktrees (`~/.t3/worktrees` for T3 Code) stops the prompts, but it also silently loads the extensions of any other repository placed there later (「project trust」 in [pi.md](pi.md)).
 - If another skill has the same name, the package's skill loses (「同じ名前のスキルがあるとき」 in [pi.md](pi.md)). Check that `sourceInfo.path` in `get_commands` points to the worktree.
 
-## Check that recipes are appended
+## Check that recipes are opened
 
-In `sandbox/`, write a recipe with a one-line marker and `step: build`, and have the conversation open `../skills/deck-design/slides.md`. If the marker is appended after it, the hook (Claude Code, Codex) and the extension (pi) work. A recipe without `step` is appended after any file of the making skills (`desk.TRIGGERS` in `desk.py` of `desk-init`), and one with `step: gather` after `../skills/deck-workflow/materials.md` and after a command that touches `Research/` or `references_index.md` and names a `.md` file. When a skill is invoked as `/desk-tools:<skill>` (Claude Code) or `$desk-tools:<skill>` (Codex), the recipes for its `SKILL.md` are appended (UserPromptSubmit); in pi, `/skill:<name>` appends them (`before_agent_start`). In Claude Code, `/compact` after such a call shows them again (SessionStart). For recipes with `per_material: true`, open `../skills/deck-workflow/start.md` (the list of them is appended), then an outline whose 「使う決まり」 names one (the recipe is appended). Reading two customer files in parallel in one message shows the customer's `memory.md` once. Claude Code gives the hook the folder the conversation last `cd`'d into as `cwd`, so the hook also looks for the workspace from `CLAUDE_PROJECT_DIR` (the folder the conversation was opened in); to check this, start it with `--add-dir ..` and have the conversation run `cd ../skills` before opening the file (without `--add-dir`, Claude Code resets `cwd` to `sandbox/` after a `cd` out of it, so the fallback is not used). The hook also tells a plugin file from the lines it prints in the tool's output, so opening it by name after `cd` into a skill folder appends the recipes too: have the conversation run `cd ../skills/deck-design && sed -n 1,3p slides.md` (in Codex, also `sed -n 1,3p slides.md` with `workdir` set to `../skills/deck-design`). With `claude -p`, allow Bash with `--allowedTools Bash`; with `Bash(cd:*)`, the `cd` out of `sandbox/` is blocked. Verified on 2026-10-29 with Claude Code 2.1.310, Codex CLI 0.163.0, and pi 1.2.0 in a workspace with one marker recipe of each kind: opening `desk-doctor/SKILL.md` appended nothing, `slides-build/visual.md` the build and common markers, `grep -rln … Research/ references_index.md` the gather marker, and an outline the material marker; `/desk-tools:deck-review`, `$desk-tools:deck-review`, and `/skill:deck-review` appended the common marker; and `deck-practices/start.md` appended the list of material recipes first, then the gather and common markers (checked in each agent's session log). After the skills were regrouped (2026-10-31), pi 1.2.0 with GPT-6.1 Sol showed the build and common markers after `deck-design/slides.md`, the gather marker after `deck-workflow/materials.md`, and nothing after `desk-doctor/SKILL.md`; Claude Code and Codex were not re-run for the markers. The hook alone can be checked without opening a conversation:
+No hook or extension shows recipes (since 2026-11-04); the skills tell the agent to open them at each step ("Workspace rules" in `desk-feedback` → routing). In `sandbox/`, write a recipe of each kind with a one-line marker, check the list, then give a conversation a request and check in its session log that it opened the right ones by itself:
 
 ```sh
-mkdir -p recipes/marker && printf -- '---\ndescription: 試し\nstep: build\n---\n目印\n' > recipes/marker/RECIPE.md
-echo "{\"cwd\":\"$PWD\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$PWD/../skills/deck-design/slides.md\"}}" \
-  | python3 ../hooks/rules_overlay.py claude
+for k in common:'' gather:'step: gather' build:'step: build' material:'per_material: true'; do
+  n=${k%%:*}; mkdir -p recipes/marker_$n && printf -- "---\ndescription: 試し（$n）\n${k#*:}\n---\n目印 $n\n" > recipes/marker_$n/RECIPE.md
+done
+python3 ../skills/deck-workflow/scripts/desk.py recipes
 ```
+
+A conversation that makes a material should open the common marker at the start, the gather marker before gathering, write the material marker into 「使う決まり」 when its `description` fits (or 「なし」), and open the build marker before building; child agents that write pages or review should get the common and chosen recipes in their brief. After `/compact`, `desk.py recipes <material folder>` names them again, and every lint run prints a one-line reminder to run it (`desk.reminder`). Give the same request to Claude Code, Codex, and pi, because the agent's own judgment is now the only thing that opens them.
 
 ## Build materials
 
@@ -124,11 +126,11 @@ To test with the production workspace's rules and materials, start from the work
 ```sh
 cd ~/Documents
 claude --plugin-dir <worktree>
-pi -ns --skill <worktree>/skills -ne -e <worktree>/extensions/rules.ts
+pi -ns --skill <worktree>/skills -ne
 ```
 
 - Claude Code loads only the `--plugin-dir` version, even when the plugin is also installed (no duplicates).
-- In pi, adding only `--skill` lets the installed package win. With `-ns` (no skill discovery) and `-ne` (no extension discovery), only what you pass loads. Other skills (such as `~/.agents/skills`) and extensions stop loading too.
+- In pi, adding only `--skill` lets the installed package win. With `-ns` (no skill discovery) and `-ne` (no extension discovery), only what you pass loads. Other skills (such as `~/.agents/skills`) and extensions stop loading too; keep `-ne`, because an installed desk-tools from before 2026-11-04 still has `extensions/rules.ts`, which would inject recipes and make the test pass falsely.
 - Codex has no launch option for passing a plugin without installing it. To test in the production workspace, install into a separate `CODEX_HOME` as in "Codex" above.
 - For both Claude Code and pi, the options don't reach child processes. Children read the installed version (the original checkout, if it was installed by that path).
 

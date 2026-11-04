@@ -85,7 +85,7 @@ TOPICS = {  # 決まりの ID の主題（何についての決まりか）。ID
     "vids-voice": "動画の読み上げの台本（スピーカーノート）", "vids-voice-ja": "日本語の読み上げの台本", "vids-voice-en": "英語の読み上げの台本",
     "vids-video": "動画を作る・差し替える", "desk-dreaming": "定期の整理", "desk-crawl": "定期の集めで、どの先をいつ読むかを決め、学ぶ"}
 PLAN_RULE = "deck-flow-004"  # 構成案の AI レビューの頼み方。これを見直すかの判断待ちに答えたら、構成の見逃しをその答えのあとから数え直す
-HARNESS = ("skills", "hooks", "extensions")  # 指紋に入れるプラグインのフォルダ（リポジトリの根元から）
+HARNESS = ("skills",)  # 指紋に入れるプラグインのフォルダ（リポジトリの根元から。2026-11-04 までは hooks/・extensions/ も）
 OVERRIDE = re.compile(r"[（(]([^（）()\n]*?)\s*より優先")  # ワークスペースの決まりの「…（slides-visual-012 より優先）」。括弧の中の ID を全部取る
 PLUGIN_ID = re.compile(rf"(?<![A-Za-z0-9_-])({ID})(?![A-Za-z0-9_-])")  # 角括弧のない ID も（決まりを指す書き方）。\w は和文の字も含むので、境目は英数字で見る（「決まりslides-visual-012より優先」）
 BRACKETED = re.compile(rf"\[({ANY_ID})\]")  # ワークスペースのファイルに書かない、角括弧の ID
@@ -507,7 +507,7 @@ def summary(ws):
 
 
 def weekly(ws, weeks=8):
-    """週ごとに、誰が指摘を書いたか。desk-dreaming が拾った分が取りこぼし（作る会話が台帳に書かなかった）。コンパクションの前に拾う hook を入れるかの材料。
+    """週ごとに、誰が指摘を書いたか。desk-dreaming が拾った分が取りこぼし（作る会話が台帳に書かなかった）。コンパクションの前に拾う仕組みを入れるかの材料。
     構成の見逃しは、方針のレビュー（AI・人）ごとの件数。構成案のレビューの頼み方を変えたあとに減ったかを見る。"""
     n = {}
     for c in state(ws)[0].values():
@@ -824,7 +824,7 @@ def items(text):
 def auto_ok(ws, a):
     """--auto で当ててよいか。会話の指摘を出典にせず、recipes/ の RECIPE.md で、箇条書きの項目を丸ごと（字下げした続きの行も）消すだけで
     （見出し・前置き・空行・ほかの項目の一部は 1 行も消さない）、消す項目と丸ごと同じ項目が、そのファイルが出るどの場面にも残るもの。残るのは、
-    そのレシピを出すプラグインの md（step の作業のファイル。desk.TRIGGERS）の、どれにもあるとき（どれかを開くたびに出るので、1 つにあるだけでは、ほかの場面で失われる。資料ごとに選ぶレシピから消すときは、残る先がない）。
+    そのレシピの作業のプラグインの md（step の作業のファイル。desk.TRIGGERS）の、どれにもあるとき（その作業のどのファイルと一緒に読むかは決まっていないので、1 つにあるだけでは、ほかの場面で失われる。資料ごとに選ぶレシピから消すときは、残る先がない）。
     文の中の引用（「次は使わない：『…』」）、コードの囲みの中の例、出る場面の違うファイルは数えない。
     ユーザーが決めた指摘・答えた判断待ち・「手で直した」版・「組み直し」の版・まだ版にしていない直しのあるファイルは止める（ID がないので、どの項目かを見分けられない）。
     ユーザーが戻した・却下した提案が消そうとした項目も止める。人を通さずに新しい文が決まりに入らないようにする（desk-dreaming-001）。
@@ -860,12 +860,12 @@ def auto_ok(ws, a):
     gone and whole == gone or no("箇条書きの項目を丸ごと消すだけでない（見出し・前置き・空行・項目の一部だけを消す）。下の決まりの効く範囲や項目の中身が変わるので人が見る")
     gone_items = [plain("\n".join(src[k] for k in sorted(spans[h]))) for h in heads]
     k = desk.kind(desk.front(text))
-    globs = [] if k == "material" else list(desk.TRIGGERS[k])  # このレシピが出る作業の、プラグインのファイル
+    globs = [] if k == "material" else list(desk.TRIGGERS[k])  # このレシピを開く作業の、プラグインのファイル
     same = [f for f in sorted(PLUGIN.rglob("*.md")) if any(fnmatch.fnmatchcase(f.relative_to(PLUGIN).as_posix(), g) for g in globs)]
-    scenes = [items(f.read_text(encoding="utf-8", errors="ignore")) for f in same]  # このファイルが出る場面ごとの、プラグインの項目
+    scenes = [items(f.read_text(encoding="utf-8", errors="ignore")) for f in same]  # このファイルを開く場面ごとの、プラグインの項目
     lone = [x for x in gone_items if not x or not (scenes and all(x in sc for sc in scenes))]
-    lone and no("消す項目と丸ごと同じ項目が、このファイルが出るどの場面にも残るとは言えない（このレシピを出す作業のプラグインの md のどれにもあるときだけ通す）。"
-                "文の中の引用・例・出る場面の違うファイルは数えない")
+    lone and no("消す項目と丸ごと同じ項目が、このファイルを開くどの場面にも残るとは言えない（このレシピを開く作業のプラグインの md のどれにもあるときだけ通す）。"
+                "文の中の引用・例・開く場面の違うファイルは数えない")
     cs, ps, qs, _ = state(ws)
     any(c.get("decided") and c["to"] == name for c in cs.values()) and no(f"ユーザーが決めた指摘が {name} につながっている")
     any(q["status"] == "回答済み" and q["rule"] == name for q in qs.values()) and no(f"答えた判断待ちが {name} のこと")
@@ -945,8 +945,8 @@ def apply(ws, ids):
 
 def gate(ws, f, before, after):
     """当てたあとの文の検査。止める理由の一覧（Harness² が、直した候補のハーネスを検査し、通らなければ理由を添えて 1 回だけ出し直させるのにならう）。
-    レシピは、frontmatter の description をなくさない（新しいレシピにも書く。ないと hook が出さない。前の版の frontmatter のないファイルを直すときは見ない）。
-    レシピの step は gather・build のどれか（書かなければ、資料を作るどの作業でも）。前の版の paths は書かない（hook はもう読まない）。
+    レシピは、frontmatter の description をなくさない（新しいレシピにも書く。ないと desk.py recipes の一覧に出ない。前の版の frontmatter のないファイルを直すときは見ない）。
+    レシピの step は gather・build のどれか（書かなければ、資料を作るどの作業でも）。前の版の paths は書かない（もう読まない）。
     ワークスペースのファイルに [ID] を新しく書き入れない（ID はプラグインの決まりだけ。プラグインの決まりを指すときは角括弧なし）。
     新しいレシピを、スキルの名前のフォルダ（recipes/build-slides/ など）に作らない（目的ごとのレシピにする。desk-feedback/recipes.md の §2）。"""
     bad = []
@@ -954,11 +954,11 @@ def gate(ws, f, before, after):
     if rel.parts[0] == desk.RECIPES and f.name == desk.RECIPE and "templates" not in rel.parts[2:-1]:
         meta = desk.front(after)
         if after.strip() and not desk.described(meta) and (desk.described(desk.front(before)) or not before.strip()):
-            bad.append(f"{rel} の頭に frontmatter の description がない（ないと hook が出さない。desk-feedback/routing.md の「Workspace rules」）")
+            bad.append(f"{rel} の頭に frontmatter の description がない（ないと desk.py recipes の一覧に出ない。desk-feedback/routing.md の「Workspace rules」）")
         if after.strip() and meta.get("step", "") not in ("", *desk.STEPS):
-            bad.append(f"{rel} の step が {meta['step']}（{'・'.join(desk.STEPS)} のどれか。資料を作るどの作業でも出すなら書かない）")
+            bad.append(f"{rel} の step が {meta['step']}（{'・'.join(desk.STEPS)} のどれか。資料を作るどの作業でも開くなら書かない）")
         if after.strip() and "paths" in meta and "paths" not in desk.front(before):
-            bad.append(f"{rel} に paths を書く（前の版の書き方で、hook はもう読まない。作業で分けるなら step: {'・'.join(desk.STEPS)}）")
+            bad.append(f"{rel} に paths を書く（前の版の書き方で、もう読まない。作業で分けるなら step: {'・'.join(desk.STEPS)}）")
         if len(after) > desk.RULE_MAX and len(after) > len(before):
             bad.append(f"{rel} が {len(after):,} 字になる（{desk.RULE_MAX:,} 字まで。もっと狭い目的のレシピに分ける）")
         if after.strip() and not before.strip() and any((PLUGIN / x / "SKILL.md").is_file() for x in rel.parts[1:-1]):

@@ -19,7 +19,7 @@
 | 道具 | `build-vids` | ベータ版（Vids の編集の公開の API がまだないので、Vids の画面と同じ内部の呼び出しを使う。呼び出しは 1 つのファイルにまとめてあり、公開の API が出たら、そのファイルだけを差し替える）。動画は、作るとはっきり頼まれたときだけ、組んだ Google Slides から Google Vids で作る。スピーカーノートが変わったら、頼まれなくても、その資料から作った動画の変わったシーンだけを差し替える。ページを足した・消した・直したときは動画を追わせず、頼まれたら作り直す（新しい Vids に作るか、`--vids` で同じ Vids の中身を消して組み直す）（`vids.py create`・`update`・`check`・`voices`・`download`）。動画は資料そのものから作り、動画のための Slides の写しを作らない。全ページをシーンにし、各ページのスピーカーノートを Conversational voice（既定は Elio。audio tags が効く）で読ませる。指定したページだけ AI avatar（Conversational voices で話す 30 体）に読ませることもでき、ページの空いた隅に丸く置く（`vids.py layout` で置き方を決め、円を描いた一覧の画像で確かめる）。動画は Slides と同じフォルダに作る。Vids の編集には公開の API がないので、対象の Google アカウントにログイン済みの Chrome のタブの中から、Vids の画面と同じ内部の呼び出しを使う（`internal_api.md`）。動画の台本（`voice.md`）: Google Vids の AI の読み上げ（voiceover）の台本を書く。台本の置き場所は、元の Google Slides の各ページのスピーカーノート。声の長さと間も、Vids の画面でなく台本（字数・audio tags）で直す。資料はノートなしで組み、ノートは頼まれたときだけ、組んだあとに資料全体の台本としてまとめて書く。ノートのある資料も、この手順で書き直す。スライドを読み上げず動画全体の筋を通し、Vids が読む audio tags を入れる。言語によらない決まりは `voice.md`、言語に結びつく決まり（文体、字数、読み、記号、ほかのシーンの指し方、タグの置き場所）は `voice_ja.md`・`voice_en.md`（lint は `--lang`）。失敗したときの見方は `failures.md`。スライドは組み直さず、ノートだけを書き換える（`speaker_notes.py pull`・`lint`・`push`。前のノートは `build/notes_before_<日付>.json` に控える） |
 | 材料 | `customer-profile` | 顧客の profile（`Customers/<顧客>/profile.md`。事業、組織、技術の構成、エンジニアの好みと文化、いまの取り組み）を `[sources]` と公開の情報から作る・取り直す・書き足す。ユーザーが言った行は残す |
 | 材料 | `desk-crawl` | 定期に回す集めの作業で、どの先をいつ読むかを決め、回ごとに学ぶ（`crawl.py`）。読む先は Slack のチャンネルと検索、メールの検索、RSS・Atom、web のページと検索、wiki のページ。値打ちの低い先は間を空けて読み（前に読んだ所から取り戻すので落とさない）、取りこぼしの元と新しい先を先に試し、子に浅く読ませて（題・リンク・要約・見えた先）候補を 1 つにまとめる。使う側が返す、使ったものと取りこぼしから学ぶ。何を選ぶか・何を書くか（関心）と、調べて出典を残すことは持たない。記録は `.desk/crawl/<話題>/` |
-| 指摘から育てる | `desk-feedback` | ユーザーの修正の指示から学ぶ。その指示が誰にとって正しいか（この資料だけ・この顧客・この人や組織の環境・誰にでも効く知見）を見立て、台帳に見立てごと残し（`ledger.py add --scope`）、それぞれの置き場所（構成案、顧客の memory、レシピ、プラグインへの提案）に、合う形（知見なら原則と理由、個別の事情なら「〜のときは〜する（理由）」、数えられるものは点検）で書く（`SKILL.md`）。記録と戻し先・決まりの ID・hook のレシピの出し方・顧客の memory・決まりの確かめ方は `routing.md`、レシピの分け方と書き方・組み直しは `recipes.md` |
+| 指摘から育てる | `desk-feedback` | ユーザーの修正の指示から学ぶ。その指示が誰にとって正しいか（この資料だけ・この顧客・この人や組織の環境・誰にでも効く知見）を見立て、台帳に見立てごと残し（`ledger.py add --scope`）、それぞれの置き場所（構成案、顧客の memory、レシピ、プラグインへの提案）に、合う形（知見なら原則と理由、個別の事情なら「〜のときは〜する（理由）」、数えられるものは点検）で書く（`SKILL.md`）。記録と戻し先・決まりの ID・レシピをいつ開くか・顧客の memory・決まりの確かめ方は `routing.md`、レシピの分け方と書き方・組み直しは `recipes.md` |
 | 指摘から育てる | `desk-dreaming` | 会話の記録と台帳から、決まりを定期的に整理する（戻し忘れた指示を提案にし、重なり・古い記述を片付け、プラグインに上げる案を出す） |
 | 指摘から育てる | `desk-kaizen` | プラグインの改善を、過去の資料で前後を比べてから Issue にする（理由・背景・検証の結果・見た目なら画像・変更案の差分）。PR は持ち主が作る |
 | 指摘から育てる | `desk-research` | 資料づくりのベストプラクティスの調べ直し。調べた記録（`state.md`・`log/`）はワークスペースの `Research/deck_research/` |
@@ -35,10 +35,7 @@ package.json                      pi のパッケージ（pi.skills: ./skills）
 skills/                           上の 16 個（Claude Code・Codex・pi で共通）
 vendor/yomiyasu/                  subtree で取り込んだ yomiyasu（中は直さない）。スキルではない。動かすのに要るファイルだけを、使うスキルの scripts/yomiyasu/ に写す
 tests/skills/check.py             スキルの形の点検。--sync で、共有のスクリプトを持ち主から写しへ写す
-hooks/hooks.json                  Claude Code と Codex の hook（プラグインのファイルを読むかスキルを呼んだら、その作業のレシピ〔recipes/〕を、顧客の資料を読んだら memory.md を続けて出す）
-hooks/rules_overlay.py            その中身（Claude Code・Codex・pi で共有）
-extensions/rules.ts               pi の拡張（同じことを pi の read・bash で）
-docs/                             設定のガイド（decisions.md: 決めたこと。todo.md: 残っている課題。claude-code-plugin.md: Claude Code に入れる範囲と確かめ方。codex-plugin.md: Codex に入れる範囲と hook の信頼。pi.md: pi に入れる範囲と確かめ方。development.md: 開発しながら動作を見る）
+docs/                             設定のガイド（decisions.md: 決めたこと。todo.md: 残っている課題。claude-code-plugin.md: Claude Code に入れる範囲と確かめ方。codex-plugin.md: Codex に入れる範囲。pi.md: pi に入れる範囲と確かめ方。development.md: 開発しながら動作を見る）
 ```
 
 ## 会話で入れる
@@ -62,7 +59,7 @@ AI Desk Tools を入れて、ワークスペースを作ってください。
    grep -rln --exclude-dir=cache --exclude-dir=marketplaces --exclude-dir=git ai-deck-factory ~/.claude/plugins ~/.claude/settings.json ~/.codex/config.toml ~/.codex/automations ~/.claude/scheduled-tasks ~/Library/LaunchAgents ~/.pi/agent/settings.json <ワークスペース>/.claude <ワークスペース>/.codex <ワークスペース>/.pi <ワークスペース>/AGENTS.md <ワークスペース>/rules 2>/dev/null
 2. 前の入れ元が手元の checkout なら、外す前に、その .claude-plugin/marketplace.json の name を見る。desk-tools でなければ（前の版のまま）、何も外さずに見せ、その checkout を mats16/ai-desktools に合わせるか、ほかの入れ元にするかをユーザーに聞く。決まったら、前の名前のプラグインとマーケットプレイスを、入れたときと同じ範囲で外す。https://raw.githubusercontent.com/mats16/ai-desktools/main/docs/ の claude-code-plugin.md・codex-plugin.md・pi.md の「外す」を、desk-tools を ai-deck-factory に替えて使う。pi は settings.json に書かれた入れ元を、そのまま pi remove に渡す（-l の有無も同じにする）。
 3. https://raw.githubusercontent.com/mats16/ai-desktools/main/INSTALL.md の 3（プラグインを入れる）と 4 の 2（desk-doctor）を、今のワークスペースで進める。入れる範囲（ユーザー全体かワークスペースだけか）と入れ元（GitHub か手元の checkout）は前と同じにし、INSTALL.md の 3 のコマンドをそれに合わせて替える（手元のパスから入れる書き方は README の「入れ方」）。desk-doctor が「前のバージョンのワークスペース」を出したら、<プラグイン>/skills/desk-migrate/SKILL.md を開いて移す。
-4. AGENTS.md・rules/ に残る ai-deck-factory:（コロン付き。/ai-deck-factory:<スキル> や $ai-deck-factory:<スキル>）を desk-tools: に替える（hook は新しい名前でしか拾わない）。コロンのない ai-deck-factory（テンプレートとデッキの目印 ai-deck-factory theme= など）は替えない。
+4. AGENTS.md・rules/ に残る ai-deck-factory:（コロン付き。/ai-deck-factory:<スキル> や $ai-deck-factory:<スキル>）を desk-tools: に替える（スキルは新しい名前でしか呼べない）。コロンのない ai-deck-factory（テンプレートとデッキの目印 ai-deck-factory theme= など）は替えない。
 5. 定期の整理（desk-dreaming）を登録していたら、登録した先を <プラグイン>/skills/desk-dreaming/schedule.md の見出しの順にすべて見て、前の登録を消し、INSTALL.md の 5 のとおりに、新しい prompt.txt と run.sh のパスで登録し直す。launchd と cron は自分で書き換えず、消すコマンドと入れるコマンドを示して、ユーザーに回してもらう。自分の道具で見られない登録先は、そのアプリで消して登録し直すよう、渡す 1 行と作業フォルダを添えてユーザーに返す。
 6. 1 の grep と crontab -l をもう一度回し、残ったものと、次からの開き方（INSTALL.md の 6）を返す。コロンのない目印と、name が desk-tools の checkout のパスに残る ai-deck-factory は、残ったものに数えない。
 ```
@@ -90,7 +87,7 @@ codex plugin marketplace add mats16/ai-desktools   # 手元の checkout なら ~
 codex plugin add desk-tools@desk-tools     # 直したものを取るときも回し直す（GitHub なら先に codex plugin marketplace upgrade desk-tools）
 ```
 
-Codex は Claude Code の形（`.claude-plugin/`・`hooks/hooks.json`）をそのまま読む。会話が読むのは `~/.codex/plugins/cache/` の写しで、手元のパスで足しても写すので、直したら `add` を回し直す。hook は、対話の Codex の `/hooks` で信頼するまで動かない。スキルは `$desk-tools:desk-init` のように呼ぶ。資料のフォルダだけで効かせる入れ方（Codex には scope がないので、ユーザーの設定で切り、ワークスペースの `.codex/config.toml` で入れる）と、効いている範囲の確かめ方は [docs/codex-plugin.md](docs/codex-plugin.md)。
+Codex は Claude Code の形（`.claude-plugin/`）をそのまま読む。会話が読むのは `~/.codex/plugins/cache/` の写しで、手元のパスで足しても写すので、直したら `add` を回し直す。スキルは `$desk-tools:desk-init` のように呼ぶ。資料のフォルダだけで効かせる入れ方（Codex には scope がないので、ユーザーの設定で切り、ワークスペースの `.codex/config.toml` で入れる）と、効いている範囲の確かめ方は [docs/codex-plugin.md](docs/codex-plugin.md)。
 
 **pi**
 
@@ -105,12 +102,12 @@ pi install git:github.com/mats16/ai-desktools        # git から
 
 ## ワークスペース
 
-資料を置くフォルダ（例: `~/Documents`）。スクリプトと hook は、今いるフォルダから上へたどって最初に見つかった `desk.toml` のフォルダをワークスペースとして扱う。見つからなければ `~/.desk.toml`（環境変数 `DESK_CONFIG` で場所を替えられる）を読み、その `workspace` をワークスペースにする。見つかった 1 つだけを読み、混ぜない（`desk-init` の `scripts/desk.py`）。`desk-init` が置くもの:
+資料を置くフォルダ（例: `~/Documents`）。スクリプトは、今いるフォルダから上へたどって最初に見つかった `desk.toml` のフォルダをワークスペースとして扱う。見つからなければ `~/.desk.toml`（環境変数 `DESK_CONFIG` で場所を替えられる）を読み、その `workspace` をワークスペースにする。見つかった 1 つだけを読み、混ぜない（`desk-init` の `scripts/desk.py`）。`desk-init` が置くもの:
 
 - `desk.toml`（`~/.desk.toml` に置くときは、ワークスペースには置かない）: 人ごとに変わる値（資料を作る言語〔`[desk] default_language`。書かなければ `ja`〕、認証、テンプレート〔`[slides.templates]`: テーマの名前 = テンプレートの URL〕と社名、Drive の置き場所、材料を集める道具〔`[sources]`: 社内の検索・チャット・会議の記録・wiki など〕、レビューの進め方〔`[review]`: 構成を決めたあとを誰が見るか、`/deck-review` のラウンドの上限〕、返したあとにコメントを見張る期間〔`[feedback.google_comments] watch_hours`。0 か書かなければ見張らない〕）。テンプレートは `build-slides/scripts/template.py navy --from-base`（`white`・`blue` も）で作ると URL が書き込まれる。元にするテンプレートは `desk.toml` に持たず、`--from-base <元の URL>` で渡す。渡さなければ、白紙の pptx（`build-slides/assets/blank.pptx`）を Google Slides に変換して上げ、そこから作る。会社で配るテーマは全社の共有テーマのフォルダ（`[drive] shared_themes`）に置き、使う人は `slides.py themes` で見つけて `slides.py theme <url>` で写す（`build-slides/themes.md`）。
 - `themes/slides/<名前>.json`: テーマのファイル（`kind: theme`。色・書体・著作権表示・表紙と扉のパターンと、使い分けの `description`。エージェントが `slides.py themes` の一覧から資料ごとに選ぶ）。組み込みの navy・white・blue はプラグインの `build-slides/themes/` にあり、同じ名前のファイルを置くとそちらが勝つ。desk-init は置かない（会社のテーマを作るとき〔`build-slides` の `template.md`〕と、共有のテーマを写すときにできる）。
 - `recipes/<名前>/RECIPE.md`: 資料を作る・材料を集めるときだけ要る、このワークスペースの決まり（レシピ）。頭の frontmatter に、いつ使うか（`description`）を書く。作るもの（`targets`）と資料の種類（`audience`）で絞り、出し方（資料ごとに選ぶ `per_material: true`、材料集めの `step: gather`、組むときの `step: build`、書かなければどの作業でも）を書く。同じフォルダに、使うテンプレート（`templates/`）と点検（`checks.py`）を置く（下の「決まりの置き場所と育て方」）。
-- `Customers/<顧客>/memory.md`: その顧客の資料への好み（どう作るか。相手が何者かは `profile.md`）（顧客の memory）。その顧客の資料の `構成案*.md` などを開くと、hook が続けて出す。
+- `Customers/<顧客>/memory.md`: その顧客の資料への好み（どう作るか。相手が何者かは `profile.md`）（顧客の memory）。作る会話が、その顧客の資料を作り始めるときと、要約のあとに開く。
 - `Customers/<顧客>/profile.md`: その顧客の事業・組織・技術の構成・エンジニアの好み（顧客の profile。行ごとに出典と日付）。`customer-profile` が作り、顧客向けの資料の作り始めに読む。30 日より古ければ取り直す。
 - `Customers/`・`Internal/`・`Research/`、`references_index.md`・`drive_folders.md`: 資料と台帳。資料のフォルダの `references.md`（出典の台帳。出典ごとに S の ID。資料に結びつかない出典は `Research/references.md`）と構成案の「出典の表」（ページに出す事実の台帳。事実ごとに F の ID）は `deck-workflow` の `scripts/refs.py` が足し、確かめる。全体の索引 `references_index.md` は、`refs.py index` がすべての `references.md` から作り直す（手で直さない）。`drive_folders.md` は Google Drive の置き場所と上げた資料で、手で足す。`Research/deck_research/` は `desk-research` の調べ直しの記録（`state.md`・`log/`。代表の 3 枚の選び方の記録も）。
 - `.desk/`: スクリプトが書く記録。`ledger.jsonl`（決まりの台帳。修正の指示、決まりの ID ごとの出典と再発、desk-dreaming の提案・適用・却下とプラグインへの提案の Issue、判断待ちと答え、deck-review の指摘の結果。`desk-feedback` の `scripts/ledger.py` が読み書きする）、`lint_runs.jsonl`（`lint.py --stats` が読む）、`spec_raw.jsonl`（JSON のページの形の外の書き方の数。`slides.py stats` が読む）、`dreaming/last_run`・`dreaming/log/`・`dreaming/backup/`、`profile/`（`customer-profile` が取り直す前の顧客の profile）、`comments.json`（`deck-workflow` の `comments.py` が前に取った時刻・送った返信・見張りの起点・見張りの知らせのコメントを残す）、`crawl/<話題>/`（`desk-crawl` の読む先の台帳 `sources.json`、回の記録 `runs.jsonl`、その回の読み方 `plan.json`）。
@@ -157,7 +154,7 @@ pi install git:github.com/mats16/ai-desktools        # git から
 
 ## 決まりの置き場所と育て方
 
-修正の指示は、ワークスペースの決まり（レシピ）と点検に戻す。大元（プラグイン）を直すべきものだけを Issue にし、持ち主が Issue から直す。決まりに層はない。プラグインの決まりは、スキルと lint の仕組みで効く。ワークスペースの決まりは、hook が要る場面で出したものを読み、資料に合うものだけを当てる。プラグインと食い違えばワークスペースが勝ち、ワークスペースどうしなら条件が狭いほう（顧客の memory、場面や資料の種類を絞ったレシピ、どの資料にも効くレシピの順）が勝つ。同じ狭さなら聞く。
+修正の指示は、ワークスペースの決まり（レシピ）と点検に戻す。大元（プラグイン）を直すべきものだけを Issue にし、持ち主が Issue から直す。決まりに層はない。プラグインの決まりは、スキルと lint の仕組みで効く。ワークスペースの決まりは、作る会話がその作業に入るときに自分で開き、資料に合うものだけを当てる。プラグインと食い違えばワークスペースが勝ち、ワークスペースどうしなら条件が狭いほう（顧客の memory、場面や資料の種類を絞ったレシピ、どの資料にも効くレシピの順）が勝つ。同じ狭さなら聞く。
 
 | 決まり | 置き場所 | 中身 | 誰が変えるか |
 |---|---|---|---|
@@ -166,7 +163,7 @@ pi install git:github.com/mats16/ai-desktools        # git から
 | プラグイン | `skills/`（入った場所は読むだけ） | 誰が使っても同じ決まり、点検、スクリプト、テンプレート | `desk-kaizen` で Issue。持ち主が直してマージしたら `update` で届く |
 
 - **決まりの本文と経緯を分ける。** 決まりは 1 項目ごとに ID（プラグインは書いてあるファイルのパスから `[slides-visual-<番号>]` のように、ワークスペースは `[ws-slides-visual-<番号>]`）と短い理由だけを書く。日付・ユーザーの言葉・どの資料か・ユーザーが決めたかは、ワークスペースの決まりの台帳に ID でつなぐ（`ledger.py why <ID>`）。資料・顧客の数から、ワークスペースに寄せるか、プラグインに上げるかを決める。
-- **レシピは frontmatter で出す。** `recipes/<名前>/RECIPE.md` の頭に、`description`（いつ使うか。要る）、`targets`（`slides`・`docs`・`vids`）、`audience`（`顧客向け`・`社内向け`・`コミュニティ向け`）と出し方を書く。1 つの `RECIPE.md` は 3,800 字まで。`step` を書かないレシピは、資料を作るどの作業でも（資料づくりのスキルのファイルを開いたとき〔Claude Code は Read・Bash・Skill、Codex は Bash、pi は read・bash〕と、資料のファイルを開いたとき）、`step: gather` は材料を集めるとき（調べもので `Research/`・`references_index.md` を使うときも。`.md` の名前が入るコマンドだけ。Claude Code と pi は `.md` のないコマンドで hook を起こさないので、Codex もそろえる）、`step: build` は組むときに、hook が続けて出す。どのプラグインのファイルがどの作業かは `desk.py` の `TRIGGERS` が持つので、書く人はプラグインのファイルを知らなくてよい。コマンドで呼んだスキル（`/desk-tools:<スキル>`・`$desk-tools:<スキル>`・pi の `/skill:<名前>`）は、その SKILL.md を開いたのと同じに扱い、Claude Code では自動のコンパクションのあとにも出し直す。`per_material: true` のレシピは資料ごとに選ぶ。作る会話が、hook の出す一覧（`deck-workflow/start.md` を開いたときと、「使う決まり」のない構成案を開いたとき）から選び、構成案の頭の「使う決まり」に書く。そのあとは、資料の `構成案*.md`・`社内メモ_*.md`・`references.md` を開くたびに、顧客の `memory.md` と一緒に先に出す。フォルダのほかのファイル（テンプレート・点検）は、名前だけを添える。前の版の `rules/` は出さず、資料を始めるときに desk-migrate で移すよう知らせる。
+- **レシピは、作る会話が作業ごとに自分で開く。** `recipes/<名前>/RECIPE.md` の先頭に、`description`（いつ使うか。要る）、`targets`（`slides`・`docs`・`vids`）、`audience`（`顧客向け`・`社内向け`・`コミュニティ向け`）と開き方を書く。1 つの `RECIPE.md` は 3,800 字まで。`step` を書かないレシピは資料を作るどの作業でも（資料を作り始めるときに開き、ページを書く子とレビューの子にも渡す）、`step: gather` は材料を集めるときと調べもので、`step: build` は組む前に開く。`per_material: true` のレシピは資料ごとに選び、構成案の先頭の「使う決まり」に書いて開く。`desk.py recipes [<資料のフォルダ>]`（ワークスペースを探すスキルがみな写しを持つ）が、レシピをいつ開くものかで分けて一覧にし、資料のフォルダを渡すと、その資料の「使う決まり」と顧客の `memory.md` も出す。スクリプトを動かせない環境では、`grep` で frontmatter を読む。hook と pi の拡張では出さない（2026-11-04 にやめた。パスの文字で決めていたので、ほかのスキルのファイルやほかの顧客のパスが出力に出ただけで誤って出し、hook のない環境〔Genie Code・Genie One〕でも同じ手順で動かすため）。前のバージョンの `rules/` は読まず、`desk.py recipes` が desk-migrate で移すよう知らせる。
 - **次の一手は台帳が出す。** `ledger.py candidates` が、決まりごとの数から、下ろす（点検か作る手順へ）・書き直す・条件を足す・上げる・写しを消す・上書きを見直すを出す。境目（2 本以上の資料、2 社以上の顧客）はスクリプトが持ち、desk-dreaming は趣旨と提案の文を考える。下ろす決まりには、プラグインのスクリプトがその ID を名指ししているか（点検がまだないか、点検をすり抜けたか）も添える。`ledger.py trace` は、決まりごとに、書いた場所・名指しするスクリプト・ほかから指すファイル・決めたことの経緯・台帳の数を 1 つの表に並べる。`trace` と `candidates` は、下ろす合図の数のうち、台帳の日付で直近 14 日の分（ユーザーの指摘の件数と、レビューで直した資料の数）も出す。台帳に遅れて書いた指摘も直近に入る。
 - **当てたことは、効いた証拠ではない。** `ledger.py add`・`review` が、資料ごとに、そのときのハーネス（プラグインと `recipes/`）の指紋を残す。`ledger.py effects` が、文を変えた決まりごとに、前と後に作った資料での指摘の数を比べ、効いた・変わらない・害が出た・指摘なし（前も後も出ていない）・まだ分からない・混ざっている（同じファイルのほかの決まりも同じときに変わった）を出す。desk-dreaming は、変わらないものを点検か作る手順に下ろす案にし、害が出たものを判断待ちにする。
 - **点検もワークスペースで育てる。** `recipes/` の下のすべての `checks.py`（見る決まりのレシピのフォルダに置く）の `slides(p, r)` をスライドの lint（`slides.py lint`・`gslides.py check`）が、`doc(doc, r)` をドキュメントの lint（`docs.py check`）が毎回呼ぶ。`HARD` に入れた名前は要修正。書き方は `desk-init/templates/recipes/README.md`。

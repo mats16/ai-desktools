@@ -7,13 +7,15 @@ description: Create, refresh, or add to a customer's profile (`Customers/<custom
 
 Keep, per customer, what the materials assume about the other side in `Customers/<customer>/profile.md`. Read it when starting a customer-facing material (step 2 in `deck-workflow` → steps 1–5). Recurring materials also start from here every time.
 
+**Workspace recipes.** Before gathering, open, each whole, the workspace's gathering recipes (`step: gather`: the company's search tools and sources) whose `description` fits. `desk.py recipes` (`deck-workflow`) lists them; where it is not installed, `grep -r -H -E '^(description|step):' recipes --include=RECIPE.md` in the workspace root (skip those under a recipe's `templates/`) ("Workspace rules" in `desk-feedback` → routing).
+
 Separate it from the customer memory ("Customer memory" in `desk-feedback` → routing and rule IDs) by content.
 
 | | profile | memory |
 |---|---|---|
 | Content | Who the customer is (business, organization, technology stack, engineers' preferences and culture, current initiatives) | How to make that customer's materials (honorifics, tone of wording, the audience's positions and interests, past decisions and rejected proposals) |
 | Source | Tools in `[sources]`, public information, what the user said. Source and date on each line | The user's corrections (IDs in the rule ledger) |
-| When read | Open it at the start of work (the hook does not inject it) | The hook injects it when `構成案*.md` and similar files are opened |
+| When read | Open it at the start of work | Open it at the start of work, and again after summarizing |
 
 If unsure, decide by the form of the sentence. 「〜である」 (a fact) goes in the profile; 「〜にする・しない」 (an instruction) goes in memory. 「エンジニアはコードを見せると喜ぶ」 goes in the profile; if you then decide 「技術のページにはコードを 1 枚入れる」, that instruction goes in memory.
 

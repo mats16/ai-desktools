@@ -1000,7 +1000,7 @@ def defined(rid):
 
 
 MATERIAL = ("deck-writing/content_customer.md", "deck-writing/content_internal.md", "deck-writing/content_explain.md")  # 資料の種類ごとに開くプラグインのファイル（content.md の §1 を 2026-10-24 に分けたもの）
-USED = re.compile(r"使う決まり")  # 構成案の「使う決まり」の行（hooks/rules_overlay.py の USE）
+USED = re.compile(r"使う決まり")  # 構成案の「使う決まり」の行（desk.py の USE）
 RECIPES = True  # 最後の段（rules/ → recipes/）を回すか。selftest が、前の段の結果を rules/ の中で確かめるときだけ外す
 slug = lambda s: re.sub(r"\W+", "_", s.lower()).strip("_") or "recipe"  # レシピのフォルダの名前（小文字と _。和文の名前は残し、組み直しで英語の名前にする）
 
@@ -1108,7 +1108,7 @@ def to_recipes(ws, backup):
             before[dst] = old
             dst.write_text(swap_all(recipe_front(old)), encoding="utf-8")
         out.append(f"移した: {src.relative_to(ws)} → {dst.relative_to(ws)}")
-        if not (dst.name in (desk.RECIPE, "checks.py") or "templates" in dst.relative_to(ws / "recipes").parts):  # 画像などは、どのレシピのフォルダにも入っていない（hook も名前を添えない）
+        if not (dst.name in (desk.RECIPE, "checks.py") or "templates" in dst.relative_to(ws / "recipes").parts):  # 画像などは、どのレシピのフォルダにも入っていない
             out.append(f"要判断: {dst.relative_to(ws)} はレシピのフォルダの外にある。使うレシピのフォルダへ移し、RECIPE.md の中のパスを直す")
     if (readme := ws / "rules" / "README.md").is_file():
         readme.unlink()  # 控えにある。雛形の今の README を置く
@@ -1123,7 +1123,7 @@ def to_recipes(ws, backup):
         out.append(f"書き換えた: {led.relative_to(ws)}（前の rules/ のパス）")
     for p in [*recipe_texts(ws), *(ws / ".desk" / "harness").glob("*.json")]:
         t = before[p]
-        n = "".join(swap_all(x) if USED.search(x) else x for x in t.splitlines(keepends=True)) if p.name.startswith("構成案") else swap_all(t)  # 構成案は「使う決まり」の行だけ（hook が読む。ほかは過去の記録のまま）
+        n = "".join(swap_all(x) if USED.search(x) else x for x in t.splitlines(keepends=True)) if p.name.startswith("構成案") else swap_all(t)  # 構成案は「使う決まり」の行だけ（desk.py recipes が読む。ほかは過去の記録のまま）
         if p.name in ("AGENTS.md", "CLAUDE.md", ".gitignore"):  # ワークスペースのフォルダとしての rules/ も（雛形の「rules/ の決まりのファイル」・!/rules/）
             n = re.sub(r"(?<![\w./-])rules/(?![\w.<-])", "recipes/", n).replace("!/rules/", "!/recipes/")  # パスの続くもの（rules/<…>・rules/x.md）は、移したものと雛形の置き場所だけ（pairs）。ほかは下で知らせる
         if n != t:

@@ -44,6 +44,6 @@ desk-kaizen の Issue（skills/desk-kaizen/SKILL.md の「Body template」）か
 ## 確かめたこと
 
 - [ ] 変えたスクリプトの `--selftest` が Python 3.11 で通る
-- [ ] Claude Code・Codex・pi のどれにも効く（`skills/`・`hooks/rules_overlay.py` を直したなら、`hooks/hooks.json` と `extensions/rules.ts` の側も見た）
+- [ ] Claude Code・Codex・pi のどれにも効く（どれか 1 つのハーネスの仕組みに頼らない。hook や拡張がなくても、スキルの md とスクリプトだけで動く）
 - [ ] スキルを足した・外した・名前を変えたなら、README の表、`docs/` の数、ほかのスキルから指すパスをそろえた
 - [ ] 顧客の名前、資料の名前・URL・本文、社内だけの情報が、題・本文・コミット・画像に入っていない

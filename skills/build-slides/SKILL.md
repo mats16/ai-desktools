@@ -7,6 +7,8 @@ description: The tool for Japanese slides in Google Slides. Write pages in the d
 
 Slides are built directly in Google Slides with the Slides API (switched from pptx on 2026-10-07). To go back to the pptx method, see the workspace's `Archive/pptx_pipeline_20261007/README.md`. This skill is the tool: what the page JSON can say, how to build and check it, and the API's pitfalls. How the work runs (steps 6–8 of a new deck, splitting pages among child agents, reusing internal decks, Drive) is in `deck-workflow`, and how pages should look is in `deck-design` → slides. Documents (Google Docs) are `build-docs`. The parts shared with documents (`gapi.py` for the Google APIs, `textlint.py` for the shared text rules and the run log, `brand.py` for fonts, colors, and the copyright notice, `sheet.py` for contact sheets) are in `scripts/`. This skill owns them: other skills (`build-docs`, `build-vids`, `deck-workflow`, and others) keep byte-identical copies, so fix them here and copy them out with `tests/skills/check.py --sync` in the plugin repository.
 
+**Workspace recipes.** The workspace may add to or override this skill in its recipes, which take precedence. Before building, run `python3 <build-slides folder>/scripts/desk.py recipes <material folder>` and open, each whole, the recipes without `step` and with `step: build` whose `description` fits, those the outline's 「使う決まり」 names, and the customer's `memory.md` it names ("Workspace rules" in `desk-feedback` → routing). Skip the ones you already opened in this context.
+
 | What you make | Read before you start writing |
 |---|---|
 | **Writing pages:** writing or fixing pages | [pages.md](pages.md) (the page JSON), with `deck-design` → slides (how slide pages should look) |

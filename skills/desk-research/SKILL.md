@@ -7,6 +7,8 @@ description: Use when re-researching best practices for making materials (the co
 
 Research results go into the knowledge skills `deck-writing` (content and wording) and `deck-design` (how pages look), `deck-workflow` and `deck-review` (how the work and the review run), `build-slides` (how to write for the Slides API, and the machine-checkable rules in `scripts/lint.py`), and `build-docs` (how to write for the Docs API). This skill holds how to research. What has been researched so far (`state.md`, `log/`) differs per user and contains internal information, so it lives in the workspace's `Research/deck_research/` (moved out of the plugin on 2026-10-12; create it if missing).
 
+**Workspace recipes.** Before gathering, open, each whole, the workspace's gathering recipes (`step: gather`: the company's search tools and sources) whose `description` fits. `desk.py recipes` (`deck-workflow`) lists them; where it is not installed, `grep -r -H -E '^(description|step):' recipes --include=RECIPE.md` in the workspace root (skip those under a recipe's `templates/`) ("Workspace rules" in `desk-feedback` → routing).
+
 ## What is kept
 
 | File | Content |
@@ -53,6 +55,7 @@ You are the researcher. Today is <YYYY-MM-DD>.
 <the person in [user] profile of desk.toml (company and role)> has Claude Code make materials (Google Slides and Google Docs). Read these first.
 - The skills under <plugin>/skills/: `deck-writing` (its SKILL.md, then content from its table), `deck-design` (its SKILL.md, then slides and documents), `deck-workflow` (its SKILL.md), and `deck-review` (its SKILL.md, then asking, and verifying and fixing findings)
 - <workspace>/Research/deck_research/state.md and <plugin>/skills/desk-research/sources.md
+- The workspace's gathering recipes (how to use the company's search tools and sources): <the `step: gather` recipe paths, or 「なし」>
 
 ## Your theme: <theme>
 <examples of the scope. Start from the sources and search terms in the matching section of sources.md, and widen on your own>

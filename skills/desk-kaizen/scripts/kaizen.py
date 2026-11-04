@@ -291,7 +291,8 @@ def writer_cmd(agent, plugin, ws, prompt, model):
         return ["claude", "--plugin-dir", str(plugin), "-p", prompt, "--permission-mode", "acceptEdits", "--output-format", "stream-json", "--verbose", *m("--model"),
                 "--strict-mcp-config", *NO_WEB, "--allowedTools", "Bash(python3:*)", "Bash(uv run:*)", "Bash(ls:*)", "Bash(mkdir:*)"]  # MCP サーバーも読ませない（使う人の settings.json が mcp__ の道具を許していても）
     if agent == "pi":
-        return ["pi", "-p", "--no-session", "--approve", "--no-mcp", "--no-extensions", "-e", str(plugin / "extensions" / "rules.ts"), "--no-skills", "--skill", str(plugin / "skills"), *m("--model"), "--", prompt]
+        ext = plugin / "extensions" / "rules.ts"  # 2026-11-04 より前のバージョンだけが持つ拡張（なくなったバージョンに -e を渡すと、pi は起きない）
+        return ["pi", "-p", "--no-session", "--approve", "--no-mcp", "--no-extensions", *(["-e", str(ext)] if ext.is_file() else []), "--no-skills", "--skill", str(plugin / "skills"), *m("--model"), "--", prompt]
     return ["codex", "exec", *CODEX_NO_WEB, "-C", str(ws), "-s", "workspace-write", "--skip-git-repo-check", "--dangerously-bypass-hook-trust", *m("-m"), prompt]
 
 
@@ -694,6 +695,11 @@ def shots_selftest():
 def selftest():
     before = "== 要修正: 1 ==\n[絵文字] p1: 「✅」\n\n== 要確認: 2 ==\n[あおり] p2: 「このままでは」\n[空疎な言い回し] p3: 「実現する」\n"
     after = "== 要修正: 0 ==\n\n== 要確認: 2 ==\n[あおり] p2: 「このままでは」\n[空疎な言い回し] p3: 「実現する」\n\n== 要確認（ワークスペースの点検）: 1 ==\n[気になる語] p4\n"
+    with tempfile.TemporaryDirectory() as d:  # 拡張のないバージョン（2026-11-04 から）には -e を渡さない。前のバージョンには渡す
+        assert "-e" not in writer_cmd("pi", Path(d), Path(d), "x", None)
+        (Path(d) / "extensions").mkdir()
+        (Path(d) / "extensions" / "rules.ts").write_text("")
+        assert writer_cmd("pi", Path(d), Path(d), "x", None)[6:8] == ["-e", str(Path(d) / "extensions" / "rules.ts")]
     cb, ca, delta, gone, new = compare(before, after)
     assert cb == {"要修正": 1, "要確認": 2} and ca == {"要修正": 0, "要確認": 3}
     assert delta == {"気になる語": (0, 1), "絵文字": (1, 0)} and gone == [("絵文字", "p1: 「✅」")] and new == [("気になる語", "p4")]
