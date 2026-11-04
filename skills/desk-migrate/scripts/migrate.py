@@ -526,10 +526,20 @@ VERBATIM = {"quote", "a", "reason"}  # 台帳の、人の言葉をそのまま�
 KEEP = VERBATIM | {"by"}  # by は書いた者の種類（session・dreaming・import）。ledger.py が値で数えるので、スキルの名前を替えても替えない
 
 
+def ws_1104(ws, value):
+    """台帳の戻し先（指摘の to、前の戻し先 prev）の google-*/… が、ワークスペースのパスか。戻し先はワークスペースのファイルにもなるので（ledger.py の linked）、
+    名前でなく、ワークスペースにそのフォルダがあるかで決める（あれば替えない。ワークスペースへの提案の file と同じ値のまま。PR #61 のレビュー）。"""
+    top = value.removeprefix("./").split("/", 1)[0]
+    return top in RENAMED_1104 and (ws / top).is_dir()
+
+
 def ledger_lines(path, fn):
     """台帳の行ごとに、文字列の値を fn で書き換える（JSON の形は変えない。人の言葉の欄 VERBATIM はそのまま）。
     ワークスペースへの変更案の文（old・new）は、その変更先が texts の書き換える形（rewritten）のときだけ書き換える（ファイルと文が同じ替えを受け、ledger.py の apply・undo が文で探せる。
     checks.py などの md でないファイルは書き換えないので、その変更案の文もそのまま。移す前のパスでも同じ答えになるよう、ファイルの一覧でなく形で決める。PR #57 のレビュー）。"""
+    ws = path.parent.parent if path.parent.name == ".desk" else path.parent
+    to = lambda x: fn(x) if ws_1104(ws, x) else lib_target(x, fn)  # 戻し先は、ワークスペースの google-*/ の下ならそのまま
+
     def walk(v):
         if isinstance(v, str):  # まるごと前の lib/ のスクリプトの値（route の前後の戻し先 prev・after なども）は、欄によらず skills/ からの今のパスに
             return lib_target(v, fn) if v.startswith("../lib/") and LIB_VALUE.fullmatch(v) else fn(v)  # skills/ からの ../lib/ だけ（lib/x.py はワークスペースのパスでもある）
@@ -537,8 +547,8 @@ def ledger_lines(path, fn):
             return [walk(x) for x in v]
         if isinstance(v, dict):
             return {k: x if k in KEEP else (fn(x) if v.get("plugin") or rewritten(str(v.get("file", "")).removeprefix("./")) else x) if k in ("old", "new") and isinstance(x, str)  # 変更案の文は、変更先のファイルと同じ替えだけ
-                    else lib_target(x, fn) if (k in TARGETS and (k == "to" or v.get("plugin")) or k == "rule") and isinstance(x, str)
-                    else {c: lib_target(y, fn) if isinstance(y, str) else walk(y) for c, y in x.items()} if k == "prev" and isinstance(x, dict)  # 前の戻し先（ledger.py reopen が戻す先）も変更先
+                    else lib_target(x, fn) if (k == "file" and v.get("plugin") or k == "rule") and isinstance(x, str) else to(x) if k == "to" and isinstance(x, str)
+                    else {c: to(y) if isinstance(y, str) else walk(y) for c, y in x.items()} if k == "prev" and isinstance(x, dict)  # 前の戻し先（ledger.py reopen が戻す先）も、to と同じに
                     else walk(x) for k, x in v.items()}
         return v
     out = []
@@ -745,7 +755,7 @@ def unresolved(ws):
     vals = [(c["id"], "to", c.get("to")) for c in cs.values()] + [(q["id"], "file", q.get("file")) for q in ps.values() if q.get("plugin") and q.get("status") == "未適用"]
     out = []
     for i, k, v in vals:
-        if not isinstance(v, str) or not (m := PLUGIN_VALUE.fullmatch(now := lib_target(v))):
+        if not isinstance(v, str) or k == "to" and ws_1104(ws, v) or not (m := PLUGIN_VALUE.fullmatch(now := lib_target(v))):  # ワークスペースの google-*/ の下の戻し先は、プラグインのパスでない
             continue
         if now == v and m.group(2) != "lib" and m.group(2) not in OLD_SKILLS:  # 移行が触っていない今の形の値（作るファイルへのプラグインへの提案など）は、残りものでない
             continue
@@ -1225,6 +1235,30 @@ def selftest():
         got = [json.loads(x) for x in ledger_lines(led, rewrite).splitlines()]
         assert got[0]["to"] == got[1]["prev"]["c-1"] == "build-slides/SKILL.md" and got[1]["why"] == "google-slides スキル", got
         assert got[2]["file"] == "google-docs/memo.md" and got[3]["file"] == "build-docs/api.md", got  # ワークスペースへの提案の file はワークスペースのパス
+    with tempfile.TemporaryDirectory() as tmp:  # ワークスペースの google-docs/ の下の戻し先は替えない（当てた提案の file と同じまま。取り消すと前の戻し先に戻る。PR #61 のレビュー）
+        ws = Path(tmp).resolve()
+        (ws / "desk.toml").write_text("")
+        (ws / "google-docs").mkdir()
+        (ws / "google-docs" / "memo.md").write_text("after")
+        (ws / ".desk").mkdir()
+        led = ws / ".desk" / "ledger.jsonl"
+        led.write_text('{"ts":"2026-11-03T00:00:00Z","kind":"correction","id":"c-0001","to":"未","quote":"q"}\n'
+                       '{"ts":"2026-11-03T00:00:01Z","kind":"proposal","id":"P0001","file":"google-docs/memo.md","old":"before","new":"after","rule":"","src":["c-0001"]}\n'
+                       '{"ts":"2026-11-03T00:00:02Z","kind":"applied","ref":"P0001","prev":{"c-0001":"未"}}\n'
+                       '{"ts":"2026-11-03T00:00:03Z","kind":"route","ref":"c-0001","to":"google-docs/memo.md","via":"P0001"}\n'
+                       '{"ts":"2026-11-03T00:00:04Z","kind":"correction","id":"c-0002","to":"google-slides/gone.md","quote":"q"}\n')
+        assert [x.split(": ")[0] for x in unresolved(ws)] == ["台帳の c-0002 の to"]  # ワークスペースのファイルは、今のプラグインにないパスとして出さない（書き換える前の値で見る）
+        led.write_text(ledger_lines(led, rewrite))
+        cs, ps, _, _ = ledger.state(ws)
+        assert cs["c-0001"]["to"] == ps["P0001"]["file"] == "google-docs/memo.md" and cs["c-0002"]["to"] == "build-slides/gone.md", (cs, ps)
+        os.environ["DESK_CONFIG"], cwd = "", os.getcwd()
+        os.chdir(ws)
+        try:
+            with open(os.devnull, "w") as null, __import__("contextlib").redirect_stdout(null), __import__("contextlib").redirect_stderr(null):
+                ledger.undo(ws, "P0001")
+        finally:
+            os.chdir(cwd)
+        assert ledger.state(ws)[0]["c-0001"]["to"] == "未" and (ws / "google-docs" / "memo.md").read_text() == "before"
     assert all(m["ids"].get(n, n) == n for m in MAPS for n in m["ids"].values())  # 今の ID は、前の ID として読んでも替わらない（何度回してもよい）
     # 2026-10-31: プラグインのパスとスキルの名前だけを替え、ワークスペースのパスと決まりの ID は替えない
     assert rewrite("vids-voice/ja.md・vids-voice/scripts/speaker_notes.py・vids-voice-ja-002・vids-voice-004・`vids-voice` の `en.md`") == "build-vids/voice_ja.md・build-vids/scripts/speaker_notes.py・vids-voice-ja-002・vids-voice-004・`build-vids` の `voice_en.md`"  # 2026-11-02。決まりの ID は替えない
