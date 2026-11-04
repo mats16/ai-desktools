@@ -27,7 +27,8 @@ HOW = {"書き換え": "誰が何をするかを書き直す（deck-content-065�
        "区切り": "読点を外すか、語の順を変える。条件・理由・並びの読点と、外すと読み違える読点は keep",
        "表記": "表記だけを直す（語は変えない）。製品名・組織名の正式な表記（カタカナと英字を詰めて書く名前など）は keep"}
 REREAD = "書き換えた文を読み比べる（言い分・言い切りの強さ・慣用句）"  # 守る語が崩れていなくても、意味を伴う書き換えは人が読み比べる（校正の赤字照合。専門家役のレビューで、語を突き合わせても拾えない改悪が 3 件あった）
-NEG = re.compile(r"な[いくかけ](?![がりれ])|なし|(?<![は必])ず(?![つっ])|ぬ(?![けぐ])|ません|ぬき|不(?=[一-鿿])|非(?=[一-鿿])|無(?=[一-鿿])|未(?=[一-鿿])")  # 「なし」（表の あり・なし）も否定。「はず」「必ず」の ず は数えない  # 否定の印（少ない・危ないは同じ語が残れば数は変わらない）
+NEG = re.compile(r"(?<!しれ)(?<!まも)(?<!ほど)な(?:い|く|かった|けれ)|なし(?!ょ)|(?<![はまわい必])ず(?=[、。にとも]|$)|ません|ぬ(?=[、。]|$)"
+                 r"|不(?=[一-鿿])|非(?=[一-鿿])|無(?=[一-鿿])|未(?=[一-鿿])")  # 否定の形。「なし」（表の あり・なし）も数え、まず・わずか・いずれ・はず・必ず・なか・まもなく・かもしれない は数えない  # 否定の印（少ない・危ないは同じ語が残れば数は変わらない）
 LATIN = re.compile(r"[A-Za-z][A-Za-z0-9.+#_/-]*[A-Za-z0-9+#]|[A-Za-z]")  # 英字の語（製品名・社名・コードの名前）
 NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 CODE = re.compile(r"`[^`]+`")
@@ -169,7 +170,7 @@ def risks(base, cur):
             pairs = [((i, i + 1), (j, j + 1)) for i, j in zip(range(i1, i2), range(j1, j2))] if i2 - i1 == j2 - j1 else [((i1, i2), (j1, j2))]  # 同じ数なら 1 文ずつ組にする
             for (a, b), (c, d) in pairs:
                 blocks.append({"key": k, "i": (a, b), "j": (c, d), "old": "\n".join(u["text"] for u in o[a:b]), "new": "\n".join(u["text"] for u in n[c:d]),
-                               "at": (n[c:d] or o[a:b])[0]})
+                               "at": (n[c:d] or o[a:b])[0], "olds": o[a:b], "news": n[c:d]})
     if not blocks:
         return []
     found = collections.OrderedDict()
@@ -178,12 +179,23 @@ def risks(base, cur):
         rid = "R" + short(kind, b["key"], b["old"], b["new"])
         found.setdefault(rid, {"id": rid, "key": b["key"], "old": b["old"], "new": b["new"], "kind": kind, "detail": detail,
                                "where": b["at"]["where"], "file": b["at"].get("file"), "loc": b["at"].get("loc")})
+    rules = lambda us: collections.Counter((r, said) for u in us for r, _, said in check_unit(u) if RULES.get(r) == "書き換え")  # 文ごとに、その文の種類（ノートか）で見る。規則と語の組を数で比べる
+
+    def reread(b):  # 書き換えの指摘が消えた（直したか、文を消した）。直す前と後を読み、同じことを同じ強さで言っているかを確かめて ok
+        if gone := sorted(rules(b["olds"]) - rules(b["news"])):
+            add(b, REREAD, "・".join(dict.fromkeys(r for r, _ in gone)) + ("" if b["news"] else "（文を消した）"))
+    lone = collections.OrderedDict()  # 片側だけの塊（消した・足した）は、ページごとにまとめて読み比べる（書き換えて動かした文も拾う）
     for b in blocks:
         for kind, detail in guard(b["old"], b["new"]):
             add(b, kind, detail)
-        rules = lambda text: collections.Counter(r for t in text.split("\n") for r, *_ in check_unit({**b["at"], "text": t}) if RULES.get(r) == "書き換え")  # 前の文も今の文と同じ種類（ノートか）で見る。数で比べ、塊の中の 1 文を直したのも拾う
-        if b["old"] and b["new"] and (gone := sorted(rules(b["old"]) - rules(b["new"]))):
-            add(b, REREAD, "・".join(gone))  # 書き換えの指摘を直した（消えた）。直す前と後を読み、同じことを同じ強さで言っているかを確かめて ok
+        if b["olds"] and b["news"]:
+            reread(b)
+        else:
+            x = lone.setdefault(b["key"], {"key": b["key"], "olds": [], "news": [], "at": b["at"]})
+            x["olds"] += b["olds"]
+            x["news"] += b["news"]
+    for x in lone.values():
+        reread({**x, "old": "\n".join(u["text"] for u in x["olds"]), "new": "\n".join(u["text"] for u in x["news"])})
     (ot, ow), (nt, nw) = lines_of(base), lines_of(cur)
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
         got = yomiyasu_diff().diff(ot, nt)
@@ -283,9 +295,9 @@ def run(folder, kind, url, revision, units, files, problems=(), tool="wording"):
     """Google の資料から集めた文（units。file・loc は道具が埋める）を点検し、wording.json を書き、状態を出す。済みなら True。
     files は点検したときのファイル（資料のフォルダからのパス → sha256）。flow.py が、点検のあとに変わったかを見る。problems は道具が見つけた、通らない理由。"""
     st, t0 = load(folder), time.time()
-    if st.get("url") not in (None, url):  # 別の資料の記録は使わない（作り直した資料など）
-        print(f"（{STATE} は別の資料 {st.get('url')} の記録。判断と前に通した文を使わずに始め直す。1 つのフォルダに 2 つの資料を置かない）")
-        st = {}
+    if st.get("url") not in (None, url):  # 別の資料の記録を黙って消さない（消すと、確かめていない恐れが、前に通した文になる）
+        sys.exit(f"{os.path.join(folder, STATE)} は別の資料 {st.get('url')} の記録。1 つのフォルダには 1 つの資料を置く。作り直した資料なら、"
+                 "このファイルを消してから回す（判断と前に通した文はなくなり、今の文から始める）")
     prev = st.get("last") or {}
     for u in units:
         u["sha"] = sha(u["text"])
@@ -457,8 +469,11 @@ def selftest():
             run(d, "slides", url, f"s{i}", page(t, key="p02"), {})
         assert load(d)["rounds"] >= MAX_ROUNDS and "上限" in out.getvalue()
         # 別の資料の記録は使わない
-        run(d, "slides", "https://docs.google.com/presentation/d/other/edit", "o1", page("仕組みを比べる", key="p02"), {})
-        assert load(d)["rounds"] == 0 and load(d)["decisions"] == {} and load(d)["last"]["risks"] == []
+        try:
+            run(d, "slides", "https://docs.google.com/presentation/d/other/edit", "o1", page("仕組みを比べる", key="p02"), {})
+            raise AssertionError("別の資料の記録を消した")
+        except SystemExit as e:
+            assert "別の資料" in str(e) and load(d)["url"] == url  # 別の資料の記録は消さずに止まる
     with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(io.StringIO()):
         assert summarize(load(d))[0]["状態"] == "未実施"  # 回していなければ未実施（済みにしない）
         # 最初の回に通らない理由があっても、その文を比べる相手にする（そのあとの書き換えを比べずに通さない）
@@ -466,16 +481,25 @@ def selftest():
         assert load(d)["base"][0]["text"] == "検証は不要ではない。4 つの構成の比べ"
         assert not run(d, "slides", "u2", "f2", [unit("p1", "検証は不要だ。4 つの構成を比べる", "#", "本文")], {})
         assert {"否定の数", REREAD} <= {r["kind"] for r in load(d)["last"]["risks"]}
+        os.remove(os.path.join(d, STATE))  # 別の資料に移るときは、記録を消してから
         run(d, "slides", "u3", "e1", [], {})
         assert load(d)["base"] == [] and load(d)["summary"]["状態"] == "済み"
         run(d, "slides", "u3", "e2", [unit("p1", "検証は不要ではない", "#", "本文")], {})
         assert [r["kind"] for r in load(d)["last"]["risks"]] == ["否定の数"]
         # 印のないページ（pages.py）の並び: 前にページを足しても、あとのページを別のページと組にしない
+        os.remove(os.path.join(d, STATE))  # 別の資料に移るときは、記録を消してから
         run(d, "slides", "u4", "g1", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("価格は月 100 円", "Spark で動かす"), 1)], {})
         run(d, "slides", "u4", "g2", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("足したページ", "価格は月 100 円", "Spark で動かす"), 1)], {})
         assert load(d)["last"]["risks"] == []
         assert flat("{10.5:注}の[Foo (bar)](https://e.org/wiki/F_(b))の説明") == "注のFoo(bar)の説明"
         assert guard("SSO 連携: 対応なし", "SSO 連携: 対応あり") and not guard("この機能は使える", "この機能は使えるはずだ") and not guard("必ず確かめる", "確かめる必要がある")
+        assert all(guard(a, b) for a, b in (("権限がなければ表を読めない", "権限があれば表を読める"), ("移行せずに進める", "移行して進める"), ("移行しなかった", "移行した")))
+        assert not any(guard(a, b) for a, b in (("まず確かめる", "確かめる"), ("わずかに増える", "少し増える"), ("そのなかで選ぶ", "その中で選ぶ"), ("まもなく出す", "近く出す"), ("いずれ移す", "あとで移す"), ("遅れるかもしれない", "遅れるおそれがある")))
+        # 書き換えの指摘がある文を消したか、書き換えて動かしたら、読み比べを出す（置き換えの組でなくても）
+        mk = lambda *t: [unit(f"p{i}", x, "#", "本文") for i, x in enumerate(t, 1)]
+        assert any(r["kind"] == REREAD for r in risks(mk("前の版の手順に戻す", "終わり"), mk("終わり")))
+        assert any(r["kind"] == REREAD for r in risks(mk("前の版の手順に戻す", "終わり"), mk("終わり", "以前の手順に戻すこともある")))
+        assert any(r["kind"] == REREAD for r in risks(mk("結果の確かめ"), mk("案の比べで決める")))  # 同じ規則の別の語に替えても読み比べる
         assert flat("- **前の版**の[比べ](https://x)") == "前の版の比べ" and flat("段を分けると、***誤りの戻り先***が {32:1} か所<br>に決まる\\*") == flat("段を分けると、誤りの戻り先が 1 か所に決まる*") and flat("# 1. 構成") == "1.構成" and flat("| a | b |") == "ab"
         os.makedirs(f"{d}/b/sub/.hide")
         for f in ("p01.json", "sub/p02.json", "sub/.hide/x.json", "doc.md", "notes.txt"):
@@ -499,6 +523,10 @@ def main(argv):
     if len(argv) == 1 and not argv[0].startswith("-"):
         st = load(argv[0])
         s = show(st)
+        files = (st.get("last") or {}).get("files") or {}
+        if files and (moved := sorted(k for k in set(files) | set(build_files(os.path.join(argv[0], "build"))) if build_files(os.path.join(argv[0], "build")).get(k) != files.get(k))):
+            print(f"古い: 点検のあとに変わったファイル {', '.join(moved[:8])}（組み直してから、道具の wording をもう一度回す）")
+            sys.exit(1)
         sys.exit(0 if s["状態"] == "済み" else 1)
     sys.exit(__doc__)
 

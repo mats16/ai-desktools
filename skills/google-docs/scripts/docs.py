@@ -1177,7 +1177,7 @@ def doc_units(doc, md_lines):
     lines = [wording.flat(x) for x in md_lines]
     for u in units:
         want = wording.flat(u["text"])[:20]
-        if n := next((i for i, x in enumerate(lines, 1) if want and want in x), None):
+        if n := next((i for i, x in enumerate(lines, 1) if want and x == want), None) or next((i for i, x in enumerate(lines, 1) if want and want in x), None):  # 短い文は、同じ文の行を先に
             u["file"], u["loc"] = "doc.md", f"{n} 行"
     return units
 

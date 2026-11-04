@@ -218,7 +218,7 @@ def locate(units, slides, build="."):
         want = wording.flat(u["text"])[:20]
         m = PAGE_KEY.search(slides[u["page"] - 1]["objectId"]) if u["page"] and u["page"] <= len(slides) else None
         for rel in ([by_key[m.group(1)]] if m and m.group(1) in by_key else list(leaves)):
-            if hit := [loc for loc, v in leaves[rel] if want and want in v]:
+            if hit := [loc for loc, v in leaves[rel] if want and v == want] or [loc for loc, v in leaves[rel] if want and want in v]:  # 短い文（表のセル）は、同じ文の値を先に
                 u["file"], u["loc"] = rel, "・".join(dict.fromkeys(hit))
                 break
         else:
