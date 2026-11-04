@@ -349,12 +349,10 @@ def facts(folder, ws):
         （gslides.py wording・docs.py wording）。2 つは別の事実で、どちらも済みでなければ渡さない。回していなければ 未実施。点検のあとに原稿のファイル
         （点検したときに組む入力だったもの）が変わったか消えたら、点検も照合も 古い。照合のあとに点検し直したら、照合は 古い。"""
         p = folder / WORDING
-        if not p.is_file():
-            return ["日本語の点検: 未実施（スライドは build/ で slides.py wording、ドキュメントは docs.py wording <URL>）", "保存した資料との照合: 未実施"]
-        st = json.loads(p.read_text(encoding="utf-8"))
+        st = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
         s, last, sv = st.get("summary") or {}, st.get("last") or {}, st.get("saved") or {}
-        moved = sorted(k for k, v in (last.get("files") or {}).items() if not (folder / k).is_file() or sha(folder / k) != v)  # wording.py の stale と同じ
-        items = [f"日本語の点検: {'古い' if moved else s.get('状態', '?')}（文 {s.get('文', '?')}・指摘 {s.get('指摘', '?')}・未判断 {s.get('未判断', '?')}・残す {s.get('残す', '?')}"
+        moved = sorted(k for k, v in (last.get("files") or {}).items() if ((folder / k).is_file() and sha(folder / k) or None) != v)  # wording.py の stale と同じ（ないファイルは None）
+        items = ["日本語の点検: 未実施（スライドは build/ で slides.py wording、ドキュメントは docs.py wording <URL>）"] if not last else [f"日本語の点検: {'古い' if moved else s.get('状態', '?')}（文 {s.get('文', '?')}・指摘 {s.get('指摘', '?')}・未判断 {s.get('未判断', '?')}・残す {s.get('残す', '?')}"
                  f"・聞く {s.get('聞く', '?')}・意味の変わる恐れの未確認 {s.get('未確認', '?')}・書き直し {s.get('書き直し', '?')} / {s.get('上限', '?')} 回）。{s.get('source')}・{s.get('ts')}"]
         if moved:
             items.append(f"日本語の点検のあとに変わったファイル: {short(moved)}（点検し直す）")
@@ -530,6 +528,8 @@ def selftest():
             (f / "build" / "p02.json").write_text("{}")
             (f / "build" / "p13.json").unlink()
             assert "日本語の点検: 済み" in got()["10"] and "保存した資料との照合: 済み" in got()["10"]
+            (f / WORDING).write_text(json.dumps({"saved": {"url": "u", "problems": ["日本語の点検を回していない"]}}))  # 点検の前に照合だけを回した
+            assert "日本語の点検: 未実施" in got()["10"] and "保存した資料との照合: 通らない" in got()["10"]
             (f / WORDING).write_text("{壊れた")
             assert "調べられない" in got()["10"] and "出典の表の確認" in got()["10"]  # 壊れた記録でも、ほかの事実は出す
             (f / WORDING).unlink()

@@ -323,20 +323,11 @@ def show(st, tool="wording", folder=None):
     return s
 
 
-def same_material(st, folder, url):
-    """wording.json が別の資料（url）の記録なら止める。別の資料の記録を黙って消さない（消すと、確かめていない恐れが、前に通した文になる）。"""
-    if url and st.get("url") not in (None, url):
-        sys.exit(f"{os.path.join(folder, STATE)} は別の資料 {st.get('url')} の記録。1 つのフォルダには 1 つの資料を置く。作り直した資料なら、"
-                 "このファイルを消してから点検から回す（判断と前に通した文はなくなり、今の文から始める）")
-    return st
-
-
-def run(folder, kind, units, files, problems=(), tool="wording", source=None, url=None):
+def run(folder, kind, units, files, problems=(), tool="wording", source=None):
     """集めた文（units。file・loc は道具が埋める）を点検し、wording.json の点検（last）を書き、状態を出す。済みなら True。
     files は点検したときのファイル（資料のフォルダからのパス → sha256）。flow.py と照合（verify）が、点検のあとに変わったかを見る。
-    problems は道具が見つけた、通らない理由。source は点検した文の出どころ（「build/deck.json（手元の JSON）」など。表示と記録だけに使う）。
-    url は Google の資料から文を読んだとき（ドキュメント）だけ渡し、別の資料の記録なら止める。"""
-    st, t0 = same_material(load(folder), folder, url), time.time()
+    problems は道具が見つけた、通らない理由。source は点検した文の出どころ（「build/deck.json（手元の JSON）」など。表示と記録だけに使う）。"""
+    st, t0 = load(folder), time.time()
     prev = st.get("last") or {}
     for u in units:
         u["sha"] = sha(u["text"])
@@ -371,7 +362,7 @@ def run(folder, kind, units, files, problems=(), tool="wording", source=None, ur
     last = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": source, "digest": digest(units),
             "units": [{k: u.get(k) for k in KEEP + ("sha",)} for u in units],
             "findings": list(hits.values()), "risks": rs, "fixed": fixed, "problems": list(problems) + unreadable, "files": files, "seconds": None}
-    st = {"version": 2, "kind": kind, **({"url": st["url"]} if st.get("url") else {}), "rounds": rounds, "max_rounds": MAX_ROUNDS,
+    st = {"version": 2, "kind": kind, "rounds": rounds, "max_rounds": MAX_ROUNDS,
           "base": base, "decisions": dec, "last": last, **({"saved": st["saved"]} if st.get("saved") else {})}  # 照合は消さない（点検の文が変われば、digest で古いになる）
     s, _, _ = summarize(st)
     accept_base(st)  # 恐れが残るうちは、前に通した文を進めない
@@ -389,7 +380,7 @@ def verify(folder, url, revision, units, problems=(), tool="wording"):
     """保存した資料との照合（saved）: 最後の点検（last）が済みで、そのあとに build/ のファイルが変わっておらず、Google に保存された資料の文（units）が
     点検した文と同じか。problems は道具が見つけた、通らない理由（組んだリビジョンでない・画像を見ていない・組んでいない直しがある）。済みなら True。
     文はページの場所（where）ごとの数え上げで比べる（並びは Google が組んだ順で変わるので見ない）。違えば、その文を通らない理由にする（画面で直したか、組んでいない）。"""
-    st = same_material(load(folder), folder, url)
+    st = load(folder)  # 資料の URL には結ばない（点検は原稿のもの。作り直したデッキの照合も、同じ点検と比べる）
     last = st.get("last") or {}
     out = list(problems)
     if not last:
@@ -408,7 +399,6 @@ def verify(folder, url, revision, units, problems=(), tool="wording"):
         if diff:
             out.append(f"保存した資料の文が、点検した文と {len(diff)} か所違う（画面で直したか、組んでいない。直しをページの JSON か doc.md に入れ、点検してから組み直す）: "
                        + " / ".join(diff[:6]) + (" ほか" if len(diff) > 6 else ""))
-    st["url"] = url
     st["saved"] = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "url": url, "revision": revision, "checked": last.get("digest"),
                    "problems": out}
     save(folder, st)
@@ -560,14 +550,11 @@ def selftest():
         assert verify(d, url, "r1", page(*texts)) and load(d)["summary"]["状態"] == "済み"
         run(d, "slides", page("4 つの構成を比べる", "前の版の手順に戻る"), files())  # 点検し直すと、前の照合は古い（ファイルが同じでも、点検した文が違う）
         assert saved_state(load(d), d) == "古い"
-        # 別の資料の記録は使わない（照合が資料の URL を持つ）
-        for f in (lambda: verify(d, "https://docs.google.com/presentation/d/other/edit", "o1", page(*texts), {}),
-                  lambda: run(d, "docs", page(*texts), {}, url="https://docs.google.com/document/d/other/edit")):
-            try:
-                f()
-                raise AssertionError("別の資料の記録を消した")
-            except SystemExit as e:
-                assert "別の資料" in str(e) and load(d)["url"] == url  # 別の資料の記録は消さずに止まる
+        # 作り直したデッキ（別の URL）の照合も、同じ点検と比べる。比べる相手・判断・書き直しの回数は残る（記録を消させない）
+        st0 = load(d)
+        assert verify(d, "https://docs.google.com/presentation/d/other/edit", "o1", page("4 つの構成を比べる", "前の版の手順に戻る")) is False  # 点検の判断が残っていない文がある
+        st1 = load(d)
+        assert st1["saved"]["url"].endswith("/other/edit") and st1["base"] == st0["base"] and st1["decisions"] == st0["decisions"] and st1["rounds"] == st0["rounds"]
     with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(io.StringIO()):
         assert summarize(load(d))[0]["状態"] == "未実施"  # 回していなければ未実施（済みにしない）
         # 最初の回に通らない理由があっても、その文を比べる相手にする（そのあとの書き換えを比べずに通さない）
@@ -575,13 +562,13 @@ def selftest():
         assert load(d)["base"][0]["text"] == "検証は不要ではない。4 つの構成の比べ"
         assert not run(d, "slides", [unit("p1", "検証は不要だ。4 つの構成を比べる", "#", "本文")], {})
         assert {"否定の数", REREAD} <= {r["kind"] for r in load(d)["last"]["risks"]}
-        os.remove(os.path.join(d, STATE))  # 別の資料に移るときは、記録を消してから
+        os.remove(os.path.join(d, STATE))  # 新しい資料から
         run(d, "slides", [], {})
         assert load(d)["base"] == [] and load(d)["summary"]["状態"] == "済み"
         run(d, "slides", [unit("p1", "検証は不要ではない", "#", "本文")], {})
         assert [r["kind"] for r in load(d)["last"]["risks"]] == ["否定の数"]
         # 印のないページ（pages.py）の並び: 前にページを足しても、あとのページを別のページと組にしない
-        os.remove(os.path.join(d, STATE))  # 別の資料に移るときは、記録を消してから
+        os.remove(os.path.join(d, STATE))  # 新しい資料から
         run(d, "slides", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("価格は月 100 円", "Spark で動かす"), 1)], {})
         run(d, "slides", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("足したページ", "価格は月 100 円", "Spark で動かす"), 1)], {})
         assert load(d)["last"]["risks"] == []

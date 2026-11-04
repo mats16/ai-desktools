@@ -446,6 +446,7 @@ class Deck:
         self.run = new_run()  # 組み直すときに、前の ID（残したページのものも）とぶつけない
         self.page_names = {}  # JSON のページのファイル名（拡張子なし）→ ページの ID。[名前](#p12) のリンク先
         self.page_files = {}  # ページの ID → そのページを書いた JSON のファイル（今いるフォルダからのパス）。日本語の点検（slides.py wording）が指摘を戻す先
+        self.read_files = []  # spec が読んだ JSON のファイル（中のデッキのファイル・部品 1 つのファイルも）。日本語の点検が組む入力として記録する
         self.resolved, self.spec_index, self.spec_esc = [], {}, []  # JSON のページ（spec）の解いた形、ページごとの (部品の場所, 文字)（lint の指摘に場所を付ける）、
         # 形の外の書き方（ページ, 場所, キー）
         self.anchor = None  # 直前の card・code の箱の文字の枠（矢印をつなぐ先。JSON のページの id）
@@ -496,7 +497,7 @@ class Deck:
     def spec(self, src):
         """JSON で書いたページ（ファイルのパス、dict、その並び、deck.json、部品 1 つ）を解いて組み、ページの ID の並びを返す。
         書き方は ../pages.md の slides-pages-034。解いた形は self.resolved に残る（slides.py resolve）。"""
-        return [spec_page(self, p, base, loc, name) for p, base, loc, name in spec_files(src)]
+        return [spec_page(self, p, base, loc, name) for p, base, loc, name in spec_files(src, read=self.read_files)]
 
     # ---- 図形と文字 ----
     def _shape(self, sid, x, y, w, h, fill=None, line=None, kind="RECTANGLE", sx=1, sy=1, dash=False, weight=0.75):
@@ -2356,10 +2357,11 @@ class SpecPage:
                     self.warns.append(f"{l1} と {l2}: 矢じりの先が 1 点に集まる（{p[0]:.2f}, {p[1]:.2f} in）。入る辺か位置をずらす")
 
 
-def spec_files(src, base=None, where=None, file=False):
+def spec_files(src, base=None, where=None, file=False, read=None):
     """src（ファイルのパス、dict、そのどちらかの並び）から (ページ, 画像のパスの起点, 場所, 名前) を順に出す。デッキのページのファイルは、デッキのファイルのあるフォルダから読む。
     名前はページのファイル名（拡張子なし。[名前](#p12) のリンク先）で、ファイルでないページは None。
-    ファイルの先頭には apiVersion と kind（deck・page・component）が要る。Python から渡した dict は、書いていなければ中身から kind を決める。"""
+    ファイルの先頭には apiVersion と kind（deck・page・component）が要る。Python から渡した dict は、書いていなければ中身から kind を決める。
+    read（並び）を渡すと、読んだファイルのパスをすべて足す（中のデッキのファイルと部品 1 つのファイルも。日本語の点検が、組む入力として記録する）。"""
     base = base or Path.cwd()
     if isinstance(src, (str, Path)):
         path, where = base / src, where or str(src)
@@ -2367,12 +2369,14 @@ def spec_files(src, base=None, where=None, file=False):
             src = json.loads(path.read_text())
         except (OSError, json.JSONDecodeError) as e:
             sys.exit(f"{where}: 読めない（{e}）")
-        yield from spec_files(src, path.parent, where, True)
+        if read is not None:
+            read.append(path)
+        yield from spec_files(src, path.parent, where, True, read)
         return
     where = where or "spec"
     if isinstance(src, list) and not file:
         for i, p in enumerate(src):
-            yield from spec_files(p, base, None if isinstance(p, str) else f"{where}[{i}]")
+            yield from spec_files(p, base, None if isinstance(p, str) else f"{where}[{i}]", read=read)
         return
     if not isinstance(src, dict):
         sys.exit(f'{where}: ファイルの先頭は {{"apiVersion": "{API_VERSION}", "kind": "deck"・"page"・"component", …}}')
@@ -2388,7 +2392,7 @@ def spec_files(src, base=None, where=None, file=False):
     if kind == "deck":
         spec_check(src, SPEC_DECK, f"{where}（deck）")
         for p in src["pages"]:
-            yield from spec_files(p, base, p)
+            yield from spec_files(p, base, p, read=read)
     elif kind == "theme":
         sys.exit(f"{where}: テーマのファイルはページに並べない（deck.json の theme に名前を書く。テーマのファイルだけを見るなら slides.py lint <ファイル>）")
     elif kind == "component":  # 部品 1 つだけのファイルは、型のないページに置く
@@ -3716,7 +3720,7 @@ def cmd_wording(path, url=None):
         deck = make_deck(m.make, getattr(m, "NAME", "dry"))
     q = local_json(json.loads(resolved(deck, p)), deck, p)
     units = wording_places(slide_units(q, [deck.notes.get(s) or "" for s in deck.slides]), deck)
-    files = wording.input_files([path, *deck.page_files.values()])
+    files = wording.input_files([path, *(os.path.relpath(f) for f in deck.read_files)])  # 組む入力だけ（deck.json か pages.py と、spec が読んだファイル）
     if not wording.run(str(Path.cwd().parent), "slides", units, files, (), "slides.py wording", f"build/{path}（手元の JSON。テーマ {name}）"):
         sys.exit(1)
 
@@ -4323,14 +4327,16 @@ def selftest_wording():
             w("sub/p02.json", page(title="仕組みを確かめる", body=[{"type": "text", "text": "検証は不要ではない"}]))
             w("p02.json", page(title="使わない控えの比べ"))  # deck.json が指していない同じ名前のファイル（混ぜない）
             w("old/p01.json", page(title="4 つの構成の比べ"))
-            w("deck.json", {"apiVersion": API_VERSION, "kind": "deck", "name": "t", "theme": "navy", "pages": ["p01.json", "sub/p02.json"]})
+            w("deck.json", {"apiVersion": API_VERSION, "kind": "deck", "name": "t", "theme": "navy", "pages": ["p01.json", "pages_a.json"]})
+            w("pages_a.json", {"apiVersion": API_VERSION, "kind": "deck", "name": "a", "pages": ["sub/p02.json", "c.json"]})  # 子の担当のデッキのファイルと、部品 1 つのファイル
+            w("c.json", {"apiVersion": API_VERSION, "kind": "component", "type": "text", "text": "部品だけのページ"})
             assert go() == 1  # 未判断の指摘がある
             st = wording.load(str(folder))
-            assert sorted(st["last"]["files"]) == ["build/deck.json", "build/p01.json", "build/sub/p02.json"]  # 組む入力だけ
+            assert sorted(st["last"]["files"]) == ["build/c.json", "build/deck.json", "build/p01.json", "build/pages_a.json", "build/sub/p02.json"]  # 組む入力だけ（中のデッキと部品のファイルも）
             got = {(f["rule"], f["file"], f["loc"]) for f in st["last"]["findings"]}
             assert ("動詞を名詞にした語", "p01.json", "title") in got and ("直訳の語", "p01.json", "body[0].rows[1][1]") in got, got  # 見出しと表のセル
             assert ("動詞を名詞にした語", "p01.json", "body[1].items[0].text") in got and ("直訳の語", "p01.json", "speakerNotes") in got, got  # 図の札とノート
-            assert not [f for f in st["last"]["findings"] if "控え" in f["excerpt"]] and {u["key"] for u in st["last"]["units"]} == {"p01", "sub/p02"}
+            assert not [f for f in st["last"]["findings"] if "控え" in f["excerpt"]] and {u["key"] for u in st["last"]["units"]} == {"p01", "sub/p02", "#"}  # 部品 1 つのファイルのページは、ファイルの名前を持たないので 1 つの並び
             keep = {f["loc"]: f["id"] for f in st["last"]["findings"]}
             with contextlib.redirect_stdout(io.StringIO()):
                 wording.decide(str(folder), "keep", list(keep.values()), "selftest")
@@ -4348,6 +4354,9 @@ def selftest_wording():
             assert go() == 1
             assert [(r["kind"], r["file"]) for r in wording.load(str(folder))["last"]["risks"]] == [("否定の数", "sub/p02.json")]
             w("sub/p02.json", page(title="仕組みを確かめる", body=[{"type": "text", "text": "検証は不要ではない"}]))
+            assert go() == 0
+            w("c.json", {"apiVersion": API_VERSION, "kind": "component", "type": "text", "text": "部品だけのページを直す"})  # 中のファイルを直せば、点検は古い
+            assert wording.stale(wording.load(str(folder)), str(folder)) == ["build/c.json"]
             assert go() == 0
             # ノートのキーを消す: ノートの文がなくなったことを、読み比べの恐れとして出す（取りこぼさない）
             w("p01.json", {k: v for k, v in p1.items() if k != "speakerNotes"} | {"title": "4 つの構成を比べる"})

@@ -1215,7 +1215,7 @@ def cmd_wording(src):
     md = open("doc.md", encoding="utf-8").read()
     units = doc_units(doc, md.splitlines())
     folder, url = os.path.dirname(os.getcwd()), f"https://docs.google.com/document/d/{did}/edit"
-    ok = wording.run(folder, "docs", units, wording.input_files(["doc.md"]), problems, f"docs.py wording {src}", f"Google の文書（リビジョン {doc.get('revisionId')}。doc.md と照らした）", url)
+    ok = wording.run(folder, "docs", units, wording.input_files(["doc.md"]), problems, f"docs.py wording {src}", f"Google の文書（リビジョン {doc.get('revisionId')}。doc.md と照らした）")
     if not (wording.verify(folder, url, doc.get("revisionId"), units, problems, f"docs.py wording {src}") and ok):  # 読んだ文書が点検した文そのものなので、照合も同じ回に書く（理由も同じ）
         sys.exit(1)
 
