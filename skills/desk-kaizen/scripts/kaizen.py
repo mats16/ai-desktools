@@ -5,8 +5,8 @@ usage:
   kaizen.py lint    <名前> <資料の URL ...>          いまの資料の JSON に、前の版と変えた版の lint をかけて比べる
   kaizen.py rebuild <名前> <資料のフォルダ ...> [--pages 2,5] [--keep]   build/ の正本（deck.json・pages.py・doc.md）を前の版と変えた版で仮に組み、ページの画像を並べて比べる
   kaizen.py probe   <名前> [--fixtures 02,05] [<資料のフォルダ> ...] [--agent claude|codex|pi] [--model <モデル>] [--jobs 2] [--timeout 1800]
-                    同じ依頼（docs/fixtures の試しと、過去の資料の構成案から書き直す再演）を、前の版と変えた版のプラグインで子のエージェントに 1 回ずつ書かせ、
-                    どちらの出力も変えた版の lint（組まずに手元で）で数え、版を伏せた選ぶ役の子に成果物だけを見て選ばせる（Google は使わない）
+                    同じ依頼（docs/fixtures の試しと、過去の資料の構成案から書き直す再演）を、前の版と変えた版のプラグインでサブエージェントに 1 回ずつ書かせ、
+                    どちらの出力も変えた版の lint（組まずに手元で）で数え、版を伏せた選ぶ役のサブエージェントに成果物だけを見て選ばせる（Google は使わない）
   kaizen.py open    <名前> --title <題> --body <本文.md>   本文と検証の記録と変更案の差分をまとめて、プラグインのリポジトリに Issue を作る（commit は先に済ませる。Issue があれば本文を書き換える）
   kaizen.py clean   <名前>                          clone と検証の記録を消す（Issue が閉じられたあと）
   kaizen.py --selftest
@@ -38,7 +38,7 @@ CODEX_NO_WEB = ("-c", 'web_search="disabled"')  # codex の Web 検索はサー�
 CODEX_SEARCH = re.compile(r"\s*(web_search\w*|standalone_web_search|search_tool)\s*=")  # 写した設定から外す（Web 検索を入れる鍵）  # claude の子は使う人の settings.json の許しを受け継ぐ。止める指定は許しより強い
 AGENTS = ("claude", "codex", "pi")
 PROBE = "### 走らせて比べる"  # verify/pr.md の probe の節。skills/ の md を変えたら、これか「検証しない理由」が要る
-RULE_TEXT = re.compile(r"skills/.+\.md$")  # 決まりと手順の文（子のエージェントが読むもの）
+RULE_TEXT = re.compile(r"skills/.+\.md$")  # 決まりと手順の文（サブエージェントが読むもの）
 CHANGED_ID = re.compile(r"\[((?:ws-)?[a-z][\w-]*?-\d{3})\]")
 SKIP = shutil.ignore_patterns(".git", "docs", "tests", "sandbox", "__pycache__")  # 子に渡すプラグインの写し。docs/fixtures の「見るところ」（答えの基準）を子に見せない
 SELECT = Path(__file__).resolve().parents[1] / "prompt_select.md"
@@ -227,7 +227,7 @@ def inputs(src, dst):
 
 
 def setup_ws(w, plugin, ws, task):
-    """書く役の子の作業場。その版の雛形（desk-init）から作り、Google に組める設定は入れない（雛形の desk.toml では組めない）。
+    """書く役のサブエージェントの作業場。その版の雛形（desk-init）から作り、Google に組める設定は入れない（雛形の desk.toml では組めない）。
     再演は、資料の材料と、顧客の memory・profile、ワークスペースのテーマを写す。ワークスペースの rules/ は写さない（ほかの人にも効くかを見るので）。"""
     sh(sys.executable, plugin / "skills" / "desk-init" / "scripts" / "init.py", ws, env={"DESK_CONFIG": ""})
     if not task["folder"]:
@@ -259,7 +259,7 @@ def codex_home(tmp, name, plugin=None):
             keep and not CODEX_SEARCH.match(line) and out.append(line)
         text = "\n".join(out) + "\n"
         if bad := codex_leftovers(text):
-            sys.exit(f"~/.codex/config.toml を子に写せない（{'、'.join(bad)} が残る）。Codex の子に MCP サーバーや Web 検索を渡さないため。書き方を表（[…]）にするか、--agent claude か pi で回す")
+            sys.exit(f"~/.codex/config.toml をサブエージェントに写せない（{'、'.join(bad)} が残る）。Codex のサブエージェントに MCP サーバーや Web 検索を渡さないため。書き方を表（[…]）にするか、--agent claude か pi で回す")
         (home / "config.toml").write_text(text, encoding="utf-8")
     for cmd in (("marketplace", "add", str(plugin)), ("add", "desk-tools@desk-tools")) if plugin else ():
         sh("codex", "plugin", *cmd, env={"CODEX_HOME": str(home)})
@@ -284,7 +284,7 @@ def codex_leftovers(text):
 
 
 def writer_cmd(agent, plugin, ws, prompt, model):
-    """書く役の子。その版のプラグインだけを読ませ、Web の道具は渡さない（claude は許す道具の一覧と WebFetch・WebSearch を止める指定、codex は workspace-write の sandbox と
+    """書く役のサブエージェント。その版のプラグインだけを読ませ、Web の道具は渡さない（claude は許す道具の一覧と WebFetch・WebSearch を止める指定、codex は workspace-write の sandbox と
     MCP サーバーを写さない CODEX_HOME。pi は Bash から外に出られる）。ponytail: 外に出るのを止めるのは道具の層だけ。試しの依頼文と見るところは公開のリポジトリにある"""
     m = lambda flag: [flag, model] if model else []
     if agent == "claude":
@@ -441,7 +441,7 @@ def probe(w, fixtures, folders, agent="claude", model=None, jobs=2, timeout=1800
     plugins = {side: tmp / names[side] for side in SIDES}
     runs = [(t, side) for t in tasks for side in SIDES]
     homes, rows, done = {}, [], {}
-    print(f"書く役の子を {len(runs)} 回（{agent}、同時に {jobs}）と、選ぶ役の子を最大 {len(tasks)} 回起こす。1 回 {timeout} 秒まで。作業場: {tmp}（終わったら消す）")
+    print(f"書く役のサブエージェントを {len(runs)} 回（{agent}、同時に {jobs}）と、選ぶ役のサブエージェントを最大 {len(tasks)} 回起こす。1 回 {timeout} 秒まで。作業場: {tmp}（終わったら消す）")
     try:
         for side, src in zip(SIDES, (w.base, w.repo)):
             shutil.copytree(src, plugins[side], ignore=SKIP)
@@ -481,7 +481,7 @@ def probe(w, fixtures, folders, agent="claude", model=None, jobs=2, timeout=1800
     ids = sorted({i for line in patch.splitlines() if line[:1] in "+-" and not line.startswith(("+++", "---")) for i in CHANGED_ID.findall(line)})
     detail, public = probe_report(rows, agent, model, probe_verdict(rows, ids), head)
     w.log(detail, public)
-    print(detail + f"\n記録: {w.verify / 'pr.md'}（Issue に載る）・{w.verify / 'detail.md'}・{w.verify / 'probe'}/（子の出力と成果物）")
+    print(detail + f"\n記録: {w.verify / 'pr.md'}（Issue に載る）・{w.verify / 'detail.md'}・{w.verify / 'probe'}/（サブエージェントの出力と成果物）")
 
 
 def save_probe(w, tasks, done, rows):
@@ -507,8 +507,8 @@ def probe_report(rows, agent, model, verdict, head=""):
     num = lambda x, k: str(x[k]) if x else "-"
     money = lambda c: f"{c:.2f}" if isinstance(c, (int, float)) else "-"
     title = (f"{PROBE}（{agent}、モデル: {model or 'その CLI の既定'}、変えた版 {head}）\n\n"
-            "同じ依頼を、前の版と変えた版のプラグインで子のエージェントに 1 回ずつ書かせた。どちらの出力も変えた版の lint（組まずに手元で）で数え、"
-            "版を伏せた選ぶ役の子が、依頼と材料と成果物だけを見て選んだ。\n\n"
+            "同じ依頼を、前の版と変えた版のプラグインでサブエージェントに 1 回ずつ書かせた。どちらの出力も変えた版の lint（組まずに手元で）で数え、"
+            "版を伏せた選ぶ役のサブエージェントが、依頼と材料と成果物だけを見て選んだ。\n\n"
             "| 依頼 | 選んだ版 | 要修正（前の版 → 変えた版） | 要確認 | 時間（分） | 費用（$、書く役） | 終わり方 |\n|---|---|---|---|---|---|---|\n")
     table = "".join(f"| {r['label']} | {r['pick']} | {num(r['lint'] and r['lint'][0], '要修正')} → {num(r['lint'] and r['lint'][1], '要修正')} | "
                     f"{num(r['lint'] and r['lint'][0], '要確認')} → {num(r['lint'] and r['lint'][1], '要確認')} | {r['base']['secs'] / 60:.1f}・{r['head']['secs'] / 60:.1f} | "

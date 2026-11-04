@@ -3,12 +3,12 @@
 ワークスペースの .desk/crawl/<topic>/ に置く。何を選ぶか・何を書くか（関心・目的・分類）は使う側が持ち、ここには持たない。標準ライブラリだけ。
 usage:
   crawl.py plan <topic> [--hours 24 | --since <ISO>] [--until <ISO>] [--explore 3]
-                      今回読む先を組（子に 1 つずつ渡す単位）に分けて出す。先ごとの始まり（前に読んだ所から。取れなかった先は取れた所から）、
+                      今回読む先を組（サブエージェントに 1 つずつ渡す単位）に分けて出す。先ごとの始まり（前に読んだ所から。取れなかった先は取れた所から）、
                       間隔で今回は読まない先、覚え書き、探索する候補、ユーザーに聞くことも出す。plan.json に残す
   crawl.py more <topic> <先の id>...   その回の中で追加に読む先（1 回に 3 つまで）を plan.json に組として足し、組の番号を出す
-  crawl.py prompt <topic> <組の番号> --goal <目的の文>   その組の子への依頼文（../prompt_collect.md を埋めたもの）を出す
-  crawl.py feeds <topic> [--out <file>]   kind が feed の先（RSS・Atom）を読み、子の返事と同じ形の JSON を出す
-  crawl.py merge <topic> <子の返事.json>... --out <run.json>   子の返事を 1 つの回の記録の下書きにまとめる（同じ URL は 1 つにし、
+  crawl.py prompt <topic> <組の番号> --goal <目的の文>   その組のサブエージェントへの依頼文（../prompt_collect.md を埋めたもの）を出す
+  crawl.py feeds <topic> [--out <file>]   kind が feed の先（RSS・Atom）を読み、サブエージェントの返事と同じ形の JSON を出す
+  crawl.py merge <topic> <サブエージェントの返事.json>... --out <run.json>   サブエージェントの返事を 1 つの回の記録の下書きにまとめる（同じ URL は 1 つにし、
                       どの先で見えたかを足す。前の回までに使われた項目には dup、題の似たものには similar を付ける）。候補の一覧を出す
   crawl.py record <topic> <run.json> [--published <出力の md>...] [--missed <取りこぼし.json>...]   回を記録する。出力のどれかに
                       URL があった項目を「使われた」にし（出力を渡さなければ、前に記録した目印のまま）、取りこぼしを足す。覚え書きへの追加と票、候補から follow への引き上げを当てて出す
@@ -114,7 +114,7 @@ def no_null(v):
 
 
 def read_input(path, as_json=True):
-    """引数で渡されたファイル（子の返事・回の記録・出力の md・取りこぼし・台帳に足す先）を読む。読めなければ理由を出して止める。"""
+    """引数で渡されたファイル（サブエージェントの返事・回の記録・出力の md・取りこぼし・台帳に足す先）を読む。読めなければ理由を出して止める。"""
     try:
         text = Path(path).read_text(encoding="utf-8")
         return json.loads(text) if as_json else text
@@ -146,7 +146,7 @@ def canon(url):
     # は、リリースノートのように 1 つのページに並ぶ項目を分けるので残す。外すのは Slack と、項目を指さないもの（#top・#content・#:~:text=）だけ。"""
     try:
         p = urllib.parse.urlsplit(url.strip())
-    except ValueError:  # 子の返事やフィードの壊れた URL（http://[::1 など）1 つで、まとめ全体を止めない
+    except ValueError:  # サブエージェントの返事やフィードの壊れた URL（http://[::1 など）1 つで、まとめ全体を止めない
         return url.strip()
     slack = p.netloc.lower().endswith(".slack.com")  # Slack のリンクの cid（チャンネル）はパスと同じなので外す
     q = [(k, v) for k, v in urllib.parse.parse_qsl(p.query, keep_blank_values=True) if not TRACKING.match(k) and not (slack and k == "cid")]
@@ -409,7 +409,7 @@ def plan(topic, a):
     print(f"# {topic} の読み方（{p['since']} 〜 {p['until']}。記録 {len(rows)} 回）\n")
     if not reg["sources"]:
         print("台帳が空。読む先を `set <topic> --from <file.json>` で足してから、もう一度 plan を回す。\n")
-    print("## 組（feed は `feeds` で取る。ほかは 1 組を 1 つの子に、`prompt <topic> <番号> --goal …` の依頼文で渡す）\n")
+    print("## 組（feed は `feeds` で取る。ほかは 1 組を 1 つのサブエージェントに、`prompt <topic> <番号> --goal …` の依頼文で渡す）\n")
     for i, g in enumerate(out, 1):
         print(f"### {i}. {g['name']}（{len(g['sources'])}）")
         for e in g["sources"]:
@@ -452,7 +452,7 @@ def more(topic, ids):
     p["explore_ids"] = p.get("explore_ids", []) + new
     p["more_ids"] = p.get("more_ids", []) + new
     write_json(folder(topic) / "plan.json", p)
-    print(f"組 {len(p['groups'])}（more）に {len(new)} つ足した。`prompt {topic} {len(p['groups'])} --goal …` の依頼文で子に渡し、"
+    print(f"組 {len(p['groups'])}（more）に {len(new)} つ足した。`prompt {topic} {len(p['groups'])} --goal …` の依頼文でサブエージェントに渡し、"
           f"返事を足して merge し直す（前の返事も全部渡す）")
 
 
@@ -464,7 +464,7 @@ def prompt(topic, n, goal):
         sys.exit("--goal（プロンプトの目的・聞き手・分類の文）がない")
     g = p["groups"][n - 1]
     if g.get("feed"):
-        sys.exit("feed の組は子に渡さない。feeds で取る")
+        sys.exit("feed の組はサブエージェントに渡さない。feeds で取る")
     lines = []
     for e in g["sources"]:
         lines.append(f"- `{e['id']}` {e['name']} — read from {e['since']}" + (f"; {e['url']}" if e["url"] else "")
@@ -516,7 +516,7 @@ def parse_feed(xml, since):
 def unsafe_feed(url):
     """開かないフィードの URL なら理由を返す: http・https でない、手元の名前、引いた先が手元・社内の IP アドレス。
     名前は引いて、出た IP を全部見る（2130706433・0x7f.1 のような数の書き方も、OS が 127.0.0.1 に読むのでここで止まる）。
-    shortcut: 引いてからつなぐまでに DNS の答えが変わると通る。子の返事から入る先を開くだけなので、要れば引いた IP につなぐ"""
+    shortcut: 引いてからつなぐまでに DNS の答えが変わると通る。サブエージェントの返事から入る先を開くだけなので、要れば引いた IP につなぐ"""
     try:
         p = urllib.parse.urlsplit(url)
         port = p.port  # 数でない・範囲の外のポートは、ここで ValueError になる
@@ -555,7 +555,7 @@ def feeds(topic, out=None):
     for sid in [x["id"] for g in p["groups"] if g.get("feed") for x in g["sources"]]:  # plan が選んだ feed だけ（間隔の来た follow と、探索に選ばれた候補）
         e = reg["sources"].get(sid, {})
         url = sid.split(":", 1)[1]
-        if why := unsafe_feed(url):  # 先の id は子の返事（読んだページ）からも入るので、開く前に確かめる
+        if why := unsafe_feed(url):  # 先の id はサブエージェントの返事（読んだページ）からも入るので、開く前に確かめる
             res["reads"].append({"source": sid, "name": e.get("name", ""), "ok": False, "error": why})
             continue
         try:
@@ -593,10 +593,10 @@ def merge(topic, files, out):
     for f in files:
         d = no_null(read_input(f))
         if isinstance(d, dict) and ("items" in d or "id" in d):
-            sys.exit(f"{f} は回の記録（merge の出力）で、子の返事ではない。子の返事と feeds の出力だけを渡す")
+            sys.exit(f"{f} は回の記録（merge の出力）で、サブエージェントの返事ではない。サブエージェントの返事と feeds の出力だけを渡す")
         if not isinstance(d, dict) or not all(isinstance(d.get(k, []), list) and all(isinstance(x, dict) for x in d.get(k, []))
                                               for k in ("reads", "candidates", "discovered", "lessons", "votes")):
-            sys.exit(f"{f} は子の返事の形でない（../prompt_collect.md の Return。各項目はオブジェクトのリスト）")
+            sys.exit(f"{f} はサブエージェントの返事の形でない（../prompt_collect.md の Return。各項目はオブジェクトのリスト）")
         if errs := check({"id": f, **{k: d.get(k, []) for k in ("reads", "discovered", "lessons", "votes")},
                           "items": d.get("candidates", [])}):  # 回の記録と同じ確かめ（使う前に止める）
             sys.exit(f"{f} の形が違う:\n- " + "\n- ".join(errs))
@@ -629,7 +629,7 @@ def merge(topic, files, out):
     got = {rd["source"] for rd in run["reads"]}
     for sid, since in starts.items():  # plan にあって返事のない先（子が落ちた組、feeds を回さなかった）は、取れなかったとして次の回に読み直す
         if sid not in got:
-            run["reads"].append({"source": sid, "ok": False, "since": since, "error": "返事がない（子が落ちたか、組を渡さなかった）",
+            run["reads"].append({"source": sid, "ok": False, "since": since, "error": "返事がない（サブエージェントが落ちたか、組を渡さなかった）",
                                  **({"explore": True} if sid in explore else {}), **({"more": True} if sid in extra else {})})
     for i in run["items"]:
         if d := next((pub[k] for k in keys(i) if k in pub), None):
@@ -691,7 +691,7 @@ def is_sid(v):
     return isinstance(v, str) and re.fullmatch(r"[\w.-]+:.+", v) is not None
 
 
-FIELDS = {  # 回の記録（と子の返事）の欄の型。コードが読む欄は全部ここに書き、check はここだけで確かめる（欄ごとに書き足すと漏れるため）
+FIELDS = {  # 回の記録（とサブエージェントの返事）の欄の型。コードが読む欄は全部ここに書き、check はここだけで確かめる（欄ごとに書き足すと漏れるため）
     "reads": {"source": "sid", "name": "str", "ok": "bool", "since": "time", "until": "time", "scanned": "int", "picked": "int",
               "explore": "bool", "more": "bool", "error": "str"},
     "items": {"url": "url", "urls": "strs", "ids": "ids", "title": "str", "public_url": "str", "seen_in": "sids", "origin": "sid", "used": "bool",
@@ -786,7 +786,7 @@ def record(topic, path, outputs=(), missed=()):
     day = run["id"][:10]
     kept = list(dict.fromkeys(applied.setdefault("changes", []) + run.get("changes", [])))  # 前に当てた直しは、記録に残す
     changes = []
-    seen = Counter()  # 同じ覚え書きの何回目かも鍵にする（2 つの子が同じものを返したら 2 つ）。回の中の位置は、まとめ直すと子の返事の順で変わるので使わない
+    seen = Counter()  # 同じ覚え書きの何回目かも鍵にする（2 つの子が同じものを返したら 2 つ）。回の中の位置は、まとめ直すとサブエージェントの返事の順で変わるので使わない
     for l in run.get("lessons", []):
         k = [seen[(l.get("source", "*"), l["text"])], l.get("source", "*"), l["text"]]
         seen[tuple(k[1:])] += 1
@@ -1041,7 +1041,7 @@ def selftest():
                 pass
         reg = registry("t")
         assert reg["sources"]["slack:A"]["notes"][0]["id"] == "n1" and reg["sources"]["slack:B"]["pinned"] is False
-        # 1 回目: plan → 子の返事 2 つ → merge → record（出力に載った URL だけ使われた）
+        # 1 回目: plan → サブエージェントの返事 2 つ → merge → record（出力に載った URL だけ使われた）
         out = q(plan, "t", {"since": "2026-10-25T07:00+09:00", "until": "2026-10-26T07:00+09:00"})
         p = read_json(folder("t") / "plan.json", {})
         assert [g["name"] for g in p["groups"]] == ["slack", "explore"] and [e["id"] for e in p["groups"][1]["sources"]] == ["slack:M"], p
@@ -1293,7 +1293,7 @@ def selftest():
             (Path(d) / "child_bad.json").write_text(bad_child)
             try:
                 q(merge, "t", [str(Path(d) / "child_bad.json")], str(Path(d) / "x.json"))
-                raise AssertionError(f"形の違う子の返事で止まらない: {bad_child}")
+                raise AssertionError(f"形の違うサブエージェントの返事で止まらない: {bad_child}")
             except SystemExit:
                 pass
         alias = {"candidates": [{"title": "A", "url": "https://n/a", "seen_in": ["slack:A"]}, {"title": "B", "url": "https://n/b", "seen_in": ["slack:B"]},
@@ -1306,8 +1306,8 @@ def selftest():
         assert planned and {r["source"]: (r["ok"], r["since"]) for r in alias_run["reads"]} == {k: (False, v) for k, v in planned.items()}  # 返事のない先は取れなかった読み
         assert len(items) == 1 and items[0]["seen_in"] == ["slack:A", "slack:B", "slack:M"], items  # 別名でつながった 2 項目は 1 つに
         try:
-            q(merge, "t", [str(Path(d) / "alias_run.json")], str(Path(d) / "x.json"))  # 前の回の記録を子の返事として取り込まない
-            raise AssertionError("回の記録を子の返事として取り込んだ")
+            q(merge, "t", [str(Path(d) / "alias_run.json")], str(Path(d) / "x.json"))  # 前の回の記録をサブエージェントの返事として取り込まない
+            raise AssertionError("回の記録をサブエージェントの返事として取り込んだ")
         except SystemExit:
             pass
         req = urllib.request.Request("https://example.com/feed.xml")

@@ -8,7 +8,7 @@ usage:
       手元のファイルなら更新の時刻、ほかは HTTP の Last-Modified から取る（取れなければ「不明」）
   refs.py seen <資料のフォルダ> <S-ID> …   読み直した出典の、確かめた日を今日にする
   refs.py check <資料のフォルダ> [--fetch] [--days 14]
-      台帳と出典の表の形の誤り（あれば exit 1）、照合していない行（危ない順。照合の子に渡す）、確認が「未」の行、
+      台帳と出典の表の形の誤り（あれば exit 1）、照合していない行（危ない順。照合のサブエージェントに渡す）、確認が「未」の行、
       古い行（確かめてから --days 日を過ぎた出典を使う、提供・数字の行）、確かめたあとに元が更新された出典。
       --fetch は元の更新日を取り直して台帳に書く（渡す前に回す）
   refs.py index [<ワークスペース>]
@@ -357,7 +357,7 @@ def check(folder, fetch_now=False, days=14, today=None, fetcher=None):
     print(f"台帳: 出典 {len(src)} 件（references.md）、事実 {len(rows)} 件（{rows[0]['_file'] if rows else '出典の表なし'}）")
     for n in notes:
         print(f"（{n}）")
-    for title, items in (("形の誤り（直す）", errs), ("照合していない行（照合の子に渡す。危ない順）", [show(r) for r in todo]),
+    for title, items in (("形の誤り（直す）", errs), ("照合していない行（照合のサブエージェントに渡す。危ない順）", [show(r) for r in todo]),
                          ("確認が「未」の行（渡す前に出典を開くか、ページから外す）", [show(r) for r in open_]),
                          (f"古い行（確かめてから {days} 日を過ぎた出典を使う、提供・数字の行。読み直して refs.py seen）", [show(r) for r in old]),
                          ("確かめたあとに元が更新された出典（読み直して refs.py seen）", moved)):
