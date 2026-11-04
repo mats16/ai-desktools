@@ -232,7 +232,7 @@ def locate(units, slides, build="."):
 def slide_units(p):
     """lint が言い回しを見る文（lint_slides の wording の呼び出し）と、ノートの行。"""
     units = []
-    key = lambda where, kw: "p" + re.match(r"p(\d+)", where).group(1)
+    key = lambda where, kw: "#"  # 印のないページ（pages.py など）は 1 つの並びにして、ページを足しても消してもあとのページがずれない（印のあるページは locate がファイル名にする）
     r = wording.collector(lint.Report(), units, key, lambda kw: "表" if kw.get("table") else "本文")
     real = lint.segment, lint.workspace_checks  # 文を集めるだけなので、文節の切れ目（BudouX）とワークスペースの点検は呼ばない（どちらも言い回しを見る文を変えない）
     lint.segment, lint.workspace_checks = (lambda ts: {t: set(range(len(t) + 1)) for t in ts}), (lambda *a: 0)
@@ -244,7 +244,7 @@ def slide_units(p):
     for i, s in enumerate(p.get("slides", []), 1):
         for line in lint.note_text(s).splitlines():
             if textlint.wording_text(line):
-                units.append(wording.unit(f"p{i} ノート", line, f"p{i}", "ノート", slides=False, page=i))
+                units.append(wording.unit(f"p{i} ノート", line, "#", "ノート", slides=False, page=i))
     return sorted(units, key=lambda u: (u["page"] or 0, u["kind"] == "ノート"))  # ページの順、ノートはそのページの後ろ（同じページの中は lint が見た順）
 
 

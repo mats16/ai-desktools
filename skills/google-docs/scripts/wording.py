@@ -308,20 +308,22 @@ def run(folder, kind, url, revision, units, files, problems=(), tool="wording"):
             else:
                 hits[fid] = {"id": fid, "rule": rule, "excerpt": excerpt, "said": said, "unit": u["sha"], "places": 1,
                              **{k: u[k] for k in ("where", "file", "loc", "obj")}}
-    base = st.get("base") or units
+    base = st.get("base")  # None は、まだ通した文がない（最初の回か、通らない理由のある回しかない）。[] は、文のない資料を通した
     try:
-        rs = risks(base, units)
+        rs = risks(units if base is None else base, units)
     except Exception as e:  # noqa: BLE001
         rs, unreadable = [], unreadable + [f"直す前と後を比べられない（{type(e).__name__}: {e}）"]
     dec = st.get("decisions", {})
     prev_open = {f["unit"] for f in prev.get("findings", []) if dec.get(f["id"], {}).get("status") not in ("keep", "ask")}
+    live = set(hits) | {r["id"] for r in rs}
+    dec = {k: v for k, v in dec.items() if k in live}  # 判断は今の指摘と恐れの分だけ残す（文が変われば消え、元に戻しても戻らない。確かめた変化がまた来たら、また確かめる）
     now = {u["sha"] for u in units}
     rounds = st.get("rounds", 0) + bool(prev_open - now)  # 前に未判断の指摘があった文を書き換えた回を数える
     fixed = len({f["id"] for f in prev.get("findings", [])} - set(hits))
     last = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "revision": revision, "units": [{k: u[k] for k in KEEP + ("sha",)} for u in units],
             "findings": list(hits.values()), "risks": rs, "fixed": fixed, "problems": list(problems) + unreadable, "files": files, "seconds": None}
     st = {"version": 1, "kind": kind, "url": url, "rules": rules_version(), "rounds": rounds, "max_rounds": MAX_ROUNDS,
-          "base": st.get("base") or [{k: u[k] for k in KEEP} for u in units],
+          "base": base,  # 進めるのは accept_base だけ（最初の回も、通らない理由がなければそこで決まる）
           "decisions": dec, "last": last, "cache": {k: v for k, v in cache.items() if k.split(":")[0] in now}}  # 今の文の結果だけを残す（増え続けない）
     s, _, _ = summarize(st)
     accept_base(st)  # 恐れが残るうちは、前に通した文を進めない
@@ -437,12 +439,20 @@ def selftest():
         decide(d, "ask", [ra["id"]], "300 円か 100 円か")
         for _ in range(2):
             run(d, "slides", url, "a2", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {})
-            assert [r["id"] for r in load(d)["last"]["risks"]] == [ra["id"]] and load(d)["summary"]["聞く"] == 2  # 前に聞くにした「版」と、この恐れ and load(d)["summary"]["状態"] == "済み"
+            assert [r["id"] for r in load(d)["last"]["risks"]] == [ra["id"]] and load(d)["summary"]["聞く"] == 2 and load(d)["summary"]["状態"] == "済み"  # 聞く 2 は、前に聞くにした「版」と、この恐れ
         decide(d, "ok", [ra["id"]], "ユーザーが 300 円と答えた")
         # 通らない理由のある回は、恐れがなくても前に通した文を進めない（画面で直した文を通した文にしない）
         base = load(d)["base"]
         run(d, "slides", url, "u1", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円", "画面で足した行"), {}, ["組んだあとに画面で直された"])
         assert load(d)["base"] == base
+        # 確かめた変化が、元に戻したあとでまた来たら、また確かめる（前の ok は使わない）
+        p5 = lambda price: page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", price)
+        for price, want in (("価格は月 400 円", "済み"), ("価格は月 300 円", "済み"), ("価格は月 400 円", "未完")):
+            run(d, "slides", url, "b", p5(price), {})
+            if want == "済み":
+                decide(d, "ok", [r["id"] for r in load(d)["last"]["risks"]], "意図した値")
+            assert load(d)["summary"]["状態"] == want, (price, load(d)["summary"])
+        decide(d, "ok", [r["id"] for r in load(d)["last"]["risks"]], "意図した値")
         # 道具が見つけた通らない理由（画面で直された・画像を取っていない）は、指摘がなくても通さない
         assert not run(d, "slides", url, "r10", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {}, ["組んだあとに画面で直された"])
         # 書き直しの上限: 未判断の指摘のある文を書き換え続けても、上限のあとは keep・ask で閉じるように出す（回り続けない）
@@ -454,6 +464,19 @@ def selftest():
         assert load(d)["rounds"] == 0 and load(d)["decisions"] == {} and load(d)["last"]["risks"] == []
     with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(io.StringIO()):
         assert summarize(load(d))[0]["状態"] == "未実施"  # 回していなければ未実施（済みにしない）
+        # 最初の回に通らない理由があれば、その文を通した文にしない（画面で直した文を基準にしない）。文のない資料を通したあとも、足した文を比べる
+        run(d, "slides", "u2", "f1", [unit("p1", "価格は月 120 円", "#", "本文")], {}, ["組んだあとに画面で直された"])
+        assert load(d)["base"] is None
+        run(d, "slides", "u2", "f2", [unit("p1", "価格は月 100 円", "#", "本文")], {})
+        assert load(d)["base"][0]["text"] == "価格は月 100 円"
+        run(d, "slides", "u3", "e1", [], {})
+        assert load(d)["base"] == [] and load(d)["summary"]["状態"] == "済み"
+        run(d, "slides", "u3", "e2", [unit("p1", "検証は不要ではない", "#", "本文")], {})
+        assert [r["kind"] for r in load(d)["last"]["risks"]] == ["否定の数"]
+        # 印のないページ（pages.py）の並び: 前にページを足しても、あとのページを別のページと組にしない
+        run(d, "slides", "u4", "g1", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("価格は月 100 円", "Spark で動かす"), 1)], {})
+        run(d, "slides", "u4", "g2", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("足したページ", "価格は月 100 円", "Spark で動かす"), 1)], {})
+        assert load(d)["last"]["risks"] == []
         assert flat("- **前の版**の[比べ](https://x)") == "前の版の比べ" and flat("# 1. 構成") == "1.構成" and flat("| a | b |") == "ab"
         os.makedirs(f"{d}/b/sub/.hide")
         for f in ("p01.json", "sub/p02.json", "sub/.hide/x.json", "doc.md", "notes.txt"):
