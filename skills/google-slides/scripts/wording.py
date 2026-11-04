@@ -26,8 +26,8 @@ JA_WARN = ("空疎な言い回し", "あおり", "和欧間のスペース抜け
 HOW = {"書き換え": "誰が何をするかを書き直す（deck-content-065、deck-writing）。言い分・数・順が変わるなら直さずに ask",
        "区切り": "読点を外すか、語の順を変える。条件・理由・並びの読点と、外すと読み違える読点は keep",
        "表記": "表記だけを直す（語は変えない）。製品名・組織名の正式な表記（カタカナと英字を詰めて書く名前など）は keep"}
-REREAD = "書き換えの読み比べ（言い分・言い切りの強さ・慣用句）"  # 守る語が崩れていなくても、意味を伴う書き換えは人が読み比べる（校正の赤字照合。専門家役のレビューで、語の突き合わせが拾えない改悪が 3 件あった）
-NEG = re.compile(r"な[いくかけ](?![がりれ])|ず(?![つっ])|ぬ(?![けぐ])|ません|ぬき|不(?=[一-鿿])|非(?=[一-鿿])|無(?=[一-鿿])|未(?=[一-鿿])")  # 否定の印（少ない・危ないは同じ語が残れば数は変わらない）
+REREAD = "書き換えた文を読み比べる（言い分・言い切りの強さ・慣用句）"  # 守る語が崩れていなくても、意味を伴う書き換えは人が読み比べる（校正の赤字照合。専門家役のレビューで、語を突き合わせても拾えない改悪が 3 件あった）
+NEG = re.compile(r"な[いくかけ](?![がりれ])|なし|(?<![は必])ず(?![つっ])|ぬ(?![けぐ])|ません|ぬき|不(?=[一-鿿])|非(?=[一-鿿])|無(?=[一-鿿])|未(?=[一-鿿])")  # 「なし」（表の あり・なし）も否定。「はず」「必ず」の ず は数えない  # 否定の印（少ない・危ないは同じ語が残れば数は変わらない）
 LATIN = re.compile(r"[A-Za-z][A-Za-z0-9.+#_/-]*[A-Za-z0-9+#]|[A-Za-z]")  # 英字の語（製品名・社名・コードの名前）
 NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 CODE = re.compile(r"`[^`]+`")
@@ -39,7 +39,7 @@ def sha(text):
 
 
 def short(*parts):
-    return hashlib.sha1("\0".join(parts).encode("utf-8")).hexdigest()[:6]
+    return hashlib.sha1("\0".join(parts).encode("utf-8")).hexdigest()[:8]  # 8 桁: 数百の指摘で ID が重なる見込みは 1 万分の 1 ほど
 
 
 @functools.cache
@@ -91,8 +91,8 @@ def checked(text_, slides, one_line, notes):
 def flat(t):
     """Google の資料の文と、ページの JSON・doc.md の書き方を突き合わせるための文: Markdown の太字・リンク・コード・見出し・箇条・表の印と空白を外す
     （slides.py・docs.py が組むときに外すもの）。gslides.py と docs.py が文の場所を探すのに使う。"""
-    t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t)
-    t = re.sub(r"\{\d+:|<br\s*/?>", "", re.sub(r"^\s*(#+|[-*]|\d+\.)\s+", "", t))  # 大きさの {32:…} と段落の中の改行 <br>
+    t = re.sub(r"\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)", r"\1", t)  # リンク（URL に 1 段のかっこがあっても）
+    t = re.sub(r"\{\d+(?:\.\d+)?:|<br\s*/?>", "", re.sub(r"^\s*(#+|[-*]|\d+\.)\s+", "", t))  # 大きさの {32:…}・{10.5:…} と段落の中の改行 <br>
     return re.sub(r"[\s*_`|{}\\]", "", t)  # 両側から同じ記号を外すので、記号を全部外しても突き合わせは崩れない（***赤***、\* のエスケープ）
 
 
@@ -181,16 +181,18 @@ def risks(base, cur):
     for b in blocks:
         for kind, detail in guard(b["old"], b["new"]):
             add(b, kind, detail)
-        rules = lambda text: {r for t in text.split("\n") for r, *_ in check_unit({**b["at"], "text": t}) if RULES.get(r) == "書き換え"}  # 前の文も今の文と同じ種類（ノートか）で見る
+        rules = lambda text: collections.Counter(r for t in text.split("\n") for r, *_ in check_unit({**b["at"], "text": t}) if RULES.get(r) == "書き換え")  # 前の文も今の文と同じ種類（ノートか）で見る。数で比べ、塊の中の 1 文を直したのも拾う
         if b["old"] and b["new"] and (gone := sorted(rules(b["old"]) - rules(b["new"]))):
             add(b, REREAD, "・".join(gone))  # 書き換えの指摘を直した（消えた）。直す前と後を読み、同じことを同じ強さで言っているかを確かめて ok
     (ot, ow), (nt, nw) = lines_of(base), lines_of(cur)
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
         got = yomiyasu_diff().diff(ot, nt)
     for r in got.get("meaning_risks", []):
-        k, idx = nw.get(r.get("new_line")) or ow.get(r.get("old_line")) or (None, None)
-        side = "j" if r.get("new_line") in nw else "i"
-        b = next((b for b in blocks if b["key"] == k and b[side][0] <= idx < max(b[side][1], b[side][0] + 1)), None)
+        b = None
+        for side, line, where in (("j", r.get("new_line"), nw), ("i", r.get("old_line"), ow)):  # 今の行が変わっていない塊にあれば、前の行の側で探す
+            if b is None and line in where:
+                k, idx = where[line]
+                b = next((b for b in blocks if b["key"] == k and b[side][0] <= idx < max(b[side][1], b[side][0] + 1)), None)
         if b:
             add(b, YOMI_RISK.get(r.get("kind"), r.get("kind", "?")), r.get("subkind") or "")
     return list(found.values())
@@ -472,6 +474,8 @@ def selftest():
         run(d, "slides", "u4", "g1", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("価格は月 100 円", "Spark で動かす"), 1)], {})
         run(d, "slides", "u4", "g2", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("足したページ", "価格は月 100 円", "Spark で動かす"), 1)], {})
         assert load(d)["last"]["risks"] == []
+        assert flat("{10.5:注}の[Foo (bar)](https://e.org/wiki/F_(b))の説明") == "注のFoo(bar)の説明"
+        assert guard("SSO 連携: 対応なし", "SSO 連携: 対応あり") and not guard("この機能は使える", "この機能は使えるはずだ") and not guard("必ず確かめる", "確かめる必要がある")
         assert flat("- **前の版**の[比べ](https://x)") == "前の版の比べ" and flat("段を分けると、***誤りの戻り先***が {32:1} か所<br>に決まる\\*") == flat("段を分けると、誤りの戻り先が 1 か所に決まる*") and flat("# 1. 構成") == "1.構成" and flat("| a | b |") == "ab"
         os.makedirs(f"{d}/b/sub/.hide")
         for f in ("p01.json", "sub/p02.json", "sub/.hide/x.json", "doc.md", "notes.txt"):

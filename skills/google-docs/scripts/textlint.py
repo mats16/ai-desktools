@@ -73,15 +73,16 @@ def yomi(text, slides=True, one_line=False):
             said = (m and (m.group(1) or m.group(2) or m.group(3)) or "").strip("「」")
             key = said.split("、")[0].strip("「」")
             stem = key[:-1] if len(key) > 1 and re.match(r"[぀-ゟ]", key[-1]) else ""  # 文に活用した形で出る語（効く → 効いて）は、語幹のあとにかなが続くところも探す（効果は数えない）
-            found = [(i, key) for i in range(len(text)) if key and text.startswith(key, i)] + [
-                (i, stem) for i in range(len(text)) if stem and text.startswith(stem, i) and re.match(r"[぀-ゟ]", text[i + len(stem):i + len(stem) + 1])]
+            exact = [i for i in range(len(text)) if key and text.startswith(key, i)]
+            found = [(i, key) for i in exact] + [(i, stem) for i in range(len(text)) if stem and i not in exact and text.startswith(stem, i)
+                                                 and re.match(r"[぀-ゟ]", text[i + len(stem):i + len(stem) + 1])]  # 同じ位置は語そのものの出現だけを数える
             outside = [(i, k) for i, k in found if not any(a < i and i + len(k) <= b for a, b in inside)]
             if found and not outside:
                 continue
-            ats, key = ([outside[0][0]], outside[0][1]) if outside else ([], key)
-            if f["rule"] == "renyo_noun" and ats and all(text[i + len(key):i + len(key) + 1] in COMPOUND for i in ats):
-                continue  # 「直し方」「見直し案」のような複合語の中（yomiyasu が語の境目をまたいで拾う）。「比べ以外」「見直し後」は出す
-            at = ats[0] if ats else -1
+            if f["rule"] == "renyo_noun":  # 「直し方」「見直し案」のような複合語の中（yomiyasu が語の境目をまたいで拾う）は数えない。「比べ以外」「見直し後」は数える
+                if outside and not (outside := [(i, k) for i, k in outside if text[i + len(k):i + len(k) + 1] not in COMPOUND]):
+                    continue
+            at, key = outside[0] if outside else (-1, key)  # 抜き出しは、引用の外の最初の出現から
             out.append((name, text[max(0, at - 12):at + len(said) + 12].strip() if at >= 0 else text[:30], said))
     return out
 
@@ -282,6 +283,7 @@ def selftest():
     globals()["yomiyasu"] = lambda: fake
     try:  # 複合語の中の「の直し」（直し方・直し案）は出さない。漢字が続くだけ（直し以外・直し後）では複合語にしない
         assert yomi("資料の直し方は 3 つ") == [] and yomi("資料の直し案") == [] and yomi("資料の直し以外") and yomi("資料の直し後")
+        assert "ページの直しをする" in yomi("資料の直し方と、ページの直しをする")[0][1]  # 最初の出現が複合語でも、ほかの出現が残れば出す（抜き出しは残った出現から）
     finally:
         globals()["yomiyasu"] = real
     assert yomi("p13 の一覧に、運用で効いてくる項目を足したもの")[0][1:] == ("p13 の一覧に、運用で効いてくる項目を足したもの", "効く")  # たとえの動詞は「」の語を、活用した形でも語幹で探す  # かぎかっこの中は書き換えない（人の言葉・画面の文言）。場所の手がかりは受けて捨てる
