@@ -63,7 +63,7 @@ Open the file for the step you are on; do not read ahead. Each file holds the st
 
 Evidence:
 - Summarizing: one call takes 9.6 seconds at 100k–200k, 11.7 seconds at 200k–300k, and 17.0 seconds at 300k–400k. Calls at boundaries were mostly after the plan review and before building the whole; they were rarely made in `/deck-review` rounds, and the automatic summary at 400k ran instead. Context that was 80k–90k right after a summary went back to a median of 210k after 30 calls because of bulk re-reading (2026-10-14; 23 pi logs; `Internal/deck_speed_202610/社内メモ_計測の結果.md`, p.7 and p.12 of the slides in the same folder; the earlier study is `Research/pi_compaction_deck_workflow_20261010/README.md`). Summarizing before delivery: of 67 revision requests after delivery, 41 started more than 5 minutes after the previous reply (the prompt cache expires), and the first call rewrote a median of 248k tokens. This rewriting was 24% of the cost of the 67. Summarizing before delivering is expected to save $1.0–1.2 per request (estimate; 2026-10-19; the workspace's `Internal/deck_revision_speed_20261019/`).
-- Not waiting for the user: in 12 past approvals, 0 replies touched the content of the three pages (`Research/deck_rep3_approval_sessions_20261009.md`).
+- Not waiting for the user: the "Evidence" paragraph after the three representative pages (slides-flow-007) in [slides_steps.md](slides_steps.md).
 
 ## What to read when
 
