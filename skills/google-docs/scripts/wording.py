@@ -315,7 +315,7 @@ def decide(folder, status, ids, why):
     for i in ids:
         st.setdefault("decisions", {})[i] = {"status": status, "why": " ".join(why.split()), "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     s, _, open_r = summarize(st)
-    if not open_r and not (last.get("problems")):  # 恐れを確かめ終えたら、今の文を前に通した文にする（次の点検は、ここからの違いを見る）
+    if not open_r and not last.get("problems"):  # 恐れを確かめ終えたら、今の文を前に通した文にする（次の点検は、ここからの違いを見る）
         st["base"] = [{k: u.get(k) for k in KEEP} for u in last.get("units", [])]
     if s["状態"] == "済み":
         st["rounds"] = 0

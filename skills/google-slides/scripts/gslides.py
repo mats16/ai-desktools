@@ -440,7 +440,7 @@ def wording_selftest():
         json.dump({"kind": "page", "title": "**4 つの構成の比べ**", "body": {"items": ["顧客は「前の版の比べ」と言った"]}, "speakerNotes": "前の版の手順を話す"},
                   open(f"{d}/build/p01.json", "w", encoding="utf-8"), ensure_ascii=False)
         os.chdir(f"{d}/build")
-        with contextlib.redirect_stdout(io.StringIO()) as out:
+        with contextlib.redirect_stdout(io.StringIO()):
             assert _exit(lambda: cmd_wording("zzwording")) == 1
             st = wording.load(d)
             fs = {f["rule"]: f for f in st["last"]["findings"]}
