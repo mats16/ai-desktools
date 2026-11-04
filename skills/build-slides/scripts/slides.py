@@ -1018,6 +1018,8 @@ SHAPES = {k.lower(): k for k in ("RECTANGLE", "ROUND_RECTANGLE", "ELLIPSE", "CHE
 GAP_BODY, GAP, GAP_ARROW, ARROW_PAD = 0.3, 0.24, 0.6, 0.08  # 本文の部品の間、stack・row・grid の間、arrows の row の間、矢印と箱の間（in）
 BOX_IN, EDGED = 0.08, ("card", "box", "label", "code", "stat", "table")  # 囲み（box）の辺と中の部品の間の下限（in。slides-visual-044）、縁の見える部品（塗りか枠線のある text も）
 MARK_CLEAR = 0.03  # 矢印の番号の丸と、ほかの線・丸・札の間の空き（in。線の太さの半分 0.01 in を含む）
+NUM_END = 0.15  # 矢印の番号の丸と、線の端（箱の辺・折れる点・矢じりの付け根）の間の空き（in）
+HEAD_IN = 0.09  # 矢じり（FILL_ARROW）の長さ（in）。線の太さ 1pt あたり（2026-11-04 に Google が描いた画像で測り、1.25pt で 0.117 in、2pt で 0.175 in、3pt で 0.258 in）
 LABEL_GAP = 0.04  # 矢印の札と線の間（in。縦の線の右は 2 倍。文字の上には行の高さの空きがあり、横の左にはない）
 # 印のあるカード（過去の資料の node・icard・ncard。2026-10-16）: 印の大きさ（アイコン・番号／画像）、カードの端から印、印から文字（in）
 MARK, MARK_IMG, MARK_IN, MARK_GAP = 0.36, 0.5, 0.18, 0.14
@@ -2380,14 +2382,23 @@ class SpecPage:
         よけるもの: ほかの矢印の線、ページの正円の番号（書き手が置いた num と、先に置いた矢印の丸）、矢印の札。丸はそれらから MARK_CLEAR 以上、札もそれらから
         MARK_CLEAR 以上離し、さらに札はその矢印の折れた先の区間にかからない。丸も札も、囲み（box）の縁をまたがず（tangles の「一部だけ重なる」と同じ判定。中に収まるのはよい）、
         ほかの部品には中に収まるのも含めて重ならない（ふつうの label や文字の中に札が入ると、文字に重なる。PR #60 の Pullfrog のレビュー）。
-        接するだけはよいので、両端の箱の間に収まる札は、番号を付けても置ける）。区間ごとに、端（折れる点・矢じり）から丸の半径 + 0.15 in の内を除いて 0.01 in 刻みで調べ、空いた範囲を求める。
-        最初に試す区間（札を置く区間。置ける長さがなければ、次に長い区間）の真ん中が空いていればそこ、空いていなければ、置ける長さの区間を順に、いちばん長い空いた範囲の
+        接するだけはよいので、両端の箱の間に収まる札は、番号を付けても置ける）。区間ごとに、端（箱の辺・折れる点・矢じりの付け根）から丸の半径 + NUM_END の内を除いて
+        0.01 in 刻みで調べ、空いた範囲を求める。矢じりの付け根は、線の先から矢じりの長さ（HEAD_IN × 太さ）だけ手前。区間の真ん中も、矢じりを除いた線の真ん中にする
+        （線の真ん中に置くと、短い線で丸が矢じりに接した。2026-11-04 のユーザーの画像）。最初に試す区間（札を置く区間。置ける長さがなければ、次に長い区間）の真ん中が空いていればそこ、空いていなければ、置ける長さの区間を順に、いちばん長い空いた範囲の
         真ん中。label_side を書いた矢印は、その向きの区間だけから探す。数か所の点だけを試す形と、箱の線の数から枝分かれを推し量る形は、多対多の図・丸の縁の近くを
         通る線・ほかの丸で外れた（2026-11-04、ローカルのレビュー）。空きがなければ最初に試す区間の真ん中に置き、組むときの警告に出す。置ける長さの区間がなければ、それも警告に出す。"""
         r = NUM["xsmall"][0] / 2
-        end, step, g = r + 0.15, 0.01, MARK_CLEAR
+        end, step, g = r + NUM_END, 0.01, MARK_CLEAR
         for e, loc, pts, color in self.numbered:
             segs = list(zip(pts, pts[1:]))
+            tip = HEAD_IN * e.get("weight", 1.25) if e.get("head", True) else 0
+            tips = [tip if i == len(segs) - 1 else 0 for i in range(len(segs))]  # 区間の終わりの矢じりの長さ（矢じりは最後の区間だけ）
+
+            def at(i, d):  # 区間 i の始めから d in の点
+                (p, q), n = segs[i], math.dist(*segs[i])
+                return (p[0] + (q[0] - p[0]) * d / n, p[1] + (q[1] - p[1]) * d / n)
+            room = lambda i: math.dist(*segs[i]) - tips[i]  # 矢じりを除いた長さ
+            center = lambda i: at(i, room(i) / 2 if room(i) > 0 else math.dist(*segs[i]) / 2)  # 矢じりを除いた線の真ん中
             flat = [abs(q[0] - p[0]) >= abs(q[1] - p[1]) for p, q in segs]
             mid = len(pts) // 2 - 1  # 札を置く区間（番号のない矢印と同じ）
             order = [i for i in [mid] + sorted((i for i in range(len(segs)) if i != mid), key=lambda i: -math.dist(*segs[i])) if math.dist(*segs[i]) >= 0.01]  # 長さ 0 の区間（中央のそろった折れ線）は向きがない
@@ -2421,25 +2432,25 @@ class SpecPage:
                 return not any(seg_hits(a, b, wide, 0) for a, b in near) and not any(rect_dist(o, wide) < ro for o, ro in rings) \
                     and not any(rect_cross(wide, rc) for rc in labels) and not hit(lr)
 
-            def free(i):  # 区間 i の空いた範囲（点の並び）の並び。端の近くは除く
-                p, q = segs[i]
-                n = int((math.dist(p, q) - 2 * end) / step + 1e-9)
+            def free(i):  # 区間 i の空いた範囲（点の並び）の並び。端と矢じりの近くは除く
+                n = int((room(i) - 2 * end) / step + 1e-9)
                 runs, cur = [], []
                 for k in range(n + 1):
-                    t = (end + k * step) / math.dist(p, q)
-                    c = (p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t)
+                    c = at(i, end + k * step)
                     if clear(c, i):
                         cur.append(c)
                     elif cur:
                         runs, cur = runs + [cur], []
                 return runs + [cur] if cur else runs
-            roomy = [i for i in order if math.dist(*segs[i]) >= 2 * end]
+            roomy = [i for i in order if room(i) >= 2 * end]
             i = (roomy or order)[0]
-            c = tuple((u + v) / 2 for u, v in zip(*segs[i]))
+            c = center(i)
             if not roomy:  # label_side を外せば置けるときだけ、label_side を言う
-                side = f"label_side（{e['label_side']}）の向きの" if "label_side" in e and any(math.dist(*sg) >= 2 * end for sg in segs) else ""
-                self.warns.append(f"{loc}（arrow）.num: 番号の丸を置ける長さの{side}区間がない（いちばん長いもので {max(math.dist(*segs[j]) for j in order):.2f} in）。丸が線の端か矢じりにかかる見込み。"
-                                  f"{side}区間のどれかが {2 * end:.2f} in 以上になるよう、箱をその区間の向きに離す" + ("か、label_side を変える" if side else ""))
+                side = f"label_side（{e['label_side']}）の向きの" if "label_side" in e and any(room(j) >= 2 * end for j in range(len(segs))) else ""
+                cut = f"矢じり（{tip:.2f} in）を除いた" if tip else ""  # 長さは、どれも矢じりを除いて測る（room）
+                self.warns.append(f"{loc}（arrow）.num: 番号の丸を置ける長さの{side}区間がない（{cut}長さが、いちばん長いもので {max(room(j) for j in order):.2f} in）。丸が線の端か矢じりに近づく見込み。"
+                                  f"{side}区間のどれかの{cut}長さが {2 * end:.2f} in 以上になるよう、箱をその区間の向きに離す"
+                                  + ("か、label_side を変える" if side else ""))
             elif not clear(c, i):
                 for j in roomy:
                     if runs := free(j):
@@ -2610,7 +2621,7 @@ SPEC_UNIT = {"w": "幅（in）", "h": "高さ（in）", "x": "frame の左上か
              "pad": "箱の端と文字の間（in）", "radius": "角の丸み（in）", "step": "項目の間隔（in）",
              "route": "bent は折れ線（両端を id でつないだとき）。id の両端が箱なら、線は箱につながる。出る辺・入る辺を決めるときは、route を書かずに from・to を \"<id>.<辺>\" にする", "today": "今日の縦線の位置（1 が 1 列目の左端、1.5 が 1 列目の中ほど）",
              "label_side": "札の置き場所。横の線は top（既定）か bottom、縦の線は right（既定）か left",
-             "arrow.num": "線の上の番号（1〜99）。線の色の小さな丸（num の xsmall）で、ほかの線がかからない点（まず札を置く区間の真ん中）に置く。説明は図の下の list に同じ番号で書く",
+             "arrow.num": "線の上の番号（1〜99）。線の色の小さな丸（num の xsmall）で、ほかの線がかからない点（まず札を置く区間の、矢じりを除いた真ん中）に置く。説明は図の下の list に同じ番号で書く",
              "offset": "線を箱の中央からずらす in。横の線は下が正、縦の線は右が正。ずらした線は箱につながない（同じ 2 つの箱の間に 2 本引くとき）",
              "bars.unit": "数のあとに付ける単位", "stat.unit": "単位（数字の半分の大きさ）", "horizontal": "横の棒（名前が長い・順位）。既定は縦の棒（時の流れ）", "bars.hot": "強調する棒の番号（1 から。赤）",
              "series": "系列の名前（2〜4 個。items の数を系列ごとの並びにする）。上に凡例の行を置き、unit は数ごとに付けず凡例の行の右に 1 回だけ書く。色は部品が決める。hot・line・horizontal とは書けない",
@@ -5149,13 +5160,23 @@ def selftest_spec():
     lg, ld = (e for e in els if e["loc"].endswith(".label"))
     r = NUM["xsmall"][0] / 2
     assert not d.warnings, d.warnings
-    assert near(n1["cx"], (go["x1"] + go["x2"]) / 2) and near(n1["cy"], go["y1"]) and n1["size"] == "xsmall" and n1.get("shape", "ellipse") == "ellipse" and n1["fill"] == SUB
-    assert near(n2["cy"], back["y1"]) and n2["fill"] == RED and near(n3["cx"], down["x1"]) and near(n3["cy"], (down["y1"] + down["y2"]) / 2)  # 色は線の色
+    tip = HEAD_IN * 1.25  # 真ん中は、矢じりを除いた線の真ん中（2026-11-04。線の真ん中では、短い線で丸が矢じりに接した）
+    assert near(n1["cx"], go["x1"] + (go["x2"] - go["x1"] - tip) / 2) and near(n1["cy"], go["y1"]) and n1["size"] == "xsmall" and n1.get("shape", "ellipse") == "ellipse" and n1["fill"] == SUB
+    assert near(n2["cy"], back["y1"]) and n2["fill"] == RED and near(n3["cx"], down["x1"]) and near(n3["cy"], down["y1"] + (down["y2"] - down["y1"] - tip) / 2)  # 色は線の色
     assert near(lg["y"] + lg["h"] + LABEL_GAP + r, go["y1"]) and near(ld["x"], down["x1"] + r + 2 * LABEL_GAP)  # 札は丸の外（横の線は上、縦の線は右）
     assert els.index(go) < els.index(n1) and els.index(back) < els.index(n2) and els.index(down) < els.index(n3)  # 丸は線より後に組む（線を隠す）
     d, _ = run({"title": "t", "body": [{"type": "frame", "h": 1, "items": [{"type": "label", "id": "a", "text": "A", "x": 0, "y": 0, "w": 2, "h": 0.8},
         {"type": "label", "id": "b", "text": "B", "x": 2.4, "y": 0, "w": 2, "h": 0.8}, {"type": "arrow", "from": "a", "to": "b", "num": 1}]}]})
     assert any("番号の丸を置ける長さの区間がない" in w for w in d.warnings), d.warnings  # 0.4 in の線では、丸が矢じりにかかる
+    d, els = run({"title": "t", "body": [{"type": "frame", "h": 1, "items": [{"type": "label", "id": "a", "text": "A", "x": 0, "y": 0, "w": 2, "h": 0.8},
+        {"type": "label", "id": "b", "text": "B", "x": 2.57, "y": 0, "w": 2, "h": 0.8}, {"type": "arrow", "from": "a", "to": "b", "num": 1}]}]})
+    ar, nu = next(e for e in els if e["call"] == "arrow"), next(e for e in els if e["call"] == "num")
+    gaps = (nu["cx"] - r - ar["x1"], ar["x2"] - tip - (nu["cx"] + r))  # 箱の辺と丸、丸と矢じりの付け根の空き（2026-11-04 のユーザーの画像の 0.57 in の線では、後ろが 0 だった）
+    assert near(*gaps) and gaps[1] > 0.09 and any("矢じり（0.11 in）を除いた長さが、いちばん長いもので 0.46 in" in w for w in d.warnings), (gaps, d.warnings)
+    _, els = run({"title": "t", "body": [{"type": "frame", "h": 1, "items": [{"type": "label", "id": "a", "text": "A", "x": 0, "y": 0, "w": 2, "h": 0.8},
+        {"type": "label", "id": "b", "text": "B", "x": 4, "y": 0, "w": 2, "h": 0.8}, {"type": "arrow", "from": "a", "to": "b", "num": 1, "head": False, "weight": 3}]}]})
+    ar, nu = next(e for e in els if e["call"] == "arrow"), next(e for e in els if e["call"] == "num")
+    assert near(nu["cx"], (ar["x1"] + ar["x2"]) / 2)  # 矢じりのない線は、線の真ん中
     _, els = run({"title": "t", "body": [{"type": "list", "fill": "NAVY", "items": ["a", "b"]}, {"type": "list", "color": "SUB", "items": ["a", {"icon": "tabler:check", "text": "b"}]}]})
     assert [e["fill"] for e in els if e["call"] == "num"] == [NAVY, NAVY, RED]  # 番号の丸は fill の色。color はアイコンの色だけで、番号は赤のまま（アイコンを交ぜた番号の list でも）
     # 枝分かれの番号: 中央のそろった枝（まっすぐ）は折れる点より先、折れ線の枝はその枝だけの縦の区間。どれもほかの枝の線に重ならない（警告なし）
