@@ -1,0 +1,19 @@
+{"apiVersion": "slides/v1", "kind": "page",
+ "title": "手順の多い流れは、線に番号を付けて下で説明する", "kicker": "arrow num",
+ "body": [
+  {"type": "frame", "h": 3.3, "items": [
+    {"type": "label", "id": "cache", "text": "キャッシュ", "x": 8.4, "y": 0, "w": 2.4, "h": 0.5},
+    {"type": "card", "id": "app", "icon": "tabler:device-mobile", "head": "アプリ", "valign": "middle", "x": 0, "y": 1.2, "w": 2.4, "h": 0.8},
+    {"type": "card", "id": "srv", "icon": "tabler:server", "head": "サーバー", "valign": "middle", "x": 4.2, "y": 1.2, "w": 2.4, "h": 0.8},
+    {"type": "card", "id": "px", "icon": "tabler:arrows-exchange", "head": "プロキシ", "valign": "middle", "x": 8.4, "y": 1.2, "w": 2.4, "h": 0.8},
+    {"type": "label", "id": "db", "text": "配信の DB", "x": 4.2, "y": 2.7, "w": 2.4, "h": 0.6},
+    {"type": "arrow", "from": "app", "to": "srv", "offset": -0.2, "num": 1, "color": "NAVY"},
+    {"type": "arrow", "from": "srv", "to": "db", "num": 2, "color": "NAVY"},
+    {"type": "arrow", "from": "srv", "to": "px", "offset": -0.2, "num": 3, "color": "NAVY", "label": "mTLS"},
+    {"type": "arrow", "from": "px", "to": "cache", "num": 4, "color": "NAVY"},
+    {"type": "arrow", "from": "px", "to": "srv", "offset": 0.2, "num": 5, "color": "NAVY"},
+    {"type": "arrow", "from": "srv", "to": "app", "offset": 0.2, "num": 6, "color": "NAVY"}]},
+  {"type": "row", "items": [
+    {"type": "list", "size": "xsmall", "fill": "NAVY", "gap": 0.1, "items": ["アプリが API を呼ぶ", "サーバーが DB に配信中かを問い合わせる", "サーバーがプロキシに結果を頼む"]},
+    {"type": "list", "size": "xsmall", "fill": "NAVY", "gap": 0.1, "start": 4, "items": ["プロキシがキャッシュを見る", "プロキシが結果を返す", "サーバーがアプリに応える"]}]}],
+ "authorNotes": ["矢印の num は線の上の番号の丸で、色は線の色になる。説明は図の下の list に同じ番号で書き、list の fill を線の色にそろえる。行きと帰りの 2 本は offset で上下にずらし、丸が重ならないようにする。札（label）は丸の外に付く。"]}
