@@ -1,6 +1,6 @@
 ---
 name: desk-feedback
-description: Learn from the user's corrections. Judge who a correction is true for (this material only, this customer, this person's or organization's environment, or knowledge any expert would share), record it in the rule ledger with that judgment, write it where that kind of knowledge lives (the outline, the customer's memory, a workspace recipe, or a proposal to the plugin through desk-kaizen), in the form that suits it, and decide how it will be verified. Holds how to judge, how to record and route (the ledger, rule IDs, how the hook shows workspace rules, customer memory, verifying rules), and how to write, test, and regroup recipes. Use when the user corrects a material or its content (「ここは〜にして」「次から〜」), when asked to add, edit, or regroup rules or recipes (「決まりに足して」「レシピを整理して」「決まりの書き方を教えて」), when the user wants to write a recipe with you (「〜のレシピを作りたい」「レシピを試して」), and before every edit of a recipe or a customer's memory.
+description: Learn from the user's corrections. Judge who a correction is true for (this material only, this customer, this person's or organization's environment, or knowledge any expert would share), record it in the rule ledger with that judgment, write it where that kind of knowledge lives (the outline, the customer's memory, a workspace recipe, or a proposal to the plugin through desk-kaizen), in the form that suits it, and decide how it will be verified. Holds how to judge, how to record and route (the ledger, rule IDs, when workspace rules are opened, customer memory, verifying rules), and how to write, test, and regroup recipes. Use when the user corrects a material or its content (「ここは〜にして」「次から〜」), when asked to add, edit, or regroup rules or recipes (「決まりに足して」「レシピを整理して」「決まりの書き方を教えて」), when the user wants to write a recipe with you (「〜のレシピを作りたい」「レシピを試して」), and before every edit of a recipe or a customer's memory.
 ---
 
 # Learning from feedback
@@ -47,8 +47,8 @@ Take a correction the user gives while making a material this way, on the spot, 
 |---|---|
 | **Classifying corrections:** who a correction is true for, what form it takes | this file |
 | **Recording a correction:** recording, writing, and routing it on the spot | this file ("Steps") |
-| **Routing** (and rule IDs): recording, the destination values, the ledger's versions, how the hook shows workspace rules, customer memory, verifying rules | [routing.md](routing.md) |
+| **Routing** (and rule IDs): recording, the destination values, the ledger's versions, when workspace rules are opened (`desk.py recipes`), customer memory, verifying rules | [routing.md](routing.md) |
 | **Writing recipes:** where a rule goes, one recipe per purpose, frontmatter (`step`, `per_material`, `targets`, `audience`), the form of items, regrouping recipes | [recipes.md](recipes.md) |
-| **Writing a recipe with the user,** and **testing a recipe:** a conversation opened to write or change a recipe; whether a material recipe's `description` gets it chosen, with scenes whose answers the user decided (`.desk/recipe_cases.md`) and the hook's list (`scripts/recipe_menu.py`) | [recipes.md](recipes.md) §6, §7 |
+| **Writing a recipe with the user,** and **testing a recipe:** a conversation opened to write or change a recipe; whether a material recipe's `description` gets it chosen, with scenes whose answers the user decided (`.desk/recipe_cases.md`) and the step-5 list (`scripts/recipe_menu.py`) | [recipes.md](recipes.md) §6, §7 |
 | Proposals from the conversation logs (the daily cleanup) | `desk-dreaming` |
 | Filing knowledge for the plugin as an Issue | `desk-kaizen` |

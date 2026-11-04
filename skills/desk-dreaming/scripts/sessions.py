@@ -96,7 +96,7 @@ PUNCT = "();<>|&`"  # コマンドの区切り
 
 
 def words(text):
-    """コマンドの語。引用符の外の ; | & ( ) < > ` と空白で区切る（引用符の中はそのまま。hooks/rules_overlay.py と同じ）。"""
+    """コマンドの語。引用符の外の ; | & ( ) < > ` と空白で区切る（引用符の中はそのまま。2026-11-04 までの hooks/rules_overlay.py と同じ）。"""
     lex = shlex.shlex(text, posix=True, punctuation_chars=PUNCT)
     lex.whitespace_split, lex.commenters = True, ""  # # は語の中にも出る（deck#2）
     try:
@@ -110,7 +110,7 @@ PATH_KEYS, COMMAND_KEYS = ("file_path", "path", "notebook_path"), ("command", "c
 
 def walk(toks):
     """コマンドの語を、その語のときの cd の先（コマンドの始めからの相対パス）と組にする。区切りとオプションは外す。
-    サブシェルの中の cd は、閉じたら戻す（hooks/rules_overlay.py の memories と同じたどり方）。"""
+    サブシェルの中の cd は、閉じたら戻す（2026-11-04 までの hooks/rules_overlay.py と同じたどり方）。"""
     base, outer = "", []
     for i, tok in enumerate(toks):
         if all(c in PUNCT for c in tok):  # 続いた区切りは 1 語になる（「);」など）

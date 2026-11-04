@@ -2,6 +2,8 @@
 
 Steps 6–8 of "Overall flow" in `SKILL.md`, for decks only. Before this, run steps 1–5 (`start.md`); after this, run step 9 (`/deck-review`, the `deck-review` skill) and steps 10–11 (`deliver.md`). How each check layer works is slides-flow-005 in `build-slides`.
 
+Before writing page JSON, open what `python3 <deck-workflow folder>/scripts/desk.py recipes <material folder>` names that is not in this context yet, each whole: the `step: build` recipes (logos, themes, API pitfalls), and, when resuming in a new conversation, also the customer's `memory.md`, the outline's 「使う決まり」, and the recipes without `step`.
+
 ## 6. Three representative pages (decks over 10 pages)
 
 [slides-flow-007] **Three representative pages:** for decks over 10 pages, after the plan review, build only three body pages of different types (a diagram, a table or code, the page with the most text or elements, etc.) (write the page JSON, list only those three in `pages` of `deck.json`, and run `slides.py new`), and check them yourself before building the whole. Do not include the cover or section dividers. They are fixed types, so looking at them decides nothing. Do not ask for approval and do not wait. Share the URL as soon as it is created (deck-drive-003 in `drive.md`; whether to look is up to the user). How to check:

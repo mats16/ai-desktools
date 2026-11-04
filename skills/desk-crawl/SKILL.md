@@ -7,6 +7,8 @@ description: Decide which places a recurring collection job reads and how often,
 
 This skill decides where and when to read, and learns from each run. A topic is an area to read, not a project or a reader. Make one topic per area (`vendor-updates`) and collect it once, at the shortest interval any consumer needs, so the same channel is not read once per project. The consumers (a daily digest, a project's watch, a customer's news) pick from the merged candidates by their own interests and write their outputs. They return two things only: the outputs (to mark what was used) and what they missed. Keep interests, categories, wording, and who may see what in the consumers, not here. A place only one consumer needs (a customer's newsroom) goes in its own topic.
 
+**Workspace recipes.** Before gathering, open, each whole, the workspace's gathering recipes (`step: gather`: the company's search tools and sources) whose `description` fits. `python3 <desk-crawl folder>/scripts/desk.py recipes` lists them ("Workspace rules" in `desk-feedback` → routing).
+
 | File | Use |
 |---|---|
 | `scripts/crawl.py` | Plan, extra reads, child prompts, feeds, merge, record, report, and the list of places (has `--selftest`) |

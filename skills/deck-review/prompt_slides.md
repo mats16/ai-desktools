@@ -12,6 +12,7 @@ You are the reviewer of this material. Look with eyes other than the maker's and
 - Axes and rules: <deck-writing folder>/SKILL.md (with its 「社外秘と顧客の情報」 and 「書き方」) and <deck-design folder>/SKILL.md (judge every aspect below by these axes)
 - Rules: from the table in <deck-writing folder>/SKILL.md: content (§6 has 「文体」 and "Sources"), and <the §1 files for this material: customer-facing materials or internal materials (no audience file for community-facing materials), and explaining materials if the material explains a tool or a mechanism, reports research or an investigation (including industry trends), recommends a protection such as isolation or a sandbox, explains an article, a talk, or a release, or guides setup or usage>; from the table in <deck-design folder>/SKILL.md: slides
 - Outline: <outline path>
+- Workspace rules: <the paths that `desk.py recipes <material folder>` (`deck-workflow`) lists: the recipes without `step`, those in the outline's 「使う決まり」, and the customer's memory.md> (open each whole; they take priority over the plugin, and a page that breaks one is a defect)
 - Text: <text path> (below `### Notes:` are the speaker notes)
 - Images: open all p-* in <image folder>
 - Contact sheet: sheet*.webp in <image folder> (all pages in 4 columns, with the number above each page)

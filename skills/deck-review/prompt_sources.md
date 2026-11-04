@@ -13,6 +13,7 @@ You check the facts of a material against their sources. Open each source yourse
 ## What to read
 - Rows to check: run `refs.py check <material folder>` (`deck-workflow`) and take the section 「照合していない行」. It lists the rows in order of risk (`提供` → `計算` → `数字` → `顧客` → `名前`) with the source's ID, kind, date checked, and URL. Check them in that order.
 - The outline's 「出典の表」 (<outline path>) and <material folder>/references.md, for the full rows and for `使い道`.
+- Workspace rules: <the paths that `desk.py recipes <material folder>` (`deck-workflow`) lists: the recipes without `step` and those in the outline's 「使う決まり」, and the customer's memory.md> (open each whole; a rule about which sources may be used or cited takes priority over the plugin)
 - Rules: "Sources" and deck-content-024, 025, 027, and 064 in content from the table in <deck-writing folder>/SKILL.md (what counts as a source, conflicting values, model generations, availability tables).
 
 ## How to open sources

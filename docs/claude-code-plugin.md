@@ -59,7 +59,7 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 | `/tmp` | false | なし |
 | `~/adf-plugin-test/Internal`（入れたフォルダのサブフォルダ） | false | なし |
 
-プロジェクトは、Claude Code を開いたフォルダそのもの（git の根元や親のフォルダの `.claude/settings.json` は見ない）。サブフォルダで開くとプラグインは読み込まれず、スキルも hook も効かない。ワークスペースの直下で開き、資料のフォルダへはそこから移る。`.agents/skills`・`.claude/skills` に置いたスキルは親のフォルダからも読まれるので、`~/Documents/Internal/<資料>/build` で開いても使える。ここが前の入れ方との違い。
+プロジェクトは、Claude Code を開いたフォルダそのもの（git の根元や親のフォルダの `.claude/settings.json` は見ない）。サブフォルダで開くとプラグインは読み込まれず、スキルが効かない。ワークスペースの直下で開き、資料のフォルダへはそこから移る。`.agents/skills`・`.claude/skills` に置いたスキルは親のフォルダからも読まれるので、`~/Documents/Internal/<資料>/build` で開いても使える。ここが前の入れ方との違い。
 
 ## ワークスペースを作る
 
@@ -70,7 +70,7 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 /desk-tools:desk-doctor
 ```
 
-doctor の要修正が 0 になれば使える。ワークスペースの決まり（レシピ。`recipes/<名前>/RECIPE.md` で、frontmatter に `description` のあるもの）は、資料づくりのプラグインのファイルを Read で開くと、その作業（`step`）に当たるものを hook が続けて出す（2026-10-12 に、そのときの形〔同じパスの `rules/deck-practices/visual.md`〕で確かめた。サブフォルダで開いた会話では出ない）。`per_material: true` のレシピは、構成案の頭の「使う決まり」に書いたものを、構成案を開くと出す。`/desk-tools:<スキル>` で呼んだときは、道具を通らずに SKILL.md が入るので、UserPromptSubmit の hook が、その SKILL.md を開いたときと同じものを出す（2026-10-20 に確かめた）。自動のコンパクションのあと、Claude Code は呼んだスキルの SKILL.md を付け直すので、SessionStart（`compact`）の hook がその決まりを出し直す（2026-10-25 に `/compact` で確かめた）。frontmatter の `paths`（2026-10-29 からは `step`）、`deck-practices/start.md`（今の `deck-workflow/start.md`）を開いたときの一覧、構成案の「使う決まり」は、2026-10-27 に sandbox の会話の記録で確かめた（Read と `/desk-tools:deck-review`）。スキルは `desk-tools:` を付けた名前で呼ぶ（`/desk-tools:build-slides` など）。
+doctor の要修正が 0 になれば使える。ワークスペースの決まり（レシピ。`recipes/<名前>/RECIPE.md` で、frontmatter に `description` のあるもの）は、hook では出さない（2026-11-04 にやめた）。資料を作るスキルの手順の中で、エージェントが `desk.py recipes` で一覧を見て、その作業に当たるものを自分で開く（`desk-feedback` の `routing.md` の「Workspace rules」）。スキルは `desk-tools:` を付けた名前で呼ぶ（`/desk-tools:build-slides` など）。
 
 ## 注意
 

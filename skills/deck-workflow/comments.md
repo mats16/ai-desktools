@@ -10,7 +10,7 @@ Use this after delivering a material, when the user has asked people (on Slack o
 
 ## Fetch
 
-Run in the material's folder (the folder with `構成案*.md` and `build/`). The URL is in the outline.
+Run in the material's folder (the folder with `構成案*.md` and `build/`). The URL is in the outline. Before fixing anything a comment asks for, open the workspace's recipes and the customer's `memory.md` that `python3 <deck-workflow folder>/scripts/desk.py recipes <material folder>` names, unless you already have in this context.
 
 ```sh
 C=<deck-workflow folder>/scripts/comments.py

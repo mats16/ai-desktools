@@ -13,7 +13,7 @@ pi install -l git:github.com/mats16/ai-desktools   # git から
 ```
 
 - 書き込まれるのは `<ワークスペース>/.pi/settings.json` の `packages`。手元のパスは `.pi/` からの相対のパスで入るので、ワークスペースか checkout を動かしたら入れ直す。
-- 入るもの（`package.json` の `pi`）: `skills/` の 16 個のスキルと、`extensions/rules.ts`（プラグインのファイルを read・bash で開いたら、その作業に当たるワークスペースのレシピ〔`recipes/<名前>/RECIPE.md`〕を、資料の `構成案*.md` などを開いたら顧客の `memory.md` と、構成案の「使う決まり」に書いた決まりを続けて出す。今の文脈に残っているものは出し直さない。2026-10-27 に、そのときの `rules/` の形で、read と `/skill:deck-review` で確かめた）。
+- 入るもの（`package.json` の `pi`）: `skills/` の 16 個のスキルだけ。拡張はない（2026-11-04 に `extensions/rules.ts` をやめた）。ワークスペースのレシピ〔`recipes/<名前>/RECIPE.md`〕と顧客の `memory.md` は、スキルの手順の中でエージェントが `desk.py recipes` で一覧を見て、自分で開く。
 - スキルは `/skill:desk-init` のように呼ぶ。入れたら `desk-init`、続けて `desk-doctor`（README の「入れ方」）。
 
 ## project trust
@@ -41,7 +41,7 @@ cd ~ && pi list                   # User packages にだけ出る（ここに de
 
 ## pi はワークスペースの直下で起こす
 
-`.pi/settings.json` は、pi を起こしたフォルダのものだけが読まれ、親はたどらない。ワークスペースの下（`Internal/<資料>/` など）で起こすと、パッケージのスキルも拡張も 0 になり、レシピも出ない。
+`.pi/settings.json` は、pi を起こしたフォルダのものだけが読まれ、親はたどらない。ワークスペースの下（`Internal/<資料>/` など）で起こすと、パッケージのスキルが 0 になる。
 
 - 対話の pi、`pi -p` の子（レビューを頼むとき）とも、ワークスペースの直下で起こす。資料のフォルダへは、起こしたあと `cd` で入る。
 - `.agents/skills/` に置いたスキルは親からも見つかる（git のリポジトリの根元まで）ので、`~/Documents/Internal` で起こしても読まれていた。パッケージに移すと、ここが変わる。

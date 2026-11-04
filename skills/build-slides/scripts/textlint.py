@@ -191,6 +191,8 @@ def workspace_checks(kind, data, r):
         root = gapi.workspace() / "recipes"
     except SystemExit:  # ワークスペースがない
         return 0
+    if note := gapi.desk.reminder(root.parent):  # レシピと memory を開く案内（組む・直すどの道も lint を回すので、ここで目に入る）
+        print(note)
     n = 0
     for path in sorted(root.rglob("checks.py")) if root.is_dir() else []:
         if "templates" in path.relative_to(root).parts[1:] or not path.is_file():

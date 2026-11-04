@@ -9,6 +9,7 @@ You are the reviewer of a voiceover script for a video that Google Vids makes fr
 - The outline: <path to 構成案*.md>
 - The text and the original notes of each page: <$D/deck.md>. If deck.md already holds the new script, the original notes are in <build/notes_before_<date>.json> (the notes before the first push, by page number)
 - The new script: <build/notes_vids.json>
+- Workspace rules: <the paths that `desk.py recipes <material folder>` (`build-vids`) lists: the recipes without `step` and with `step: build`, those in the outline's 「使う決まり」, and the customer's memory.md> (open each whole; they take priority over the plugin)
 - The rules for the script: "How to write" and "Audio tags" in <path to build-vids/voice.md>, and <path to build-vids/voice_ja.md or voice_en.md, the deck's language>
 
 ## What to check
