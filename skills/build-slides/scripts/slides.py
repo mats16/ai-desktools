@@ -3565,7 +3565,7 @@ def refont(o, font):
 
 
 def default_theme():
-    """desk.toml の [slides] default_theme（書いていなければ navy。desk-doctor と同じ）。"""
+    """desk.toml の [slides] default_theme（書いていなければ navy。desk-init の doctor.py と同じ）。"""
     return config().get("slides", {}).get("default_theme", "navy") if gapi.find_config() else "navy"
 
 
@@ -3923,7 +3923,7 @@ def merge(pages, fixes):
 
 
 def selftest():
-    assert gapi.find_config.cache_info().currsize == 0  # import で [brand] を読んでも、gapi の覚えた結果を作らない（あとで今いるフォルダを変える desk-doctor のため）
+    assert gapi.find_config.cache_info().currsize == 0  # import で [brand] を読んでも、gapi の覚えた結果を作らない（あとで今いるフォルダを変える desk-init の doctor.py のため）
     assert paint(NAVY) == {"themeColor": "DARK1"} and paint("FFFFFF") == {"rgbColor": {"red": 1.0, "green": 1.0, "blue": 1.0}}
     assert u16("𝄞あ") == 3  # サロゲートペアは 2
     if COPYRIGHT.strip() == PLACEHOLDER_COPYRIGHT:  # desk.toml の [brand] がないところで回したとき

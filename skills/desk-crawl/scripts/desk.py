@@ -28,7 +28,7 @@ AGENTS_TEMPLATE = ("決まりの優先", "基本方針", "いい資料の考え�
 # スキルのあいだで同じ中身を持つスクリプト → 持ち主のスキル（2026-11-02 に lib/ をやめた）。直すのは持ち主だけで、ほかのスキルの scripts/ の同じ名前のファイルは写し
 # （tests/skills/check.py --sync が写し、同じ中身かを見る）。ledger.py は決まりの ID を持ち主のファイルでだけ数え、前の台帳の ../lib/<名前>.py を持ち主のファイルとして読む
 SHARED = {"desk.py": "desk-init", "gapi.py": "build-slides", "brand.py": "build-slides", "textlint.py": "build-slides", "sheet.py": "build-slides",
-          "notes.py": "build-slides", "wording.py": "build-slides", "ledger.py": "desk-feedback", "refs.py": "deck-workflow", "doctor.py": "desk-doctor"}
+          "notes.py": "build-slides", "wording.py": "build-slides", "ledger.py": "desk-feedback", "refs.py": "deck-workflow", "doctor.py": "desk-init"}
 COPIES = {"desk-migrate/templates/drive_folders.md": "desk-init/templates/drive_folders.md",  # スクリプトでない写し（<スキル>/<パス> → 持ち主。フォルダなら中のファイルをみな）
           "desk-migrate/templates/recipes/README.md": "desk-init/templates/recipes/README.md",
           "build-docs/assets/gcp": "build-slides/assets/gcp"}  # build-docs の assets/README.md は自分のもの（build-slides の台帳を名前で指す）
@@ -41,7 +41,7 @@ TRIGGERS = {  # プラグインのファイル（<スキル>/<ファイル>）�
 
 
 def loads(text, where):
-    """TOML を読む。desk.py が TOML を読むのはここだけ。読めなければ止める（止めるのは SystemExit だけ。import のときに読む brand.py・desk-doctor は、これだけを受けて続ける）。"""
+    """TOML を読む。desk.py が TOML を読むのはここだけ。読めなければ止める（止めるのは SystemExit だけ。import のときに読む brand.py・doctor.py は、これだけを受けて続ける）。"""
     if not tomllib:
         sys.exit(f"{where}: 読むには Python 3.11 以上が要る（今は {sys.version.split()[0]}）")
     try:
@@ -143,7 +143,7 @@ def front(text):
         if sep and k.strip() and not x.startswith((" ", "\t", "#")):
             key, v = k.strip(), v.strip()
             v = v[:v.find(v[0], 1) + 1] if v[:1] in ("'", '"') and v.find(v[0], 1) > 0 else v.split(" #")[0].strip()  # 引用符の中の # はコメントでない
-            v = "" if v[:1] in ("|", ">", "#") else v  # 複数行の値（description: >）は読まない（値のないものとして、desk-doctor・gate が知らせる）。# から後ろはコメント
+            v = "" if v[:1] in ("|", ">", "#") else v  # 複数行の値（description: >）は読まない（値のないものとして、doctor.py・gate が知らせる）。# から後ろはコメント
             out[key] = [s.strip().strip("'\"") for s in v[1:-1].split(",") if s.strip()] if v.startswith("[") and v.endswith("]") else v.strip("'\"")
     return {}
 
@@ -211,7 +211,7 @@ def with_workspace(text, ws):
 
 def old_agents(ws):
     """ワークスペースの AGENTS.md が、2026-10-31 までの desk-init の雛形の写しか（その節の見出しが半分より多く残る）。
-    desk-doctor が、レシピに移すよう知らせるための目安（台帳は AGENTS.md を決まりのファイルにしない）。持ち主が書いた AGENTS.md は、プラグインは読まない。"""
+    doctor.py が、レシピに移すよう知らせるための目安（台帳は AGENTS.md を決まりのファイルにしない）。持ち主が書いた AGENTS.md は、プラグインは読まない。"""
     try:
         text = (Path(ws) / "AGENTS.md").read_text(encoding="utf-8", errors="ignore")
     except OSError:
@@ -474,7 +474,7 @@ def selftest():
         conf.write_text('workspace = "../Documents"\n')
         (other / OLD).unlink()
         (ws / NAME).write_text("")
-        assert local(ws / "Customers") == (ws / NAME, ws) and locate(other) == (conf, ws)  # 既定のワークスペースにも desk.toml があると、中と外で読む設定が変わる（desk-doctor が出す）
+        assert local(ws / "Customers") == (ws / NAME, ws) and locate(other) == (conf, ws)  # 既定のワークスペースにも desk.toml があると、中と外で読む設定が変わる（doctor.py が出す）
         assert front("---\ndescription: 顧客向けの資料: 共通\ntargets: [slides, 'docs']  # 省くと全部\npaths:\n  - a/b.md\n- a/c.md\naudience: 顧客向け\n---\n本文") == {
             "description": "顧客向けの資料: 共通", "targets": ["slides", "docs"], "paths": ["a/b.md", "a/c.md"], "audience": "顧客向け"}
         assert front('---\ndescription: "Issue #12 の件"  # c\n---\n')["description"] == "Issue #12 の件"
@@ -492,7 +492,7 @@ def selftest():
         assert copied("x/build-docs/assets/gcp/a.png") and not copied("/p/skills/build-docs/assets/README.md") and not copied("x/build-slides/assets/README.md")
         assert copied("x/build-docs/scripts/gapi.py") and not copied("x/build-slides/scripts/gapi.py") and copied("x/deck-review/scripts/yomiyasu/scripts/yomiyasu_diff.py") and not copied("x/build-docs/scripts/docs.py")
         assert triggers("deck-workflow/materials.md") == {"gather", "make"} and triggers("build-slides/pages.md") == {"build", "make"} and triggers("deck-review/SKILL.md") == {"make"}
-        assert triggers("customer-profile/SKILL.md") == {"gather"} and triggers("desk-doctor/SKILL.md") == set()  # 資料づくりの外の作業では、step のないものは開かない
+        assert triggers("customer-profile/SKILL.md") == {"gather"} and triggers("desk-init/doctor.md") == set()  # 資料づくりの外の作業では、step のないものは開かない
         for f, t in (("cxo/RECIPE.md", "---\ndescription: CxO に提案するとき\nper_material: true\naudience: [顧客向け]\n---\n"), ("tools/RECIPE.md", "---\ndescription: 社内の道具\nstep: gather\n---\n"),
                      ("logo/RECIPE.md", "---\ndescription: ロゴ\nstep: build\n---\n")):
             (r / f).parent.mkdir(parents=True, exist_ok=True)

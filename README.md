@@ -23,8 +23,7 @@
 | 指摘から育てる | `desk-dreaming` | 会話の記録と台帳から、決まりを定期的に整理する（戻し忘れた指示を提案にし、重なり・古い記述を片付け、プラグインに上げる案を出す） |
 | 指摘から育てる | `desk-kaizen` | プラグインの改善を、過去の資料で前後を比べてから Issue にする（理由・背景・検証の結果・見た目なら画像・変更案の差分）。PR は持ち主が作る |
 | 指摘から育てる | `desk-research` | 資料づくりのベストプラクティスの調べ直し。調べた記録（`state.md`・`log/`）はワークスペースの `Research/deck_research/` |
-| 環境 | `desk-init` | ワークスペースを作る（desk.toml・references_index.md・drive_folders.md・recipes/ の雛形と資料のフォルダ。AGENTS.md・CLAUDE.md は置かない。どのフォルダに何を置くかも持つ。設定の desk.toml は、ワークスペースか `~/.desk.toml` に置く。あるファイルは上書きしない） |
-| 環境 | `desk-doctor` | 前提を確かめる（Python・uv、使っている設定とワークスペース、スキルの重なり、Google の認証、Drive のフォルダ、gh）。テーマとテンプレートは、道具のスキルの `slides_doctor.py`（`build-slides`）と `docs_doctor.py`（`build-docs`）が見る |
+| 環境 | `desk-init` | ワークスペースを作る（desk.toml・references_index.md・drive_folders.md・recipes/ の雛形と資料のフォルダ。AGENTS.md・CLAUDE.md は置かない。どのフォルダに何を置くかも持つ。設定の desk.toml は、ワークスペースか `~/.desk.toml` に置く。あるファイルは上書きしない）。前提も確かめる（`doctor.py`: Python・uv、使っている設定とワークスペース、スキルの重なり、Google の認証、Drive のフォルダ、gh）。テーマとテンプレートは、道具のスキルの `slides_doctor.py`（`build-slides`）と `docs_doctor.py`（`build-docs`）が見る |
 | 環境 | `desk-migrate` | 前の版で作ったワークスペースを今の版へ移す（`rules/` の移動、決まりの ID とパスの書き換え、`rules/` から `recipes/<名前>/RECIPE.md` への移し。先に `.desk/migrate/` に控えを取る）。全体に入れるときは、ワークスペースの `desk.toml` を `~/.desk.toml` に移す（`to-user`）。2026-10-31 のスキルの組み直しと、2026-11-02 のスキルの名前の替え（`google-*`）と `lib/` をやめたこと、2026-11-04 の名前の替え（`build-*`）で変わった名前とパスも、ワークスペースの文と台帳で書き換える（`google-*` は、ほかのパッケージにもある名前なので、文の中では `desk-tools:` のあとと `<… folder>` だけを替える。ほかは手で直す） |
 
 ```
@@ -32,7 +31,7 @@ INSTALL.md                        会話で入れるときに、エージェン�
 .claude-plugin/plugin.json        Claude Code のプラグイン（Codex もこれを読む）
 .claude-plugin/marketplace.json   このリポジトリをそのままマーケットプレイスにする
 package.json                      pi のパッケージ（pi.skills: ./skills）
-skills/                           上の 16 個（Claude Code・Codex・pi で共通）
+skills/                           上の 15 個（Claude Code・Codex・pi で共通）
 vendor/yomiyasu/                  subtree で取り込んだ yomiyasu（中は直さない）。スキルではない。動かすのに要るファイルだけを、使うスキルの scripts/yomiyasu/ に写す
 tests/skills/check.py             スキルの形の点検。--sync で、共有のスクリプトを持ち主から写しへ写す
 docs/                             設定のガイド（decisions.md: 決めたこと。todo.md: 残っている課題。claude-code-plugin.md: Claude Code に入れる範囲と確かめ方。codex-plugin.md: Codex に入れる範囲。pi.md: pi に入れる範囲と確かめ方。development.md: 開発しながら動作を見る）
@@ -47,7 +46,7 @@ AI Desk Tools を入れて、ワークスペースを作ってください。
 手順は https://raw.githubusercontent.com/mats16/ai-desktools/main/INSTALL.md にあります。WebFetch ではなく curl で読み、そのとおりに進めてください。
 ```
 
-エージェントが [INSTALL.md](INSTALL.md) に従い、ワークスペースにするフォルダと全社の共有テーマのフォルダ、定期の整理を回すか、資料を作る言語を聞き、Python・uv を見て、そのフォルダだけにプラグインを入れる。続けて、入れた `desk-init` と `desk-doctor` の手順で `desk.toml`（Google の認証、テーマ、Drive の置き場所、材料を集める道具）を一緒に埋め、要修正が 0 になるまで進める。最後に、定期の整理（desk-dreaming）を回すなら、エージェントが自分の道具にあるスケジューラー（T3 Code・Claude Code Desktop・Omnigent など）に登録する（なければ、launchd か cron の入れ方を示す）。自分で回すのは、ブラウザが開く Google のログインだけ。終わったら、ワークスペースの直下で会話を開き直す。
+エージェントが [INSTALL.md](INSTALL.md) に従い、ワークスペースにするフォルダと全社の共有テーマのフォルダ、定期の整理を回すか、資料を作る言語を聞き、Python・uv を見て、そのフォルダだけにプラグインを入れる。続けて、入れた `desk-init` の手順（作る・doctor）で `desk.toml`（Google の認証、テーマ、Drive の置き場所、材料を集める道具）を一緒に埋め、要修正が 0 になるまで進める。最後に、定期の整理（desk-dreaming）を回すなら、エージェントが自分の道具にあるスケジューラー（T3 Code・Claude Code Desktop・Omnigent など）に登録する（なければ、launchd か cron の入れ方を示す）。自分で回すのは、ブラウザが開く Google のログインだけ。終わったら、ワークスペースの直下で会話を開き直す。
 
 ## 前の名前から移る
 
@@ -58,7 +57,7 @@ AI Desk Tools を入れて、ワークスペースを作ってください。
 1. 前の名前で登録したものを拾う。<ワークスペース> は資料のフォルダ（desk.toml か factory.toml のあるところ）で、分からなければ聞く。次の grep で出たファイル（プラグインの写しのフォルダは除いてある）、crontab -l、自分の道具のスケジューラー（T3 Code・Claude Code Desktop・Omnigent など）の定期の作業のうち ai-deck-factory を含むものを、まとめて見せてから進める。自分の道具で見られないスケジューラー（ほかのアプリのもの）に desk-dreaming を登録したかも、ユーザーに聞く。
    grep -rln --exclude-dir=cache --exclude-dir=marketplaces --exclude-dir=git ai-deck-factory ~/.claude/plugins ~/.claude/settings.json ~/.codex/config.toml ~/.codex/automations ~/.claude/scheduled-tasks ~/Library/LaunchAgents ~/.pi/agent/settings.json <ワークスペース>/.claude <ワークスペース>/.codex <ワークスペース>/.pi <ワークスペース>/AGENTS.md <ワークスペース>/rules 2>/dev/null
 2. 前の入れ元が手元の checkout なら、外す前に、その .claude-plugin/marketplace.json の name を見る。desk-tools でなければ（前の版のまま）、何も外さずに見せ、その checkout を mats16/ai-desktools に合わせるか、ほかの入れ元にするかをユーザーに聞く。決まったら、前の名前のプラグインとマーケットプレイスを、入れたときと同じ範囲で外す。https://raw.githubusercontent.com/mats16/ai-desktools/main/docs/ の claude-code-plugin.md・codex-plugin.md・pi.md の「外す」を、desk-tools を ai-deck-factory に替えて使う。pi は settings.json に書かれた入れ元を、そのまま pi remove に渡す（-l の有無も同じにする）。
-3. https://raw.githubusercontent.com/mats16/ai-desktools/main/INSTALL.md の 3（プラグインを入れる）と 4 の 2（desk-doctor）を、今のワークスペースで進める。入れる範囲（ユーザー全体かワークスペースだけか）と入れ元（GitHub か手元の checkout）は前と同じにし、INSTALL.md の 3 のコマンドをそれに合わせて替える（手元のパスから入れる書き方は README の「入れ方」）。desk-doctor が「前のバージョンのワークスペース」を出したら、<プラグイン>/skills/desk-migrate/SKILL.md を開いて移す。
+3. https://raw.githubusercontent.com/mats16/ai-desktools/main/INSTALL.md の 3（プラグインを入れる）と 4 の 2（doctor）を、今のワークスペースで進める。入れる範囲（ユーザー全体かワークスペースだけか）と入れ元（GitHub か手元の checkout）は前と同じにし、INSTALL.md の 3 のコマンドをそれに合わせて替える（手元のパスから入れる書き方は README の「入れ方」）。desk-init の doctor が「前のバージョンのワークスペース」を出したら、<プラグイン>/skills/desk-migrate/SKILL.md を開いて移す。
 4. AGENTS.md・rules/ に残る ai-deck-factory:（コロン付き。/ai-deck-factory:<スキル> や $ai-deck-factory:<スキル>）を desk-tools: に替える（スキルは新しい名前でしか呼べない）。コロンのない ai-deck-factory（テンプレートとデッキの目印 ai-deck-factory theme= など）は替えない。
 5. 定期の整理（desk-dreaming）を登録していたら、登録した先を <プラグイン>/skills/desk-dreaming/schedule.md の見出しの順にすべて見て、前の登録を消し、INSTALL.md の 5 のとおりに、新しい prompt.txt と run.sh のパスで登録し直す。launchd と cron は自分で書き換えず、消すコマンドと入れるコマンドを示して、ユーザーに回してもらう。自分の道具で見られない登録先は、そのアプリで消して登録し直すよう、渡す 1 行と作業フォルダを添えてユーザーに返す。
 6. 1 の grep と crontab -l をもう一度回し、残ったものと、次からの開き方（INSTALL.md の 6）を返す。コロンのない目印と、name が desk-tools の checkout のパスに残る ai-deck-factory は、残ったものに数えない。
@@ -98,7 +97,7 @@ pi install git:github.com/mats16/ai-desktools        # git から
 
 スキルは `/skill:desk-init` のように呼ぶ。資料のフォルダだけで効かせる（`-l`）入れ方と、project trust、効いている範囲の確かめ方は [docs/pi.md](docs/pi.md)。
 
-入れたら、ワークスペースにするフォルダで `desk-init`、続けて `desk-doctor` を呼ぶ。前の版から更新したら `desk-doctor` を回し、「前のバージョンのワークスペース」が出たら `desk-migrate` で移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前〔`factory.toml` → `desk.toml`、`.factory/` → `.desk/`、`factory-*` → `desk-*`、`dreaming` → `desk-dreaming` と決まりの ID の `factory-dreaming` → `desk-dreaming`〕を変えた）。
+入れたら、ワークスペースにするフォルダで `desk-init` を呼ぶ（作ったあと、同じスキルの doctor で前提を確かめる）。前の版から更新したら `desk-init` の doctor を回し、「前のバージョンのワークスペース」が出たら `desk-migrate` で移す（2026-10-24 にスキルの名前・ファイルの分け方・決まりの ID を、2026-10-25 に設定と記録と管理のスキルの名前〔`factory.toml` → `desk.toml`、`.factory/` → `.desk/`、`factory-*` → `desk-*`、`dreaming` → `desk-dreaming` と決まりの ID の `factory-dreaming` → `desk-dreaming`〕を変えた）。
 
 ## ワークスペース
 
@@ -114,7 +113,7 @@ pi install git:github.com/mats16/ai-desktools        # git から
 
 自分だけの画像は `assets/` に置く。`slides.asset()` はここを先に探し、なければ `build-slides/assets/` を使う。
 
-ワークスペースの直下の `AGENTS.md`・`CLAUDE.md` は、プラグインもスキルも前提にしない（[決めたこと](docs/decisions.md) の 2026-10-31）。`desk-init` は置かず、スクリプトも読まず、修正の指示も戻さない。持ち主が自分で置くのは止めない。ただ、エージェントはこれをどの会話にも、スキルより強く読み込むので、書いた決まりは、資料を作らない作業にも効く。資料を作るための決まりはレシピに書く。2026-10-31 までの `desk-init` が置いた写しは、`desk-doctor` が「前の雛形の AGENTS.md」として知らせ、`desk-migrate` の手順で持ち主と一緒にレシピへ移す。
+ワークスペースの直下の `AGENTS.md`・`CLAUDE.md` は、プラグインもスキルも前提にしない（[決めたこと](docs/decisions.md) の 2026-10-31）。`desk-init` は置かず、スクリプトも読まず、修正の指示も戻さない。持ち主が自分で置くのは止めない。ただ、エージェントはこれをどの会話にも、スキルより強く読み込むので、書いた決まりは、資料を作らない作業にも効く。資料を作るための決まりはレシピに書く。2026-10-31 までの `desk-init` が置いた写しは、`desk-init` の `doctor.py` が「前の雛形の AGENTS.md」として知らせ、`desk-migrate` の手順で持ち主と一緒にレシピへ移す。
 
 ## 書体
 
@@ -180,11 +179,11 @@ pi install git:github.com/mats16/ai-desktools        # git から
 API を直接呼ぶ（MCP は使わない）。トークンは `gapi.py`（`build-slides` が持ち主で、Google を呼ぶスキルはみな写しを持つ）が次の順に取る。gcloud も、ほかの Google のスキルも、動かすときには要らない。
 
 1. 環境変数 `GOOGLE_OAUTH_ACCESS_TOKEN`（ほかの仕組みで取ったトークンを渡すとき）
-2. `authorized_user` の認証情報の JSON（`GOOGLE_APPLICATION_CREDENTIALS`、なければ gcloud の ADC のファイル）の refresh_token。作るのは `gcloud auth application-default login --scopes=…`（`desk-doctor` がコマンドを出す）
+2. `authorized_user` の認証情報の JSON（`GOOGLE_APPLICATION_CREDENTIALS`、なければ gcloud の ADC のファイル）の refresh_token。作るのは `gcloud auth application-default login --scopes=…`（`desk-init` の `doctor.py` がコマンドを出す）
 
 gcloud の既定の OAuth クライアントで作った認証情報は、`google.quota_project` がないと 403 になる。
 
-Databricks の Unity Catalog の HTTP の connection を通して呼ぶこともできる（Google のトークンは connection が持つ）。`desk.toml` の `[uc_connections]` に、Databricks の CLI の profile（`profile`。ワークスペースの URL もそこから読む。profile を使わないなら `host` にワークスペースの URL）と、Google のホストごとの connection の名前（`[uc_connections.proxy]`。`www.googleapis.com`（Drive）・`slides.googleapis.com`・`docs.googleapis.com`）を書くと、そのホストへの呼び出しは `/api/2.0/unity-catalog/connections/<名前>/proxy/…` に送る。connection は、host をその Google のホスト、base_path を空にし、OAuth の scope に drive・presentations・documents を入れて作る。Databricks のトークンは、`profile` があればその profile で `databricks auth token` が取る（`databricks auth login` でログインしたもの。`DATABRICKS_TOKEN` は使わない）。`databricks auth token` は OAuth の profile だけを扱うので、PAT の profile は `profile` に書かず、`host` と `DATABRICKS_TOKEN` で渡す。`profile` がなければ環境変数 `DATABRICKS_TOKEN`、それもなければ `host` のホストで `databricks auth token`（同じホストの profile が 2 つ以上あると CLI が選べないので、`profile` を書く）。Genie Code などの Databricks の上では、子のプロセスは自分でトークンを取れないので、呼び出す側の Python で `WorkspaceClient().config.authenticate()` のトークンを `DATABRICKS_TOKEN` に、`config.host` を `DATABRICKS_HOST` に入れて渡す（`profile` と `host` は書かない。`desk-doctor` にも同じく渡す）。`profile` と `host` を両方書くと、`profile` を使う。Genie One は、2026-11-01 の時点で、スキルに入れたスクリプトを動かせない。connection が人ごとの OAuth なら、使う人が先にワークスペースの画面で connection にログインしておく。`[uc_connections]` に `enabled = false` と書くと、設定を残したまま直接呼ぶのに戻る（書かなければ有効）。
+Databricks の Unity Catalog の HTTP の connection を通して呼ぶこともできる（Google のトークンは connection が持つ）。`desk.toml` の `[uc_connections]` に、Databricks の CLI の profile（`profile`。ワークスペースの URL もそこから読む。profile を使わないなら `host` にワークスペースの URL）と、Google のホストごとの connection の名前（`[uc_connections.proxy]`。`www.googleapis.com`（Drive）・`slides.googleapis.com`・`docs.googleapis.com`）を書くと、そのホストへの呼び出しは `/api/2.0/unity-catalog/connections/<名前>/proxy/…` に送る。connection は、host をその Google のホスト、base_path を空にし、OAuth の scope に drive・presentations・documents を入れて作る。Databricks のトークンは、`profile` があればその profile で `databricks auth token` が取る（`databricks auth login` でログインしたもの。`DATABRICKS_TOKEN` は使わない）。`databricks auth token` は OAuth の profile だけを扱うので、PAT の profile は `profile` に書かず、`host` と `DATABRICKS_TOKEN` で渡す。`profile` がなければ環境変数 `DATABRICKS_TOKEN`、それもなければ `host` のホストで `databricks auth token`（同じホストの profile が 2 つ以上あると CLI が選べないので、`profile` を書く）。Genie Code などの Databricks の上では、子のプロセスは自分でトークンを取れないので、呼び出す側の Python で `WorkspaceClient().config.authenticate()` のトークンを `DATABRICKS_TOKEN` に、`config.host` を `DATABRICKS_HOST` に入れて渡す（`profile` と `host` は書かない。`doctor.py` にも同じく渡す）。`profile` と `host` を両方書くと、`profile` を使う。Genie One は、2026-11-01 の時点で、スキルに入れたスクリプトを動かせない。connection が人ごとの OAuth なら、使う人が先にワークスペースの画面で connection にログインしておく。`[uc_connections]` に `enabled = false` と書くと、設定を残したまま直接呼ぶのに戻る（書かなければ有効）。
 
 ## 決めたこと・残っている課題
 
