@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""日本語の点検: 組んだ資料を Google から読み、言い回しの指摘を場所つきで出し、直したあとに読み直して、意味の変わる恐れと、まだ判断していない指摘を数える。
-文を集めるのは道具（スライドは gslides.py wording、ドキュメントは docs.py wording）で、ここは集めた文を見て、資料のフォルダの wording.json に残す。
+"""日本語の点検: できあがった原稿（スライドはページの JSON と pages.py から組む前のデッキ）の文を見て、言い回しの指摘を場所つきで出し、直したあとに見直して、
+意味の変わる恐れと、まだ判断していない指摘を数える。最後に、Google に保存された資料の文が、点検した文と同じかを別に確かめる（保存した資料との照合）。
+文を集めるのは道具（スライドは slides.py wording と gslides.py wording、ドキュメントは docs.py wording）で、ここは集めた文を見て、資料のフォルダの wording.json に残す。
 持ち主は google-slides。google-docs は写しを持つ（tests/skills/check.py --sync）。標準ライブラリと、同じフォルダの textlint.py・yomiyasu/ だけ。
-usage: wording.py <資料のフォルダ>                            今の点検の状態（wording.json）
+usage: wording.py <資料のフォルダ>                            今の点検の状態と、保存した資料との照合の状態（wording.json。Google を読まない）
        wording.py keep <資料のフォルダ> <ID> ... --why <理由>   言い回しの指摘（W…）を直さずに残す（その文のハッシュに結ぶ。文が変われば判断は消える）
        wording.py ask  <資料のフォルダ> <ID> ... --why <問い>   指摘か恐れをユーザーに聞く（渡すときの問いの一覧へ）
        wording.py ok   <資料のフォルダ> <ID> ... --why <理由>   意味の変わる恐れ（R…）を確かめ、変えてよいとした
        （--selftest で自己確認）
 決め方（2026-11-04 の「決めたこと」）: 指摘と判断は文の中身のハッシュで結ぶ（翻訳の確認の道具が区切りごとの「無視」を、区切りが変わると消すのと同じ）。
 直したあとは、前に通した文（base）と今の文を比べ、守る語（数・URL・コード・英字の語・かぎかっこの中・否定・語と助詞の組）の崩れと、yomiyasu_diff の
-意味の変わる恐れを出す。恐れが残るうちは base を進めない（2 度目に直したときに 1 度目の崩れが見えなくならないように）。"""
-import argparse, collections, contextlib, difflib, functools, glob, hashlib, importlib.util, io, json, os, re, sys, time, unicodedata
+意味の変わる恐れを出す。恐れが残るうちは base を進めない（2 度目に直したときに 1 度目の崩れが見えなくならないように）。
+点検（last）と照合（saved）は別の事実: 点検が済みでも、組んで保存した資料の文が点検した文と同じで、組んだあとの画像を見るまでは、照合は済みにならない。"""
+import argparse, collections, contextlib, difflib, functools, hashlib, importlib.util, io, json, os, re, sys, time, unicodedata
 
 sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -97,15 +99,19 @@ def flat(t):
     return re.sub(r"[\s*_`|{}\\]", "", t)  # 両側から同じ記号を外すので、記号を全部外しても突き合わせは崩れない（***赤***、\* のエスケープ）
 
 
-def build_files(build="."):
-    """点検したときの build/ のファイル（資料のフォルダからのパス → sha256）: ページの JSON（隠しファイルは除く）・pages.py・doc.md。
-    flow.py（deck-workflow）は同じ組を見て、点検のあとに変わったか増えたかを決める。"""
-    out = {}
-    for f in sorted(glob.glob("**/*.json", root_dir=build, recursive=True) + ["pages.py", "doc.md"]):
-        if os.path.isfile(p := os.path.join(build, f)):
-            with open(p, "rb") as x:
-                out[f"build/{f}"] = hashlib.sha256(x.read()).hexdigest()
-    return out
+def input_files(rels, build="."):
+    """点検した原稿のファイル（資料のフォルダからのパス → sha256）: 組む入力だけ（スライドは deck.json か pages.py と、deck.json が指したページのファイル。
+    ドキュメントは doc.md）。build/ にあっても組まないファイル（控え・別のフォルダの同じ名前のファイル・並べていないページ）は入れない。
+    flow.py（deck-workflow）と照合（verify）は同じ組を読み直して、点検のあとに変わったか消えたかを決める（stale）。"""
+    return {f"build/{os.path.normpath(f)}": file_sha(os.path.join(build, f)) for f in rels}
+
+
+def file_sha(path):
+    try:
+        with open(path, "rb") as x:
+            return hashlib.sha256(x.read()).hexdigest()
+    except OSError:
+        return None
 
 
 def finding_id(rule, unit_sha, said):
@@ -239,7 +245,7 @@ def summarize(st):
     s = {"状態": "済み" if last and not (open_f or open_r or last.get("problems")) else "未完" if last else "未実施",
          "文": len(last.get("units", [])), "指摘": len(fs), "未判断": len(open_f), "残す": sum(status(f) == "keep" for f in fs),
          "聞く": sum(status(x) == "ask" for x in fs + rs), "直した": last.get("fixed", 0), "恐れ": len(rs), "未確認": len(open_r),
-         "書き直し": st.get("rounds", 0), "上限": MAX_ROUNDS, "通らない理由": last.get("problems", []), "revision": last.get("revision"), "ts": last.get("ts")}
+         "書き直し": st.get("rounds", 0), "上限": MAX_ROUNDS, "通らない理由": last.get("problems", []), "source": last.get("source"), "ts": last.get("ts")}
     return s, open_f, open_r
 
 
@@ -252,14 +258,34 @@ def accept_base(st):
 
 
 def place(x):
-    return f"{x['where']}" + (f"（build/{x['file']}" + (f" {x['loc']}" if x.get("loc") else "") + "）" if x.get("file") else "（build/ にこの文がない: 直したが組んでいないか、画面で直したか、部品が足した文）")
+    return f"{x['where']}" + (f"（build/{x['file']}" + (f" {x['loc']}" if x.get("loc") else "") + "）" if x.get("file") else "（build/ のファイルの文に戻せない: pages.py の式で作った文か、部品が足した文）")
 
 
-def show(st, tool="wording"):
+def digest(units):
+    """点検した文の指紋（ページの名前・場所・文）。照合（saved）は、どの点検の文と比べたかをこれで持つ。"""
+    return sha(json.dumps([(u["key"], u["where"], u["text"]) for u in units], ensure_ascii=False))
+
+
+def stale(st, folder):
+    """点検のあとに変わったか消えた原稿のファイル（点検したときの files を読み直す）。新しいページは deck.json か pages.py が変わるので、ここに出る。"""
+    return sorted(k for k, v in ((st.get("last") or {}).get("files") or {}).items() if file_sha(os.path.join(folder, k)) != v)
+
+
+def saved_state(st, folder):
+    """保存した資料との照合の状態: 未実施・済み・通らない・古い（照合のあとに点検し直したか、原稿のファイルが変わった）。"""
+    sv, last = st.get("saved") or {}, st.get("last") or {}
+    if not sv:
+        return "未実施"
+    if sv.get("checked") != last.get("digest") or stale(st, folder):
+        return "古い"
+    return "済み" if not sv.get("problems") else "通らない"
+
+
+def show(st, tool="wording", folder=None):
     s, open_f, open_r = summarize(st)
     last, dec = st.get("last") or {}, st.get("decisions", {})
     if not last:
-        print("日本語の点検: 未実施（gslides.py wording <URL> か docs.py wording <URL> を build/ で回す）")
+        print("日本語の点検: 未実施（スライドは slides.py wording、ドキュメントは docs.py wording <URL> を build/ で回す）")
         return s
     print(f"日本語の点検: 文 {s['文']}・指摘 {s['指摘']}（未判断 {s['未判断']}・残す {s['残す']}）・前の点検から直した {s['直した']}"
           f"・意味の変わる恐れ {s['恐れ']}（未確認 {s['未確認']}）・聞く {s['聞く']}（指摘と恐れ）・書き直し {s['書き直し']} / {s['上限']} 回")
@@ -284,20 +310,33 @@ def show(st, tool="wording"):
         if n:
             print(f"直し方〔{k}〕{n} 件: {HOW[k]}")
     if s["状態"] == "済み":
-        print("状態: 済み" + (f"（聞く {s['聞く']} 件は、渡すときの問いの一覧に入れる）" if s["聞く"] else "") + f"。Google のリビジョン {s['revision']} で点検した")
+        print("点検: 済み" + (f"（聞く {s['聞く']} 件は、渡すときの問いの一覧に入れる）" if s["聞く"] else "") + f"。{last.get('source') or '?'} を点検した")
     else:
-        print(f"状態: 未完。ページの JSON（ドキュメントは doc.md）を直して組み、check で画像を見てから {tool} をもう一度回す。直さないものは "
+        print(f"点検: 未完。ページの JSON（ドキュメントは doc.md）を直して {tool} をもう一度回す。直さないものは "
               f"wording.py keep・ask、変えてよい恐れは wording.py ok（<資料のフォルダ> <ID> … --why …）で閉じる")
+    if folder is not None:
+        sv = st.get("saved") or {}
+        print(f"保存した資料との照合: {saved_state(st, folder)}" + (f"（{sv.get('url')} リビジョン {sv.get('revision')}・{sv.get('ts')}）" if sv else "")
+              + "。点検が済んでも、組んで画像を見たあとの照合（gslides.py wording <URL> か docs.py wording <URL>）が済むまでは渡さない")
+        for p in sv.get("problems", [])[:8] if saved_state(st, folder) == "通らない" else []:
+            print(f"[照合が通らない] {p}")
     return s
 
 
-def run(folder, kind, url, revision, units, files, problems=(), tool="wording"):
-    """Google の資料から集めた文（units。file・loc は道具が埋める）を点検し、wording.json を書き、状態を出す。済みなら True。
-    files は点検したときのファイル（資料のフォルダからのパス → sha256）。flow.py が、点検のあとに変わったかを見る。problems は道具が見つけた、通らない理由。"""
-    st, t0 = load(folder), time.time()
-    if st.get("url") not in (None, url):  # 別の資料の記録を黙って消さない（消すと、確かめていない恐れが、前に通した文になる）
+def same_material(st, folder, url):
+    """wording.json が別の資料（url）の記録なら止める。別の資料の記録を黙って消さない（消すと、確かめていない恐れが、前に通した文になる）。"""
+    if url and st.get("url") not in (None, url):
         sys.exit(f"{os.path.join(folder, STATE)} は別の資料 {st.get('url')} の記録。1 つのフォルダには 1 つの資料を置く。作り直した資料なら、"
-                 "このファイルを消してから回す（判断と前に通した文はなくなり、今の文から始める）")
+                 "このファイルを消してから点検から回す（判断と前に通した文はなくなり、今の文から始める）")
+    return st
+
+
+def run(folder, kind, units, files, problems=(), tool="wording", source=None, url=None):
+    """集めた文（units。file・loc は道具が埋める）を点検し、wording.json の点検（last）を書き、状態を出す。済みなら True。
+    files は点検したときのファイル（資料のフォルダからのパス → sha256）。flow.py と照合（verify）が、点検のあとに変わったかを見る。
+    problems は道具が見つけた、通らない理由。source は点検した文の出どころ（「build/deck.json（手元の JSON）」など。表示と記録だけに使う）。
+    url は Google の資料から文を読んだとき（ドキュメント）だけ渡し、別の資料の記録なら止める。"""
+    st, t0 = same_material(load(folder), folder, url), time.time()
     prev = st.get("last") or {}
     for u in units:
         u["sha"] = sha(u["text"])
@@ -314,7 +353,7 @@ def run(folder, kind, url, revision, units, files, problems=(), tool="wording"):
                 hits[fid]["places"] += 1
             else:
                 hits[fid] = {"id": fid, "rule": rule, "excerpt": excerpt, "said": said, "unit": u["sha"], "places": 1,
-                             **{k: u[k] for k in ("where", "file", "loc", "obj")}}
+                             **{k: u.get(k) for k in ("where", "file", "loc", "obj")}}
     base = st.get("base")
     if base is None:  # 比べる相手は、最初に読んだ文（通らない回でも置く。置かないと、そのあとの書き換えが何とも比べられずに通る）。進めるのは accept_base だけ
         base = [{k: u[k] for k in KEEP} for u in units]
@@ -329,11 +368,11 @@ def run(folder, kind, url, revision, units, files, problems=(), tool="wording"):
     now = {u["sha"] for u in units}
     rounds = st.get("rounds", 0) + bool(prev_open - now)  # 前に未判断の指摘があった文を書き換えた回を数える
     fixed = len({f["id"] for f in prev.get("findings", [])} - set(hits))
-    last = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "revision": revision, "units": [{k: u[k] for k in KEEP + ("sha",)} for u in units],
+    last = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": source, "digest": digest(units),
+            "units": [{k: u.get(k) for k in KEEP + ("sha",)} for u in units],
             "findings": list(hits.values()), "risks": rs, "fixed": fixed, "problems": list(problems) + unreadable, "files": files, "seconds": None}
-    st = {"version": 1, "kind": kind, "url": url, "rounds": rounds, "max_rounds": MAX_ROUNDS,
-          "base": base,
-          "decisions": dec, "last": last}
+    st = {"version": 2, "kind": kind, **({"url": st["url"]} if st.get("url") else {}), "rounds": rounds, "max_rounds": MAX_ROUNDS,
+          "base": base, "decisions": dec, "last": last, **({"saved": st["saved"]} if st.get("saved") else {})}  # 照合は消さない（点検の文が変われば、digest で古いになる）
     s, _, _ = summarize(st)
     accept_base(st)  # 恐れが残るうちは、前に通した文を進めない
     if s["状態"] == "済み":
@@ -341,15 +380,46 @@ def run(folder, kind, url, revision, units, files, problems=(), tool="wording"):
     last["seconds"] = round(time.time() - t0, 2)
     st["summary"], _, _ = summarize(st)
     save(folder, st)
-    print(f"（Google の {url} の文 {len(units)}。{last['seconds']} 秒）")
-    show(st, tool)
+    print(f"（{source or '?'} の文 {len(units)}。{last['seconds']} 秒）")
+    show(st, tool, folder)
     return st["summary"]["状態"] == "済み"
+
+
+def verify(folder, url, revision, units, problems=(), tool="wording"):
+    """保存した資料との照合（saved）: 最後の点検（last）が済みで、そのあとに build/ のファイルが変わっておらず、Google に保存された資料の文（units）が
+    点検した文と同じか。problems は道具が見つけた、通らない理由（組んだリビジョンでない・画像を見ていない・組んでいない直しがある）。済みなら True。
+    文はページの場所（where）ごとの数え上げで比べる（並びは Google が組んだ順で変わるので見ない）。違えば、その文を通らない理由にする（画面で直したか、組んでいない）。"""
+    st = same_material(load(folder), folder, url)
+    last = st.get("last") or {}
+    out = list(problems)
+    if not last:
+        out.append("日本語の点検を回していない（スライドは slides.py wording を先に回す）")
+    else:
+        if summarize(st)[0]["状態"] != "済み":
+            out.append("日本語の点検が済みでない（wording.py <資料のフォルダ> で残りを見る）")
+        if moved := stale(st, folder):
+            out.append(f"点検のあとに変わったファイル: {', '.join(moved[:8])}（点検し直す）")
+        mine = collections.Counter((u["where"], u["text"]) for u in last.get("units", []))
+        got = collections.Counter((u["where"], u["text"]) for u in units)
+        at = {(u["where"], u["text"]): u for u in last.get("units", [])}
+        one = lambda t: " ⏎ ".join(t.split("\n"))[:60]
+        diff = [f"{w}: 保存した資料にだけある「{one(t)}」" for w, t in (got - mine).elements()] + \
+               [f"{w}: 点検した文にだけある「{one(t)}」{place(at[(w, t)])[len(w):]}" for w, t in (mine - got).elements()]
+        if diff:
+            out.append(f"保存した資料の文が、点検した文と {len(diff)} か所違う（画面で直したか、組んでいない。直しをページの JSON か doc.md に入れ、点検してから組み直す）: "
+                       + " / ".join(diff[:6]) + (" ほか" if len(diff) > 6 else ""))
+    st["url"] = url
+    st["saved"] = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "url": url, "revision": revision, "checked": last.get("digest"),
+                   "problems": out}
+    save(folder, st)
+    show(st, tool, folder)
+    return not out
 
 
 def decide(folder, status, ids, why):
     """指摘（W…）か恐れ（R…）の判断を残す。ID は最後の点検にあるものだけ。keep は W だけ、ok は R だけ。"""
     st = load(folder)
-    last = st.get("last") or sys.exit(f"{os.path.join(folder, STATE)} がない（点検は未実施）。先に gslides.py wording か docs.py wording を回す")
+    last = st.get("last") or sys.exit(f"{os.path.join(folder, STATE)} がない（点検は未実施）。先に slides.py wording か docs.py wording を回す")
     known = {x["id"]: x for x in last.get("findings", []) + last.get("risks", [])}
     bad = [i for i in ids if i not in known or (status == "keep" and not i.startswith("W")) or (status == "ok" and not i.startswith("R"))]
     bad and sys.exit(f"最後の点検にない ID か、使えない判断（keep は W…、ok は R…、ask はどちらも）: {', '.join(bad)}")
@@ -362,7 +432,7 @@ def decide(folder, status, ids, why):
         st["rounds"] = 0
     st["summary"], _, _ = summarize(st)
     save(folder, st)
-    show(st)
+    show(st, "docs.py wording <URL>" if st.get("kind") == "docs" else "slides.py wording", folder)
 
 
 def selftest():
@@ -386,15 +456,15 @@ def selftest():
         page = lambda *texts, key="p01": [u(key, t, where=f"p{i}") for i, t in enumerate(texts, 1)]
         url = "https://docs.google.com/presentation/d/x/edit"
         # 1 回目: 指摘は場所つき・未判断で、通らない
-        assert not run(d, "slides", url, "r1", page("4 つの構成の比べ", "顧客は「前の版の比べ」と言った", "検証は不要ではない"), {"build/p01.json": "a"})
+        assert not run(d, "slides", page("4 つの構成の比べ", "顧客は「前の版の比べ」と言った", "検証は不要ではない"), {"build/p01.json": "a"})
         st = load(d)
         (f,) = st["last"]["findings"]
         assert f["rule"] == "動詞を名詞にした語" and f["id"] == finding_id("動詞を名詞にした語", sha("4 つの構成の比べ"), "の比べ") and st["summary"]["未判断"] == 1 and st["summary"]["状態"] == "未完"
         # 同じ文で回し直しても、ID は変わらず、増えない（重複しない）。書き直しの回も数えない
-        run(d, "slides", url, "r1", page("4 つの構成の比べ", "顧客は「前の版の比べ」と言った", "検証は不要ではない"), {})
+        run(d, "slides", page("4 つの構成の比べ", "顧客は「前の版の比べ」と言った", "検証は不要ではない"), {})
         assert [x["id"] for x in load(d)["last"]["findings"]] == [f["id"]] and load(d)["rounds"] == 0
         # 直す: 指摘は消え、直したに数える。ついでに否定を反転させた改悪は、恐れとして出て、通らない
-        assert not run(d, "slides", url, "r2", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要だ"), {})
+        assert not run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要だ"), {})
         st = load(d)
         assert st["last"]["findings"] == [] and st["last"]["fixed"] == 1 and st["rounds"] == 1 and sorted(r["kind"] for r in st["last"]["risks"]) == sorted(["否定の数", REREAD])
         neg = next(r for r in st["last"]["risks"] if r["kind"] == "否定の数")
@@ -404,18 +474,18 @@ def selftest():
         decide(d, "ok", [reread["id"]], "比べる対象と強さは同じ")
         rid = neg["id"]
         # 2 度目に直すときに否定とかかわらない語を変えても、前に通した文と比べるので、恐れは消えない
-        assert not run(d, "slides", url, "r3", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要だと考える"), {})
+        assert not run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要だと考える"), {})
         assert "否定の数" in [r["kind"] for r in load(d)["last"]["risks"]]
         # 戻せば恐れは消え、済みになる（前に通した文が今の文になる）
-        assert run(d, "slides", url, "r4", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない"), {})
+        assert run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない"), {})
         assert load(d)["summary"]["状態"] == "済み" and load(d)["rounds"] == 0
         # 残す判断は文のハッシュに結ぶ: 文が変われば判断は消え、未判断に戻る（失効）
-        run(d, "slides", url, "r5", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順に戻す"), {})
+        run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順に戻す"), {})
         (g,) = load(d)["last"]["findings"]
         assert g["rule"] == "直訳の語"
         decide(d, "keep", [g["id"]], "製品の版（エディション）の意味")
         assert load(d)["summary"]["状態"] == "済み" and load(d)["summary"]["残す"] == 1
-        run(d, "slides", url, "r6", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す"), {})
+        run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す"), {})
         assert load(d)["summary"]["未判断"] == 1 and load(d)["summary"]["状態"] == "未完"
         # 判断の誤り: 知らない ID、keep に R、理由なし
         for args in (("keep", ["Wzzzzzz"], "x"), ("keep", [rid], "x"), ("ask", [load(d)["last"]["findings"][0]["id"]], " ")):
@@ -428,68 +498,92 @@ def selftest():
         s = load(d)["summary"]
         assert s["状態"] == "済み" and s["聞く"] == 1  # 聞くは閉じた扱いで、問いの一覧に入る
         # 恐れを確かめる（ok）: 意図して数を変えたもの
-        run(d, "slides", url, "r7", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 120 円"), {})
-        run(d, "slides", url, "r8", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 100 円"), {})
+        run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 120 円"), {})
+        run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 100 円"), {})
         (r,) = load(d)["last"]["risks"]
         assert r["kind"] == "数" and load(d)["summary"]["状態"] == "未完"
         decide(d, "ok", [r["id"]], "出典の表 F3 の値に合わせた")
         assert load(d)["summary"]["状態"] == "済み"
-        run(d, "slides", url, "r9", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 100 円"), {})
+        run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 100 円"), {})
         assert load(d)["last"]["risks"] == [] and load(d)["summary"]["状態"] == "済み"  # 確かめたあとは、そこからの違いだけを見る
         # 文を消しても、ページごと消しても比べられる（消えた文の守る語は恐れに出る）
-        run(d, "slides", url, "r9b", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 100 円") + page("仕組みを比べる", key="p09"), {})
-        assert run(d, "slides", url, "r9c", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す"), {}) is False
+        run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 100 円") + page("仕組みを比べる", key="p09"), {})
+        assert run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す"), {}) is False
         assert [r["kind"] for r in load(d)["last"]["risks"]] == ["数"] and not load(d)["last"]["problems"]
         decide(d, "ok", [load(d)["last"]["risks"][0]["id"]], "価格の行は 10 で聞く")
         assert load(d)["summary"]["状態"] == "済み"
         # 恐れを ask にしても、次の点検で消えない（答えを待つあいだ、前に通した文を進めない）
-        run(d, "slides", url, "a1", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {})
+        run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {})
         (ra,) = load(d)["last"]["risks"]
         decide(d, "ask", [ra["id"]], "300 円か 100 円か")
         for _ in range(2):
-            run(d, "slides", url, "a2", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {})
+            run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {})
             assert [r["id"] for r in load(d)["last"]["risks"]] == [ra["id"]] and load(d)["summary"]["聞く"] == 2 and load(d)["summary"]["状態"] == "済み"  # 聞く 2 は、前に聞くにした「版」と、この恐れ
         decide(d, "ok", [ra["id"]], "ユーザーが 300 円と答えた")
         # 通らない理由のある回は、恐れがなくても前に通した文を進めない（画面で直した文を通した文にしない）
         base = load(d)["base"]
-        run(d, "slides", url, "u1", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円", "画面で足した行"), {}, ["組んだあとに画面で直された"])
+        run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円", "画面で足した行"), {}, ["組んだあとに画面で直された"])
         assert load(d)["base"] == base
         # 確かめた変化が、元に戻したあとでまた来たら、また確かめる（前の ok は使わない）
         p5 = lambda price: page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", price)
         for price, want in (("価格は月 400 円", "済み"), ("価格は月 300 円", "済み"), ("価格は月 400 円", "未完")):
-            run(d, "slides", url, "b", p5(price), {})
+            run(d, "slides", p5(price), {})
             if want == "済み":
                 decide(d, "ok", [r["id"] for r in load(d)["last"]["risks"]], "意図した値")
             assert load(d)["summary"]["状態"] == want, (price, load(d)["summary"])
         decide(d, "ok", [r["id"] for r in load(d)["last"]["risks"]], "意図した値")
         # 道具が見つけた通らない理由（画面で直された・画像を取っていない）は、指摘がなくても通さない
-        assert not run(d, "slides", url, "r10", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {}, ["組んだあとに画面で直された"])
+        assert not run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {}, ["組んだあとに画面で直された"])
         # 書き直しの上限: 未判断の指摘のある文を書き換え続けても、上限のあとは keep・ask で閉じるように出す（回り続けない）
         for i, t in enumerate(("仕組みの比べ", "仕組みの比べをする", "全体の仕組みの比べ")):
-            run(d, "slides", url, f"s{i}", page(t, key="p02"), {})
+            run(d, "slides", page(t, key="p02"), {})
         assert load(d)["rounds"] >= MAX_ROUNDS and "上限" in out.getvalue()
-        # 別の資料の記録は使わない
-        try:
-            run(d, "slides", "https://docs.google.com/presentation/d/other/edit", "o1", page("仕組みを比べる", key="p02"), {})
-            raise AssertionError("別の資料の記録を消した")
-        except SystemExit as e:
-            assert "別の資料" in str(e) and load(d)["url"] == url  # 別の資料の記録は消さずに止まる
+        # 保存した資料との照合（verify）は点検と別の事実: 点検が済んで、ファイルが同じで、保存した文が点検した文と同じときだけ済み
+        texts = ("4 つの構成を比べる", "前の版の手順へ戻す")
+        os.remove(os.path.join(d, STATE))  # 新しい資料から
+        os.makedirs(f"{d}/build", exist_ok=True)
+        open(f"{d}/build/p01.json", "w").write("a")
+        files = lambda: input_files(["p01.json"], f"{d}/build")
+        assert run(d, "slides", page(*texts), files(), source="build/deck.json（手元の JSON）") is False  # 未判断の「版」
+        assert saved_state(load(d), d) == "未実施"
+        assert not verify(d, url, "r1", page(*texts)) and any("点検が済みでない" in x for x in load(d)["saved"]["problems"])
+        decide(d, "keep", [f["id"] for f in load(d)["last"]["findings"]], "製品の版")
+        assert verify(d, url, "r1", page(*texts)) and saved_state(load(d), d) == "済み"
+        open(f"{d}/build/p01.json", "w").write("b")  # 照合のあとに手元を直した
+        assert saved_state(load(d), d) == "古い" and stale(load(d), d) == ["build/p01.json"]
+        assert not verify(d, url, "r1", page(*texts)) and any("点検のあとに変わったファイル: build/p01.json" in x for x in load(d)["saved"]["problems"])
+        open(f"{d}/build/p01.json", "w").write("a")
+        assert not verify(d, url, "r2", page("4 つの構成を比べる", "前の版の手順へ戻した"))  # 画面で直した（保存した文が違う）
+        bad = " ".join(load(d)["saved"]["problems"])
+        assert "p2: 保存した資料にだけある「前の版の手順へ戻した」" in bad and "p2: 点検した文にだけある「前の版の手順へ戻す」" in bad
+        assert not verify(d, url, "r1", page(*texts), ["組んだあとの画像を取っていないページ: p1"])  # 道具が見つけた理由
+        assert verify(d, url, "r1", page(*texts)) and load(d)["summary"]["状態"] == "済み"
+        run(d, "slides", page("4 つの構成を比べる", "前の版の手順に戻る"), files())  # 点検し直すと、前の照合は古い（ファイルが同じでも、点検した文が違う）
+        assert saved_state(load(d), d) == "古い"
+        # 別の資料の記録は使わない（照合が資料の URL を持つ）
+        for f in (lambda: verify(d, "https://docs.google.com/presentation/d/other/edit", "o1", page(*texts), {}),
+                  lambda: run(d, "docs", page(*texts), {}, url="https://docs.google.com/document/d/other/edit")):
+            try:
+                f()
+                raise AssertionError("別の資料の記録を消した")
+            except SystemExit as e:
+                assert "別の資料" in str(e) and load(d)["url"] == url  # 別の資料の記録は消さずに止まる
     with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(io.StringIO()):
         assert summarize(load(d))[0]["状態"] == "未実施"  # 回していなければ未実施（済みにしない）
         # 最初の回に通らない理由があっても、その文を比べる相手にする（そのあとの書き換えを比べずに通さない）
-        run(d, "slides", "u2", "f1", [unit("p1", "検証は不要ではない。4 つの構成の比べ", "#", "本文")], {}, ["画像を取っていないページ: p1"])
+        run(d, "slides", [unit("p1", "検証は不要ではない。4 つの構成の比べ", "#", "本文")], {}, ["画像を取っていないページ: p1"])
         assert load(d)["base"][0]["text"] == "検証は不要ではない。4 つの構成の比べ"
-        assert not run(d, "slides", "u2", "f2", [unit("p1", "検証は不要だ。4 つの構成を比べる", "#", "本文")], {})
+        assert not run(d, "slides", [unit("p1", "検証は不要だ。4 つの構成を比べる", "#", "本文")], {})
         assert {"否定の数", REREAD} <= {r["kind"] for r in load(d)["last"]["risks"]}
         os.remove(os.path.join(d, STATE))  # 別の資料に移るときは、記録を消してから
-        run(d, "slides", "u3", "e1", [], {})
+        run(d, "slides", [], {})
         assert load(d)["base"] == [] and load(d)["summary"]["状態"] == "済み"
-        run(d, "slides", "u3", "e2", [unit("p1", "検証は不要ではない", "#", "本文")], {})
+        run(d, "slides", [unit("p1", "検証は不要ではない", "#", "本文")], {})
         assert [r["kind"] for r in load(d)["last"]["risks"]] == ["否定の数"]
         # 印のないページ（pages.py）の並び: 前にページを足しても、あとのページを別のページと組にしない
         os.remove(os.path.join(d, STATE))  # 別の資料に移るときは、記録を消してから
-        run(d, "slides", "u4", "g1", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("価格は月 100 円", "Spark で動かす"), 1)], {})
-        run(d, "slides", "u4", "g2", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("足したページ", "価格は月 100 円", "Spark で動かす"), 1)], {})
+        run(d, "slides", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("価格は月 100 円", "Spark で動かす"), 1)], {})
+        run(d, "slides", [unit(f"p{i}", t, "#", "本文", page=i) for i, t in enumerate(("足したページ", "価格は月 100 円", "Spark で動かす"), 1)], {})
         assert load(d)["last"]["risks"] == []
         assert flat("{10.5:注}の[Foo (bar)](https://e.org/wiki/F_(b))の説明") == "注のFoo(bar)の説明"
         assert guard("SSO 連携: 対応なし", "SSO 連携: 対応あり") and not guard("この機能は使える", "この機能は使えるはずだ") and not guard("必ず確かめる", "確かめる必要がある")
@@ -501,10 +595,10 @@ def selftest():
         assert any(r["kind"] == REREAD for r in risks(mk("前の版の手順に戻す", "終わり"), mk("終わり", "以前の手順に戻すこともある")))
         assert any(r["kind"] == REREAD for r in risks(mk("結果の確かめ"), mk("案の比べで決める")))  # 同じ規則の別の語に替えても読み比べる
         assert flat("- **前の版**の[比べ](https://x)") == "前の版の比べ" and flat("段を分けると、***誤りの戻り先***が {32:1} か所<br>に決まる\\*") == flat("段を分けると、誤りの戻り先が 1 か所に決まる*") and flat("# 1. 構成") == "1.構成" and flat("| a | b |") == "ab"
-        os.makedirs(f"{d}/b/sub/.hide")
-        for f in ("p01.json", "sub/p02.json", "sub/.hide/x.json", "doc.md", "notes.txt"):
+        os.makedirs(f"{d}/b/sub")
+        for f in ("p01.json", "sub/p02.json"):
             open(f"{d}/b/{f}", "w").write("{}")
-        assert sorted(build_files(f"{d}/b")) == ["build/doc.md", "build/p01.json", "build/sub/p02.json"]  # 隠しファイルとページでないファイルは数えない
+        assert sorted(input_files(["p01.json", "./sub/p02.json", "p01.json"], f"{d}/b")) == ["build/p01.json", "build/sub/p02.json"]  # 組む入力だけ。同じファイルは 1 つ
         report = type("R", (), {})()
         units = []
         collector(report, units, lambda where, kw: "p01")
@@ -522,12 +616,11 @@ def main(argv):
         return decide(a.folder, argv[0], a.ids, a.why)
     if len(argv) == 1 and not argv[0].startswith("-"):
         st = load(argv[0])
-        s = show(st)
-        files = (st.get("last") or {}).get("files") or {}
-        if files and (moved := sorted(k for k in set(files) | set(build_files(os.path.join(argv[0], "build"))) if build_files(os.path.join(argv[0], "build")).get(k) != files.get(k))):
-            print(f"古い: 点検のあとに変わったファイル {', '.join(moved[:8])}（組み直してから、道具の wording をもう一度回す）")
+        s = show(st, folder=argv[0])
+        if moved := stale(st, argv[0]):
+            print(f"点検: 古い。点検のあとに変わったファイル {', '.join(moved[:8])}（slides.py wording か docs.py wording をもう一度回す）")
             sys.exit(1)
-        sys.exit(0 if s["状態"] == "済み" else 1)
+        sys.exit(0 if s["状態"] == "済み" else 1)  # 0 は点検が済んだこと。保存した資料との照合は、上の行と flow.py（deck-workflow）が別に出す
     sys.exit(__doc__)
 
 

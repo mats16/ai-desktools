@@ -10,8 +10,8 @@ usage（資料の build/ で。doc.md は今いるフォルダのもの）:
                                         未解決のコメントがあれば止まる。直しを doc.md に入れてから --force で組み直す
   docs.py check <URL か ID>   仕上げの確認。JSON・テキスト・lint・ページの画像（Drive が書き出した PDF）・画像でのレイアウトの確認（doc_layout.py）、
                               doc.md と組んだ文書の照合、テンプレートとの照合、元のテンプレートとの骨組みの比較を /tmp/docs_<ID の先頭 8 字>/ に出す
-  docs.py wording <URL か ID>   日本語の点検。Google の資料の段落の言い回しの指摘を doc.md の行つきで出し、直す前に通した文と比べて意味の変わる恐れを出し、
-                                資料のフォルダの wording.json に残す（wording.py。google-docs の lint.md の「Japanese check」）
+  docs.py wording <URL か ID>   日本語の点検と、保存した資料との照合。Google の資料の段落の言い回しの指摘を doc.md の行つきで出し、直す前に通した文と比べて
+                                意味の変わる恐れを出し、資料のフォルダの wording.json に残す（wording.py。google-docs の lint.md の「Japanese check」）
   docs.py export <URL か ID> <出力.docx か .pdf>   Word か PDF で書き出す（相手が Word を求めたときだけ。納品は Google Docs の URL）
   docs.py --selftest
 見た目の決まりは deck-design → docs。書体・色・著作権表示はスライドと同じもの（brand.py。google-slides のものの写し）を使う。lint は doc_lint.py。"""
@@ -1193,8 +1193,10 @@ def unbuilt_doc(doc):
 
 
 def cmd_wording(src):
-    """docs-lint-020 の日本語の点検（スライドの slides-lint-035 と同じ中身。wording.py）。Google に保存された資料（documents.get）の段落を読み、doc.md の行に戻す。
-    通らない理由: 組んだあとに画面で直された（本文の指紋が組んだときと違う）、組んだあとの文書を docs.py check で見ていない（直して延びた段落のページ割りを見ていない）。"""
+    """docs-lint-020 の日本語の点検（スライドの slides-lint-035 と同じ中身。wording.py）。doc.md から documents.get の形を手元で作る道がないので、
+    Google に保存された資料（documents.get）の段落を読み、doc.md の行に戻す。読んだ文が保存した資料の文なので、点検（last）と保存した資料との照合（saved）を同じ回に書く。
+    通らない理由（どちらにも）: 組んだあとに画面で直された（本文の指紋が組んだときと違う）、組んだあとの文書を docs.py check で見ていない（直して延びた段落の
+    ページ割りを見ていない）、doc.md に組んでいない直しがある（読んだ文が doc.md の文でない）。"""
     if os.path.basename(os.getcwd()) != "build" or not os.path.isfile("doc.md"):
         sys.exit("wording は資料の build/（doc.md のあるフォルダ）で回す")
     did = file_id(src)
@@ -1212,7 +1214,9 @@ def cmd_wording(src):
     problems += unbuilt_doc(doc)
     md = open("doc.md", encoding="utf-8").read()
     units = doc_units(doc, md.splitlines())
-    if not wording.run(os.path.dirname(os.getcwd()), "docs", f"https://docs.google.com/document/d/{did}/edit", doc.get("revisionId"), units, wording.build_files(), problems, f"docs.py wording {src}"):
+    folder, url = os.path.dirname(os.getcwd()), f"https://docs.google.com/document/d/{did}/edit"
+    ok = wording.run(folder, "docs", units, wording.input_files(["doc.md"]), problems, f"docs.py wording {src}", f"Google の文書（リビジョン {doc.get('revisionId')}。doc.md と照らした）", url)
+    if not (wording.verify(folder, url, doc.get("revisionId"), units, problems, f"docs.py wording {src}") and ok):  # 読んだ文書が点検した文そのものなので、照合も同じ回に書く（理由も同じ）
         sys.exit(1)
 
 
@@ -1262,13 +1266,15 @@ def wording_selftest():
                 assert e.code == 1 and any("check で見ていない" in x for x in wording.load(d)["last"]["problems"])
             json.dump({"body": body_hash(doc["body"])}, open(f"{seen}/seen.json", "w"))
             wording.decide(d, "ask", [f["id"] for f in fs.values()], "selftest")
+            assert wording.saved_state(wording.load(d), d) == "通らない"  # 判断しただけでは、照合は前の回のまま
             cmd_wording(doc["documentId"])  # check で見た本文で、判断がそろえば通る
+            assert wording.saved_state(wording.load(d), d) == "済み" and wording.load(d)["saved"]["url"].endswith("/zzwordingdoc/edit")
             pending["v"] = ["doc.md に、組んでいない直しがある"]  # 組んだあとに doc.md だけを直した
             try:
                 cmd_wording(doc["documentId"])
                 raise AssertionError("通した")
             except SystemExit as e:
-                assert e.code == 1 and "doc.md に、組んでいない直しがある" in wording.load(d)["last"]["problems"]
+                assert e.code == 1 and "doc.md に、組んでいない直しがある" in wording.load(d)["last"]["problems"] and wording.saved_state(wording.load(d), d) == "通らない"
             pending["v"] = []
             assert real[3](doc)  # 手で作ったこの文書は doc.md と形が違うので、本物の照合は差を出す
             stamp["v"] = "x"  # 組んだあとに画面で直された

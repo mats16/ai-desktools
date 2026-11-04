@@ -10,6 +10,7 @@ cd <folder>/build
 python3 $K/slides.py new <Drive folder URL> <YYYYMMDD_name> [--theme <theme>]   # first build. Write the printed URL into the outline and tell the user right away (deck-drive-003 in `deck-workflow` → Drive)
 python3 $K/slides.py lint [pages_<owner>.py | <page>.json] [<URL>] [--pages 3,5 | --all] [--talk]   # after every edit. Turns the build requests into JSON locally without building, and lints them (unit. SKILL.md slides-flow-005. Does not read Google. [themes.md](themes.md))
 python3 $K/slides.py lint <workspace>/themes/slides/<name>.json   # checks only the theme file (format, fonts, contrast of role pairs. slides-theme-036 in [themes.md](themes.md))
+python3 $K/slides.py wording [<URL>]   # the Japanese check on the whole deck (deck.json or pages.py) without building; the URL only for a deck whose theme has no file. The saved deck is checked last with gslides.py wording <URL> (slides-lint-035 in [lint.md](lint.md))
 python3 $K/slides.py plan <URL> [<page>.json …]   # prints what build will write (writes nothing. slides-command-037 below)
 python3 $K/slides.py build <URL> [<page>.json …] [--force]   # at checkpoints. Rebuilds, in the same URL, only pages whose content changed (pass files to rebuild only those pages. Stops if the deck was edited on screen. Below)
 python3 $K/slides.py dry [pages_<owner>.py | <page>.json] [<URL>]  # runs make without building; prints build warnings and page count (default is deck.json or pages.py. slides-pages-031 in [pages.md](pages.md))

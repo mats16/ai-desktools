@@ -23,7 +23,7 @@ python3 $K/docs.py init <template name>                      # when the workspac
 python3 $K/docs.py new <Drive folder URL> <YYYYMMDD_name>   # first build. Write the printed URL in the outline and tell the user right away (deck-drive-003 in `deck-workflow` → Drive)
 python3 $K/docs.py build <URL>                                    # rebuild after edits (the URL does not change. Stops if someone edited in the UI)
 python3 $K/docs.py check <URL>                                    # check (§2 below. exit 1 if there is 要修正)
-python3 $K/docs.py wording <URL>                                  # after check: the Japanese check on the saved document ([lint.md](lint.md) → Japanese check)
+python3 $K/docs.py wording <URL>                                  # after check: the Japanese check on the saved document, which is also the match with it ([lint.md](lint.md) → Japanese check)
 python3 $K/docs.py export <URL> /tmp/<material name>.docx                 # only when the counterpart asks for Word ([lint.md](lint.md))
 ```
 
