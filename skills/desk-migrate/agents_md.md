@@ -10,7 +10,7 @@ Until 2026-10-31, desk-init placed `AGENTS.md` and `CLAUDE.md` in the workspace,
    - 「基本方針」: the language and reuse (step 5 and steps 1–4 of `deck-workflow`), where customer information comes from (`deck-workflow` → gathering materials), building with the Slides and Docs APIs and delivering Drive URLs without PDFs (`deck-workflow` → delivering), reading rule files one per call ("Working practices" in `deck-workflow`), the child agent's model (deck-agents-008 in `deck-workflow` → child agents), and when to run desk-doctor or desk-init (their own descriptions). Choosing AI Desk Tools over other slide skills installed in the same environment is the owner's: keep it in `AGENTS.md`, because that choice is made before any recipe is shown
    - 「資料を作る・直すとき」: confirming the four questions before starting (deck-flow-003), reviewing a new material before returning it (step 9, `deck-review`), and requests after delivery (`deck-workflow` → requests after delivery)
    - 「修正の指示」, including 「メモリに書いて済ませない」: `desk-feedback` → recording a correction
-   - 「調べもの」: `deck-workflow` → research requests
+   - 「調べもの」: `desk-research`
    - 「フォルダの置き方」: "Workspace layout" and step 5 (git) in `desk-init`, and searching `references_index.md` and `drive_folders.md` first (step 3 of `deck-workflow`). The customers in 「顧客とフォルダ」 are the folders under `Customers/`
    - `CLAUDE.md` (「コンパクションへの備え」): deck-flow-005 and deck-flow-015 in `deck-workflow`. Its 「Compact Instructions」 has no plugin home: Claude Code reads it only from `CLAUDE.md`, so keep it there if the owner wants it
 2. **Plan.** Sort every item of both files into one of three:

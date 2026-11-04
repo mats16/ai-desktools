@@ -42,7 +42,7 @@ Customers/<customer>/<content>_<YYYYMM or YYYYMMDD>/  … one customer-facing ma
 Customers/<customer>/memory.md                         … that customer's preferences for materials ("Customer memory" in `desk-feedback` → routing)
 Customers/<customer>/profile.md                        … that customer's business, organization, technical setup, and engineers' preferences (`customer-profile`)
 Internal/<content>_<YYYYMM or YYYYMMDD>/              … internal materials (the same contents as customer-facing ones)
-Research/<topic>_<YYYYMMDD>.md                         … research notes (`deck-workflow` → research requests)
+Research/<topic>_<YYYYMMDD>.md                         … research notes (`desk-research`)
 Research/deck_research/                                … desk-research's resurvey log (state.md, log/)
 recipes/<name>/RECIPE.md                               … the workspace's rules (recipes; `recipes/README.md`, `desk-feedback` → writing recipes)
 recipes/<name>/templates/, checks.py                   … the document templates and checks a recipe uses (lint reads the checks)

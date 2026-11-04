@@ -1,40 +1,30 @@
 ---
 name: desk-research
-description: Use when re-researching best practices for making materials (the content and look of slides and documents) and for the mechanisms that have AI agents do it (skills, instructions, check scripts). Holds the list of sources, search terms that worked, research tips, the record of past research, and the findings adopted and passed over. Read when asked 「ベストプラクティスを調べ直して」, 「前回から変わったことを調べて」, or 「資料作成のスキルを更新して」. Not for gathering material for a deck (`deck-workflow` → gathering materials) or for reading fixed places on a schedule (`desk-crawl`).
+description: Use for research. Research requests that make no material (「〇〇を調べて」, 「前に調べたことはある？」): search the workspace's earlier research, write the result in Research/, and copy it to Drive. Re-researching the best practices for making materials (the content and look of slides and documents) and for the mechanisms that have AI agents do it (skills, instructions, check scripts), asked as 「ベストプラクティスを調べ直して」, 「前回から変わったことを調べて」, or 「資料作成のスキルを更新して」, and run by desk-dreaming once a month. Holds the list of sources, search terms that worked, and research tips. Not for gathering material for one deck or document (`deck-workflow` → gathering materials) or for reading fixed places on a schedule (`desk-crawl`).
 ---
 
-# Ongoing research on best practices for making materials
+# Research
 
-Research results go into the knowledge skills `deck-writing` (content and wording) and `deck-design` (how pages look), `deck-workflow` and `deck-review` (how the work and the review run), `build-slides` (how to write for the Slides API, and the machine-checkable rules in `scripts/lint.py`), and `build-docs` (how to write for the Docs API). This skill holds how to research. What has been researched so far (`state.md`, `log/`) differs per user and contains internal information, so it lives in the workspace's `Research/deck_research/` (moved out of the plugin on 2026-10-12; create it if missing).
+Research for one material goes in that material's folder instead (`references.md` and `社内メモ_*.md`; `deck-workflow` → gathering materials). This skill holds research that makes no material, and the re-research of best practices whose results go into the plugin's skills.
 
-**Workspace recipes.** Before gathering, open, each whole, the workspace's gathering recipes (`step: gather`: the company's search tools and sources) whose `description` fits. `desk.py recipes` (`deck-workflow`) lists them; where it is not installed, `grep -r -H -E '^(description|step):' recipes --include=RECIPE.md` in the workspace root (skip those under a recipe's `templates/`) ("Workspace rules" in `desk-feedback` → routing).
-
-## What is kept
-
-| File | Content |
+| Situation | Open |
 |---|---|
-| `Research/deck_research/state.md` | The previous date, adopted findings and where they went (corrections the user gave while making materials go not here but in the rule ledger `.desk/ledger.jsonl`), passed-over findings and why, items awaiting the user's decision, items left unverified, and what to research next |
-| **Sources:** [sources.md](sources.md) | Per field: good sources, search terms that worked, misses, and access tips |
-| `Research/deck_research/log/<YYYYMMDD>_<topic>.md` | The full report of each run (written by subagents). Names use only alphanumerics, hyphens, and underscores (e.g. `20261006_jp_content.md`). A file that contains internal information says so at the top |
-| `Research/deck_research/log/20261009_rep3_selection.md` | The record of how the three representative pages were chosen (the agent making materials adds one entry per material; up to 10 materials from 2026-10-13) |
+| **Best practices:** re-researching how materials are made and how AI agents make them; what is kept where; the prompt for the researcher children; running it regularly | [practices.md](practices.md) |
+| **Sources:** per field, good sources, search terms that worked, misses, and access tips | [sources.md](sources.md) |
 
-## How to proceed
+## Research requests
 
-1. **Read state.md and sources.md.** Check the previous date, items awaiting decision, unverified items, and what to research next.
-2. **Decide the themes.** The first run (2026-10-06) split into the following 6. From the second run on, prioritize state.md's 「次に調べること」 and things that change quickly (official docs and official skills, Japanese posts from the last few months).
-   - Japanese-language: material content (structure, messages, how to make one page)
-   - Japanese-language: look, diagrams, Japanese typesetting
-   - Japanese-language: practice of making slides with AI agents
-   - English-language: how to write skills and project instructions
-   - English-language: methods and research on AI slide generation
-   - Internal: the tools in `[sources]` of `desk.toml` (search, chat, wiki) and the plugins on this Mac
-   [deck-research-001] Japanese-language posts are higher quality for material content, and English-language posts are more plentiful for the mechanisms (skills, instructions) (an assessment; the first run also found this).
-3. [deck-research-002] **Run one subagent per theme in parallel.** Run them in the background at the same time. Pass the main agent's model and reasoning effort explicitly (deck-agents-008 in `deck-workflow` → child agents). Use the prompt template below. Have them write the full report in `log/` and return only the key points here (saves conversation context and survives compaction).
-4. **Read the reports and compare with state.md.** Exclude what was already adopted or passed over; pick only what is new or changed since last time.
-5. **Decide where each finding goes.** Changes go into the plugin's `skills/` as an Issue through the skill `desk-kaizen` (edits to `sources.md` go into the same Issue's proposed change; `log/` and `state.md` stay in the workspace and do not go into the Issue). Put in only findings that hold for anyone; things specific to one person or organization become proposals to the workspace's recipes (`recipes/`; "Workspace rules" in `desk-feedback` → routing and rule IDs). Things that must always be followed and can be checked by machine → `lint.py`. Things needed only while making → `deck-writing` (content) or `deck-design` (look), or `build-slides` (writing pages and the other files in its table) or `build-docs` (how to write for the Slides API and Docs API). When the same failure happens twice, add it to the instructions (`Research/deck_research/log/20261006_en_skills_instructions.md` 1-17). **Ask the user before applying anything that conflicts with a workspace recipe or a value in `desk.toml`.**
-6. **Update state.md and sources.md.** Also add new sources, search terms that missed, and access tips.
+Open this for a research request that makes no material (「〇〇を調べて」). Do not stop at answering in the reply. Leave the result in `Research/<topic>_<YYYYMMDD>.md`, so the same thing is not researched twice.
+
+- **Open the workspace's gathering recipes first** (`step: gather`: the company's search tools and sources). `desk.py recipes` (`deck-workflow`) lists them; where it is not installed, `grep -r -H -E '^(description|step):' recipes --include=RECIPE.md` in the workspace root (skip those under a recipe's `templates/`) ("Workspace rules" in `desk-feedback` → routing).
+- **Search first.** `grep -rln <word> Research/ references_index.md` finds earlier research and the sources used before. If one covers the request, read it, research only what is missing, and add to the same file (the date and what changed under 「更新」 at the end).
+- **What to write:** the request in the user's words, the conclusion in a few lines at the top, the evidence and its sources (URL and the date you checked), what you confirmed apart from what you inferred, and what is still unconfirmed. If it holds internal-only information, write 【社内】 at the top (「社外秘と顧客の情報」 in `deck-writing`).
+- **After writing or adding, copy it to Drive.** `drive_put.py research Research/<topic>_<YYYYMMDD>.md` (`deck-workflow` → Drive) converts it to Google Docs and uploads it to `Research` under `drive.desk` in `desk.toml` (created if missing). A file with the same name is overwritten, so the URL stays the same. The first time, add `- 上げた: Research/<topic>_<YYYYMMDD>.md → [<YYYYMMDD>_<topic>](URL)（初めて上げた日）` under the `Research` line of `drive_folders.md` (add the line if missing). The copy is a record for people to read in a browser. The md here is the original, and you search and read it here. Do not edit or comment on the Drive copy, because the next upload erases the edits and leaves the comments without their anchor.
+- **Sources** that can help other materials: `refs.py add Research <URL> --use <what it is good for>` (`deck-workflow`; `Research/references.md`). `refs.py` rebuilds the overall index `references_index.md` from every folder's `references.md`, so do not edit the index by hand.
 
 ## Research rules
+
+These hold for both kinds of research.
 
 - web_search answers are summaries and mix in errors and example sentences that are not in the article. Verify each claim you adopt by opening the primary source (the article, slides, paper, or docs body) with WebFetch.
 - WebFetch is also a small model's summary and drops numbers from long pages. For numbers and rules, ask it to "quote verbatim", or fetch with `curl`, strip the tags, and read with `grep`.
@@ -43,37 +33,3 @@ Research results go into the knowledge skills `deck-writing` (content and wordin
 - Do not take product promotion articles or thinly sourced SEO articles like 「2026 年版」. Value records from people who actually built things, and failure stories.
 - Always note the posting date. Talk about AI tools goes stale in half a year.
 - For internal information, write whether it may go outside the company. Do not cite it in customer-facing materials.
-
-## Prompt template
-
-Fill in the `<>`. From the second run on, add: "The previous research (<date>) is in <workspace>/Research/deck_research/log/. Report only what is not there or what has changed since then. If nothing changed, write 「変化なし」. If you could not reach a source, do not treat it as no change; say so."
-
-```text
-You are the researcher. Today is <YYYY-MM-DD>.
-
-## Background
-<the person in [user] profile of desk.toml (company and role)> has Claude Code make materials (Google Slides and Google Docs). Read these first.
-- The skills under <plugin>/skills/: `deck-writing` (its SKILL.md, then content from its table), `deck-design` (its SKILL.md, then slides and documents), `deck-workflow` (its SKILL.md), and `deck-review` (its SKILL.md, then asking, and verifying and fixing findings)
-- <workspace>/Research/deck_research/state.md and <plugin>/skills/desk-research/sources.md
-- The workspace's gathering recipes (how to use the company's search tools and sources): <the `step: gather` recipe paths, or 「なし」>
-
-## Your theme: <theme>
-<examples of the scope. Start from the sources and search terms in the matching section of sources.md, and widen on your own>
-
-## How to proceed
-- Load `select:mcp__web_search__web_search,WebFetch` with ToolSearch and use them. web_search is a summary and mixes in errors, so verify each claim you adopt by opening the primary source with WebFetch. Verify numbers verbatim. Write 「未確認」 for anything you could not verify.
-- Consult at least <count> sources. Note posting dates.
-
-## Output
-Write the full report with Write to <workspace>/Research/deck_research/log/<YYYYMMDD>_<topic>.md (2500 words or fewer).
-1. 「新しい知見」 (not in deck-writing, deck-design, or state.md): for each item, 「ルール（指示・チェックとして書ける形）」「なぜ」「出典（著者・タイトル・URL・日付）」「確度」「どう確かめるか」
-2. 「deck-writing・deck-design と食い違う・補強する点」
-3. 「情報源（継続調査用）」: 「よかった情報源」「効いた検索語」「外れ」「アクセスのコツ」
-
-Make your final reply only the file path and the 5 most important findings (one line each).
-```
-
-## Running it regularly
-
-- When the regular cleanup (`desk-dreaming`) finds more than 30 days since the previous run, it runs this procedure (step 7 of `desk-dreaming` → running). It may also be called by hand.
-- A cloud Routine clones a fresh GitHub repository every run, so it does not fit this folder, which is not managed by git (`Research/deck_research/log/20261006_en_skills_instructions.md` section 3).

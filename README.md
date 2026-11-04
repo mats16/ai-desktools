@@ -22,7 +22,7 @@
 | 指摘から育てる | `desk-feedback` | ユーザーの修正の指示から学ぶ。その指示が誰にとって正しいか（この資料だけ・この顧客・この人や組織の環境・誰にでも効く知見）を見立て、台帳に見立てごと残し（`ledger.py add --scope`）、それぞれの置き場所（構成案、顧客の memory、レシピ、プラグインへの提案）に、合う形（知見なら原則と理由、個別の事情なら「〜のときは〜する（理由）」、数えられるものは点検）で書く（`SKILL.md`）。記録と戻し先・決まりの ID・レシピをいつ開くか・顧客の memory・決まりの確かめ方は `routing.md`、レシピの分け方と書き方・組み直しは `recipes.md` |
 | 指摘から育てる | `desk-dreaming` | 会話の記録と台帳から、決まりを定期的に整理する（戻し忘れた指示を提案にし、重なり・古い記述を片付け、プラグインに上げる案を出す） |
 | 指摘から育てる | `desk-kaizen` | プラグインの改善を、過去の資料で前後を比べてから Issue にする（理由・背景・検証の結果・見た目なら画像・変更案の差分）。PR は持ち主が作る |
-| 指摘から育てる | `desk-research` | 資料づくりのベストプラクティスの調べ直し。調べた記録（`state.md`・`log/`）はワークスペースの `Research/deck_research/` |
+| 指摘から育てる | `desk-research` | 調べもの（資料を作らない「〇〇を調べて」。結果は `Research/` に残し Drive に上げる）と、資料づくりのベストプラクティスの調べ直し。調べた記録（`state.md`・`log/`）はワークスペースの `Research/deck_research/` |
 | 環境 | `desk-init` | ワークスペースを作る（desk.toml・references_index.md・drive_folders.md・recipes/ の雛形と資料のフォルダ。AGENTS.md・CLAUDE.md は置かない。どのフォルダに何を置くかも持つ。設定の desk.toml は、ワークスペースか `~/.desk.toml` に置く。あるファイルは上書きしない） |
 | 環境 | `desk-doctor` | 前提を確かめる（Python・uv、使っている設定とワークスペース、スキルの重なり、Google の認証、Drive のフォルダ、gh）。テーマとテンプレートは、道具のスキルの `slides_doctor.py`（`build-slides`）と `docs_doctor.py`（`build-docs`）が見る |
 | 環境 | `desk-migrate` | 前の版で作ったワークスペースを今の版へ移す（`rules/` の移動、決まりの ID とパスの書き換え、`rules/` から `recipes/<名前>/RECIPE.md` への移し。先に `.desk/migrate/` に控えを取る）。全体に入れるときは、ワークスペースの `desk.toml` を `~/.desk.toml` に移す（`to-user`）。2026-10-31 のスキルの組み直しと、2026-11-02 のスキルの名前の替え（`google-*`）と `lib/` をやめたこと、2026-11-04 の名前の替え（`build-*`）で変わった名前とパスも、ワークスペースの文と台帳で書き換える（`google-*` は、ほかのパッケージにもある名前なので、文の中では `desk-tools:` のあとと `<… folder>` だけを替える。ほかは手で直す） |

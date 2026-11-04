@@ -84,6 +84,7 @@ MOVED_1102 = {"vids-voice/SKILL.md": "build-vids/voice.md", "vids-voice/ja.md": 
               "vids-voice/prompt_review.md": "build-vids/prompt_voice_review.md"}  # 2026-11-02 に動かしたファイル（名前の替えの前に当てる。決まりの ID の vids-voice-… は替えない）
 RENAMED_1104 = {"google-slides": "build-slides", "google-docs": "build-docs", "google-vids": "build-vids"}  # 2026-11-04 のスキルの名前の替え（pi でほかのパッケージと名前がぶつかるため）
 G1104 = f"({'|'.join(RENAMED_1104)})"
+MOVED_1105 = {"deck-workflow/research.md": "desk-research/SKILL.md"}  # 2026-11-05 に調べものを desk-research の SKILL.md に集めた。前の SKILL.md（調べ直し）は practices.md になったが、その替えは入れない: 今の SKILL.md の表から届くし、入れると 2 回目の apply が新しい SKILL.md まで practices.md にする（rewrite は何度当てても同じ）
 
 
 LIB_1102 = {"desk": "desk-init", "gapi": "build-slides", "brand": "build-slides", "textlint": "build-slides", "sheet": "build-slides", "ledger": "desk-feedback", "refs": "deck-workflow"}  # 2026-11-02 に lib/ から持ち主のスキルの scripts/ へ移したスクリプト（desk.SHARED と同じ持ち主）
@@ -123,7 +124,8 @@ RESTRUCTURE = [  # 2026-10-31: 進め方・知見・道具でスキルを分け�
     # 2026-11-04: 道具のスキルを build-* にした。google-* はほかのパッケージにもある名前（fe-google-tools の google-slides など）で、文からはどちらのものか決められない
     # （パスの形も、ほかのパッケージの同じ名前のフォルダにありうる）。替えるのは、名前の形でこのプラグインのものと決まる desk-tools: のあとと <… folder> だけ。台帳の変更先の値は lib_target が替える
     (rf"(?<=desk-tools:){G1104}(?![{B}])", lambda m: RENAMED_1104[m.group(1)]),
-    (rf"(<(?:スキル )?){G1104}( folder>| のフォルダ>)", lambda m: f"{m.group(1)}{RENAMED_1104[m.group(2)]}{m.group(3)}")]
+    (rf"(<(?:スキル )?){G1104}( folder>| のフォルダ>)", lambda m: f"{m.group(1)}{RENAMED_1104[m.group(2)]}{m.group(3)}"),
+    *((rf"(?<![.{B}]){re.escape(a)}(?![{B}])", b) for a, b in MOVED_1105.items())]  # 2026-11-05 に動かしたファイル
 # deck-practices/scripts のほかの形（lib/ へ移したスクリプト、フォルダ、glob、cd）は、どこを指すか文から分からない（$K/・./・.agents/skills/ など）ので、
 # 雛形が書く形（上の <… のフォルダ>/scripts/）と台帳の値（skills/ から。rewrite の頭）だけを替え、ほかはどの形も old_scripts が要判断にする
 OLD_SKILLS = set(RENAMED_31) | set(RENAMED_1102) | {"vids-voice"}  # 2026-10-31・2026-11-02 の前のスキルの名前（前の版の rules/<スキル>/ の上書きを見分ける。google-* のころには rules/ はもうない）
@@ -1298,6 +1300,8 @@ def selftest():
         assert ledger.state(ws)[0]["c-0003"]["to"] == "未"
     assert all(m["ids"].get(n, n) == n for m in MAPS for n in m["ids"].values())  # 今の ID は、前の ID として読んでも替わらない（何度回してもよい）
     # 2026-10-31: プラグインのパスとスキルの名前だけを替え、ワークスペースのパスと決まりの ID は替えない
+    assert rewrite("deck-workflow/research.md・deck-research/SKILL.md・desk-research/practices.md") == "desk-research/SKILL.md・desk-research/SKILL.md・desk-research/practices.md"  # 2026-11-05
+    assert rewrite(rewrite("deck-workflow/research.md")) == rewrite("deck-workflow/research.md")  # 今の desk-research/SKILL.md は、もう一度当てても替わらない
     assert rewrite("vids-voice/ja.md・vids-voice/scripts/speaker_notes.py・vids-voice-ja-002・vids-voice-004・`vids-voice` の `en.md`") == "build-vids/voice_ja.md・build-vids/scripts/speaker_notes.py・vids-voice-ja-002・vids-voice-004・`build-vids` の `voice_en.md`"  # 2026-11-02。決まりの ID は替えない
     assert rewrite(SPLIT["vids-build/SKILL.md"]) == "build-vids/SKILL.md・avatars.md、build-vids/failures.md（失敗したときの節。2026-11-02）"  # 分けた先は今のファイルで知らせる
     assert rewrite("Run <plugin>/lib/ledger.py.・x:../lib/refs.py・a|../lib/desk.py") == "Run <plugin>/skills/desk-feedback/scripts/ledger.py.・x:../skills/deck-workflow/scripts/refs.py・a|../skills/desk-init/scripts/desk.py"  # 文の終わりの . と、: | のあとも

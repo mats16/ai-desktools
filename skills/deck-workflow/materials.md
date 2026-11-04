@@ -1,6 +1,6 @@
 # Gathering materials
 
-Read this when gathering internal materials and customer information (steps 3 and 4 in [start.md](start.md), and [research.md](research.md)). Handle confidential information as 「社外秘と顧客の情報」 in `deck-writing` says. Record what you read in `references.md` in the material's folder (see "Ledger" below).
+Read this when gathering internal materials and customer information (steps 3 and 4 in [start.md](start.md), and research requests in `desk-research`). Handle confidential information as 「社外秘と顧客の情報」 in `deck-writing` says. Record what you read in `references.md` in the material's folder (see "Ledger" below).
 
 - [deck-sources-001] **Do not stall waiting on slow tools.** Two rules for waiting:
   - [deck-sources-002] **One command runs at most 5 minutes.** Set the limit with the tool's `timeout` (the argument of pi's bash or Claude Code's Bash). macOS has no `timeout` command. When a command hits the limit, do not rerun the same command. Narrow the scope (period, path, `git clone --depth 1`, only the needed files through the GitHub API) or postpone it.
