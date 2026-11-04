@@ -12,7 +12,7 @@ usage:
   gslides.py jp     <URL か ID> [置き換え.json]     すべての文字を Noto Sans JP にし、置き換え（[["元の文", "訳した文"], …]）を入れる（keep で作った複製に使う）
 python3 gslides.py --selftest で自己確認。
 認証は gapi.py（環境変数 GOOGLE_OAUTH_ACCESS_TOKEN か、gcloud の ADC のファイル）。401・403 なら desk-doctor で確かめる。"""
-import contextlib, glob, hashlib, io, json, os, re, subprocess, sys, urllib.request
+import contextlib, glob, io, json, os, re, subprocess, sys, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 sys.dont_write_bytecode = True  # scripts/ に __pycache__ を残さない
