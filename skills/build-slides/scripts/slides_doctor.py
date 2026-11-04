@@ -39,10 +39,10 @@ def check(ws, local=False, own=False):
             ng(f"themes/slides/{f.name}", str(e).replace(f"{f}: ", ""))
     marks += [(f"themes/slides/{n}.json の copyright", t["copyright"]) for n, t in mine.items() if "copyright" in t]
     for key, c in marks:
-        if bad := copyright_problem(c):
-            ng(key, bad[1])
+        if bad := copyright_problem(c, theme=key != "brand.copyright"):
+            (ng if bad[0] == "要修正" else warn)(key, bad[1])
     if not brand.get("company"):
-        warn("brand.company", "空。表紙の左下に社名を置かない")
+        warn("brand.company", "空。テーマのファイルに company がなければ、表紙の左下に社名を置かない")
     files = {**{f.stem: t for f in slides.BUILTIN_THEMES.glob("*.json") for t in [slides.read_theme(f)]}, **mine}  # ワークスペースのものが勝つ
     theme, temps = sl.get("default_theme", "navy"), {k: v for k, v in sl.get("templates", {}).items() if v}
     if old := sl.get("themes"):  # 2026-10-16 までの書き方
@@ -129,7 +129,9 @@ def selftest():
         themes.mkdir(parents=True)
         put = lambda n, o: (themes / f"{n}.json").write_text(json.dumps({"apiVersion": "slides/v1", "kind": "theme", **o}))
         put("mine", {"copyright": "© Me 2026"})
-        assert kinds()["themes/slides/mine.json の copyright"] == "要修正"  # テーマの copyright にも同じ確かめ
+        assert kinds()["themes/slides/mine.json の copyright"] == "要確認"  # テーマの copyright は決まった形でなくてよい（非公式の表記など）ので、要確認にとどめる
+        put("mine", {"copyright": ""})
+        assert kinds()["themes/slides/mine.json の copyright"] == "要修正"  # 空は組めない
         put("mine", {"copyright": "© 2026 Me. All rights reserved.", "colors": {"TEXT": "red"}})
         assert kinds()["themes/slides/mine.json"] == "要修正" and "themes/slides/mine.json の copyright" not in kinds()  # 6 桁でない色
         put("mine", {"copyright": 2026})

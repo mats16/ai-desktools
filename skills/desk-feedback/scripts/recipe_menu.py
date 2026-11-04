@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """資料ごとに選ぶレシピの一覧を、作る会話が手順 5 で desk.py recipes から受け取る文のとおりに出す。標準ライブラリだけ。
-レシピを試すとき（../recipes.md の "Testing a recipe"）に、子への頼む文に入れる。一覧は desk.py recipes と同じ desk.index() で作るので、作る会話が見る文と食い違わない。
+レシピを試すとき（../recipes.md の "Testing a recipe"）に、サブエージェントに頼む文に入れる。一覧は desk.py recipes と同じ desk.index() で作るので、作る会話が見る文と食い違わない。
 usage:
   recipe_menu.py [--draft <下書きの RECIPE.md> --as recipes/<名前>/RECIPE.md]
       --draft は、ワークスペースに書き込む前の下書きを、--as のパスのレシピとして一覧に入れる（あれば置き換える、なければ足す）。
