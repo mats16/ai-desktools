@@ -547,7 +547,7 @@ def theme_names():
 
 
 def read_theme(path):
-    """テーマのファイル path（kind theme）を確かめて dict にする（load_theme が読む形）。書けない値は、場所を付けてまとめて止める（組む前に。desk-doctor も呼ぶ）。
+    """テーマのファイル path（kind theme）を確かめて dict にする（load_theme が読む形）。書けない値は、場所を付けてまとめて止める（組む前に。desk-init の doctor.py も呼ぶ）。
     色のコントラストでは止めない（会社の文書のテンプレートの色に合わせるテーマなので。poc の見出しの 4A86E8 は白の地で 3.58:1）。"""
     if not re.fullmatch(r"[A-Za-z0-9_-]+", Path(path).stem):
         sys.exit(f"{path}: テーマのファイルの名前は英数字と - _ だけにする（名前がテーマの名前）")

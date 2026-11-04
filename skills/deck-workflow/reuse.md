@@ -2,7 +2,7 @@
 
 [slides-reuse-001] Read this when you use pages from internal decks. The four stages are a flow that worked. Try them from the top, in order. First check "Checks at every stage".
 
-The commands are `gslides.py` of `build-slides`. `gslides.py` does not write to the source deck (`keep` makes a copy and then changes it). `gapi.py` takes care of authentication (the environment variable `GOOGLE_OAUTH_ACCESS_TOKEN`, or the gcloud ADC file; it also adds the quota project header). On 401 or 403, check with desk-doctor.
+The commands are `gslides.py` of `build-slides`. `gslides.py` does not write to the source deck (`keep` makes a copy and then changes it). `gapi.py` takes care of authentication (the environment variable `GOOGLE_OAUTH_ACCESS_TOKEN`, or the gcloud ADC file; it also adds the quota project header). On 401 or 403, check with `doctor.py` of `desk-init`.
 
 ```sh
 G=<the folder of build-slides's scripts>   # gslides.py is a build-slides command (`build-slides` → commands)

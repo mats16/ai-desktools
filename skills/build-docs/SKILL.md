@@ -20,7 +20,7 @@ description: Write Japanese documents (proposals, research reports, explanatory 
 ```sh
 K=<build-docs folder>/scripts   # the scripts/ folder beside this file. docs.py imports copies of the parts shared with slides (gapi.py, textlint.py, brand.py) from this folder; their owner is build-slides
 cd <folder>/build
-python3 $K/docs_doctor.py <workspace> [--local]             # the prerequisites for building documents: desk-doctor's checks, then [brand], themes, templates (--own: only these, when desk-doctor already ran)
+python3 $K/docs_doctor.py <workspace> [--local]             # the prerequisites for building documents: doctor.py's checks (desk-init), then [brand], themes, templates (--own: only these, when doctor.py already ran)
 python3 $K/docs.py init <template name>                      # when the workspace has a template and you start from it (copies doc.md. templates.md)
 python3 $K/docs.py new <Drive folder URL> <YYYYMMDD_name>   # first build. Write the printed URL in the outline and tell the user right away (deck-drive-003 in `deck-workflow` → Drive)
 python3 $K/docs.py build <URL>                                    # rebuild after edits (the URL does not change. Stops if someone edited in the UI)

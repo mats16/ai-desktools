@@ -1,15 +1,19 @@
 ---
 name: desk-init
-description: Create an AI Desk Tools workspace (the folder that holds materials and rules). Places templates of references_index.md, drive_folders.md, recipes/, and .gitignore, plus Customers/, Internal/, and Research/, and the settings desk.toml in the workspace or in ~/.desk.toml (never overwrites existing files), fills in the settings with the user, and checks with desk-doctor. Also holds the workspace layout (which folder holds what). Use when asked 「ワークスペースを作って」, 「setup して」, or 「AI Desk Tools を使い始めたい」.
+description: Create an AI Desk Tools workspace (the folder that holds materials and rules). Places templates of references_index.md, drive_folders.md, recipes/, and .gitignore, plus Customers/, Internal/, and Research/, and the settings desk.toml in the workspace or in ~/.desk.toml (never overwrites existing files), fills in the settings with the user, and holds the workspace layout (which folder holds what). Also checks the prerequisites (doctor.py: Python and uv, which settings file and workspace are used, overlapping skills, Google authentication, templates and Drive folders, the MCP servers for gathering) and prints how to fix each problem. Use when asked 「ワークスペースを作って」, 「setup して」, 「AI Desk Tools を使い始めたい」, 「環境を確かめて」, or 「doctor して」, in a new environment, on 401 or 403, or when 「desk.toml が見つからない」 appears.
 ---
 
 # Create a workspace
+
+| Situation | Open |
+|---|---|
+| Checking the prerequisites (after creating, in a new environment, on 401 or 403, 「doctor して」) | [doctor.md](doctor.md) |
 
 A workspace is the folder that holds the material folders, the rules, and the records `.desk/` (for example `~/Documents`). Its settings `desk.toml` go in one of two places. Scripts walk up from the current folder and use the first `desk.toml` they find, and its folder is the workspace. If there is none, they read `~/.desk.toml` (or the path in the environment variable `DESK_CONFIG`) and use its `workspace`. They read only the one they find and never merge the two (`scripts/desk.py`). What goes where is in "Workspace layout" below; how workspace rules take priority over the plugin is in `desk-feedback` → routing ("Workspace rules").
 
 ## Steps
 
-When installing through a conversation (the repository's `INSTALL.md`), step 1 is already done. A conversation that just installed the plugin has not loaded this skill or any other skill, so for other skills (build-slides, desk-doctor), open `skills/<skill>/SKILL.md` in the install location and follow it.
+When installing through a conversation (the repository's `INSTALL.md`), step 1 is already done. A conversation that just installed the plugin has not loaded this skill or any other skill, so for other skills (build-slides), open `skills/<skill>/SKILL.md` in the install location and follow it.
 
 1. **Decide the location.** If not told, ask whether the current folder is fine. Always ask for the workspace folder, because materials must stay in a folder the user sees; never put them in a hidden folder under the home folder. If the folder already has `desk.toml`, tell the user (do not overwrite; place only what is missing).
    - **Where the settings go.** Match how the plugin is installed. Installed only in the workspace (the repository's `INSTALL.md`, `--scope project`, `pi install -l`): in the workspace (`<workspace>/desk.toml`), because only conversations opened there load the plugin. Installed for the whole user: in `~/.desk.toml`, so that a conversation opened in any folder uses this workspace. A second workspace or a test one (`sandbox/`) always gets its own `desk.toml`. If `~/.desk.toml` already exists and points to another workspace, tell the user; there is only one.
@@ -33,7 +37,7 @@ When installing through a conversation (the repository's `INSTALL.md`), step 1 i
    - `[sources]`: tools for gathering material (internal search, chat, meeting records, wiki, customer ledger, spend). Offer candidates from the MCP servers and skills in your own tool list and ask. To make per-tool usage a rule, write it in a recipe for the company's tools (such as `recipes/internal_tools/RECIPE.md`) with frontmatter `description` and `step: gather` (`desk-feedback` → writing recipes).
 4. **Create the customers' folders.** Ask for the user's customers and create `Customers/<customer>/` for each ("Workspace layout" below). Ask whether to create a profile for each now; if yes, create it with the skill `customer-profile` (after filling `[sources]`).
 5. **Ask whether to use git.** To keep a history of growing rules and checks, run `git init` in the workspace and make the first commit (the placed `.gitignore` includes only the rules, themes, assets, the research log, and an `AGENTS.md` or `CLAUDE.md` the owner writes; the settings hold per-person values and stay out). The user decides whether to push to a remote.
-6. **Check.** Run the skill `desk-doctor` and fix until there are 0 `要修正`.
+6. **Check.** Run `doctor.py` as [doctor.md](doctor.md) says and fix until there are 0 `要修正`.
 
 ## Workspace layout
 
@@ -62,4 +66,4 @@ drive_folders.md                                       … Drive locations and t
 ## Notes
 
 - The templates are in `templates/`. Do not copy changes made in a workspace back into the templates (the templates are the same starting point for everyone).
-- In a workspace that already has a skill with the same name (build-slides, etc.) in `.agents/skills/` or `.claude/skills/`, it is loaded twice along with the plugin's. doctor reports it as `要確認`, so ask the user which one to use.
+- In a workspace that already has a skill with the same name (build-slides, etc.) in `.agents/skills/` or `.claude/skills/`, it is loaded twice along with the plugin's. `doctor.py` reports it as `要確認`, so ask the user which one to use.

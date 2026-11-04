@@ -88,7 +88,7 @@ Do not wait for skills to be called automatically; open the skill when the situa
 | Making a Google Vids video from a deck (only when the user explicitly asks, also when building or fixing a deck), or, after the notes of a deck change, updating the video made from it (without asking) | `build-vids` (beta; when to make or update, setup, `create`, `update`, voices) |
 | A correction from the user, adding or editing a rule or a recipe | `desk-feedback` (who it is true for, recording and routing, writing recipes) |
 | Editing the plugin | `desk-kaizen` (verifying on past materials, and the Issue) |
-| desk-doctor reports 「前のバージョンのワークスペース」 | `desk-migrate` |
+| `doctor.py` (desk-init) reports 「前のバージョンのワークスペース」 | `desk-migrate` |
 
 The history and the sources of the research are in the workspace's `Research/deck_research/log/` (the owner's logs; not included in the plugin). The abbreviations in parentheses in the text point to sections of those logs (the list of abbreviations is at the top of `state.md` in the same folder).
 

@@ -45,7 +45,7 @@ done
 
 ```
 
-2026-10-20 に検証用のワークスペースで確かめた結果（そのときの 19 個とパス。2026-10-31 にスキルを組み直して 17 個になり、`slides-build/visual.md` は `deck-design/slides.md` になった。2026-11-02 に、道具のスキルの名前を `google-*` にし、vids-voice を google-vids に寄せて 16 個になった。2026-11-04 に `build-*` と改めた）:
+2026-10-20 に検証用のワークスペースで確かめた結果（そのときの 19 個とパス。2026-10-31 にスキルを組み直して 17 個になり、`slides-build/visual.md` は `deck-design/slides.md` になった。2026-11-02 に、道具のスキルの名前を `google-*` にし、vids-voice を google-vids に寄せて 16 個になった。2026-11-04 に `build-*` と改め、2026-11-05 に desk-doctor を desk-init に入れて 15 個になった）:
 
 | フォルダ | 出たスキル |
 |---|---|
@@ -59,7 +59,6 @@ done
 
 ```
 $desk-tools:desk-init
-$desk-tools:desk-doctor
 ```
 
 doctor の要修正が 0 になれば使える。

@@ -53,7 +53,7 @@ def gdoc_paras(doc):
 
 def theme_pages():
     """ドキュメントのテーマのファイル（ワークスペースの themes/docs/<名前>.json）の用紙（pt の幅・高さ）。会社のテンプレートに合わせた版面なので、
-    A4 でなくても、1 行の字数が多くても通す。読めないファイルは飛ばす（形の誤りは docs.py と desk-doctor が止める）。"""
+    A4 でなくても、1 行の字数が多くても通す。読めないファイルは飛ばす（形の誤りは docs.py と desk-init の doctor.py が止める）。"""
     out = []
     for f in sorted(p[1].joinpath("themes", "docs").glob("*.json")) if (p := gapi.locate()) else []:
         try:

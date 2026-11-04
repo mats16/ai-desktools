@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Google の API（Drive・Slides・Docs）を呼ぶ共通の部品。スライド（build-slides）・ドキュメント（build-docs）とほかのスキルのスクリプトが使う（標準ライブラリだけ）。
 認証は単独で動く（gcloud も、ほかの Google のスキルも要らない）。トークンは、環境変数 GOOGLE_OAUTH_ACCESS_TOKEN、なければ
-authorized_user の認証情報の JSON（GOOGLE_APPLICATION_CREDENTIALS、なければ gcloud の ADC のファイル）の refresh_token で取る。401・403 や認証情報がないときは desk-doctor で確かめる。
+authorized_user の認証情報の JSON（GOOGLE_APPLICATION_CREDENTIALS、なければ gcloud の ADC のファイル）の refresh_token で取る。401・403 や認証情報がないときは desk-init の doctor.py で確かめる。
 設定の uc_connections.proxy にあるホストは、Databricks の Unity Catalog の connection の proxy を通して呼ぶ（Google のトークンは connection が持つ。route）。
 usage: python3 gapi.py --selftest"""
 import datetime, functools, getpass, json, os, re, socket, subprocess, sys, tempfile, threading, time, tomllib, urllib.error, urllib.parse, urllib.request, uuid
@@ -20,7 +20,7 @@ FOLDER = "application/vnd.google-apps.folder"
 _TOK = None
 _DBTOK = None  # proxy に渡す Databricks のトークン
 _HOSTS = {}  # profile ごとのワークスペースの URL（取れたものだけ）
-REJECTED = "connection の proxy が断った"  # proxy が自分で断ったときの ApiError の先頭（desk-doctor が見分ける）
+REJECTED = "connection の proxy が断った"  # proxy が自分で断ったときの ApiError の先頭（desk-init の doctor.py が見分ける）
 _DBLOCK = threading.Lock()  # 取り手が並んでも、CLI を 1 回だけ呼ぶ（429 の _LOCK とは分ける。CLI は 2 分かかりうる）
 WAITED = []  # 429・5xx・回線のエラーで取り直す前に待った秒（request が足す。Clock が回数と秒を出す）
 _HOLD = [0.0]  # 429 の分の枠が明ける時刻。並べて取るほかの取り手も、それまで送らない
@@ -77,7 +77,7 @@ CLOCK = Clock()  # 読み込んだときから数える
 
 def locate():
     """(設定のファイル, ワークスペース)。探し方は desk.py（今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace）。なければ None。
-    結果を覚えない。import のときに読むもの（slides.py の [brand]）はこちらを使う（覚えると、あとで今いるフォルダを変える desk-doctor が古い結果を使う）。"""
+    結果を覚えない。import のときに読むもの（slides.py の [brand]）はこちらを使う（覚えると、あとで今いるフォルダを変える desk-init の doctor.py が古い結果を使う）。"""
     return desk.locate()
 
 
@@ -167,7 +167,7 @@ def uc(cfg=None):
     bad = [k for k, t in (("enabled", bool), ("profile", str), ("host", str), ("proxy", dict)) if k in px and not isinstance(px[k], t)] if isinstance(px, dict) else ["表"]
     if bad or not all(isinstance(n, str) for n in px.get("proxy", {}).values()):  # enabled = "false" は、文字列が真なので通してしまう
         raise ApiError(f"uc_connections の書き方が違う（{', '.join(bad) or 'proxy の名前'}）。[uc_connections] の enabled は true か false、profile・host は文字列、"
-                       '[uc_connections.proxy] は "ホスト" = "connection の名前"。desk-doctor で確かめる')
+                       '[uc_connections.proxy] は "ホスト" = "connection の名前"。desk-init の doctor.py で確かめる')
     return px if px.get("enabled", True) else {}
 
 

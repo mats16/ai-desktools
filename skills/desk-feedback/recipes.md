@@ -68,7 +68,7 @@ Before writing a new recipe, read the `description` of every recipe (`head -6 re
 5. **Propose and apply together.** For each new recipe: `python3 $L propose --file recipes/<name>/RECIPE.md --rewrite .desk/tmp/regroup/<name> --kind 組み直し --why 目的ごとに組み直す --src <the c-IDs of its items>`; the same without `--src` for each old recipe, and `--kind パスの直し` for each other fixed file (only recipes get 「組み直し」, which stops `--auto` there). Apply all of them in one call, `python3 $L apply <P-ID> …`, because `apply` checks every proposal before writing any; it also links each `--src` finding to the new recipe. Then move the resources with `mv` (a moved `checks.py` starts a new version history at its new path), delete the emptied old folders, and delete `.desk/tmp/regroup/`.
 6. **Check.**
    - `python3 $L list --to <old recipe>` for each old recipe prints nothing (link a leftover with `python3 $L route <c-ID> <new recipe>`).
-   - `doctor.py --local` (`desk-doctor`) reports no recipe problems (sizes, frontmatter, folder names).
+   - `doctor.py --local` (`desk-init`) reports no recipe problems (sizes, frontmatter, folder names).
    - Answer the questions that name an old recipe (`python3 $L answer <Q-ID> --a <answer naming the new recipe>`) only with the user; until then, say in the report which new recipe each refers to.
    - Fix 「使う決まり」 in the outlines of materials still in progress; `desk.py recipes <material folder>` names entries that point to a deleted recipe.
 

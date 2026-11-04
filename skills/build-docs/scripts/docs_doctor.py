@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """usage: docs_doctor.py [<ワークスペース>] [--local] [--own]   （--selftest で自己確認）
 ドキュメントを組む前提を確かめる: [brand] の著作権表示、ワークスペースのテーマのファイル（themes/docs/<名前>.json）、[docs] の既定のテーマとテンプレート。
---local は手元だけ見て、Google の API を呼ばない。desk-doctor の SKILL.md から、ほかの前提と一緒に回す（2026-11-02 に doctor.py から分けた）。
+--local は手元だけ見て、Google の API を呼ばない。desk-init の doctor.md から、ほかの前提と一緒に回す（2026-11-02 に doctor.py から分けた）。
 著作権表示はスライドと同じ確かめ（brand.copyright_problem）で、build-docs だけを入れても見る。1 行 1 項目で「OK」「要修正」「要確認」を出す。要修正が 1 つでもあれば exit 1。"""
 import contextlib, io, json, os, sys, tempfile, tomllib
 from pathlib import Path
@@ -13,14 +13,14 @@ import docs as docs_py  # noqa: E402  テーマのファイルは docs.py と同
 
 
 def check(ws, local=False, own=False):
-    """(区分, 項目, 詳しく) の並び。区分は OK・要修正・要確認。own が偽なら、desk-doctor の doctor.py（写し）の行から始める。"""
-    out = [] if own else doctor.check(ws, local)  # desk-doctor と同じ前提（設定・道具・Google の認証・Drive）。このスキルだけを入れても足りる。--own は desk-doctor が先に出したとき
+    """(区分, 項目, 詳しく) の並び。区分は OK・要修正・要確認。own が偽なら、desk-init の doctor.py（写し）の行から始める。"""
+    out = [] if own else doctor.check(ws, local)  # desk-init の doctor.py と同じ前提（設定・道具・Google の認証・Drive）。このスキルだけを入れても足りる。--own は desk-init の doctor.py が先に出したとき
     ok = lambda name, detail="": out.append(("OK", name, detail))
     ng = lambda name, detail: out.append(("要修正", name, detail))
     warn = lambda name, detail: out.append(("要確認", name, detail))
     try:
         found = desk.locate(ws)
-    except SystemExit:  # 設定の見つからなさ・読めなさは doctor.check（か、先に回した desk-doctor）が出す
+    except SystemExit:  # 設定の見つからなさ・読めなさは doctor.check（か、先に回した desk-init の doctor.py）が出す
         return out
     if not found:
         return out
@@ -50,7 +50,7 @@ def check(ws, local=False, own=False):
     gapi.find_config = lambda: (conf, root)
     if any(k == "要修正" and (n == "Google の認証" or n.startswith("uc_connections")) for k, n, _ in out):  # 通らない認証では、テンプレートを開けるかは見ない
         return out
-    if own:  # 認証の行は desk-doctor の doctor.py が出した。通らなければ、テンプレートごとに同じ断りを重ねない
+    if own:  # 認証の行は desk-init の doctor.py が出した。通らなければ、テンプレートごとに同じ断りを重ねない
         try:
             gapi.request("GET", f"{gapi.DRIVE}/about?fields=user(emailAddress)")
         except Exception:  # 回線のエラー・形の違う返事も
@@ -80,7 +80,7 @@ def selftest():
     os.environ["DESK_CONFIG"] = ""  # 手元の ~/.desk.toml に左右されない
     with tempfile.TemporaryDirectory() as tmp:
         kinds = lambda: {n: k for k, n, _ in check(Path(tmp), local=True, own=True)}
-        assert kinds() == {} and ("要修正", "desk.toml") in {(k, n) for k, n, _ in check(Path(tmp), local=True)}  # --own でなければ、desk-doctor と同じ前提も出す
+        assert kinds() == {} and ("要修正", "desk.toml") in {(k, n) for k, n, _ in check(Path(tmp), local=True)}  # --own でなければ、desk-init の doctor.py と同じ前提も出す
         toml = Path(tmp) / "desk.toml"
         toml.write_text("[desk]\n")
         assert kinds() == {"brand.copyright": "要修正"}  # build-docs だけを入れても、組めない著作権表示を出す

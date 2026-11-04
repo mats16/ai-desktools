@@ -11,7 +11,7 @@ usage:
   gslides.py keep   <URL か ID> <Drive のフォルダ> <Drive 上の名前> <ページ番号 ...>   複製して、指定したページだけをその順に残す（流用の段階 1）
   gslides.py jp     <URL か ID> [置き換え.json]     すべての文字を Noto Sans JP にし、置き換え（[["元の文", "訳した文"], …]）を入れる（keep で作った複製に使う）
 python3 gslides.py --selftest で自己確認。
-認証は gapi.py（環境変数 GOOGLE_OAUTH_ACCESS_TOKEN か、gcloud の ADC のファイル）。401・403 なら desk-doctor で確かめる。"""
+認証は gapi.py（環境変数 GOOGLE_OAUTH_ACCESS_TOKEN か、gcloud の ADC のファイル）。401・403 なら desk-init の doctor.py で確かめる。"""
 import contextlib, glob, io, json, os, re, subprocess, sys, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -158,7 +158,7 @@ def cmd_check(src, *opts):
                 for f in (f"{d}/p-{n:02d}.png", f"{d}/p-{n:02d}.webp"):  # sheet.py が置き換えの途中で止まると、両方あるページも残る
                     if os.path.exists(f):
                         os.remove(f)
-            print(f"\n（ページの画像を WebP にできなかったので、この回に取ったページの画像はない: {conv.stderr.strip()[-300:]}。uv が要る。desk-doctor で確かめる）")
+            print(f"\n（ページの画像を WebP にできなかったので、この回に取ったページの画像はない: {conv.stderr.strip()[-300:]}。uv が要る。desk-init の doctor.py で確かめる）")
             want, failed = [], want
     gapi.CLOCK.lap(f"画像 {len(want)} 枚")
     if not failed:
