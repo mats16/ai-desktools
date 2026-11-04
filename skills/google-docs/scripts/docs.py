@@ -1182,6 +1182,16 @@ def doc_units(doc, md_lines):
     return units
 
 
+def unbuilt_doc(doc):
+    """doc.md に、まだ組んでいない直しがあるか: 通らない理由の文の並び（なければ []）。check の照合（fidelity）と同じく、doc.md と組んだ文書を同じ形にして比べる。"""
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            diff = fidelity(load_doc(), doc)
+    except (Exception, SystemExit) as e:  # noqa: BLE001  確かめられなければ通さない
+        return [f"doc.md と組んだ文書を照らせない（{type(e).__name__}: {e}）"]
+    return [f"doc.md に、組んでいない直しがある（組んだ文書との差 {sum(x[0] in '+-' for x in diff)} 行）。docs.py build で組み、check で見てから回す（組んでいない原稿を点検済みにしない）"] if diff else []
+
+
 def cmd_wording(src):
     """docs-lint-020 の日本語の点検（スライドの slides-lint-035 と同じ中身。wording.py）。Google に保存された資料（documents.get）の段落を読み、doc.md の行に戻す。
     通らない理由: 組んだあとに画面で直された（本文の指紋が組んだときと違う）、組んだあとの文書を docs.py check で見ていない（直して延びた段落のページ割りを見ていない）。"""
@@ -1199,6 +1209,7 @@ def cmd_wording(src):
         seen = None
     if seen != now:
         problems.append(f"組んだあとの文書を check で見ていない（docs.py check {src} でページの画像を見てから回す）")
+    problems += unbuilt_doc(doc)
     md = open("doc.md", encoding="utf-8").read()
     units = doc_units(doc, md.splitlines())
     if not wording.run(os.path.dirname(os.getcwd()), "docs", f"https://docs.google.com/document/d/{did}/edit", doc.get("revisionId"), units, wording.build_files(), problems, f"docs.py wording {src}"):
@@ -1219,7 +1230,9 @@ def wording_selftest():
            "namedStyles": {"styles": [{"namedStyleType": "NORMAL_TEXT", "textStyle": {"weightedFontFamily": {"fontFamily": FONT}, "fontSize": {"magnitude": 10.5}}}]},
            "body": {"content": [gp("仕組みの比べ", "HEADING_1"), gp("前の版の手順に戻す。"), gp("引用の前の版の比べ", borderLeft={}), gp("出典: 前の版の比べ")]}}
     md = "# 仕組みの比べ\n\n前の版の手順に**戻す**。\n\n> 引用の前の版の比べ\n"
-    real = request, doc_lint.workspace_checks, doc_lint.theme_pages
+    real = request, doc_lint.workspace_checks, doc_lint.theme_pages, unbuilt_doc
+    pending = {"v": []}
+    globals()["unbuilt_doc"] = lambda doc: pending["v"]
     stamp = {"v": body_hash(doc["body"])}
     globals()["request"] = lambda m, u, *a, **k: {"appProperties": {STAMP: stamp["v"]}} if "/files/" in u else doc
     doc_lint.workspace_checks, doc_lint.theme_pages = (lambda *a: 0), (lambda: [])
@@ -1250,6 +1263,14 @@ def wording_selftest():
             json.dump({"body": body_hash(doc["body"])}, open(f"{seen}/seen.json", "w"))
             wording.decide(d, "ask", [f["id"] for f in fs.values()], "selftest")
             cmd_wording(doc["documentId"])  # check で見た本文で、判断がそろえば通る
+            pending["v"] = ["doc.md に、組んでいない直しがある"]  # 組んだあとに doc.md だけを直した
+            try:
+                cmd_wording(doc["documentId"])
+                raise AssertionError("通した")
+            except SystemExit as e:
+                assert e.code == 1 and "doc.md に、組んでいない直しがある" in wording.load(d)["last"]["problems"]
+            pending["v"] = []
+            assert real[3](doc)  # 手で作ったこの文書は doc.md と形が違うので、本物の照合は差を出す
             stamp["v"] = "x"  # 組んだあとに画面で直された
             try:
                 cmd_wording(doc["documentId"])
@@ -1258,7 +1279,7 @@ def wording_selftest():
                 assert e.code == 1 and any("docs.py build で組んだ本文でない" in x for x in wording.load(d)["last"]["problems"])
     finally:
         os.chdir(cwd)
-        globals()["request"] = real[0]
+        globals()["request"], globals()["unbuilt_doc"] = real[0], real[3]
         doc_lint.workspace_checks, doc_lint.theme_pages = real[1], real[2]
         shutil.rmtree(d, ignore_errors=True)
         shutil.rmtree(seen, ignore_errors=True)
