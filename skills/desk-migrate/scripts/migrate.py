@@ -531,7 +531,8 @@ def targets_1104(ws, led=None):
     提案の file は、plugin の欄でどちらのものか決まっている（プラグインへの提案は替え、ワークスペースへの提案は、まだないフォルダへのものでも替えない）。
     戻し先はどちらのファイルにもなる（ledger.py の linked）ので、ある提案の file と同じ値なら、その提案に合わせる（ledger.py の reopen は、戻し先と提案の file を文字列で比べる）。
     両方の種類の提案の file と同じ値と、どの提案の file でもない値でワークスペースに同じ名前のフォルダ（google-docs/ など）があるものは、決められないので替えずに知らせる。
-    どの提案の file でもなく、フォルダもなければ、このプラグインのファイルとして替える（PR #61 のレビュー）。"""
+    両方の種類の提案にある値は、プラグインへの提案の file も替えない（どの欄も同じ値のままなら、取り下げると戻し先が戻り、知らせも、決めるまで消えない）。
+    どの提案の file でもなく、フォルダもなければ、このプラグインのファイルとして替える（PR #61 のレビュー）。返すのは (替える戻し先, 決められない値, 替えない提案の file)。"""
     led = led or ws / ".desk" / "ledger.jsonl"
     recs = [json.loads(x) for x in led.read_text(encoding="utf-8").splitlines() if x.strip()] if led.is_file() else []
     kinds = {}
@@ -540,14 +541,15 @@ def targets_1104(ws, led=None):
             kinds.setdefault(ledger.key(r["file"]), set()).add(bool(r.get("plugin")))
     vals = {v for r in recs for v in [r.get("to"), *(r.get("prev") or {}).values()] if isinstance(v, str) and ledger.renamed_1104(v) != v}
     rename, ask = set(), []
-    for v in sorted(vals):
+    both = {k for k, got in kinds.items() if got == {True, False} and ledger.renamed_1104(k) != k}
+    for v in sorted(vals | {r["file"] for r in recs if r.get("kind") == "proposal" and isinstance(r.get("file"), str) and ledger.key(r["file"]) in both}):
         k = ledger.key(v)
         got = kinds.get(k, set())
         if got == {True} or not got and not (ws / v.removeprefix("./").split("/", 1)[0]).is_dir():
             rename.add(k)
-        elif got != {False}:
+        elif got != {False} and v not in ask:
             ask.append(v)
-    return rename, ask
+    return rename, ask, both
 
 
 def ledger_lines(path, fn):
@@ -555,7 +557,7 @@ def ledger_lines(path, fn):
     ワークスペースへの変更案の文（old・new）は、その変更先が texts の書き換える形（rewritten）のときだけ書き換える（ファイルと文が同じ替えを受け、ledger.py の apply・undo が文で探せる。
     checks.py などの md でないファイルは書き換えないので、その変更案の文もそのまま。移す前のパスでも同じ答えになるよう、ファイルの一覧でなく形で決める。PR #57 のレビュー）。"""
     ws = path.parent.parent if path.parent.name == ".desk" else path.parent
-    rename = targets_1104(ws, path)[0]  # 2026-11-04 の google-*/… の戻し先で、今の build-* に替えるもの（プラグインへの提案の file はいつも替え、ワークスペースへの提案の file は替えない）
+    rename, _, both = targets_1104(ws, path)  # 2026-11-04 の google-*/… の戻し先で、今の build-* に替えるもの（プラグインへの提案の file はいつも替え、ワークスペースへの提案の file は替えない）
     to = lambda x: lib_target(x, fn, rename=ledger.key(x) in rename)
 
     def walk(v):
@@ -565,7 +567,7 @@ def ledger_lines(path, fn):
             return [walk(x) for x in v]
         if isinstance(v, dict):
             return {k: x if k in KEEP else (fn(x) if v.get("plugin") or rewritten(str(v.get("file", "")).removeprefix("./")) else x) if k in ("old", "new") and isinstance(x, str)  # 変更案の文は、変更先のファイルと同じ替えだけ
-                    else lib_target(x, fn) if (k == "file" and v.get("plugin") or k == "rule") and isinstance(x, str) else to(x) if k == "to" and isinstance(x, str)
+                    else lib_target(x, fn, rename=ledger.key(x) not in both) if (k == "file" and v.get("plugin") or k == "rule") and isinstance(x, str) else to(x) if k == "to" and isinstance(x, str)
                     else {c: to(y) if isinstance(y, str) else walk(y) for c, y in x.items()} if k == "prev" and isinstance(x, dict)  # 前の戻し先（ledger.py reopen が戻す先）も、to と同じに
                     else walk(x) for k, x in v.items()}
         return v
@@ -1255,7 +1257,7 @@ def selftest():
                        '{"kind":"proposal","id":"P4","file":"google-docs/api.md","old":"a","new":"b"}\n')
         got = [json.loads(x) for x in ledger_lines(led, rewrite).splitlines()]
         assert got[0]["to"] == got[1]["prev"]["c-1"] == "build-slides/SKILL.md" and got[1]["why"] == "google-slides スキル", got
-        assert got[2]["file"] == "google-docs/memo.md" and got[3]["file"] == "build-docs/api.md" and got[4]["file"] == "google-docs/api.md", got  # 提案の file は plugin の欄で決める（ワークスペースへの提案は、まだないフォルダへのものでも替えない）
+        assert got[2]["file"] == "google-docs/memo.md" and got[3]["file"] == got[4]["file"] == "google-docs/api.md", got  # ワークスペースへの提案は、まだないフォルダへのものでも替えない。同じ値の両方の種類の提案は、どちらも替えない
     with tempfile.TemporaryDirectory() as tmp:  # 戻し先は、同じ値の提案の種類に合わせる（取り消すと前の戻し先に戻る）。決められないものは替えずに知らせる（PR #61 のレビュー）
         ws = Path(tmp).resolve()
         (ws / "desk.toml").write_text("")
@@ -1282,7 +1284,8 @@ def selftest():
         cs, ps, _, _ = ledger.state(ws)
         assert cs["c-0001"]["to"] == ps["P0001"]["file"] == "google-docs/memo.md" and cs["c-0002"]["to"] == "build-slides/gone.md", (cs, ps)
         assert cs["c-0003"]["to"] == ps["P0002"]["file"] == "build-docs/api.md" and ps["P0003"]["file"] == "google-vids/new.md", (cs, ps)  # google-docs/ があっても、プラグインへの提案からつないだ戻し先は替える
-        assert cs["c-0004"]["to"] == "google-docs/notes.md" and cs["c-0005"]["to"] == ps["P0004"]["file"] == "google-docs/lint.md" and ps["P0005"]["file"] == "build-docs/lint.md", (cs, ps)
+        assert cs["c-0004"]["to"] == "google-docs/notes.md" and cs["c-0005"]["to"] == ps["P0004"]["file"] == ps["P0005"]["file"] == "google-docs/lint.md", (cs, ps)  # 両方の種類にある値は、どの欄も替えない
+        assert [x.split(" は、")[0] for x in stale_asks(ws)] == ["要判断: 台帳の戻し先 google-docs/lint.md", "要判断: 台帳の戻し先 google-docs/notes.md"] and unresolved(ws) == []  # 移したあとも、決めるまで知らせる
         os.environ["DESK_CONFIG"], cwd = "", os.getcwd()
         os.chdir(ws)
         try:
