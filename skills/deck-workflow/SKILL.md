@@ -1,6 +1,6 @@
 ---
 name: deck-workflow
-description: How to run the work of making a material (decks and documents) from request to delivery. Holds the overall flow of 11 steps, the working practices that hold at every step, and the files for each step (preparation and the outline, the three representative pages and building a deck, child agents, gathering materials and reusing internal decks, Drive, delivering, requests after delivery, fixing from comments on a built material and watching for them, and research requests that make no material). What makes a material good is in deck-writing and deck-design; the tools are build-slides and build-docs. Read first when asked 「資料を作って」「構成案を書いて」「このページを直して」「コメントを見て直して」「コメントを見張って」, 「〇〇を調べて」, when the user corrects a material or asks about its content, and after delivering when watch_hours in desk.toml's [feedback.google_comments] is greater than 0.
+description: How to run the work of making a material (decks and documents) from request to delivery. Holds the overall flow of 11 steps, the working practices that hold at every step, and the files for each step (preparation and the outline, the three representative pages and building a deck, child agents, gathering materials and reusing internal decks, Drive, delivering, requests after delivery, and fixing from comments on a built material and watching for them). What makes a material good is in deck-writing and deck-design; the tools are build-slides and build-docs. Read first when asked 「資料を作って」「構成案を書いて」「このページを直して」「コメントを見て直して」「コメントを見張って」, when the user corrects a material or asks about its content, and after delivering when watch_hours in desk.toml's [feedback.google_comments] is greater than 0.
 ---
 
 # The flow of making a material
@@ -81,7 +81,7 @@ Do not wait for skills to be called automatically; open the skill when the situa
 | Creating or refreshing a customer profile | `customer-profile` (business, organization, technical setup, engineers' preferences; how it differs from memory) |
 | **Gathering materials:** sources | [materials.md](materials.md) (search, meeting records, internal chat; the `references.md` ledger) |
 | **Reusing internal decks** | [reuse.md](reuse.md) (the four stages, exporting Google Slides and page images) |
-| **Research requests:** a request that makes no material (「〇〇を調べて」) | [research.md](research.md) (searching earlier research, what to write, copying to Drive) |
+| **Research requests:** a request that makes no material (「〇〇を調べて」) | `desk-research` → research requests |
 | **Drive:** creating, naming, renaming, or uploading files on Drive (slides, documents, html, csv, research notes) | [drive.md](drive.md) (location, name, `drive_put.py`) |
 | Review before delivery | `deck-review` |
 | Writing or rewriting the voiceover script of a video (the speaker notes of a built deck), only when the user asks (`deck-writing` → content §5; asked while building a deck: deck-flow-022) | `build-vids` → voiceover scripts (story across scenes, writing for speech, audio tags, replacing only the notes) |
