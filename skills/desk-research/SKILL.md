@@ -1,6 +1,6 @@
 ---
 name: desk-research
-description: Use for research. Research requests that make no material (「〇〇を調べて」, 「前に調べたことはある？」): search the workspace's earlier research, write the result in Research/, and copy it to Drive. Re-researching the best practices for making materials (the content and look of slides and documents) and for the mechanisms that have AI agents do it (skills, instructions, check scripts), asked as 「ベストプラクティスを調べ直して」, 「前回から変わったことを調べて」, or 「資料作成のスキルを更新して」, and run by desk-dreaming once a month. Holds the list of sources, search terms that worked, and research tips. Not for gathering material for one deck or document (`deck-workflow` → gathering materials) or for reading fixed places on a schedule (`desk-crawl`).
+description: "Use for research. Research requests that make no material (「〇〇を調べて」, 「前に調べたことはある？」): search the workspace's earlier research, write the result in Research/, and copy it to Drive. Re-researching the best practices for making materials (the content and look of slides and documents) and for the mechanisms that have AI agents do it (skills, instructions, check scripts), asked as 「ベストプラクティスを調べ直して」, 「前回から変わったことを調べて」, or 「資料作成のスキルを更新して」, and run by desk-dreaming once a month. Holds the list of sources, search terms that worked, and research tips. Not for gathering material for one deck or document (`deck-workflow` → gathering materials) or for reading fixed places on a schedule (`desk-crawl`)."
 ---
 
 # Research
