@@ -2378,8 +2378,9 @@ class SpecPage:
     def marks(self):
         """矢印の番号の丸（num。線の色の xsmall の正円）と、その矢印の札を置く。丸は線の上に重ねる（線より後に組むので、線を隠す）。
         よけるもの: ほかの矢印の線、ページの正円の番号（書き手が置いた num と、先に置いた矢印の丸）、矢印の札。丸はそれらから MARK_CLEAR 以上、札もそれらから
-        MARK_CLEAR 以上離し、さらに札はその矢印の折れた先の区間にかからない。丸も札も、部品と一部だけ重ならない（tangles の「一部だけ重なる」と同じ判定。
-        囲みの中に収まるか外にあればよく、縁をまたがない。接するだけはよいので、両端の箱の間に収まる札は、番号を付けても置ける）。区間ごとに、端（折れる点・矢じり）から丸の半径 + 0.15 in の内を除いて 0.01 in 刻みで調べ、空いた範囲を求める。
+        MARK_CLEAR 以上離し、さらに札はその矢印の折れた先の区間にかからない。丸も札も、囲み（box）の縁をまたがず（tangles の「一部だけ重なる」と同じ判定。中に収まるのはよい）、
+        ほかの部品には中に収まるのも含めて重ならない（ふつうの label や文字の中に札が入ると、文字に重なる。PR #60 の Pullfrog のレビュー）。
+        接するだけはよいので、両端の箱の間に収まる札は、番号を付けても置ける）。区間ごとに、端（折れる点・矢じり）から丸の半径 + 0.15 in の内を除いて 0.01 in 刻みで調べ、空いた範囲を求める。
         最初に試す区間（札を置く区間。置ける長さがなければ、次に長い区間）の真ん中が空いていればそこ、空いていなければ、置ける長さの区間を順に、いちばん長い空いた範囲の
         真ん中。label_side を書いた矢印は、その向きの区間だけから探す。数か所の点だけを試す形と、箱の線の数から枝分かれを推し量る形は、多対多の図・丸の縁の近くを
         通る線・ほかの丸で外れた（2026-11-04、ローカルのレビュー）。空きがなければ最初に試す区間の真ん中に置き、組むときの警告に出す。置ける長さの区間がなければ、それも警告に出す。"""
@@ -2402,20 +2403,23 @@ class SpecPage:
             names = {lab for *_, lab, _ in self.lines if lab}  # 矢印の札の場所
             labels = [rc for _, l, rc, *_ in self.placed if l in names]
             ringed = {loc for kind, loc, _, _, _, el in self.placed if kind in OUTLINE and el.get("shape") == "ellipse"}  # 輪（tangles と同じく、重ねるのが意図）
-            solids = [rc for l, _, rc in self.solids() if l not in ringed]  # 丸も札も、部品と一部だけ重ならない（tangles の「一部だけ重なる」と同じ判定）
+            solids = [(kind, rc) for l, kind, rc in self.solids() if l not in ringed]
+
+            def hit(rect):  # 囲み（box）は縁をまたがなければ中に置ける（tangles の「一部だけ重なる」と同じ判定）。ほかの部品には、中に収まるのも含めて重ならない
+                return any(partly(rect, rc) if kind == "box" else rect_cross(rect, rc) for kind, rc in solids)
             rel = {f: self.arrow_label(e, loc, 0, 0, f, r, put=False) for f in {flat[i] for i in order}} if "label" in e else {}  # 丸の中心から見た札の四角（向きごとに 1 回測る）
             near = lines + segs  # 札がよける線（その矢印の線も。横と縦の区間では札は線から離れて置かれ、斜めの区間では線にかかるので置けない）
 
             def clear(c, i):  # c に丸（と札）を置けるか
                 if any(seg_dist(c, a, b) < r + g for a, b in lines) or any(math.dist(c, o) < r + ro + g for o, ro in rings) or any(rect_dist(c, rc) < r + g for rc in labels) \
-                        or any(partly((c[0] - r, c[1] - r, 2 * r, 2 * r), rc) for rc in solids):
+                        or hit((c[0] - r, c[1] - r, 2 * r, 2 * r)):
                     return False
                 if "label" not in e:
                     return True
                 x, y, w, h = rel[flat[i]]
                 lr, wide = (c[0] + x, c[1] + y, w, h), (c[0] + x - g, c[1] + y - g, w + 2 * g, h + 2 * g)  # 札と、MARK_CLEAR だけ広げた札
                 return not any(seg_hits(a, b, wide, 0) for a, b in near) and not any(rect_dist(o, wide) < ro for o, ro in rings) \
-                    and not any(rect_cross(wide, rc) for rc in labels) and not any(partly(lr, rc) for rc in solids)
+                    and not any(rect_cross(wide, rc) for rc in labels) and not hit(lr)
 
             def free(i):  # 区間 i の空いた範囲（点の並び）の並び。端の近くは除く
                 p, q = segs[i]
@@ -5206,6 +5210,11 @@ def selftest_spec():
     assert not [w for w in d.warnings if ".label" in w or ".num" in w], d.warnings  # 横 1 列の図の row の勧めは出る
     d, _ = pair({"type": "num", "n": 12, "shape": "round_rectangle", "size": "small", "x": 2.6, "y": 0.0}, {"type": "arrow", "from": "a", "to": "b", "num": 1, "label": "x"})
     assert not d.warnings, d.warnings
+    _, els = run({"title": "t", "body": [{"type": "frame", "h": 2, "items": [{"type": "label", "text": "XXXXX", "x": 1.5, "y": 0.5, "w": 1, "h": 0.4},
+        {"type": "arrow", "from": [0, 1], "to": [4, 1], "num": 1, "label": "X"}]}]})  # ふつうの label の中には、札も丸も置かない（PR #60 の Pullfrog の再現）
+    lb, ar = next(e for e in els if e["call"] == "label"), next(e for e in els if e["loc"].endswith(".label"))
+    nm = next(e for e in els if e["call"] == "num")
+    assert not rect_cross((ar["x"], ar["y"], ar["w"], ar["h"]), (lb["x"], lb["y"], lb["w"], lb["h"])) and not rect_cross((nm["cx"] - 0.11, nm["cy"] - 0.11, 0.22, 0.22), (lb["x"], lb["y"], lb["w"], lb["h"]))
     d, _ = run({"title": "t", "body": [{"type": "frame", "h": 2, "items": [{"type": "arrow", "from": [0, 0], "to": [3, 2], "num": 1, "label": "データを送る"}]}]})
     assert any("置ける空いた点がない" in w for w in d.warnings), d.warnings  # 斜めの線の札はその線にかかるので、置ける点がないと言う
     try:
