@@ -67,6 +67,7 @@ BRAND_COPYRIGHT = _BRAND.get("copyright", PLACEHOLDER_COPYRIGHT)  # 初公表年
 LOGO = _BRAND.get("logo")  # ドキュメントの表紙のロゴ（assets/ の中のパスか URL）。なければ置かない
 COPYRIGHT_PT = 9  # 著作権表示と、高さをそろえるページ番号だけは 11pt 以上の例外。本文を邪魔しない（2026-10-08、ページ番号は 2026-10-13）
 COPYRIGHT_FOOTER = re.compile(r"^©\s*\d{4}\s+.+?\s+All rights reserved\.(?:\s*｜\s*(?:Internal Only|Confidential))?\s*$", re.I)
+CLASSIFICATION = re.compile(r"\s*｜\s*(?:Internal Only|Confidential)\s*$", re.I)  # フッターの末尾の秘密区分（資料名から slides.py の finish が足す）
 
 
 def need_brand(copyright=BRAND_COPYRIGHT):
@@ -77,14 +78,17 @@ def need_brand(copyright=BRAND_COPYRIGHT):
                  "書かないと全ページの左下が仮の表示（Example, Inc.）になる")
 
 
-def copyright_problem(c):
-    """著作権表示 c の、組む前に直すこと（(区分, 詳しく)。区分は 要修正・要確認）。なければ None。スライドとドキュメントの前提の確かめ（slides_doctor.py・docs_doctor.py）が同じものを出す。"""
+def copyright_problem(c, theme=False):
+    """著作権表示 c の、組む前に直すこと（(区分, 詳しく)。区分は 要修正・要確認）。なければ None。スライドとドキュメントの前提の確かめ（slides_doctor.py・docs_doctor.py）が同じものを出す。
+    theme はスライドのテーマの copyright。決まった形でなくてもよい（非公式の表記など。lint はテーマの copyright と同じ文字列を著作権表示と見なす）ので、要確認にとどめる。"""
     if not (c := str(c).strip()):
         return "要修正", "空。スライドもドキュメントも組めない（全ページの左下に書く著作権表示がない）。自分の会社の著作権表示を書く"
     if c == PLACEHOLDER_COPYRIGHT:
         return "要修正", f"「{c}」は書いていないときの仮の値。スライドもドキュメントも組めない。自分の会社の著作権表示を書く"
+    if not COPYRIGHT_FOOTER.fullmatch(c) and theme:
+        return "要確認", f"「{c}」は「© <年> <社名> All rights reserved.」の形でない。非公式の表記など、わざと別の形にしたなら、このままでよい"
     if not COPYRIGHT_FOOTER.fullmatch(c):
-        return "要修正", f"「{c}」は「© <年> <社名> All rights reserved.」の形でない。lint が全ページの著作権表示を「11pt 未満の文字」の要確認に出す"
+        return "要修正", f"「{c}」は「© <年> <社名> All rights reserved.」の形でない（スライドで非公式の表記など別の形にするなら、テーマのファイルの copyright に書く。そちらは要確認にとどめる。ドキュメントのフッターは [brand] の値だけ）"
     return None
 
 
@@ -119,6 +123,8 @@ def asset(path):
 
 def selftest():
     assert COPYRIGHT_FOOTER.match("© 2026 Acme, Inc. All rights reserved.｜Internal Only") and not COPYRIGHT_FOOTER.match("© Acme 2026")
+    assert copyright_problem("Unofficial content.")[0] == "要修正" and copyright_problem("Unofficial content.", theme=True)[0] == "要確認" and copyright_problem("", theme=True)[0] == "要修正"
+    assert CLASSIFICATION.sub("", "Unofficial content.｜Internal Only") == "Unofficial content."
     assert copyright_problem("© 2026 Acme, Inc. All rights reserved.") is None and copyright_problem(" ")[0] == copyright_problem(PLACEHOLDER_COPYRIGHT + " ")[0] == copyright_problem("© Acme 2026")[0] == "要修正"
     assert theme_font({}) == FONT and theme_font({"font": "DM Sans"}) == "DM Sans" and theme_mono({"mono": " IBM Plex Mono "}) == "IBM Plex Mono"
     for bad in (lambda: theme_font({"font": "Arial"}), lambda: theme_mono({"mono": "fira  code"}), lambda: need_brand(PLACEHOLDER_COPYRIGHT + " "), lambda: need_brand("")):
