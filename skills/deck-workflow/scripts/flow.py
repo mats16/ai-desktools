@@ -21,6 +21,7 @@ try:
 except ImportError:  # shortcut: Windows では鍵をかけない（ledger.py と同じ）。子が同時に書いて行が壊れたら msvcrt で鍵をかける
     fcntl = None
 
+WORDING = "wording.json"  # 日本語の点検の記録（google-slides・google-docs の wording.py が書く。ここは読むだけ）
 PROGRESS = "progress.jsonl"  # 資料のフォルダに置く手順の記録。足すだけで書き換えない。build/ を消しても残る
 STEPS = ("1–4 準備", "5 構成", "6 代表の 3 枚", "7 ページを書く", "8 全体を組む", "9 /deck-review", "10 渡す", "11 片付け")
 STATUSES = ("始めた", "済んだ", "飛ばした", "止まった")  # 止まったは、ユーザーの答えか別の作業を待つもの
@@ -341,7 +342,26 @@ def facts(folder, ws):
         for r in table()[0]:
             k = {"-": "空か -", "?": "読めない値"}.get(s := refs.state(r["確認"]), s)
             kinds[k] = kinds.get(k, 0) + 1
-        return ["出典の表の確認: " + "・".join(f"{k} {n}" for k, n in kinds.items())] if kinds else ["出典の表がない"]
+        return (["出典の表の確認: " + "・".join(f"{k} {n}" for k, n in kinds.items())] if kinds else ["出典の表がない"]) + guarded(wording)
+
+    def wording():
+        """deck-flow-023 の日本語の点検（google-slides の gslides.py wording・google-docs の docs.py wording が書く wording.json）。回していなければ 未実施。
+        点検したあとにページのファイル（build/ の *.json・pages.py・doc.md）が変わったか増えたか消えたら 古い（点検し直す）。どちらも済みにしない。"""
+        p = folder / WORDING
+        if not p.is_file():
+            return ["日本語の点検: 未実施（build/ で gslides.py wording <URL> か docs.py wording <URL>）"]
+        st = json.loads(p.read_text(encoding="utf-8"))
+        s, files = st.get("summary") or {}, (st.get("last") or {}).get("files") or {}
+        rel = [x.relative_to(build).as_posix() for x in build.rglob("*.json") if x.is_file()]
+        now = {f"build/{r}" for r in rel if not any(part.startswith(".") for part in r.split("/"))}  # 点検のあとに足したページ（gslides.py wording と同じく隠しファイルは数えない）。pages.py・doc.md は記録にあれば中身を比べる
+        moved = sorted(k for k in set(files) | (now if files else set()) if k not in files or sha(folder / k) != files[k])
+        state_ = "古い" if moved else s.get("状態", "?")
+        items = [f"日本語の点検: {state_}（文 {s.get('文', '?')}・指摘 {s.get('指摘', '?')}・未判断 {s.get('未判断', '?')}・残す {s.get('残す', '?')}・聞く {s.get('聞く', '?')}"
+                 f"・意味の変わる恐れの未確認 {s.get('未確認', '?')}・書き直し {s.get('書き直し', '?')} / {s.get('上限', '?')} 回）。保存版のリビジョン {s.get('revision')}・{s.get('ts')}"]
+        if moved:
+            items.append(f"日本語の点検のあとに変わったファイル: {short(moved)}（組み直してから点検し直す）")
+        items += [f"日本語の点検の通らない理由: {x}" for x in s.get("通らない理由", [])[:3]]
+        return items
 
     def clean():
         got = ledger_facts()
@@ -409,7 +429,7 @@ def report(folder):
                 print(f"  - 済んだと記録したあとに中身が変わった（か、なくなった）: {short(moved[step])}")
         print(*(f"  - {x}" for x in items), sep="\n")
     print("\nコマンドで確かめる（結果は会話の中にしかない）: slides.py lint・gslides.py check <URL> --all（google-slides）か docs.py check <URL>（google-docs）の要修正、"
-          f"refs.py check {folder} --fetch（10 の前）")
+          f"refs.py check {folder} --fetch（10 の前）。日本語の点検は、10 の前にもう一度 gslides.py wording <URL> か docs.py wording <URL>（保存版を読む）")
     return rows
 
 
@@ -486,6 +506,19 @@ def selftest():
             assert "スライド docs.google.com/presentation/d/built_1（構成案.md・デッキで共通）" in s["8"]  # #タグ と囲みの中の # は見出しでない
             assert "reused_1（構成案.md・流用元、社内メモ_deck.md）" in s["8"] and s["8"].count("reused_1") == 1  # 同じ URL は 1 つにまとめる
             assert "未 1" in s["10"] and "空か - 2" in s["10"]
+            assert "日本語の点検: 未実施" in s["10"]  # 回していない点検を済みにしない
+            (f / WORDING).write_text(json.dumps({"summary": {"状態": "済み", "文": 3, "指摘": 1, "未判断": 0, "残す": 1, "聞く": 0, "未確認": 0, "書き直し": 0, "上限": 2, "revision": "r9", "通らない理由": []},
+                                                 "last": {"files": {f"build/{x.relative_to(f / 'build').as_posix()}": sha(x) for x in (f / "build").rglob("*.json")}}}))
+            assert "日本語の点検: 済み（文 3・指摘 1・未判断 0・残す 1" in got()["10"] and "リビジョン r9" in got()["10"] and "変わったファイル" not in got()["10"]
+            (f / "build" / "p02.json").write_text('{"直した": 1}')
+            (f / "build" / "p13.json").write_text("{}")
+            assert "日本語の点検: 古い" in got()["10"] and "変わったファイル: build/p02.json, build/p13.json" in got()["10"]  # 点検のあとに直したか足したページ
+            (f / "build" / "p02.json").write_text("{}")
+            (f / "build" / "p13.json").unlink()
+            assert "日本語の点検: 済み" in got()["10"]
+            (f / WORDING).write_text("{壊れた")
+            assert "調べられない" in got()["10"] and "出典の表の確認" in got()["10"]  # 壊れた記録でも、ほかの事実は出す
+            (f / WORDING).unlink()
             (f / "社内メモ_urls.md").write_text("".join(f"https://docs.google.com/document/d/many_{i}/edit\n" for i in range(8)))
             assert "ほか 5 件" in got()["8"]
             (f / "社内メモ_urls.md").unlink()

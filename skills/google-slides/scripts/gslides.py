@@ -3,6 +3,8 @@
 usage:
   gslides.py check  <URL か ID> [--talk] [--all | --pages 3,5]   組んだあとの確認。JSON・テキスト・lint と、前に取ったときから変わったページの画像（p-NN.webp）を /tmp/slides_<ID の先頭 8 字>/ に出し、
                    画像で箱の下の余白を測る（box_pad.py）。取ったページと指摘を changed.json に書く。--all で全ページの画像（/deck-review の前などの区切り）
+  gslides.py wording <URL か ID>                  日本語の点検（build/ で回す）。保存版の文とノートの言い回しの指摘を、ページのファイルと JSON の場所つきで出し、
+                   直す前に通した文と比べて意味の変わる恐れを出し、資料のフォルダの wording.json に残す（wording.py。lint.md の「Japanese check」）
   gslides.py pages  <URL か ID>                    ページ番号・objectId・最初の文字を一覧にする
   gslides.py thumb  <URL か ID> <ページ番号> <出力.png>   Google が描いたページの画像（1600 × 900）を保存する
   gslides.py export <URL か ID> <出力.pptx>          pptx で書き出す（Drive に置かれた pptx はそのまま落とす）。名前と更新日も出す（references.md に書く）
@@ -10,12 +12,13 @@ usage:
   gslides.py jp     <URL か ID> [置き換え.json]     すべての文字を Noto Sans JP にし、置き換え（[["元の文", "訳した文"], …]）を入れる（keep で作った複製に使う）
 python3 gslides.py --selftest で自己確認。
 認証は gapi.py（環境変数 GOOGLE_OAUTH_ACCESS_TOKEN か、gcloud の ADC のファイル）。401・403 なら desk-doctor で確かめる。"""
-import glob, json, os, re, subprocess, sys, urllib.request
+import contextlib, glob, hashlib, io, json, os, re, subprocess, sys, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 sys.dont_write_bytecode = True  # scripts/ に __pycache__ を残さない
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gapi, lint, textlint
+import gapi, lint, textlint, wording
+from notes import PAGE_KEY, page_key
 from slides import STAMP, page_numbers, revision
 from gapi import DRIVE, PPTX, SLIDES, batch, file_id, folder_id, request, run, slide_ids, thumbnail, trash
 
@@ -184,6 +187,93 @@ def cmd_check(src, *opts):
         sys.exit("lint の要修正が残っている（上の出力を直す）")
 
 
+def json_leaves(o, path=""):
+    """JSON の文字の値と、その場所（body.items[2].text）。"""
+    if isinstance(o, dict):
+        for k, v in o.items():
+            yield from json_leaves(v, f"{path}.{k}" if path else k)
+    elif isinstance(o, list):
+        for i, v in enumerate(o):
+            yield from json_leaves(v, f"{path}[{i}]")
+    elif isinstance(o, str):
+        yield path, o
+
+
+def flat(t):
+    """突き合わせのための文: Markdown の太字・リンク・コードの印と空白を外す（slides.py が組むときに外すもの）。"""
+    return re.sub(r"\s|\*\*|__|`", "", re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t))
+
+
+def locate(units, slides, build="."):
+    """保存版の文を、build/ のページのファイルと JSON の場所に戻す（u の file・loc を埋める）。ページの objectId の印（PAGE_KEY）でファイルを決め、
+    その中の文字の値から文の先頭 20 字を探す。印のないページ（pages.py・印を付ける前に組んだもの）は、build/ のどのファイルからも探す。見つからなければ空のまま。"""
+    files = sorted(p for p in glob.glob(os.path.join(build, "**", "*.json"), recursive=True) if not os.path.basename(p).startswith("."))
+    by_key, leaves = {}, {}
+    for f in files:
+        rel = os.path.relpath(f, build)
+        by_key.setdefault(page_key(os.path.splitext(os.path.basename(f))[0]), rel)
+        try:
+            leaves[rel] = list(json_leaves(json.load(open(f, encoding="utf-8"))))
+        except (OSError, ValueError):
+            leaves[rel] = []
+    py = os.path.join(build, "pages.py")
+    lines = open(py, encoding="utf-8").read().splitlines() if os.path.isfile(py) else []
+    for u in units:
+        want = flat(u["text"])[:20]
+        m = PAGE_KEY.search(slides[u["page"] - 1]["objectId"]) if u["page"] and u["page"] <= len(slides) else None
+        for rel in ([by_key[m.group(1)]] if m and m.group(1) in by_key else list(leaves)):
+            if hit := [loc for loc, v in leaves[rel] if want and want in flat(v)]:
+                u["file"], u["loc"] = rel, "・".join(dict.fromkeys(hit))
+                break
+        else:
+            if (n := next((i for i, x in enumerate(lines, 1) if want and want in flat(x)), None)):
+                u["file"], u["loc"] = "pages.py", f"{n} 行"
+        if m and m.group(1) in by_key:  # 直す前後を組にするページの名前（並べ替えても同じ）。文が JSON に見つからなくても、ページの印で決める
+            u["key"] = os.path.splitext(by_key[m.group(1)])[0]
+    return units
+
+
+def slide_units(p):
+    """lint が言い回しを見る文（lint_slides の wording の呼び出し）と、ノートの行。"""
+    units = []
+    key = lambda where, kw: "p" + re.match(r"p(\d+)", where).group(1)
+    r = wording.collector(lint.Report(), units, key, lambda kw: "表" if kw.get("table") else "本文")
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        lint.lint_slides(p, r, "差し替え用" in p["title"])
+    for i, s in enumerate(p.get("slides", []), 1):
+        for line in lint.note_text(s).splitlines():
+            if textlint.wording_text(line):
+                units.append(wording.unit(f"p{i} ノート", line, f"p{i}", "ノート", slides=False, page=i))
+    return sorted(units, key=lambda u: (u["page"] or 0, u["kind"] == "ノート"))  # ページの順、ノートはそのページの後ろ（同じページの中は lint が見た順）
+
+
+def cmd_wording(src):
+    """slides-lint-035 の日本語の点検。保存版（presentations.get）を読むので、手元の JSON だけが直っていて Google が古いまま、という取りこぼしがない。
+    通らない理由: 組んだあとに画面で直された（JSON と保存版が違う。直しを JSON に写して組み直す）、組んだあとのページの画像を check で取っていない（直して文が延びたページの見た目を見ていない）。"""
+    if os.path.basename(os.getcwd()) != "build":
+        sys.exit("wording は資料の build/ で回す（ページのファイルの場所を出し、資料のフォルダに wording.json を書く）")
+    pid = file_id(src)
+    p = request("GET", f"{SLIDES}/{pid}")
+    rev, stamp = built(pid), request("GET", f"{DRIVE}/files/{pid}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(STAMP)
+    problems = []
+    if rev is None or rev != stamp:
+        problems.append("slides.py build で組んだリビジョンでない（画面で直されたか、ほかの道具で変えた）。直しをページの JSON に写して slides.py build で組み直す")
+    ids = [s["objectId"] for s in p["slides"]]
+    try:
+        shots = json.load(open(f"/tmp/slides_{pid[:8]}/shots.json"))
+    except (OSError, ValueError):
+        shots = []
+    if miss := [n for n, o in enumerate(ids, 1) if n > len(shots) or shots[n - 1] != o]:
+        problems.append(f"組んだあとの画像を取っていないページ: {', '.join(f'p{n}' for n in miss[:12])}{' ほか' if len(miss) > 12 else ''}"
+                        f"（gslides.py check {src} で取り、直したページの画像を見てから回す）")
+    units = locate(slide_units(p), p["slides"])
+    files = {f"build/{os.path.relpath(f, '.')}": hashlib.sha256(open(f, "rb").read()).hexdigest()
+             for f in sorted(glob.glob("**/*.json", recursive=True) + glob.glob("pages.py")) if os.path.isfile(f)}
+    ok = wording.run(os.path.dirname(os.getcwd()), "slides", f"https://docs.google.com/presentation/d/{pid}/edit", rev, units, files, problems, f"gslides.py wording {src}")
+    if not ok:
+        sys.exit(1)
+
+
 def cmd_pages(src):
     p = request("GET", f"{SLIDES}/{file_id(src)}?fields=slides(objectId,pageElements(shape(text(textElements(textRun(content))))))")
     for n, s in enumerate(p["slides"], 1):
@@ -252,6 +342,7 @@ def selftest():
         assert want == [2] and moved == 2 and sorted(os.listdir(d)) == ["p-01.webp", "p-03.webp"]
         assert open(f"{d}/p-01.webp").read() == "c" and open(f"{d}/p-03.webp").read() == "a"
     check_selftest()
+    wording_selftest()
     hits = by_page([(lint.TWO_LINES, "p3 の見出し: 「x」"), ("絵文字", "p12: 「✅」"), ("扉", "13 枚。…")])
     assert hits == {3: [f"[{lint.TWO_LINES}] p3 の見出し: 「x」（見積もり）"], 12: ["[絵文字] p12: 「✅」"]}
     print("selftest ok")
@@ -324,6 +415,61 @@ def check_selftest():
         globals().update(real[0])
         lint.lint_slides, subprocess.run = real[1], real[2]
         shutil.rmtree(d, ignore_errors=True)
+
+
+def wording_selftest():
+    """cmd_wording: 保存版の文とノートを集め、ページのファイルと JSON の場所に戻し、画面で直したことと画像を取っていないことを通らない理由にする。Google は呼ばない。"""
+    import shutil, tempfile
+    from slides import EMU
+    sid = f"x_k{page_key('p01')}h{'0' * 16}"
+    shape = lambda oid, y, *lines: {"objectId": oid, "size": {"width": {"magnitude": 8 * EMU, "unit": "EMU"}, "height": {"magnitude": 1 * EMU, "unit": "EMU"}},
+                                    "transform": {"scaleX": 1, "scaleY": 1, "translateX": 0.5 * EMU, "translateY": y * EMU, "unit": "EMU"},
+                                    "shape": {"shapeType": "TEXT_BOX", "text": {"textElements": [x for t in lines for x in ({"paragraphMarker": {"style": {}}},
+                                              {"textRun": {"content": t + "\n", "style": {"fontFamily": lint.FONT, "fontSize": {"magnitude": 14, "unit": "PT"}}}})]}}}
+    deck = {"title": "tmp", "masters": [{"objectId": "m", "pageProperties": {"colorScheme": {"colors": []}}}], "layouts": [], "slides": [
+        {"objectId": sid, "pageElements": [shape("t1", 0.6, "4 つの構成の比べ"), shape("b1", 2, "顧客は「前の版の比べ」と言った", "出典: 前の版の比べ", "Run the build")],
+         "slideProperties": {"masterObjectId": "m", "notesPage": {"notesProperties": {"speakerNotesObjectId": "n"}, "pageElements": [shape("n", 0, "前の版の手順を話す") | {"objectId": "n"}]}}}]}
+    state = {"rev": "rev", "stamp": "rev"}
+    real = {k: globals()[k] for k in ("request", "built")}, lint.workspace_checks, lint.segment
+    globals().update(request=lambda m, u, *a, **k: {"appProperties": {STAMP: state["stamp"]}} if "/files/" in u else deck, built=lambda pid: state["rev"])
+    lint.workspace_checks, lint.segment = (lambda *a: 0), (lambda ts: {t: set(range(len(t) + 1)) for t in ts})
+    cwd, d, shots = os.getcwd(), tempfile.mkdtemp(), "/tmp/slides_zzwordin/shots.json"
+    shutil.rmtree(os.path.dirname(shots), ignore_errors=True)
+    try:
+        os.makedirs(f"{d}/build")
+        json.dump({"kind": "page", "title": "**4 つの構成の比べ**", "body": {"items": ["顧客は「前の版の比べ」と言った"]}, "speakerNotes": "前の版の手順を話す"},
+                  open(f"{d}/build/p01.json", "w", encoding="utf-8"), ensure_ascii=False)
+        os.chdir(f"{d}/build")
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            assert _exit(lambda: cmd_wording("zzwording")) == 1
+            st = wording.load(d)
+            fs = {f["rule"]: f for f in st["last"]["findings"]}
+            assert set(fs) == {"動詞を名詞にした語", "直訳の語"} and fs["動詞を名詞にした語"]["file"] == "p01.json" and fs["動詞を名詞にした語"]["loc"] == "title"
+            assert fs["直訳の語"]["where"] == "p1 ノート" and fs["直訳の語"]["loc"] == "speakerNotes"  # ノートも点検し、JSON の場所に戻す。かぎかっこの中・出典の行・英字だけの文は見ない
+            assert any("画像を取っていない" in x for x in st["last"]["problems"]) and "build/p01.json" in st["last"]["files"]
+            os.makedirs(os.path.dirname(shots))
+            json.dump([sid], open(shots, "w"))
+            wording.decide(d, "keep", [f["id"] for f in fs.values()], "selftest")
+            assert _exit(lambda: cmd_wording("zzwording")) == 0 and wording.load(d)["summary"]["状態"] == "済み"
+            state["rev"] = "rev2"  # 組んだあとに画面で直された
+            assert _exit(lambda: cmd_wording("zzwording")) == 1 and any("slides.py build で組んだリビジョンでない" in x for x in wording.load(d)["last"]["problems"])
+        os.chdir(d)
+        assert "build/ で回す" in str(_exit(lambda: cmd_wording("zzwording"), message=True))
+    finally:
+        os.chdir(cwd)
+        globals().update(real[0])
+        lint.workspace_checks, lint.segment = real[1], real[2]
+        shutil.rmtree(d, ignore_errors=True)
+        shutil.rmtree(os.path.dirname(shots), ignore_errors=True)
+
+
+def _exit(fn, message=False):
+    """fn() の終わり方: sys.exit の値（message なら文）か、止まらなければ 0。"""
+    try:
+        fn()
+    except SystemExit as e:
+        return e.code if not message else str(e)
+    return 0
 
 
 def main():

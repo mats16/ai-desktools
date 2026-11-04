@@ -12,7 +12,7 @@ description: Write Japanese documents (proposals, research reports, explanatory 
 | Google Docs (default) | This file and `deck-design` → documents (the visual rules for documents) |
 | **Templates:** a document written from a workspace template (`recipes/<recipe>/templates/<name>/doc.md`), or making or fixing a template | [templates.md](templates.md), in addition to the two above |
 | **Themes:** writing a document theme file (`themes/docs/<name>.json`) | [themes.md](themes.md) |
-| **Lint:** reading `docs.py check` and lint output | [lint.md](lint.md) |
+| **Lint:** reading `docs.py check` and lint output; the Japanese check after building (`docs.py wording`) | [lint.md](lint.md) |
 | **Docs API pitfalls:** changing `docs.py`, or a build that fails or looks wrong in an unexpected way | [api.md](api.md); after editing `docs.py`, `doc_lint.py`, or `doc_layout.py`, also the bullet 「When you edit docs.py, doc_lint.py, or doc_layout.py」 in [templates.md](templates.md) (selftests and rebuilding the template samples) |
 
 ```sh
@@ -23,6 +23,7 @@ python3 $K/docs.py init <template name>                      # when the workspac
 python3 $K/docs.py new <Drive folder URL> <YYYYMMDD_name>   # first build. Write the printed URL in the outline and tell the user right away (deck-drive-003 in `deck-workflow` → Drive)
 python3 $K/docs.py build <URL>                                    # rebuild after edits (the URL does not change. Stops if someone edited in the UI)
 python3 $K/docs.py check <URL>                                    # check (§2 below. exit 1 if there is 要修正)
+python3 $K/docs.py wording <URL>                                  # after check: the Japanese check on the saved document ([lint.md](lint.md) → Japanese check)
 python3 $K/docs.py export <URL> /tmp/<material name>.docx                 # only when the counterpart asks for Word ([lint.md](lint.md))
 ```
 
@@ -36,7 +37,8 @@ python3 $K/docs.py export <URL> /tmp/<material name>.docx                 # only
 2. Write the content. Write the content agreed in the outline into doc.md without waiting for the user (deck-flow-006 in `deck-workflow`). If the user says they want to settle the content in doc.md, you may do so (what readers see is the built Google Docs).
 3. Build with `docs.py new` (first time) or `docs.py build`, and check with `docs.py check`.
 4. Bring `要修正` to 0, check each `要確認` one by one, and open and look at the images ([lint.md](lint.md)). Put fixes into doc.md or docs.py, and go back to 3.
-5. Before returning a newly made document, run `/deck-review` (the `deck-review` skill). Put the findings into doc.md as well and rebuild. For fixes after delivery, run only the scope decided by deck-flow-017 in `deck-workflow` → requests after delivery.
+5. Then run `docs.py wording <URL>` and close each finding by fixing doc.md (then back to 3), `keep`, or `ask`, until it reports 済み (docs-lint-020 in [lint.md](lint.md) → Japanese check).
+6. Before returning a newly made document, run `/deck-review` (the `deck-review` skill). Put the findings into doc.md as well and rebuild. For fixes after delivery, run only the scope decided by deck-flow-017 in `deck-workflow` → requests after delivery.
 
 ### 1.2 doc.md format
 

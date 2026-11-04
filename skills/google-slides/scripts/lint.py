@@ -571,6 +571,8 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                     thin_red.append(w)  # 角丸の囲みは辺の線と角の円弧に分かれるので、ページごとに 1 件にまとめる
             if "shape" in e and src_without_link(e["shape"]):
                 r.hits[NO_LINK].append(f"p{i}: 「{''.join(ptext(x) for x in paras(e['shape'].get('text'))).strip()[:30]}」")
+            code_box = "shape" in e and (own or under) == scheme.get("DARK1") and any(
+                st.get("fontFamily") == MONO for text, _ in texts for x in paras(text) for c, st in x[1] if c.strip())  # コードの箱（濃紺の地に等幅の字。和文の字は本文の書体で組む）。言い回しは見ない
             for text, f in texts:
                 items = [ptext(x).strip() for x in paras(text) if x[0].get("bullet") and ptext(x).strip()]
                 if len({t.endswith("。") for t in items}) > 1:  # 1 つの枠の箇条書き（ひとまとまり）で、句点のある項目とない項目が混ざる
@@ -592,8 +594,8 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                             one_line = est_lines(para, avail) == 1  # 大きさの分からない run があれば None（1 行とは数えない）
                             if bs:
                                 wraps.append((f"p{i}", "".join(c for c, _ in para[1]), bs))
-                    if not footer and not mono:
-                        r.wording(f"p{i}", t, one_line=one_line)
+                    if not footer and not mono and not code_box:
+                        r.wording(f"p{i}", t, one_line=one_line, obj=e.get("objectId"), table="table" in e)  # obj・table は日本語の点検（wording.py）が場所に使う
                     if m := re.search(r"\v\s*[（「『]", raw):
                         r.hits[OPEN_HEAD].append(f"p{i}: 「{raw[max(0, m.start() - 12):m.end() + 12].replace(chr(11), '⏎')}」。括弧の前で改行せず、括弧の後か句読点で改行する")
                     if (f or under) == scheme.get("DARK1") and CODE_LINE.match(t) and any(st.get("fontFamily") != MONO and re.search("[A-Za-z]", c) for c, st in para[1]):
@@ -1003,6 +1005,11 @@ def selftest():
     assert blk(OAT, "303F47") == 1 and blk(OAT, "EEEDE9") == 0 and blk(NAVY, "303F47") == 0
     # 濃紺の地のコード: 等幅でなければ出す。等幅なら出さない。地の文（和文で始まる行）は見ない
     code = lambda t, font: len(run(deck([(OAT, [title(), shape(1, text=[t], font=font, fill=NAVY)])]))[0].hits[CODE_NOT_MONO])
+    cbox = shape(1, text=["slides.py build "], font=MONO, fill=NAVY)
+    cbox["shape"]["text"]["textElements"][-1]["textRun"]["content"] = "slides.py build "
+    cbox["shape"]["text"]["textElements"].append({"textRun": {"content": "の比べ\n", "style": {"fontFamily": FONT, "fontSize": {"magnitude": 12, "unit": "PT"}}}})
+    assert not run(deck([(OAT, [title(), cbox])]))[0].hits["動詞を名詞にした語"]  # コードの箱（濃紺の地に等幅の字）の和文は、言い回しを見ない
+    assert run(deck([(OAT, [title(), shape(1, text=["構成の比べ"])])]))[0].hits["動詞を名詞にした語"]  # 地の文は見る
     assert code("SELECT 1;", FONT) == 1 and code("SELECT 1;", MONO) == 0 and code("Lakebase が担当する", FONT) == 0 and code("databricks.com/product/pricing", FONT) == 0
     # 提供ステージの札: Public Preview を黄で塗ったら出し、淡い緑なら出さない。Beta は黄
     stg = lambda t, h: len(run(deck([(NAVY, [title(), shape(1, text=[t], fill={"rgbColor": rgb(h)})])]))[0].hits[STAGE_NG])

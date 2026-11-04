@@ -7,7 +7,7 @@ Open when the review children's findings return (every round; steps 4–5 of `SK
 Review children also report defects that do not occur. Fixing without verifying changes places that need no change and creates new defects. Before fixing, check one by one whether each finding really occurs.
 
 - Check visual findings (overflow, misalignment, overlap) on the full-size image (`$D/p-NN.webp` for slides, `$D/p-N.png` for documents; crop details with `sips -s format png -c`, because sips cannot write WebP) or by the coordinates in the JSON in `$D` (`deck.json`, `doc.json`). If it does not occur, mark it 「残した（誤り）」 (that count is used to fix rules and aspects that miss often; `desk-feedback` → routing and rule IDs).
-- Put lint `要確認` items into the same table, one per row. For each verified finding, write the matching rule in the 「決まり」 column ("Finding format" below).
+- Put lint `要確認` items into the same table, one per row, except the Japanese wording ones that the Japanese check closes (deck-review-019 below). For each verified finding, write the matching rule in the 「決まり」 column ("Finding format" below).
 - Before putting in a finding, check that it does not stray from the one sentence that page wants to say. Put ones that stray into 「聞く」.
 
 ## What to fix
@@ -36,4 +36,5 @@ One finding per row. The reviewer returns up to 「直し方の案」; you (the 
   python3 $C/yomiyasu/scripts/yomiyasu_diff.py --no-words --json $D/before.md $D/deck.md | python3 -c 'import json, sys; rs = json.load(sys.stdin)["meaning_risks"]; print("meaning risks:", len(rs)); [print("-", r["kind"], "line", r["new_line"], ":", r["old"], "→", r["new"]) for r in rs]'   # documents: $D/text.md
   ```
 
+- [deck-review-019] **Close the Japanese wording findings in the Japanese check, not row by row.** After the rebuild and check in step 6, and before delivering in step 7, run `gslides.py wording <URL>` (`google-slides` → lint, "Japanese check") or `docs.py wording <URL>` (`google-docs` → lint) in `build/`. It reads the saved material, so it also catches a fix that is in the page JSON but was not built. Close each `W…` finding by fixing it, `keep` (with the reason), or `ask`, and each `R…` meaning risk by reverting it or `ok` (with the reason). Write only the `ask` ones into the table, as 「聞く」 rows with 出所 `lint` and 決まり `lint:<rule name>`, so they reach the user in step 7. The check's own record (`<material folder>/wording.json`) holds the rest, tied to the text: a later fix in another round reopens what it changes. It compares with the text it last accepted, so it complements deck-review-018 (which compares one round's before and after) and does not replace it.
 - **Splitting the fixes among page owners (slides only).** When several pages need fixes, open [prompt_fix.md](prompt_fix.md) before fixing them yourself: it holds when to split and when not to, what the parent keeps, how to merge what returns (deck-review-011), and the prompt.

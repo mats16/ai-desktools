@@ -16,7 +16,7 @@ Slides are built directly in Google Slides with the Slides API (switched from pp
 | **Themes:** choosing, copying, or changing a theme | [themes.md](themes.md) |
 | **Images:** images, logos, icons | [images.md](images.md) |
 | **Assets:** the reused images, logos, and the blank template (`blank.pptx`), with where each came from | `assets/` (its `README.md`) |
-| **Lint:** reading `gslides.py check` and lint output | [lint.md](lint.md) |
+| **Lint:** reading `gslides.py check` and lint output; the Japanese check after building (`gslides.py wording`) | [lint.md](lint.md) |
 | **Slides API pitfalls:** changing `slides.py`, raw requests, unexpected build failures | [api.md](api.md) |
 | **Older decks:** decks built with `pages.py`, or pptx from before 2026-10-07 | [legacy.md](legacy.md) |
 | **Templates:** creating or adjusting a template from a company template, switching the default theme | [template.md](template.md) |
@@ -34,6 +34,7 @@ python3 $K/slides.py new <Drive folder URL> <YYYYMMDD_name>   # first build. Tel
 python3 $K/slides.py lint <URL>                                     # after every edit, lint locally without building (pages changed since the last run. "Three layers of checks" below)
 python3 $K/slides.py build <URL>                                    # build at checkpoints (rebuilds only changed pages. The URL does not change. Stops if someone edited in the UI. commands.md)
 python3 $K/gslides.py check <URL>                                   # after building. Images and lint of changed pages. Add --talk at the end for talks such as LTs. --all for images of every page
+python3 $K/gslides.py wording <URL>                                 # after check: the Japanese check on the saved deck (lint.md → Japanese check)
 ```
 
 ## Three layers of checks
@@ -63,6 +64,7 @@ Basis: 20% of the time spent making materials went to building and checking, and
 - **What each check and lint rule does** is in [lint.md](lint.md). Open it when a finding is unclear.
 - **Images:** After building, open the images of the changed pages (`changed.json`), look at them, and fix (the e2e in "Three layers of checks" above. When you build the whole deck for the first time and go straight into `/deck-review`, the review child agents look at full size. slides-flow-005 above). Look for overflow (text is not clipped even when it leaves its frame), overlaps, collisions with the source line or footer, punctuation at the start of a line, last lines of only 1–2 characters, and line breaks inside a word or phrase. Judge the finish by these Google-rendered images.
 - **Text:** Read `deck.md` for missing content or wrong order.
+- **Japanese:** After `check`, run `gslides.py wording <URL>` and close every finding by fixing it in the page JSON, `keep`, or `ask` (slides-lint-035 in [lint.md](lint.md) → Japanese check). It reads the saved deck, so build before it.
 - **lint:** Bring `要修正` to 0. Check each `要確認` one by one, and either fix it or be able to say why it stays (example: 「顧客の発言の引用に です・ます が残るのはよい。案内・依頼・注意書きのページ（問い合わせ先、お願い、「ご相談ください」、免責・価格の注記）の です・ます も残してよい。それ以外の説明の文は常体か体言止めに直す。」 `deck-writing` → content §6).
 - **Before delivering:** Review a newly made material as a whole with `/deck-review` (the `deck-review` skill) before returning it to the user. It looks with a separate subagent's eyes and with the contact sheet of all pages. For fixes after delivery, run only the scope decided by deck-flow-017 in `deck-workflow`.
 - When checking is done, you may delete `/tmp/slides_<ID>/`. Do not keep it in the material's folder.

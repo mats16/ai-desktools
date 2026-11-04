@@ -50,6 +50,38 @@ def yomiyasu():
 
 NUM = re.compile(r"\d[\d,.]*\s?(%|％|倍|億|万|兆|円|ドル|USD|ms|TB|GB|PB|K\b|M\b)|[$＄]\s?\d")  # 統計らしい数字だけ（「2 時間」「3 社」は数えない）
 URL = re.compile(r"https?://\S+")
+QUOTED = re.compile(r"「[^「」]*」|『[^『』]*』|“[^“”]*”")  # かぎかっこの中（人の言葉・画面の文言・節の名前）。言い回しの候補でも書き換えない
+
+
+def wording_text(text):
+    """言い回しを見る文（URL を外し、段落の中の改行 \\v も 1 行にする）。出典の行と、日本語のない文は None（出典の行は元の題を写すので見ない）。"""
+    text = re.sub(r"\s+", " ", URL.sub("", text)).strip()
+    return None if not re.search(f"[{JA}]", text) or re.match(r"(出典|Sources?)\s*[:：]", text, re.I) else text
+
+
+def yomi(text, slides=True, one_line=False):
+    """yomiyasu の lint の候補のうち YOMI の規則のもの: [(規則の名前, 前後 12 字の抜き出し, 当たった言い方)]。Report.wording と日本語の点検（wording.py）が同じものを使う。
+    当たった言い方がかぎかっこの中だけにあるものは出さない（引用と画面の文言は書き換えない）。"""
+    if not (text := wording_text(text)):
+        return []
+    inside = [m.span() for m in QUOTED.finditer(text)]
+    out = []
+    for f in yomiyasu().lint_text(text, doc_type="slides" if slides else None)["findings"]:
+        if (name := YOMI.get(f["rule"])) and (one_line or name != SLIDE_COMMA):
+            m = re.search(r"当たった言い方: (.+?)）の候補|直訳「(.+?)」|比喩動詞「(.+?)」", f["message"])  # translated_term は「英語の直訳「版」（version）」、metaphor_verb は「比喩動詞「効く」」の形
+            said = (m and (m.group(1) or m.group(2) or m.group(3)) or "").strip("「」")
+            key = said.split("、")[0].strip("「」")
+            for k in (key, key[:-1] if len(key) > 1 and re.match(r"[぀-ゟ]", key[-1]) else "", key[:2]):  # 文に活用した形で出る語（効く → 効いて）は語幹で探す
+                if ats := [i for i in range(len(text)) if k and text.startswith(k, i)]:
+                    key = k
+                    break
+            if ats and all(any(a < i and i + len(key) <= b for a, b in inside) for i in ats):
+                continue
+            if f["rule"] == "renyo_noun" and ats and all(re.match(r"[一-鿿]", text[i + len(key):i + len(key) + 1]) for i in ats):
+                continue  # 「直し方」「見直し案」のような複合語の中（yomiyasu が語の境目をまたいで拾う）
+            at = ats[0] if ats else -1
+            out.append((name, text[max(0, at - 12):at + len(said) + 12].strip() if at >= 0 else text[:30], said))
+    return out
 
 
 def lum(h):
@@ -129,18 +161,12 @@ class Report:
             if m:
                 self.hits[name].append(f"{where}: 「{text[max(0, m.start() - 12):m.end() + 12].strip()}」")
 
-    def wording(self, where, text, slides=True, one_line=False):
+    def wording(self, where, text, slides=True, one_line=False, **_):
         """yomiyasu の lint（yomiyasu/ に subtree で取り込んだもの）の候補のうち、YOMI の規則だけを要確認に足す（deck-lint-027）。
-        見出しと箇条の間の読点は、1 行に収まる段落（one_line。スライドの lint が折り返しの見込みで決める）だけ。本文の文の読点は残してよいため。"""
-        text = re.sub(r"\s+", " ", URL.sub("", text)).strip()  # 段落の中の改行（\v）も 1 行の指摘にする
-        if not re.search(f"[{JA}]", text) or re.match(r"(出典|Sources?)\s*[:：]", text, re.I):  # 出典の行は元の題を写すので見ない
-            return
-        for f in yomiyasu().lint_text(text, doc_type="slides" if slides else None)["findings"]:
-            if (name := YOMI.get(f["rule"])) and (one_line or name != SLIDE_COMMA):
-                m = re.search(r"当たった言い方: (.+?)）の候補|直訳「(.+?)」", f["message"])  # translated_term だけ「英語の直訳「版」（version）」の形
-                said = (m and (m.group(1) or m.group(2)) or "").strip("「」")
-                at = text.find(said.split("、")[0].strip("「」")) if said else -1
-                self.hits[name].append(f"{where}: 「{text[max(0, at - 12):at + len(said) + 12].strip() if at >= 0 else text[:30]}」" + (f"（{said}）" if said else ""))
+        見出しと箇条の間の読点は、1 行に収まる段落（one_line。スライドの lint が折り返しの見込みで決める）だけ。本文の文の読点は残してよいため。
+        **_ は呼ぶ側が渡す場所の手がかり（スライドの図形の objectId・表か）。ここでは使わず、日本語の点検（wording.py）が同じ呼び出しから文を集める。"""
+        for name, excerpt, said in yomi(text, slides, one_line):
+            self.hits[name].append(f"{where}: 「{excerpt}」" + (f"（{said}）" if said else ""))
 
     def show(self, names, title):
         n, est = sum(len(self.hits[k]) for k in names), sum(len(self.hits[k]) for k in names if k in self.estimate)
@@ -247,6 +273,9 @@ def selftest():
     w.wording("p4", "結果を受け取る。\v今回の比べをする", one_line=True)
     w.wording("段落 1", "費用は、コンピュートの CU 時間で見積もる", slides=False)
     w.wording("p2", "出典: 前の版の仕組みの比べ（https://example.com）")
+    w.wording("p5", "顧客は「前の版の比べ」と言った", obj="g1", table=False)
+    w.wording("p6", "資料の直し方は 3 つ")  # 複合語の中の「の直し」は出さない
+    assert yomi("p13 の一覧に、運用で効いてくる項目を足したもの")[0][1:] == ("p13 の一覧に、運用で効いてくる項目を足したもの", "効く")  # たとえの動詞は「」の語を、活用した形でも語幹で探す  # かぎかっこの中は書き換えない（人の言葉・画面の文言）。場所の手がかりは受けて捨てる
     assert {k: len(v) for k, v in w.hits.items() if v} == {"動詞を名詞にした語": 2, "直訳の語": 1, SLIDE_COMMA: 1}, dict(w.hits)
     assert "\v" not in w.hits["動詞を名詞にした語"][1] and w.hits["動詞を名詞にした語"][1].startswith("p4: ")
     assert w.hits["動詞を名詞にした語"][0] == "p1: 「4 つの構成の比べ」（の比べ）" and "（版）" in w.hits["直訳の語"][0]
