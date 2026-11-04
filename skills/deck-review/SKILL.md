@@ -1,11 +1,11 @@
 ---
 name: deck-review
-description: Full review of a material (Google Slides or Google Docs) before returning it to the user. Uses lint, a contact sheet of all pages, and a separate subagent's eyes, verifies the findings, fixes and rebuilds what may be fixed, and asks about anything that changes a claim, number, or order. `/deck-review <URL>`. Use when asked 「レビューして」「見直して」「渡す前に確認して」, and always before returning a newly made material to the user. Checks during building are google-slides and google-docs. For fixes after delivery, run only the scope decided in `deck-workflow` → requests after delivery.
+description: Full review of a material (Google Slides or Google Docs) before returning it to the user. Uses lint, a contact sheet of all pages, and a separate subagent's eyes, verifies the findings, fixes and rebuilds what may be fixed, and asks about anything that changes a claim, number, or order. `/deck-review <URL>`. Use when asked 「レビューして」「見直して」「渡す前に確認して」, and always before returning a newly made material to the user. Checks during building are build-slides and build-docs. For fixes after delivery, run only the scope decided in `deck-workflow` → requests after delivery.
 ---
 
 # Full review before delivery
 
-[deck-review-001] While building, run lint with google-slides's `gslides.py check` for slides and google-docs's `docs.py check` for documents, and open the images of the changed pages yourself and fix them (`google-slides` "Reading the results", `google-docs` §3). This skill is the review of the whole material that runs after that, before returning it to the user. The steps and the files below are the same for every format; only the review prompt is split per format. A separate pair of eyes finds the cross-page defects that page-by-page checks miss (story, runs of the same pattern, uneven whitespace and density, the number of decorations) and the defects the maker overlooks (研究 1-3、AI 実践 1-4、中身 1-12; the abbreviations are in the table in `deck-workflow`). For fixes after delivery, how far to run (one round on the changed pages only, the whole material, or not at all) is decided by deck-flow-017 in `deck-workflow` → requests after delivery.
+[deck-review-001] While building, run lint with build-slides's `gslides.py check` for slides and build-docs's `docs.py check` for documents, and open the images of the changed pages yourself and fix them (`build-slides` "Reading the results", `build-docs` §3). This skill is the review of the whole material that runs after that, before returning it to the user. The steps and the files below are the same for every format; only the review prompt is split per format. A separate pair of eyes finds the cross-page defects that page-by-page checks miss (story, runs of the same pattern, uneven whitespace and density, the number of decorations) and the defects the maker overlooks (研究 1-3、AI 実践 1-4、中身 1-12; the abbreviations are in the table in `deck-workflow`). For fixes after delivery, how far to run (one round on the changed pages only, the whole material, or not at all) is decided by deck-flow-017 in `deck-workflow` → requests after delivery.
 
 `/deck-review <Google Slides or Google Docs URL> [--talk]`. If the URL is omitted, use the URL written in the outline of the working folder. The URL decides the format (`/presentation/` is slides, `/document/` is a document). `--talk` is for materials that are spoken, such as LTs (slides only). Steps 1–6 below (check again, ask, verify findings, fix, rebuild and check) count as one round; run up to the round limit.
 
@@ -27,9 +27,9 @@ Open the file for the step you are on; do not read ahead.
 ## Steps
 
 ```sh
-K=<google-slides folder>/scripts   # the scripts/ folder of the skill google-slides (installed beside this skill's folder)
-J=<google-docs folder>/scripts     # the scripts/ folder of the skill google-docs
-C=<deck-review folder>/scripts    # this skill's copies of sheet.py and yomiyasu/ (the owner of sheet.py is google-slides)
+K=<build-slides folder>/scripts   # the scripts/ folder of the skill build-slides (installed beside this skill's folder)
+J=<build-docs folder>/scripts     # the scripts/ folder of the skill build-docs
+C=<deck-review folder>/scripts    # this skill's copies of sheet.py and yomiyasu/ (the owner of sheet.py is build-slides)
 python3 $K/gslides.py check <URL> --all [--talk] # Slides. Images of all pages (the checkpoint for cross-page review)
 D=/tmp/slides_<first 8 chars of ID>              # Output of check (deck.json from presentations.get [not build/deck.json], deck.md, p-NN.webp)
 python3 $J/docs.py check <URL>                    # Document (Google Docs)

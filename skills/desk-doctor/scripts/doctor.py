@@ -8,10 +8,11 @@ from pathlib import Path
 SKILLS = Path(__file__).resolve().parents[2]  # このスキルと並ぶスキルのフォルダ（ワークスペースの .agents/skills などとの重なりを、名前だけで見る）
 sys.dont_write_bytecode = True
 import desk  # noqa: E402  ワークスペースと設定のファイルの探し方（desk-init のものの写し）
-import gapi  # noqa: E402  Google の API（connection を通すときの確かめと、proxy の断りの見分け。google-slides のものの写し）
+import gapi  # noqa: E402  Google の API（connection を通すときの確かめと、proxy の断りの見分け。build-slides のものの写し）
 
 
-OLD_NAMES = ("slides-build", "docs-build", "vids-build", "vids-voice")  # 2026-11-02 に google-slides・google-docs・google-vids にしたスキルの前の名前
+OLD_1104 = {"google-slides": "scripts/gslides.py", "google-docs": "scripts/doc_lint.py", "google-vids": "scripts/vids_internal.py"}  # 2026-11-02〜11-04 の道具のスキルの名前と、その写しにしかないファイル（ほかのパッケージにも同じ名前のスキルがあるので、これで見分ける）
+OLD_NAMES = ("slides-build", "docs-build", "vids-build", "vids-voice", *OLD_1104)  # 道具のスキルの前の名前（2026-11-02 に google-*、2026-11-04 に build-* にした）
 CHECKS = "connection にログインしてあるか（人ごとの OAuth）、USE CONNECTION の権限、connection の OAuth の scope（drive・presentations・documents）、databricks auth login"
 
 
@@ -103,11 +104,11 @@ def check(ws, local=False):
     found = {}  # 実体ごとに 1 回（.claude/skills は .agents/skills へのリンクのことが多い）
     for d in (".agents/skills", ".claude/skills"):
         for name in names:
-            if (root / d / name / "SKILL.md").is_file() and (root / d / name).resolve() != (SKILLS / name).resolve():  # このスキルを入れた場所そのもの（ワークスペースの .claude/skills に 1 つずつ入れたとき）は重なりでない
+            if (root / d / name / "SKILL.md").is_file() and (root / d / name).resolve() != (SKILLS / name).resolve() and (name not in OLD_1104 or (root / d / name / OLD_1104[name]).is_file()):  # このスキルを入れた場所そのもの（ワークスペースの .claude/skills に 1 つずつ入れたとき）は重なりでない
                 found.setdefault((root / d / name).resolve(), f"{d}/{name}")
     dup, old = [x for x in found.values() if x.rsplit("/", 1)[1] not in OLD_NAMES], [x for x in found.values() if x.rsplit("/", 1)[1] in OLD_NAMES]
     (warn if dup or old else ok)("スキルの重なり", "、".join(x for x in (f"ワークスペースにも同じ名前のスキルがある（プラグインと二重に読まれる）: {', '.join(dup)}" * bool(dup),
-                                                                f"前のバージョンの名前のスキルがある（今の google-slides・google-docs・google-vids と両方が効く）: {', '.join(old)}" * bool(old)) if x))
+                                                                f"前のバージョンの名前のスキルがある（今の build-slides・build-docs・build-vids と両方が効く）: {', '.join(old)}" * bool(old)) if x))
     g, dr = cfg.get("google", {}), cfg.get("drive", {})
     try:
         px = gapi.uc(cfg)  # 型の違う設定は gapi.uc が断る（スクリプトも同じところで止まる）
@@ -165,7 +166,7 @@ def check(ws, local=False):
         fix = "google.quota_project を書く（空だと gcloud の既定の OAuth クライアントのトークンは 403）" if first.startswith("403") and not g.get("quota_project") else f"作り直す: {gapi.LOGIN}"
         ng("Google の認証", f"{how} で通らない: {first}。{fix}")
         return out
-    targets = [(f"drive.{k}", v) for k, v in dr.items() if v]  # テンプレートは slides_doctor.py（google-slides）と docs_doctor.py（google-docs）が開く
+    targets = [(f"drive.{k}", v) for k, v in dr.items() if v]  # テンプレートは slides_doctor.py（build-slides）と docs_doctor.py（build-docs）が開く
     for name, url in targets:
         fid = gapi.folder_id(url) if "/folders/" in url else gapi.file_id(url)
         try:
@@ -206,7 +207,7 @@ def workspace(ws, user=None):
 
 
 def selftest():
-    me = Path(__file__).resolve().parents[1].name  # このスクリプトのスキル（desk-doctor か、写しを持つ google-slides・google-docs）。隣にほかのスキルがなくても回る
+    me = Path(__file__).resolve().parents[1].name  # このスクリプトのスキル（desk-doctor か、写しを持つ build-slides・build-docs）。隣にほかのスキルがなくても回る
     assert "connection にログインする: Please login" in proxy_fail(Exception(f"{gapi.REJECTED}: GET u\nPlease login"))  # 返事のログインの URL を見せる
     m = proxy_fail(Exception('503 GET u\n<html>bad gateway</html>'))
     assert m.startswith("503 GET u（<html>bad gateway</html>）。確かめる: ") and CHECKS in m and proxy_fail(TimeoutError()) == f"TimeoutError。確かめる: {CHECKS}"  # 原因は当てない
@@ -238,7 +239,12 @@ def selftest():
         (Path(tmp) / ".agents" / "skills" / me / "SKILL.md").write_text("x")
         (Path(tmp) / ".claude" / "skills" / "slides-build").mkdir(parents=True)
         (Path(tmp) / ".claude" / "skills" / "slides-build" / "SKILL.md").write_text("x")
-        assert "前のバージョンの名前のスキルがある（今の google-slides・google-docs・google-vids と両方が効く）: .claude/skills/slides-build" in next(d for _, n, d in check(Path(tmp), local=True) if n == "スキルの重なり")  # 前の名前で置いた写しも
+        for n, f in (("google-slides", "scripts/gslides.py"), ("google-docs", "SKILL.md")):  # google-docs は、ほかのパッケージの同じ名前のスキル（doc_lint.py がない）
+            (Path(tmp) / ".claude" / "skills" / n / f).parent.mkdir(parents=True, exist_ok=True)
+            (Path(tmp) / ".claude" / "skills" / n / f).write_text("x")
+        (Path(tmp) / ".claude" / "skills" / "google-slides" / "SKILL.md").write_text("x")
+        got = next(d for _, n, d in check(Path(tmp), local=True) if n == "スキルの重なり")
+        assert "前のバージョンの名前のスキルがある（今の build-slides・build-docs・build-vids と両方が効く）: .claude/skills/google-slides, .claude/skills/slides-build" in got and "google-docs" not in got, got  # 前の名前で置いた写しも
         k = kinds()
         assert k["スキルの重なり"] == "要確認" and k["drive.customers"] == "要確認"
         (Path(tmp) / "Customers" / "acme").mkdir(parents=True, exist_ok=True)

@@ -21,7 +21,7 @@ try:
 except ImportError:  # shortcut: Windows では鍵をかけない（ledger.py と同じ）。子が同時に書いて行が壊れたら msvcrt で鍵をかける
     fcntl = None
 
-WORDING = "wording.json"  # 日本語の点検の記録（google-slides・google-docs の wording.py が書く。ここは読むだけ）
+WORDING = "wording.json"  # 日本語の点検の記録（build-slides・build-docs の wording.py が書く。ここは読むだけ）
 PROGRESS = "progress.jsonl"  # 資料のフォルダに置く手順の記録。足すだけで書き換えない。build/ を消しても残る
 STEPS = ("1–4 準備", "5 構成", "6 代表の 3 枚", "7 ページを書く", "8 全体を組む", "9 /deck-review", "10 渡す", "11 片付け")
 STATUSES = ("始めた", "済んだ", "飛ばした", "止まった")  # 止まったは、ユーザーの答えか別の作業を待つもの
@@ -428,7 +428,7 @@ def report(folder):
             if moved[step]:
                 print(f"  - 済んだと記録したあとに中身が変わった（か、なくなった）: {short(moved[step])}")
         print(*(f"  - {x}" for x in items), sep="\n")
-    print("\nコマンドで確かめる（結果は会話の中にしかない）: slides.py lint・gslides.py check <URL> --all（google-slides）か docs.py check <URL>（google-docs）の要修正、"
+    print("\nコマンドで確かめる（結果は会話の中にしかない）: slides.py lint・gslides.py check <URL> --all（build-slides）か docs.py check <URL>（build-docs）の要修正、"
           f"refs.py check {folder} --fetch（10 の前）。日本語は、点検（slides.py wording。ドキュメントは docs.py wording <URL>）が済んでから、組んで画像を見て、"
           "10 の前に保存した資料との照合（gslides.py wording <URL> か docs.py wording <URL>）")
     return rows

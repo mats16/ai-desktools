@@ -41,7 +41,7 @@ mkdir -p .codex && { grep -qs 'desk-tools@desk-tools' .codex/config.toml || prin
 
 - 信頼は hook の中身のハッシュに付く。`hooks/hooks.json` が変わった版を取ると、信頼し直すまで止まる（起動のときに `/hooks` を開くよう知らせが出る）。
 - `codex exec`（desk-dreaming の `run.sh codex`、レビューの子）は聞けない。先に対話の Codex で信頼しておく。
-- Codex はファイルをシェル（`cat`・`sed` など）で読むので、PostToolUse は `Bash` で効く。`$desk-tools:google-slides` のように呼んだスキルは、道具を使わずに SKILL.md が入るので、UserPromptSubmit がプロンプトから拾って、その SKILL.md を開いたときと同じレシピを出す（2026-10-27 に、そのときの形〔frontmatter の `paths`〕で、`sed` で開いたもの・一覧・構成案の「使う決まり」と、`$desk-tools:deck-review` を、会話の記録の developer のメッセージで確かめた）。
+- Codex はファイルをシェル（`cat`・`sed` など）で読むので、PostToolUse は `Bash` で効く。`$desk-tools:build-slides` のように呼んだスキルは、道具を使わずに SKILL.md が入るので、UserPromptSubmit がプロンプトから拾って、その SKILL.md を開いたときと同じレシピを出す（2026-10-27 に、そのときの形〔frontmatter の `paths`〕で、`sed` で開いたもの・一覧・構成案の「使う決まり」と、`$desk-tools:deck-review` を、会話の記録の developer のメッセージで確かめた）。
 - Codex は `hooks.json` の `if`（Claude Code が `.md` に触れない Read・Bash で hook を起こさないための条件）を読まないので、Bash のたびに hook が起き、出すものがなければすぐ終わる。Codex は hook の差し込みが約 2,500 トークン（和文で約 3,300 字）を超えるとファイルに逃がして頭と末尾だけを見せるので、`additionalContextLimit` を 0 にして逃がさない。量は hook が 9,000 字までに抑える（README の「決めたこと」の 2026-10-25）。
 
 ## そのフォルダだけで効いているかを確かめる
@@ -58,7 +58,7 @@ cd <ワークスペース> && (printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"
   | python3 -c "import json,sys; r=next(e for e in map(json.loads, sys.stdin) if e.get('id')==2); [print(h['eventName'], h.get('matcher'), h['trustStatus']) for d in r['result']['data'] for h in d['hooks'] if h.get('pluginId')=='desk-tools@desk-tools']"
 ```
 
-2026-10-20 に検証用のワークスペースで確かめた結果（そのときの 19 個とパス。2026-10-31 にスキルを組み直して 17 個になり、`slides-build/visual.md` は `deck-design/slides.md` になった。2026-11-02 に、道具のスキルの名前を `google-*` にし、vids-voice を google-vids に寄せて 16 個になった）:
+2026-10-20 に検証用のワークスペースで確かめた結果（そのときの 19 個とパス。2026-10-31 にスキルを組み直して 17 個になり、`slides-build/visual.md` は `deck-design/slides.md` になった。2026-11-02 に、道具のスキルの名前を `google-*` にし、vids-voice を google-vids に寄せて 16 個になった。2026-11-04 に `build-*` と改めた）:
 
 | フォルダ | 出たスキル | hook |
 |---|---|---|

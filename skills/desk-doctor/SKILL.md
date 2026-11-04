@@ -15,8 +15,8 @@ Prints one item per line as 「OK」, 「要修正」, or 「要確認」. Exits
 
 `doctor.py` checks what every skill needs (Python, the settings, the workspace, Google authentication, Drive). Each tool checks its own settings, so run these too, in the same workspace (the two tool checks with the same `--local`; `migrate.py check` takes no options and reads only local files), and report all the lines together (an item that two of them print, such as 「brand.copyright」, is one item):
 
-- `slides_doctor.py --own` (`google-slides`): `[brand]`, the slide themes and templates, the shared themes folder. (Without `--own` it starts with the same checks as `doctor.py`, for when only that skill is installed.)
-- `docs_doctor.py --own` (`google-docs`): `[brand]`, the document themes and templates.
+- `slides_doctor.py --own` (`build-slides`): `[brand]`, the slide themes and templates, the shared themes folder. (Without `--own` it starts with the same checks as `doctor.py`, for when only that skill is installed.)
+- `docs_doctor.py --own` (`build-docs`): `[brand]`, the document themes and templates.
 - `migrate.py check` (`desk-migrate`): what is still in an earlier version's form (it changes nothing, and prints 「移すものはない（今の版）」 when there is nothing). Run it every time, because only it can tell an earlier workspace from the current one; report its list as 「前のバージョンのワークスペース」.
 
 ## What it checks
@@ -36,7 +36,7 @@ Prints one item per line as 「OK」, 「要修正」, or 「要確認」. Exits
 | `google.quota_project`, `slides.templates` (`slides_doctor.py`), `drive.*` | Fill them in as in desk-init step 3 |
 | `slides.themes` (the format of an earlier version) | Move the theme table to the workspace's `themes/slides/<name>.json` (`kind: theme`; write the colors under `colors` with the same names, and do not write `url`), move `url` to 「<名前> = "<url>"」 in `[slides.templates]`, and delete the table. Names that have a template can also be copied with `slides.py theme <url>` (templates from before 2026-10-16 lack the colors not stored in the theme, `copyright`, `mono`, and `description`, so copy those from the table). Before moving, ask the user where to keep the history left in the table's comments (JSON cannot hold comments) |
 | `themes/slides/<name>.json`, theme files, `slides.default_theme` | For invalid values, fix the reported location and check with `slides.py lint <file>`. For a theme that has a template but no file, copy it with `slides.py theme <URL>` |
-| Theme descriptions | A theme without `description` cannot be chosen per material by the agent. Write what the theme is and which materials and audience it is for (`google-slides` → themes) |
+| Theme descriptions | A theme without `description` cannot be chosen per material by the agent. Write what the theme is and which materials and audience it is for (`build-slides` → themes) |
 | `review.*` | Fix `review.*` to values within the template's range (`"ai"`, `"human"`, 1 to 3) |
 | `uc_connections`, `uc_connections.proxy.<host>` | Calls to Google through Databricks Unity Catalog HTTP connections (`[uc_connections]` in `desk.toml`; desk-init step 3). Fix a wrong type or a missing workspace in `desk.toml`. For a connection that does not pass, the row shows the reply and what to check: log in to the connection in the workspace (the login URL is in the reply when the proxy refused), the `USE CONNECTION` grant, the connection's OAuth scopes, `databricks auth login`. `--local` does not contact Databricks, so it does not check the workspace or the connections. `enabled = false` keeps the settings and calls Google directly |
 | Google authentication | Have the user run the printed command (`gcloud auth application-default login --scopes=…`). How to get a token is in the comments of `[google]` in `desk.toml` |

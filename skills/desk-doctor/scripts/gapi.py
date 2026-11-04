@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Google の API（Drive・Slides・Docs）を呼ぶ共通の部品。スライド（google-slides）・ドキュメント（google-docs）とほかのスキルのスクリプトが使う（標準ライブラリだけ）。
+"""Google の API（Drive・Slides・Docs）を呼ぶ共通の部品。スライド（build-slides）・ドキュメント（build-docs）とほかのスキルのスクリプトが使う（標準ライブラリだけ）。
 認証は単独で動く（gcloud も、ほかの Google のスキルも要らない）。トークンは、環境変数 GOOGLE_OAUTH_ACCESS_TOKEN、なければ
 authorized_user の認証情報の JSON（GOOGLE_APPLICATION_CREDENTIALS、なければ gcloud の ADC のファイル）の refresh_token で取る。401・403 や認証情報がないときは desk-doctor で確かめる。
 設定の uc_connections.proxy にあるホストは、Databricks の Unity Catalog の connection の proxy を通して呼ぶ（Google のトークンは connection が持つ。route）。
@@ -461,7 +461,7 @@ def u16(s):  # Slides API・Docs API の文字位置は UTF-16 の単位
 
 
 def png(url, w=1024):
-    """SVG の URL を、Slides API が読める PNG の URL にする（wsrv.nl が幅 w px に描く）。Slides API は SVG の URL を読めない（google-slides/images.md）。"""
+    """SVG の URL を、Slides API が読める PNG の URL にする（wsrv.nl が幅 w px に描く）。Slides API は SVG の URL を読めない（build-slides/images.md）。"""
     return "https://wsrv.nl/?" + urllib.parse.urlencode({"url": url, "output": "png", "w": w})
 
 
