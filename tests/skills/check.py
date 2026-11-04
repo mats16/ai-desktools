@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """usage: check.py [<skills のフォルダ>]   （--selftest で自己確認。プラグインの skills/ も確かめる）
-スキルの形を確かめる（AGENTS.md の「Rules for changes」）: SKILL.md の name がフォルダの名前、description が 1,000 字以内、
+スキルの形を確かめる（AGENTS.md の「Rules for changes」）: frontmatter が 1 行に 1 つの「キー: 値」で、値に引用符なしの「: 」などがない（pi は YAML として読めないスキルを黙って飛ばす。YAML の検査器ではない）、SKILL.md の name がフォルダの名前、description が 1,000 字以内、
 本文が約 5,000 トークン以内（コンパクションのあと Claude Code が付け直すのは先頭の 5,000 トークン）、スキルのフォルダの直下の md がみな
 SKILL.md から指されている（ほかのファイルからしか届かないファイルは、一部だけ読まれやすい）、md がみな 50 KB・2,000 行未満（pi の read はそこで切れ、続きを読まないモデルがいる。mats16/ai-desktools#38）、
 md がほかのスキルの中のファイルを指さない（ほかのスキルは名前で呼び、その SKILL.md の表から開く。2026-10-31。前のパスを今のパスへ書き換える desk-migrate は除く）、スクリプトがほかのスキルの中か lib/ を指すパスを組まない、共有のスクリプトの写しが持ち主と同じ中身（2026-11-02。--sync で写す）、「`<スキル>` → <場面>」で指した場面が、そのスキルの SKILL.md の表の太字の見出しか # の見出しにある、ほかのスキルのファイルを名前だけで指さない。desk-kaizen の open も、変えるバージョンでこれを回す。標準ライブラリだけ。"""
@@ -218,10 +218,23 @@ def problems(skills=SKILLS):
         if not m:
             out.append(f"{name}: SKILL.md の先頭に frontmatter がない")
             continue
-        head = dict(re.findall(r"^(\w+): *(.*)$", m.group(1), re.M))
-        if desc := re.search(r"^description: *(.*)\n((?:[ \t]+.*\n?)*)", m.group(1) + "\n", re.M):  # 続きの行（字下げした行。> や | で折りたたんだものも）をつなぐ
-            first = "" if re.fullmatch(r"[>|][-+]?", desc.group(1).strip()) else desc.group(1).strip()
-            head["description"] = " ".join(x for x in [first, *(y.strip() for y in desc.group(2).splitlines())] if x)
+        # pi は YAML として読めない frontmatter のスキルを黙って読み飛ばす。YAML の検査器ではなく、1 行に 1 つの「キー: 値」の形と、
+        # 値の起こりやすい間違い（引用符なしの「: 」「 #」、先頭の記号、description が文字列でない）を止める。囲んだ形は中に " も \ もないものだけ通し、字数を YAML の読む値と合わせる
+        keys = [re.fullmatch(r"([A-Za-z][\w-]*):[ \t]+(\S.*?)[ \t]*", x) for x in m.group(1).split("\n")]
+        if not all(keys) or len({k[1] for k in keys}) < len(keys) or re.search("[\x00-\x08\x0b-\x1f\x7f-\x9f\u2028\u2029\ufeff\ufffe\uffff]", m.group(1)):
+            out.append(f"{name}: frontmatter は 1 行に 1 つの「キー: 値」にし、キーを重ねない（字下げの続き、> や |、空行、コメント、制御文字は使わない）")
+        head = {}
+        for k in filter(None, keys):  # 1 つのキーでも読めなければ、frontmatter ごと読めない
+            v = k[2]
+            if re.fullmatch(r'"[^"\\]*"', v):
+                v = v[1:-1]
+            elif not re.match(r"[A-Za-z]|[^\x00-\x7f]", v) or re.search(r":([ \t]|$)|[ \t]#", v):
+                out.append(f"{name}: frontmatter の {k[1]} が YAML でそのまま読めない（引用符なしの「: 」「 #」か先頭の記号。1 行の \"...\" で囲む。中に \" と \\ を入れない）")
+            elif k[1] == "description" and re.fullmatch(r"(?i)null|true|false|yes|no|on|off|y|n", v):
+                out.append(f"{name}: frontmatter の description が YAML で文字列に読めない（1 行の \"...\" で囲む）")
+            head[k[1]] = v
+        if "description" not in head:
+            out.append(f"{name}: frontmatter に description がない")
         if head.get("name") != name:
             out.append(f"{name}: name が「{head.get('name', '')}」（フォルダの名前にする）")
         if len(head.get("description", "")) > MAX_DESC:
@@ -269,14 +282,26 @@ def selftest():
         assert "c/big.md: UTF-8 で読めない" in problems(root)
         (root / "c" / "big.md").unlink()
         (root / "d").mkdir()
-        (root / "d" / "SKILL.md").write_text(f"---\nname: d\ndescription: >\n  {'x' * MAX_DESC}\n  y\n---\n\n[prompt_run.md](prompt_run.md)、`../e/run.md`\n")
+        (root / "d" / "SKILL.md").write_text(f"---\nname: d\ndescription: \"{'x' * (MAX_DESC + 1)}\"\n---\n\n[prompt_run.md](prompt_run.md)、`../e/run.md`\n")
         (root / "d" / "run.md").write_text("x")
         (root / "d" / "prompt_run.md").write_text("x")
         got = [x for x in problems(root) if x.startswith("d")]
-        assert len(got) == 2 and "description" in got[0] and got[1].startswith("d/run.md"), got  # 折りたたんだ description も数え、名前の一部・ほかのスキルの同じ名前は指したことにしない
+        assert len(got) == 2 and "description" in got[0] and got[1].startswith("d/run.md"), got  # 囲んだ description は引用符を除いて数え、名前の一部・ほかのスキルの同じ名前は指したことにしない
         (root / "d" / "SKILL.md").write_text(f"---\nname: d\ndescription: {'x' * 600}\n  {'y' * 600}\n---\n\n`d/run.md` と [prompt_run.md](prompt_run.md)\n")
         got = [x for x in problems(root) if x.startswith("d")]
-        assert len(got) == 1 and "description" in got[0], got  # 字下げで続けた description も数え、<このスキル>/名前 は指したことにする
+        assert len(got) == 1 and "1 行に 1 つ" in got[0], got  # 字下げの続きは止め、<このスキル>/名前 は指したことにする
+        for desc, bad in [("Use it: now", "そのまま読めない"), ("a #b", "そのまま読めない"), ("ends:", "そのまま読めない"), ("a:\tb", "そのまま読めない"), ("`x` → y", "そのまま読めない"), ("@x", "そのまま読めない"), ("[x] y", "そのまま読めない"),
+                          ("&x y", "そのまま読めない"), ("true", "文字列に読めない"), ("3", "そのまま読めない"), ("'a: b'", "そのまま読めない"), ('"a" b', "そのまま読めない"), ('"C:\\q"', "そのまま読めない"),
+                          ("", "1 行に 1 つ"), ("Use it\n  when asked: foo", "1 行に 1 つ"), ("Use it\n\n  when asked: foo", "1 行に 1 つ"), ("Use it\n\twhen", "1 行に 1 つ"), (">\n  Use it", "1 行に 1 つ"),
+                          ("a\n# x", "1 行に 1 つ"), ("a\ndescription: b", "1 行に 1 つ"), ('"a\n  b"', "1 行に 1 つ"),
+                          (f"\"Use it: {'x' * (MAX_DESC - 11)} #x\"", None), ("e-mail a:b, 「x」", None), ("「字幕」で使う", None), ("Truest", None),
+                          ("x\ncompatibility: Requires: uv", "compatibility が"), ("x\nlicense: \"MIT", "license が"), ("Use it\rnow", "1 行に 1 つ"), ("\t x", None), ("Use it\u2028when: x", "1 行に 1 つ"), ("a\x0cb", "1 行に 1 つ"), ("x\n---x: y", "1 行に 1 つ"),
+                          ("x\ndisable-model-invocation: true", None), ("y", "文字列に読めない")]:
+            (root / "d" / "SKILL.md").write_text(f"---\nname: d\ndescription: {desc}\n---\n\n[prompt_run.md](prompt_run.md)、`d/run.md`\n")
+            got = [x for x in problems(root) if x.startswith("d:")]
+            assert (got == [] if bad is None else len(got) >= 1 and bad in got[0]), (desc, got)  # 1 行の「キー: 値」で、値に起こりやすい間違いがないものだけ通し、引用符は字数に入れない
+        (root / "d" / "SKILL.md").write_text("---\nname: d\n---\n\n[prompt_run.md](prompt_run.md)、`d/run.md`\n")
+        assert [x for x in problems(root) if x.startswith("d:")] == ["d: frontmatter に description がない"], problems(root)
         (root / "d" / "run.md").write_text("x" * MAX_BYTES)
         assert any(x.startswith(f"d/run.md: {MAX_BYTES:,} バイト・1 行") for x in problems(root))  # 50 KB ちょうどから止める
         (root / "d" / "run.md").write_text("x\n" * (MAX_LINES - 1) + "x")  # 最後の行に改行がなくても 2,000 行と数える
