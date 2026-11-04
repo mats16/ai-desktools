@@ -3,7 +3,7 @@
 usage:
   gslides.py check  <URL か ID> [--talk] [--all | --pages 3,5]   組んだあとの確認。JSON・テキスト・lint と、前に取ったときから変わったページの画像（p-NN.webp）を /tmp/slides_<ID の先頭 8 字>/ に出し、
                    画像で箱の下の余白を測る（box_pad.py）。取ったページと指摘を changed.json に書く。--all で全ページの画像（/deck-review の前などの区切り）
-  gslides.py wording <URL か ID>                  日本語の点検（build/ で回す）。保存版の文とノートの言い回しの指摘を、ページのファイルと JSON の場所つきで出し、
+  gslides.py wording <URL か ID>                  日本語の点検（build/ で回す）。Google の資料の文とノートの言い回しの指摘を、ページのファイルと JSON の場所つきで出し、
                    直す前に通した文と比べて意味の変わる恐れを出し、資料のフォルダの wording.json に残す（wording.py。lint.md の「Japanese check」）
   gslides.py pages  <URL か ID>                    ページ番号・objectId・最初の文字を一覧にする
   gslides.py thumb  <URL か ID> <ページ番号> <出力.png>   Google が描いたページの画像（1600 × 900）を保存する
@@ -200,7 +200,7 @@ def json_leaves(o, path=""):
 
 
 def locate(units, slides, build="."):
-    """保存版の文を、build/ のページのファイルと JSON の場所に戻す（u の file・loc を埋める）。ページの objectId の印（PAGE_KEY）でファイルを決め、
+    """Google の資料の文を、build/ のページのファイルと JSON の場所に戻す（u の file・loc を埋める）。ページの objectId の印（PAGE_KEY）でファイルを決め、
     その中の文字の値から文の先頭 20 字を探す。印のないページ（pages.py・印を付ける前に組んだもの）は、build/ のどのファイルからも探す。見つからなければ空のまま。"""
     files = sorted((p for p in glob.glob(os.path.join(build, "**", "*.json"), recursive=True) if not os.path.basename(p).startswith(".")),
                    key=lambda p: (p.count(os.sep), p))  # 同じ名前なら build/ の直下を先に（サブフォルダの控えに印を取られない）
@@ -209,20 +209,20 @@ def locate(units, slides, build="."):
         rel = os.path.relpath(f, build)
         by_key.setdefault(page_key(os.path.splitext(os.path.basename(f))[0]), rel)
         try:
-            leaves[rel] = list(json_leaves(json.load(open(f, encoding="utf-8"))))
+            leaves[rel] = [(loc, wording.flat(v)) for loc, v in json_leaves(json.load(open(f, encoding="utf-8")))]  # 突き合わせの形にして 1 度だけ持つ
         except (OSError, ValueError):
             leaves[rel] = []
     py = os.path.join(build, "pages.py")
-    lines = open(py, encoding="utf-8").read().splitlines() if os.path.isfile(py) else []
+    lines = [wording.flat(x) for x in open(py, encoding="utf-8").read().splitlines()] if os.path.isfile(py) else []
     for u in units:
         want = wording.flat(u["text"])[:20]
         m = PAGE_KEY.search(slides[u["page"] - 1]["objectId"]) if u["page"] and u["page"] <= len(slides) else None
         for rel in ([by_key[m.group(1)]] if m and m.group(1) in by_key else list(leaves)):
-            if hit := [loc for loc, v in leaves[rel] if want and want in wording.flat(v)]:
+            if hit := [loc for loc, v in leaves[rel] if want and want in v]:
                 u["file"], u["loc"] = rel, "・".join(dict.fromkeys(hit))
                 break
         else:
-            if (n := next((i for i, x in enumerate(lines, 1) if want and want in wording.flat(x)), None)):
+            if (n := next((i for i, x in enumerate(lines, 1) if want and want in x), None)):
                 u["file"], u["loc"] = "pages.py", f"{n} 行"
         if m and m.group(1) in by_key:  # 直す前後を組にするページの名前（並べ替えても同じ）。文が JSON に見つからなくても、ページの印で決める
             u["key"] = os.path.splitext(by_key[m.group(1)])[0]
@@ -249,8 +249,8 @@ def slide_units(p):
 
 
 def cmd_wording(src):
-    """slides-lint-035 の日本語の点検。保存版（presentations.get）を読むので、手元の JSON だけが直っていて Google が古いまま、という取りこぼしがない。
-    通らない理由: 組んだあとに画面で直された（JSON と保存版が違う。直しを JSON に写して組み直す）、組んだあとのページの画像を check で取っていない（直して文が延びたページの見た目を見ていない）。"""
+    """slides-lint-035 の日本語の点検。Google に保存された資料（presentations.get）を読むので、手元の JSON だけが直っていて Google が古いまま、という取りこぼしがない。
+    通らない理由: 組んだあとに画面で直された（JSON と Google の資料が違う。直しを JSON に写して組み直す）、組んだあとのページの画像を check で取っていない（直して文が延びたページの見た目を見ていない）。"""
     if os.path.basename(os.getcwd()) != "build":
         sys.exit("wording は資料の build/ で回す（ページのファイルの場所を出し、資料のフォルダに wording.json を書く）")
     pid = file_id(src)
@@ -417,7 +417,7 @@ def check_selftest():
 
 
 def wording_selftest():
-    """cmd_wording: 保存版の文とノートを集め、ページのファイルと JSON の場所に戻し、画面で直したことと画像を取っていないことを通らない理由にする。Google は呼ばない。"""
+    """cmd_wording: Google の資料の文とノートを集め、ページのファイルと JSON の場所に戻し、画面で直したことと画像を取っていないことを通らない理由にする。Google は呼ばない。"""
     import shutil, tempfile
     from slides import EMU
     sid = f"x_k{page_key('p01')}h{'0' * 16}"

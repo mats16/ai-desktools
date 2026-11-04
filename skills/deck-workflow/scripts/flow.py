@@ -357,7 +357,7 @@ def facts(folder, ws):
         moved = sorted(k for k in set(files) | (now if files else set()) if k not in files or sha(folder / k) != files[k])
         state_ = "古い" if moved else s.get("状態", "?")
         items = [f"日本語の点検: {state_}（文 {s.get('文', '?')}・指摘 {s.get('指摘', '?')}・未判断 {s.get('未判断', '?')}・残す {s.get('残す', '?')}・聞く {s.get('聞く', '?')}"
-                 f"・意味の変わる恐れの未確認 {s.get('未確認', '?')}・書き直し {s.get('書き直し', '?')} / {s.get('上限', '?')} 回）。保存版のリビジョン {s.get('revision')}・{s.get('ts')}"]
+                 f"・意味の変わる恐れの未確認 {s.get('未確認', '?')}・書き直し {s.get('書き直し', '?')} / {s.get('上限', '?')} 回）。Google のリビジョン {s.get('revision')}・{s.get('ts')}"]
         if moved:
             items.append(f"日本語の点検のあとに変わったファイル: {short(moved)}（組み直してから点検し直す）")
         items += [f"日本語の点検の通らない理由: {x}" for x in s.get("通らない理由", [])[:3]]
@@ -429,7 +429,7 @@ def report(folder):
                 print(f"  - 済んだと記録したあとに中身が変わった（か、なくなった）: {short(moved[step])}")
         print(*(f"  - {x}" for x in items), sep="\n")
     print("\nコマンドで確かめる（結果は会話の中にしかない）: slides.py lint・gslides.py check <URL> --all（google-slides）か docs.py check <URL>（google-docs）の要修正、"
-          f"refs.py check {folder} --fetch（10 の前）。日本語の点検は、10 の前にもう一度 gslides.py wording <URL> か docs.py wording <URL>（保存版を読む）")
+          f"refs.py check {folder} --fetch（10 の前）。日本語の点検は、10 の前にもう一度 gslides.py wording <URL> か docs.py wording <URL>（Google の資料を読む）")
     return rows
 
 

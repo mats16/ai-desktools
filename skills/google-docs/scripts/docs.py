@@ -10,7 +10,7 @@ usage（資料の build/ で。doc.md は今いるフォルダのもの）:
                                         未解決のコメントがあれば止まる。直しを doc.md に入れてから --force で組み直す
   docs.py check <URL か ID>   仕上げの確認。JSON・テキスト・lint・ページの画像（Drive が書き出した PDF）・画像でのレイアウトの確認（doc_layout.py）、
                               doc.md と組んだ文書の照合、テンプレートとの照合、元のテンプレートとの骨組みの比較を /tmp/docs_<ID の先頭 8 字>/ に出す
-  docs.py wording <URL か ID>   日本語の点検。保存版の段落の言い回しの指摘を doc.md の行つきで出し、直す前に通した文と比べて意味の変わる恐れを出し、
+  docs.py wording <URL か ID>   日本語の点検。Google の資料の段落の言い回しの指摘を doc.md の行つきで出し、直す前に通した文と比べて意味の変わる恐れを出し、
                                 資料のフォルダの wording.json に残す（wording.py。google-docs の lint.md の「Japanese check」）
   docs.py export <URL か ID> <出力.docx か .pdf>   Word か PDF で書き出す（相手が Word を求めたときだけ。納品は Google Docs の URL）
   docs.py --selftest
@@ -1152,6 +1152,8 @@ def cmd_check(src):
     print(lay.stdout.rstrip() if lay.returncode == 0 else f"\n（doc_layout.py が止まった: {lay.stderr.strip()[-300:]}）")
     hard = source_checks(doc, md) or hard
     pages = sorted(glob.glob(f"{d}/p-*.png"))
+    if pages:  # ページの画像を作れたあとに、見た本文を残す（docs.py wording が、組んだあとの文書を check で見たかを、これで決める）
+        json.dump({"body": body_hash(doc["body"])}, open(f"{d}/seen.json", "w"))
     print(f"\nテキスト: {d}/text.md\n画像: {d}/p-N.png（{len(pages)} ページ）\nJSON: {d}/doc.json")
     if hard:
         sys.exit("要修正が残っている（上の出力を直す）")
@@ -1166,8 +1168,12 @@ def doc_units(doc, md_lines):
     """lint が言い回しを見る段落（lint_gdoc の wording の呼び出し。引用とコードの段落・出典の行は外す）を集め、doc.md の行に戻す（u の file・loc）。"""
     units = []
     r = wording.collector(doc_lint.Report(), units, lambda where, kw: "doc", lambda kw: "段落")
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        doc_lint.lint_gdoc(doc, r)
+    real, doc_lint.workspace_checks = doc_lint.workspace_checks, (lambda *a: 0)  # 文を集めるだけなので、ワークスペースの点検は呼ばない（スライドの slide_units と同じ）
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            doc_lint.lint_gdoc(doc, r)
+    finally:
+        doc_lint.workspace_checks = real
     lines = [wording.flat(x) for x in md_lines]
     for u in units:
         want = wording.flat(u["text"])[:20]
@@ -1177,7 +1183,7 @@ def doc_units(doc, md_lines):
 
 
 def cmd_wording(src):
-    """docs-lint-020 の日本語の点検（スライドの slides-lint-035 と同じ中身。wording.py）。保存版（documents.get）の段落を読み、doc.md の行に戻す。
+    """docs-lint-020 の日本語の点検（スライドの slides-lint-035 と同じ中身。wording.py）。Google に保存された資料（documents.get）の段落を読み、doc.md の行に戻す。
     通らない理由: 組んだあとに画面で直された（本文の指紋が組んだときと違う）、組んだあとの文書を docs.py check で見ていない（直して延びた段落のページ割りを見ていない）。"""
     if os.path.basename(os.getcwd()) != "build" or not os.path.isfile("doc.md"):
         sys.exit("wording は資料の build/（doc.md のあるフォルダ）で回す")
@@ -1188,8 +1194,8 @@ def cmd_wording(src):
     if now != request("GET", f"{DRIVE}/files/{did}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(STAMP):
         problems.append("docs.py build で組んだ本文でない（画面で直されたか、ほかの道具で変えた）。直しを doc.md に写して docs.py build で組み直す")
     try:
-        seen = body_hash(json.load(open(f"/tmp/docs_{did[:8]}/doc.json", encoding="utf-8"))["body"])
-    except (OSError, ValueError, KeyError):
+        seen = json.load(open(f"/tmp/docs_{did[:8]}/seen.json", encoding="utf-8"))["body"]  # check がページの画像を作ったあとに書く
+    except (OSError, ValueError, KeyError, TypeError):
         seen = None
     if seen != now:
         problems.append(f"組んだあとの文書を check で見ていない（docs.py check {src} でページの画像を見てから回す）")
@@ -1235,7 +1241,13 @@ def wording_selftest():
             assert set(fs) == {"動詞を名詞にした語", "直訳の語"} and fs["動詞を名詞にした語"]["loc"] == "1 行" and fs["直訳の語"]["loc"] == "3 行"  # 引用の段落と出典の行は見ない
             assert any("check で見ていない" in x for x in st["last"]["problems"]) and st["last"]["files"] == {"build/doc.md": hashlib.sha256(md.encode()).hexdigest()}
             os.makedirs(seen)
-            json.dump(doc, open(f"{seen}/doc.json", "w"))
+            json.dump(doc, open(f"{seen}/doc.json", "w"))  # 画像を作る前に止まった check（doc.json だけ）は、見たことにしない
+            try:
+                cmd_wording(doc["documentId"])
+                raise AssertionError("通した")
+            except SystemExit as e:
+                assert e.code == 1 and any("check で見ていない" in x for x in wording.load(d)["last"]["problems"])
+            json.dump({"body": body_hash(doc["body"])}, open(f"{seen}/seen.json", "w"))
             wording.decide(d, "ask", [f["id"] for f in fs.values()], "selftest")
             cmd_wording(doc["documentId"])  # check で見た本文で、判断がそろえば通る
             stamp["v"] = "x"  # 組んだあとに画面で直された

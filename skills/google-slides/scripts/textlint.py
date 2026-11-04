@@ -72,8 +72,9 @@ def yomi(text, slides=True, one_line=False):
             m = re.search(r"当たった言い方: (.+?)）の候補|直訳「(.+?)」|比喩動詞「(.+?)」", f["message"])  # translated_term は「英語の直訳「版」（version）」、metaphor_verb は「比喩動詞「効く」」の形
             said = (m and (m.group(1) or m.group(2) or m.group(3)) or "").strip("「」")
             key = said.split("、")[0].strip("「」")
-            forms = [k for k in dict.fromkeys((key, key[:-1] if len(key) > 1 and re.match(r"[぀-ゟ]", key[-1]) else "", key[:2])) if k]  # 文に活用した形で出る語（効く → 効いて）は語幹でも探す
-            found = [(i, k) for k in forms for i in range(len(text)) if text.startswith(k, i)]
+            stem = key[:-1] if len(key) > 1 and re.match(r"[぀-ゟ]", key[-1]) else ""  # 文に活用した形で出る語（効く → 効いて）は、語幹のあとにかなが続くところも探す（効果は数えない）
+            found = [(i, key) for i in range(len(text)) if key and text.startswith(key, i)] + [
+                (i, stem) for i in range(len(text)) if stem and text.startswith(stem, i) and re.match(r"[぀-ゟ]", text[i + len(stem):i + len(stem) + 1])]
             outside = [(i, k) for i, k in found if not any(a < i and i + len(k) <= b for a, b in inside)]
             if found and not outside:
                 continue
@@ -276,6 +277,7 @@ def selftest():
     w.wording("p2", "出典: 前の版の仕組みの比べ（https://example.com）")
     w.wording("p5", "顧客は「前の版の比べ」と言った", obj="g1", table=False)
     assert yomi("顧客は「効く」と言うが、運用で効いてくる")  # 引用の中の形だけを見て、外の活用した形を落とさない
+    assert yomi("顧客は「運用で効いてくる」と言った。効果は高い") == []  # 引用の外の別の語（効果）を、活用した形と取り違えない
     real, fake = yomiyasu, type("Y", (), {"lint_text": staticmethod(lambda t, doc_type=None: {"findings": [{"rule": "renyo_noun", "message": "（当たった言い方: の直し）の候補"}]})})
     globals()["yomiyasu"] = lambda: fake
     try:  # 複合語の中の「の直し」（直し方・直し案）は出さない。漢字が続くだけ（直し以外・直し後）では複合語にしない
