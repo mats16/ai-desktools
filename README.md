@@ -32,7 +32,7 @@ INSTALL.md                        会話で入れるときに、エージェン�
 .claude-plugin/plugin.json        Claude Code のプラグイン（Codex もこれを読む）
 .claude-plugin/marketplace.json   このリポジトリをそのままマーケットプレイスにする
 package.json                      pi のパッケージ（pi.skills: ./skills）
-skills/                           上の 16 個（Claude Code・Codex・pi で共通）
+skills/                           上のスキル（Claude Code・Codex・pi で共通）
 vendor/yomiyasu/                  subtree で取り込んだ yomiyasu（中は直さない）。スキルではない。動かすのに要るファイルだけを、使うスキルの scripts/yomiyasu/ に写す
 tests/skills/check.py             スキルの形の点検。--sync で、共有のスクリプトを持ち主から写しへ写す
 docs/                             設定のガイド（decisions.md: 決めたこと。todo.md: 残っている課題。claude-code-plugin.md: Claude Code に入れる範囲と確かめ方。codex-plugin.md: Codex に入れる範囲。pi.md: pi に入れる範囲と確かめ方。development.md: 開発しながら動作を見る）
