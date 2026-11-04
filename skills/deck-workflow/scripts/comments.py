@@ -6,10 +6,10 @@ usage（資料のフォルダで）:
   --src <フォルダ>                     付いた文を探す手元の正本（既定: 今いるフォルダの build/）
   comments.py reply <URL か ID> <コメントの ID> <文> [--resolve]   返信する。--resolve を付けると、返信と一緒に解決する
   comments.py watch <URL か ID>... [--hours <時間>] [--start]   --new を 90 秒ごとに回し、新しいコメントが出たら出して返る。出なければ 270 秒で
-                                      「まだ」と返る（見張りの子が呼び直す。../prompt_watch.md）。最後のコメント（なければ見張り始め。--start で今にする）から
+                                      「まだ」と返る（見張りのサブエージェントが呼び直す。../prompt_watch.md）。最後のコメント（なければ見張り始め。--start で今にする）から
                                       --hours（既定は desk.toml の [feedback.google_comments] watch_hours）のあいだ新しいコメントがなければ、「見張りを終える」と返る。
                                       資料には、AI が見張っていることと終える時刻をコメントに書き（知らせ）、終える時刻が延びたら返信し、終えたら返信して解決する
-  comments.py watch-prompt <URL か ID>... [--hours <時間>] [--folder <資料のフォルダ>]   見張りの子に渡す依頼文（../prompt_watch.md を埋めたもの）を出す。
+  comments.py watch-prompt <URL か ID>... [--hours <時間>] [--folder <資料のフォルダ>]   見張りのサブエージェントに渡す依頼文（../prompt_watch.md を埋めたもの）を出す。
                                       資料のフォルダの既定は今いるフォルダ。埋め残しの差し込み先があれば止める
   comments.py --selftest
 前に取った時刻、reply で送った返信の ID（--new で新しいと数えない）、見張りの起点、知らせのコメントの ID と書いた終える時刻は、ワークスペースの .desk/comments.json に残す。"""
@@ -45,7 +45,7 @@ def state_path():
 
 @contextlib.contextmanager
 def state():
-    """.desk/comments.json を読んで渡し、ブロックを抜けたら書く（途中で止まったら書かない）。見張りの子と親の reply が同時に動いても
+    """.desk/comments.json を読んで渡し、ブロックを抜けたら書く（途中で止まったら書かない）。見張りのサブエージェントと親の reply が同時に動いても
     互いの書き込みを消さないよう、そのあいだ錠をかけ、仮のファイルから差し替える。"""
     p = state_path()
     p.parent.mkdir(exist_ok=True)
@@ -68,7 +68,7 @@ def post(fid, cid, text, resolve=False):  # 返信を送り、その ID を返�
 
 def reply(fid, cid, text, resolve=False):
     """返信する。送った返信の ID を残し、--new で新しいと数えない。
-    送るところから錠の中でする（送ってから ID を残すまでに見張りの子が取ると、自分の返信を新しいと数える）。"""
+    送るところから錠の中でする（送ってから ID を残すまでに見張りのサブエージェントが取ると、自分の返信を新しいと数える）。"""
     with state() as st:
         st["sent"].append(post(fid, cid, text, resolve))
 

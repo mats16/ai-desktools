@@ -74,7 +74,7 @@ AUTO = ("重なり", "古い記述")  # 会話を出典にしない片付け。-
 RECS = ("適用", "様子見", "却下")
 SCOPES = ("資料", "顧客", "環境", "知見")  # 指摘の見立て: この資料だけ・この顧客・この人や組織の環境・誰にでも効く知見（desk-feedback の SKILL.md。2026-10-31）
 TOPICS = {  # 決まりの ID の主題（何についての決まりか）。ID は一度付けたら、ファイルを分けても移しても変えない（desk-feedback の routing.md の "Rule IDs"）
-    "deck-flow": "1〜11 の工程と、どの工程でも守ること", "deck-writing": "どの資料にも効く、中身と言葉の判断の軸", "deck-design": "どの資料にも効く、見た目の判断の軸", "deck-agents": "子の起こし方と待ち方", "deck-content": "構成案と言葉",
+    "deck-flow": "1〜11 の工程と、どの工程でも守ること", "deck-writing": "どの資料にも効く、中身と言葉の判断の軸", "deck-design": "どの資料にも効く、見た目の判断の軸", "deck-agents": "サブエージェントの起こし方と待ち方", "deck-content": "構成案と言葉",
     "deck-sources": "材料の集め方と出典の台帳", "deck-drive": "Drive への置き方", "deck-rules": "ワークスペースの決まりと、修正の指示の戻し方",
     "deck-review": "返す前のレビューと、その観点", "deck-comments": "コメントから直す", "deck-profile": "顧客の profile", "deck-research": "調べ直し",
     "deck-lint": "スライドとドキュメントで共通の lint", "deck-google": "Google の API・認証・上限", "deck-brand": "書体・字幅・著作権表示",

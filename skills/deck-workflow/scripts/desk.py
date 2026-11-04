@@ -222,7 +222,7 @@ def old_agents(ws):
 
 RULE_PATH = r"recipes/[\w./-]+?/RECIPE\.md"  # 「使う決まり」に書くレシピのパス
 USE = re.compile(r"(?m)^[ \t]*(?:[-*][ \t]*)?\**使う決まり\**[ \t]*[:：]\**(.*)$")  # 構成案の先頭の「使う決まり」の行（- **使う決まり:** recipes/a/RECIPE.md、recipes/b/RECIPE.md）
-GROUPS = (("make", "どの作業でも（step なし）", "資料を書く・組む・レビューするとき。資料を作り始めるときに開き、ページを書く子とレビューの子にも渡す"),
+GROUPS = (("make", "どの作業でも（step なし）", "資料を書く・組む・レビューするとき。資料を作り始めるときに開き、ページを書くサブエージェントとレビューのサブエージェントにも渡す"),
           ("gather", "集めるとき（step: gather）", "材料を集めるとき（手順 1〜5、顧客の profile、定期の収集）と、調べもの"),
           ("build", "組むとき（step: build）", "Google Slides・Docs・Vids に組むとき（組む前に開く）"))
 
