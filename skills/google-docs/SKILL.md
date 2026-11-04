@@ -37,7 +37,7 @@ python3 $K/docs.py export <URL> /tmp/<material name>.docx                 # only
 2. Write the content. Write the content agreed in the outline into doc.md without waiting for the user (deck-flow-006 in `deck-workflow`). If the user says they want to settle the content in doc.md, you may do so (what readers see is the built Google Docs).
 3. Build with `docs.py new` (first time) or `docs.py build`, and check with `docs.py check`.
 4. Bring `要修正` to 0, check each `要確認` one by one, and open and look at the images ([lint.md](lint.md)). Put fixes into doc.md or docs.py, and go back to 3.
-5. Then run `docs.py wording <URL>` and close each finding by fixing doc.md (then back to 3), `keep`, or `ask`, until it reports 「済み」 (docs-lint-020 in [lint.md](lint.md) → Japanese check).
+5. Then run `docs.py wording <URL>` and close each finding by fixing doc.md (then back to 3), `keep`, or `ask`, and run it again until it reports 「済み」 (after the last `keep`, `ask`, or `ok` too: the same run records the match with the saved document. docs-lint-020 in [lint.md](lint.md) → Japanese check).
 6. Before returning a newly made document, run `/deck-review` (the `deck-review` skill). Put the findings into doc.md as well and rebuild. For fixes after delivery, run only the scope decided by deck-flow-017 in `deck-workflow` → requests after delivery.
 
 ### 1.2 doc.md format

@@ -357,7 +357,7 @@ def facts(folder, ws):
         if moved:
             items.append(f"日本語の点検のあとに変わったファイル: {short(moved)}（点検し直す）")
         items += [f"日本語の点検の通らない理由: {x}" for x in s.get("通らない理由", [])[:3]]
-        saved = ("未実施" if not sv else "古い" if moved or sv.get("checked") != last.get("digest") else "通らない" if sv.get("problems")
+        saved = ("未実施" if not sv else "古い" if moved or sv.get("checked") != last.get("digest") or sv.get("files") != last.get("files") else "通らない" if sv.get("problems")
                  else "済み" if s.get("状態") == "済み" else "古い")  # wording.py の saved_state と同じ
         items.append(f"保存した資料との照合: {saved}" + (f"（{sv.get('url')} リビジョン {sv.get('revision')}・{sv.get('ts')}）" if sv else "（組んで check で画像を見たあとに gslides.py wording <URL> か docs.py wording <URL>）"))
         items += [f"照合の通らない理由: {x}" for x in sv.get("problems", [])[:3]] if saved == "通らない" else []
@@ -515,13 +515,15 @@ def selftest():
             ten = got()["10"]
             assert "日本語の点検: 済み（文 3・指摘 1・未判断 0・残す 1" in ten and "build/deck.json（手元の JSON）" in ten and "変わったファイル" not in ten
             assert "保存した資料との照合: 未実施" in ten  # 点検が済んでも、照合は別の事実
-            (f / WORDING).write_text(json.dumps(rec | {"saved": {"url": "u", "revision": "r9", "checked": "d1", "problems": []}}))
+            (f / WORDING).write_text(json.dumps(rec | {"saved": {"url": "u", "revision": "r9", "checked": "d1", "files": files, "problems": []}}))
             assert "保存した資料との照合: 済み（u リビジョン r9" in got()["10"]
+            (f / WORDING).write_text(json.dumps(rec | {"saved": {"url": "u", "revision": "r9", "checked": "d1", "files": {}, "problems": []}}))
+            assert "保存した資料との照合: 古い" in got()["10"]  # 照合したときと原稿のファイルが違う（文の変わらない直しを点検し直した）
             (f / WORDING).write_text(json.dumps(rec | {"saved": {"url": "u", "revision": "r9", "checked": "d0", "problems": []}}))
             assert "保存した資料との照合: 古い" in got()["10"]  # 照合のあとに点検し直した
-            (f / WORDING).write_text(json.dumps(rec | {"saved": {"url": "u", "revision": "r9", "checked": "d1", "problems": ["組んだリビジョンでない"]}}))
+            (f / WORDING).write_text(json.dumps(rec | {"saved": {"url": "u", "revision": "r9", "checked": "d1", "files": files, "problems": ["組んだリビジョンでない"]}}))
             assert "保存した資料との照合: 通らない" in got()["10"] and "照合の通らない理由: 組んだリビジョンでない" in got()["10"]
-            (f / WORDING).write_text(json.dumps(rec | {"saved": {"url": "u", "revision": "r9", "checked": "d1", "problems": []}}))
+            (f / WORDING).write_text(json.dumps(rec | {"saved": {"url": "u", "revision": "r9", "checked": "d1", "files": files, "problems": []}}))
             (f / "build" / "p02.json").write_text('{"直した": 1}')
             (f / "build" / "p13.json").write_text("{}")  # 組む入力でなかったファイル（並べていないページ）は見ない。並べれば deck.json が変わる
             ten = got()["10"]

@@ -500,7 +500,7 @@ class Deck:
         out = []
         for p, base, loc, name in spec_files(src, read=self.read_files):
             out.append(sid := spec_page(self, p, base, loc, name))
-            if (f := Path(base) / Path(loc).name) in self.read_files:  # ページを書いたファイル（ページのファイルと部品 1 つのファイル。deck.json の中に書いたページは、そのデッキのファイル）
+            if self.read_files and (f := Path(base) / Path(loc).name) == self.read_files[-1]:  # ページを書いたファイル（ページのファイルと部品 1 つのファイルは、出す直前に読む。Python から渡した dict のページにはない）
                 self.page_files[sid] = os.path.relpath(f)
         return out
 
@@ -3689,13 +3689,14 @@ def json_leaves(o, path=""):
         yield path, o
 
 
-def wording_places(units, deck):
+def wording_places(units, deck, py=("pages.py",)):
     """点検する文（slide_units）を、そのページを書いたファイル（deck.page_files。deck.json が指したもの）と JSON の場所に戻す（u の key・file・loc）。
-    JSON のページは、そのファイルの文字の値から文の先頭 20 字を探す（短い文〔表のセル〕は、同じ文の値を先に）。ファイルのないページ（pages.py の関数）は pages.py の行。
+    JSON のページは、そのファイルの文字の値から文の先頭 20 字を探す（短い文〔表のセル〕は、同じ文の値を先に）。ファイルのないページ（pages.py の関数）は py のファイル
+    （pages.py と、make が読み込んだ build/ の pages_<担当>.py）の行。
     key は直す前後を組にするページの名前: JSON のページはファイルのパス（並べ替えても同じ）、ファイルのないページは 1 つの並び（ページを足しても消してもずれない）。"""
     import wording
     leaves = {}
-    py = [wording.flat(x) for x in Path("pages.py").read_text(encoding="utf-8").splitlines()] if Path("pages.py").is_file() else []
+    lines = [(f, n, wording.flat(x)) for f in py if Path(f).is_file() for n, x in enumerate(Path(f).read_text(encoding="utf-8").splitlines(), 1)]
     for u in units:
         f = deck.page_files.get(deck.slides[u["page"] - 1]) if u["page"] and u["page"] <= len(deck.slides) else None
         want = wording.flat(u["text"])[:20]
@@ -3705,8 +3706,8 @@ def wording_places(units, deck):
                 leaves[f] = [(loc, wording.flat(v)) for loc, v in json_leaves(json.loads(Path(f).read_text(encoding="utf-8")))]
             hit = [loc for loc, v in leaves[f] if want and v == want] or [loc for loc, v in leaves[f] if want and want in v]
             u["file"], u["loc"] = f, "・".join(dict.fromkeys(hit)) or None  # 部品が数と単位から組んだ文（「16 モデル」）は、場所なしでファイルだけ
-        if not u.get("file") and want and (n := next((i for i, x in enumerate(py, 1) if want in x), None)):
-            u["file"], u["loc"] = "pages.py", f"{n} 行"
+        if not u.get("file") and want and (hit := next(((f, n) for f, n, x in lines if want in x), None)):
+            u["file"], u["loc"] = hit[0], f"{hit[1]} 行"
     return units
 
 
@@ -3723,8 +3724,11 @@ def cmd_wording(path, url=None):
     with contextlib.redirect_stderr(io.StringIO()):  # 組むときの警告は slides.py lint が出す
         deck = make_deck(m.make, getattr(m, "NAME", "dry"))
     q = local_json(json.loads(resolved(deck, p)), deck, p)
-    units = wording_places(slide_units(q, [deck.notes.get(s) or "" for s in deck.slides]), deck)
-    files = wording.input_files([path, *(os.path.relpath(f) for f in deck.read_files)])  # 組む入力だけ（deck.json か pages.py と、spec が読んだファイル）
+    here = Path.cwd().resolve()
+    py = sorted({os.path.relpath(f) for m in list(sys.modules.values()) if (f := getattr(m, "__file__", None)) and f.endswith(".py") and Path(f).resolve().is_relative_to(here)},
+                key=lambda f: f != "pages.py")  # make が読み込んだ build/ の Python（pages.py と、make の中で読む pages_<担当>.py）
+    units = wording_places(slide_units(q, [deck.notes.get(s) or "" for s in deck.slides]), deck, py)
+    files = wording.input_files([path, *py, *(os.path.relpath(f) for f in deck.read_files)])  # 組む入力だけ（deck.json か pages.py と、実際に読んだ Python と JSON のファイル）
     if not wording.run(str(Path.cwd().parent), "slides", units, files, (), "slides.py wording", f"build/{path}（手元の JSON。テーマ {name}）"):
         sys.exit(1)
 
@@ -4372,15 +4376,20 @@ def selftest_wording():
         with tempfile.TemporaryDirectory() as t:  # 前の資料の pages.py: ページの関数の文とノート（d.note）を、pages.py の行に戻す
             (Path(t) / "build").mkdir()
             os.chdir(Path(t) / "build")
-            Path("pages.py").write_text('from slides import *\nNAME = "t"\n\n\ndef make(d):\n    s = d.page("仕組みの比べ")\n    d.note(s, "前の版の手順を話す")\n', encoding="utf-8")
-            sys.modules.pop("pages", None)
+            Path("pages.py").write_text('from slides import *\nNAME = "t"\n\n\ndef make(d):\n    s = d.page("仕組みの比べ")\n    d.note(s, "前の版の手順を話す")\n'
+                                        '    import pages_a\n    pages_a.make(d)\n', encoding="utf-8")
+            Path("pages_a.py").write_text('def make(d):\n    d.page("子の担当の比べ")\n', encoding="utf-8")  # 子が書いたページ（make の中で読み込む。google-slides の slides-pages-031）
+            for m in ("pages", "pages_a"):
+                sys.modules.pop(m, None)
             try:
                 assert go("pages.py") == 1
+                st = wording.load(t)
+                assert {(f["rule"], f["file"], f["loc"]) for f in st["last"]["findings"]} == {("動詞を名詞にした語", "pages.py", "6 行"), ("直訳の語", "pages.py", "7 行"),
+                                                                                         ("動詞を名詞にした語", "pages_a.py", "2 行")}
+                assert sorted(st["last"]["files"]) == ["build/pages.py", "build/pages_a.py"]  # 子のファイルも組む入力
             finally:
-                sys.modules.pop("pages", None)
-            st = wording.load(t)
-            assert {(f["rule"], f["file"], f["loc"]) for f in st["last"]["findings"]} == {("動詞を名詞にした語", "pages.py", "6 行"), ("直訳の語", "pages.py", "7 行")}
-            assert list(st["last"]["files"]) == ["build/pages.py"]
+                for m in ("pages", "pages_a"):
+                    sys.modules.pop(m, None)
     finally:
         os.chdir(cwd)
         globals()["request"] = real

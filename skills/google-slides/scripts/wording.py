@@ -276,7 +276,7 @@ def saved_state(st, folder):
     sv, last = st.get("saved") or {}, st.get("last") or {}
     if not sv:
         return "未実施"
-    if sv.get("checked") != last.get("digest") or stale(st, folder):
+    if sv.get("checked") != last.get("digest") or sv.get("files") != last.get("files") or stale(st, folder):  # 照合した原稿と、今の点検の原稿が違う（文の変わらない直しも）
         return "古い"
     if sv.get("problems"):
         return "通らない"
@@ -311,7 +311,9 @@ def show(st, tool="wording", folder=None):
     for k, n in hint.items():
         if n:
             print(f"直し方〔{k}〕{n} 件: {HOW[k]}")
-    if s["状態"] == "済み":
+    if folder is not None and (moved := stale(st, folder)):
+        print(f"点検: 古い。点検のあとに変わったファイル {', '.join(moved[:8])}（{tool} をもう一度回す）")
+    elif s["状態"] == "済み":
         print("点検: 済み" + (f"（聞く {s['聞く']} 件は、渡すときの問いの一覧に入れる）" if s["聞く"] else "") + f"。{last.get('source') or '?'} を点検した")
     else:
         print(f"点検: 未完。ページの JSON（ドキュメントは doc.md）を直して {tool} をもう一度回す。直さないものは "
@@ -402,7 +404,7 @@ def verify(folder, url, revision, units, problems=(), tool="wording"):
             out.append(f"保存した資料の文が、点検した文と {len(diff)} か所違う（画面で直したか、組んでいない。直しをページの JSON か doc.md に入れ、点検してから組み直す）: "
                        + " / ".join(diff[:6]) + (" ほか" if len(diff) > 6 else ""))
     st["saved"] = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "url": url, "revision": revision, "checked": last.get("digest"),
-                   "problems": out}
+                   "files": last.get("files"), "problems": out}  # どの原稿のファイルを照合したか（文の変わらない直しを点検し直しても、照合は古いになる）
     save(folder, st)
     show(st, tool, folder)
     return not out
@@ -543,8 +545,15 @@ def selftest():
         assert verify(d, url, "r1", page(*texts)) and saved_state(load(d), d) == "済み"
         open(f"{d}/build/p01.json", "w").write("b")  # 照合のあとに手元を直した
         assert saved_state(load(d), d) == "古い" and stale(load(d), d) == ["build/p01.json"]
+        with contextlib.redirect_stdout(io.StringIO()) as shown:
+            show(load(d), "slides.py wording", d)
+        assert "点検: 古い。点検のあとに変わったファイル build/p01.json" in shown.getvalue() and "点検: 済み" not in shown.getvalue()
         assert not verify(d, url, "r1", page(*texts)) and any("点検のあとに変わったファイル: build/p01.json" in x for x in load(d)["saved"]["problems"])
+        open(f"{d}/build/p01.json", "w").write("a2")  # 文の変わらない直し（位置・大きさ）を点検し直しても、前の照合は古い（組んでいない）
+        run(d, "slides", page(*texts), files())
+        assert load(d)["summary"]["状態"] == "済み" and load(d)["last"]["digest"] == load(d)["saved"]["checked"] and saved_state(load(d), d) == "古い"
         open(f"{d}/build/p01.json", "w").write("a")
+        run(d, "slides", page(*texts), files())
         assert not verify(d, url, "r2", page("4 つの構成を比べる", "前の版の手順へ戻した"))  # 画面で直した（保存した文が違う）
         bad = " ".join(load(d)["saved"]["problems"])
         assert "p2: 保存した資料にだけある「前の版の手順へ戻した」" in bad and "p2: 点検した文にだけある「前の版の手順へ戻す」" in bad
@@ -614,8 +623,7 @@ def main(argv):
     if len(argv) == 1 and not argv[0].startswith("-"):
         st = load(argv[0])
         s = show(st, folder=argv[0])
-        if moved := stale(st, argv[0]):
-            print(f"点検: 古い。点検のあとに変わったファイル {', '.join(moved[:8])}（slides.py wording か docs.py wording をもう一度回す）")
+        if stale(st, argv[0]):  # 古い は show が出した
             sys.exit(1)
         sys.exit(0 if s["状態"] == "済み" else 1)  # 0 は点検が済んだこと。保存した資料との照合は、上の行と flow.py（deck-workflow）が別に出す
     sys.exit(__doc__)
