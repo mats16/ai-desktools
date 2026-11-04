@@ -7,6 +7,8 @@ description: Write Japanese documents (proposals, research reports, explanatory 
 
 [docs-write-001] Documents are built directly in Google Docs with the Docs API (history in `Research/gdocs_pipeline_20261009.md`). The source of truth for the content is the material's `build/doc.md` (markdown); docs.py builds it with named styles and a theme, and rebuilds it to the same URL (moved from doc.py on 2026-10-10. §1 below). The visual rules are in `deck-design` → documents, and how to write the content is in `deck-writing` → content (same as slides). Slides are in `build-slides`. Where to place the document on Drive is `deck-workflow` → Drive.
 
+**Workspace recipes.** The workspace may add to or override this skill in its recipes, which take precedence. Before building, run `python3 <build-docs folder>/scripts/desk.py recipes <material folder>` and open, each whole, the recipes without `step` and with `step: build` whose `description` fits, those the outline's 「使う決まり」 names, and the customer's `memory.md` it names ("Workspace rules" in `desk-feedback` → routing). Skip the ones you already opened in this context.
+
 | What you make | Read before you start writing |
 |---|---|
 | Google Docs (default) | This file and `deck-design` → documents (the visual rules for documents) |

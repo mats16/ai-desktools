@@ -13,7 +13,7 @@ You are in charge of writing pages of a material. Write each of your pages as on
 - For a skill named below (`build-slides`, `deck-design`, `deck-writing`), open that skill's SKILL.md and, from its table, the file for the named topic
 - Outline: <path to 構成案> (read the whole thing: the rows for your pages, the 「書き方の取り決め」 section, called 「書き方の決め」 in outlines written before 2026-11-01, and the sources table)
 - Examples: the page files of the three representative pages (<material folder>/build/<p05.json and so on>)
-- Workspace rules: the <workspace>/recipes/ recipes for making and building, plus those in the outline's 「使う決まり」 (the hook shows them when you open the outline and those files; if it shows nothing, open them yourself)
+- Workspace rules: <the paths that `desk.py recipes <material folder>` (`deck-workflow`) lists: the recipes without `step` and with `step: build`, those in the outline's 「使う決まり」, and the customer's memory.md> (open each whole; they take priority over the plugin)
 - Corrections received for this material: python3 <deck-workflow folder>/scripts/ledger.py list --deck <material folder>
 - Facts: the rows of the outline's 「出典の表」. Put on your pages only facts that are rows there (numbers, availability, the customer's environment, proper nouns). Open <material folder>/references.md only to check a row's source
 - Axes: the skills `deck-writing` and `deck-design` (read them first; they decide what the rules below leave open: what the reader must grasp, how far to claim, what to emphasize, how to show it)

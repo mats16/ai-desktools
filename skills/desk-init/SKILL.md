@@ -5,7 +5,7 @@ description: Create an AI Desk Tools workspace (the folder that holds materials 
 
 # Create a workspace
 
-A workspace is the folder that holds the material folders, the rules, and the records `.desk/` (for example `~/Documents`). Its settings `desk.toml` go in one of two places. Scripts and hooks walk up from the current folder and use the first `desk.toml` they find, and its folder is the workspace. If there is none, they read `~/.desk.toml` (or the path in the environment variable `DESK_CONFIG`) and use its `workspace`. They read only the one they find and never merge the two (`scripts/desk.py`). What goes where is in "Workspace layout" below; how workspace rules take priority over the plugin is in `desk-feedback` → routing ("Workspace rules").
+A workspace is the folder that holds the material folders, the rules, and the records `.desk/` (for example `~/Documents`). Its settings `desk.toml` go in one of two places. Scripts walk up from the current folder and use the first `desk.toml` they find, and its folder is the workspace. If there is none, they read `~/.desk.toml` (or the path in the environment variable `DESK_CONFIG`) and use its `workspace`. They read only the one they find and never merge the two (`scripts/desk.py`). What goes where is in "Workspace layout" below; how workspace rules take priority over the plugin is in `desk-feedback` → routing ("Workspace rules").
 
 ## Steps
 
@@ -57,7 +57,7 @@ drive_folders.md                                       … Drive locations and t
 - `Customers/` has one folder per customer company. For a new customer, use a short English name. Internal materials about a customer go in `Internal/`.
 - Name files that agents read and write with ASCII letters, digits, hyphens, and underscores only. Deliverables and the files the user reads (`構成案*.md`, `社内メモ_*.md`) keep their Japanese names.
 - Do not create files directly under the workspace root other than those above. Put working copies (exported pptx, page images, PDFs for checking) in `/tmp`, and delete them when done; for materials you consulted, write the URL in `references.md` instead of keeping a copy.
-- The plugin does not place or read `AGENTS.md` or `CLAUDE.md` in the workspace, and works without them. The owner may write one. Agents load such a file into every conversation and give it more weight than a skill, so a rule there also applies to work it was not written for. Keep rules for making materials in recipes, which the hook shows only in the steps they are for.
+- The plugin does not place or read `AGENTS.md` or `CLAUDE.md` in the workspace, and works without them. The owner may write one. Agents load such a file into every conversation and give it more weight than a skill, so a rule there also applies to work it was not written for. Keep rules for making materials in recipes, which the skills open only in the steps they are for.
 
 ## Notes
 

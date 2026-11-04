@@ -136,6 +136,11 @@ def check(script, lang="ja"):
 def cmd_lint(path, lang):
     script = load(path)
     fix, ask = check(script, lang)
+    try:  # レシピと memory を開く案内（スライドとドキュメントの lint と同じ。台本を直すどの道もここを回す）
+        if note := gapi.desk.reminder(gapi.workspace()):
+            print(note)
+    except SystemExit:  # ワークスペースがない
+        pass
     for title, rows in (("要修正", fix), ("要確認", ask)):
         print(f"\n== {title}: {len(rows)} ==")
         if rows:

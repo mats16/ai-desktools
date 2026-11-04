@@ -12,7 +12,7 @@ sys.path.insert(0, str(SKILLS / "desk-init" / "scripts"))
 import desk  # noqa: E402  写しの表（desk.SHARED・desk.COPIES）は desk.py にだけ書く（ledger.py も同じ表で、写しの中の決まりの ID を数えない）
 
 # スキルのあいだで同じ中身を持つもの（AGENTS.md の「Shared code」。2026-11-02）。SHARED はスクリプトの名前 → 持ち主のスキル、FILES はスクリプトでない写し → 持ち主。
-# 直すのは持ち主だけ。ほかのスキル（と hooks/）の scripts/ の同じ名前のファイルは写しで、--sync が持ち主から写し、点検が同じ中身かを見る。写しを足すときは、一度 cp してから --sync
+# 直すのは持ち主だけ。ほかのスキルの scripts/ の同じ名前のファイルは写しで、--sync が持ち主から写し、点検が同じ中身かを見る。写しを足すときは、一度 cp してから --sync
 SHARED, FILES = desk.SHARED, desk.COPIES
 VENDOR = SKILLS.parent / "vendor" / "yomiyasu"  # 上流の yomiyasu（git subtree。中は直さない）。スキルには、動かすのに要るものだけを scripts/yomiyasu/ に写す
 VENDOR_FILES = ("LICENSE", "UNICODE-LICENSE.txt", "scripts/markdown_visibility.py", "scripts/yomiyasu_lint.py", "scripts/yomiyasu_diff.py", "references/lists/*.txt")
@@ -74,7 +74,7 @@ def bare(files, name, text, qualified=False):
 
 
 def copies(skills=SKILLS):
-    """[(写し, 持ち主のファイル)]。写しは、ほかのスキルの scripts/ と、スキルのフォルダの隣の hooks/ にある同じ名前のファイル。"""
+    """[(写し, 持ち主のファイル)]。写しは、ほかのスキルの scripts/ にある同じ名前のファイル。"""
     out = []
     for f, src in FILES.items():  # 表に書いた写しは、なくなっても出す（--sync が作る）
         if (skills / src).is_dir():  # フォルダは、持ち主のファイルをみな
@@ -83,7 +83,7 @@ def copies(skills=SKILLS):
             out.append((skills / f, skills / src))
     for name, owner in SHARED.items():
         src = skills / owner / "scripts" / name
-        for f in sorted([*skills.glob(f"*/scripts/{name}"), skills.parent / "hooks" / name]):
+        for f in sorted(skills.glob(f"*/scripts/{name}")):
             if f.is_file() and f != src:
                 out.append((f, src))
     return out

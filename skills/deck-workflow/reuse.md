@@ -25,6 +25,8 @@ The page elements (type, position, size, text) can be read directly with the Sli
 
 ## 1. Search
 
+Before reusing pages, open the workspace's recipes that `python3 <deck-workflow folder>/scripts/desk.py recipes <material folder>` names and that are not in your context yet (the `step: build` ones say where logos and themes come from).
+
 - Before searching, look at `references_index.md` at the top of the working folder (the overall index of sources used before, rebuilt from every `references.md`), `drive_folders.md` (materials made before), and `references.md` in the material's folder. If you have seen a material before, reread it from that URL and page (if the source's last updated date is newer than the date you checked it, also check whether the content has changed).
 - Search with the internal cross search, and check the contents in file storage, chat, and the wiki ([materials.md](materials.md) "Internal materials"). Add every material you looked at to `references.md`, including ones you decided not to use. To read the contents of Google Slides, having the internal search tool summarize it fails less often than WebFetch （社内 6）. To choose pages, look with `gslides.py pages` and `thumb`.
 - [slides-reuse-002] **For pages that depict the product's main feature (architecture and so on), search for a good-looking figure before drawing your own.** Look at internal decks other than the product pitch and Field Kit, figures in the docs, and figures in the official blog and product pages, and use them in Stages 1–3. Do not settle for a self-made box diagram that only gets the meaning across.

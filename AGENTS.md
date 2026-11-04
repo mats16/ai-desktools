@@ -2,7 +2,7 @@
 
 This repository (`mats16/ai-desktools` on GitHub) is the source of the AI Desk Tools plugin (Claude Code, Codex) and package (pi). [README.md](README.md) covers the contents, installation, and workspace layout; [docs/development.md](docs/development.md) covers development procedures in detail.
 
-If the conversation was opened under `sandbox/`, ignore this file. That folder is a test workspace for seeing the plugin as a user does, and this file is loaded only because it sits in a parent folder. Act as a plugin user, with only what the plugin gives (its skills, and the recipes the hook shows); the workspace has no `AGENTS.md` of its own.
+If the conversation was opened under `sandbox/`, ignore this file. That folder is a test workspace for seeing the plugin as a user does, and this file is loaded only because it sits in a parent folder. Act as a plugin user, with only what the plugin gives (its skills, and the workspace recipes they tell you to open); the workspace has no `AGENTS.md` of its own.
 
 ## Names
 
@@ -28,8 +28,6 @@ The 16 skills fall into six groups by what they hold (2026-10-31 in `docs/decisi
 | `skills/<skill>/` | `SKILL.md`, per-situation files linked from its table, `scripts/`. All three agents read them |
 | `skills/<skill>/scripts/` | The skill's own scripts, and byte-identical copies of shared scripts it needs ("Shared code" below). A script reads only files inside its own skill |
 | `vendor/yomiyasu/` | nanaism/yomiyasu's `skills/yomiyasu` at 2.5.0, added with `git subtree --squash`. Not a skill and not shipped as one: `tests/skills/check.py --sync` copies only the runtime files (its lint and diff scripts and `references/lists/`) into `scripts/yomiyasu/` of `build-slides`, `build-docs`, and `deck-review`. Don't edit inside it. To update, split `skills/yomiyasu` at the new commit in a clone of upstream. The squash commit still records the old prefix `lib/yomiyasu` (moved on 2026-11-02), so the first update re-adds it: `git rm -r -q vendor/yomiyasu && git commit -m "yomiyasu を入れ直す"`, then `git subtree add --prefix vendor/yomiyasu <clone> <split branch> --squash`; later updates use `git subtree pull --prefix vendor/yomiyasu <clone> <split branch> --squash`. Then `check.py --sync` and the selftests |
-| `hooks/` | `rules_overlay.py` (appends the workspace's recipes, `recipes/<name>/RECIPE.md`) and `hooks.json`, which calls it from Claude Code and Codex |
-| `extensions/rules.ts` | The pi extension. Calls `rules_overlay.py` |
 | `.claude-plugin/`, `package.json` | Plugin and marketplace definitions (Codex reads these too); the pi package |
 | `tests/render/` | Builds the JSON samples and checks them as images (`run.py`; per-page checks in `expect.json`) |
 | `tests/skills/` | `check.py`: the shape of each skill (`SKILL.md` within 5,000 tokens, `description` within 1,000 characters, every md linked from `SKILL.md`, every md under 50 KB and 2,000 lines, no path into another skill from md or scripts, every copy of shared code equal to its owner). `--sync` writes the owners over the copies. Runs with the selftests and before `kaizen.py open` |
@@ -42,7 +40,7 @@ The 16 skills fall into six groups by what they hold (2026-10-31 in `docs/decisi
 
 There is no shared `lib/` (2026-11-02 in `docs/decisions.md`). Each skill must work when it is installed alone, as Unity Gateway skills distribute it (one folder per skill), so a script never imports or reads a file of another skill. Code that several skills need lives in one owner skill, and the others keep byte-identical copies in their own `scripts/`.
 
-- The owners are listed once, in `SHARED` (scripts by name) and `COPIES` (other files and folders, such as `build-docs/assets/gcp`) in `skills/desk-init/scripts/desk.py`. Today: `desk.py` (`desk-init`); `gapi.py`, `brand.py`, `textlint.py`, `sheet.py`, `notes.py`, `wording.py` (`build-slides`); `ledger.py` (`desk-feedback`); `refs.py` (`deck-workflow`); `doctor.py` (`desk-doctor`, so `slides_doctor.py` and `docs_doctor.py` run the same common checks when their skill is installed alone). `hooks/` keeps a copy of `desk.py`.
+- The owners are listed once, in `SHARED` (scripts by name) and `COPIES` (other files and folders, such as `build-docs/assets/gcp`) in `skills/desk-init/scripts/desk.py`. Today: `desk.py` (`desk-init`); `gapi.py`, `brand.py`, `textlint.py`, `sheet.py`, `notes.py`, `wording.py` (`build-slides`); `ledger.py` (`desk-feedback`); `refs.py` (`deck-workflow`); `doctor.py` (`desk-doctor`, so `slides_doctor.py` and `docs_doctor.py` run the same common checks when their skill is installed alone).
 - Edit only the owner's file, then run `python3 tests/skills/check.py --sync`. It writes the owner's bytes over every copy (and refreshes `scripts/yomiyasu/` from `vendor/`). `check.py` fails when a copy differs, so CI catches a copy edited by hand.
 - To give a skill a new copy, `cp` the owner's file into its `scripts/` once; `--sync` keeps it from then on. Copy only what the skill's scripts import (follow the imports: `brand.py` needs `gapi.py`, which needs `desk.py`).
 - `ledger.py` counts a rule ID only in the owner's file (`desk.copied`), so a copy never makes a rule look written twice.
@@ -63,7 +61,7 @@ Find the owner first, and change it there only. To find where a plugin rule is w
 | A key or component of the page JSON | `build-slides/scripts/slides.py`, and `pages.md` or `diagrams.md` (what the key does, not which page should use it) | A page in `samples/json/` and its checks in `tests/render/expect.json` (the selftest checks both); which form suits which message goes in `deck-design` |
 | A lint check | `lint.py` (`build-slides`), `doc_lint.py` (`build-docs`), or `textlint.py` (`build-slides`, shared with `build-docs` as a copy) | The rule text says 「lint が〜」 and the check names the rule ID (`ledger.py trace <ID>` then lists the check as an edge of the rule) |
 | Google API calls | `gapi.py` (owner `build-slides`; then `check.py --sync`), or the tool skill's script | The pitfall in that tool's `api.md` |
-| How the workspace, settings, or recipes are found; which plugin files trigger which recipes | `desk.py` of `desk-init` (`TRIGGERS`; then `check.py --sync`) | `hooks/rules_overlay.py` and `extensions/rules.ts` behave the same; the trigger lists in `desk-feedback/routing.md` ("Workspace rules") |
+| How the workspace, settings, or recipes are found and listed (`desk.py recipes`); which plugin files belong to which step | `desk.py` of `desk-init` (`TRIGGERS`; then `check.py --sync`) | The skill md files that tell the agent to open each step's recipes, and the step lists in `desk-feedback/routing.md` ("Workspace rules") |
 | How corrections are judged, recorded, or routed | `desk-feedback`, and its `scripts/ledger.py` for the ledger | `desk-dreaming`'s `run.md` if the daily cleanup reads it |
 | A rule ID | New: `python3 ../skills/desk-feedback/scripts/ledger.py next <prefix>` in `sandbox/` (the prefix from `TOPICS` in `ledger.py`). Never change one, even when the rule moves | — |
 | A skill's file is split, moved, or renamed; a skill is added, removed, or renamed | The files themselves | `RESTRUCTURE` (paths and names) or `SPLIT` (splits) in `desk-migrate/scripts/migrate.py`, `TRIGGERS` in `desk.py` of `desk-init` (then `check.py --sync`), `SHARED`/`COPIES` there if a shared file moves, `TABLE` in `desk-dreaming/scripts/sessions.py` (keep the old names too), the groups above, the table in README, the count in `docs/` ("16") |
@@ -72,8 +70,8 @@ Find the owner first, and change it there only. To find where a plugin rule is w
 
 - **Give knowledge, not orders.** Write principles, best practices with their reasons and sources, examples, and tools, and let the model decide. Write an instruction only for what the principles do not cover (what is left over) and for the specifics of one environment or a user's decision, because a fixed instruction applies itself to pages it was not written for (2026-10-30 and 2026-10-31 in `docs/decisions.md`). What can be measured goes into the components' defaults and lint, not into text the model reads.
 - **A skill opens only its own files.** Name another skill by its folder name (`deck-design`), and a part of it by the topic its `SKILL.md` table names, with a section number or rule ID: "`deck-design` → slides §3", "slides-visual-049 (`deck-design`)". Don't write a path into another skill, because its files then cannot move without breaking the caller, and a reader who skips the other skill's `SKILL.md` misses the context it gives. A command of another skill's script is written by name with the skill ("`slides.py lint` (`build-slides`)"); a skill that holds a copy of a shared script runs its own (`<this skill's folder>/scripts/ledger.py`). `tests/skills/check.py` fails on a path into another skill (only `desk-migrate`, which maps earlier paths to current ones, may name them). When you add a topic that other skills point to, add it to that skill's `SKILL.md` table under the same words.
-- Use the same source for Claude Code, Codex, and pi. Codex reads the Claude Code layout (`.claude-plugin/`, `hooks/hooks.json`) as is, so don't add Codex-specific files. When changing how recipes are appended, check both `hooks/hooks.json` and `extensions/rules.ts`. Don't make a fix that works for only one agent.
-- Find the workspace, the settings, and the workspace's recipes (`desk.rules`: `recipes/**/RECIPE.md` with frontmatter `description`; which plugin files trigger which `step`: `desk.TRIGGERS`) only through `desk.py` (owner `desk-init`; every skill that looks up the workspace holds a copy) (walk up for `desk.toml`, else `~/.desk.toml` and its `workspace`; `DESK_CONFIG` overrides the path, and empty skips it). Scripts, `hooks/rules_overlay.py` (and through it `extensions/rules.ts`), and desk-dreaming's `run.sh` and `snapshot.sh` all use it, so the lookup order stays the same everywhere. Take the workspace from `gapi.workspace()` or `desk.locate()`, not from the folder of the settings file, because `~/.desk.toml` sits outside the workspace.
+- Use the same source for Claude Code, Codex, and pi. Codex reads the Claude Code layout (`.claude-plugin/`) as is, so don't add Codex-specific files. Don't add hooks or extensions: the plugin works through skills and scripts alone, so it runs the same in hosts without hooks (Genie Code, Genie One), and the agent opens workspace recipes itself (2026-11-04 in `docs/decisions.md`). Don't make a fix that works for only one agent.
+- Find the workspace, the settings, and the workspace's recipes (`desk.rules`: `recipes/**/RECIPE.md` with frontmatter `description`; which plugin files belong to which `step`: `desk.TRIGGERS`) only through `desk.py` (owner `desk-init`; every skill that looks up the workspace holds a copy) (walk up for `desk.toml`, else `~/.desk.toml` and its `workspace`; `DESK_CONFIG` overrides the path, and empty skips it). Scripts and desk-dreaming's `run.sh` and `snapshot.sh` all use it, so the lookup order stays the same everywhere. Take the workspace from `gapi.workspace()` or `desk.locate()`, not from the folder of the settings file, because `~/.desk.toml` sits outside the workspace.
 - Write scripts with the standard library only. Only scripts that need packages such as Pillow declare them in a leading `# /// script` block and run with `uv run`. Target Python 3.11 or later. A script imports only modules in its own `scripts/` folder (its own files and the copies of shared code, "Shared code" above). Don't import or read another skill's files; `build-vids` reads and writes the speaker notes with its copy of `notes.py`, which `build-slides` owns. A script without `--selftest` is not run by CI, so give a new script at least a `--selftest` that imports it.
 - Keep the body of each `SKILL.md` within 5,000 tokens, because after compaction Claude Code re-attaches only the first 5,000 tokens of each invoked skill. Move sections needed only in some situations (conditional steps, failure handling, steps used by a separate call) into a file linked directly from the table in `SKILL.md`. Don't create files reachable only from other files, because nested files tend to be read only in part.
 - Record user decisions in `docs/decisions.md`, with the date and the user's own words, verbatim. Record deferred work in `docs/todo.md`.
@@ -87,13 +85,13 @@ Run every check in `sandbox/` (see "Sandbox" below), and paste the results as-is
 | Changed | How to verify |
 | --- | --- |
 | Skill md files | `tests/skills/check.py` prints 「スキルの形: 問題なし」 |
-| Scripts (`hooks/`, `skills/*/scripts/`, `tests/`) | Run `--selftest` with Python 3.11 (step 2 of "Sandbox"). Every script prints `selftest ok` |
+| Scripts (`skills/*/scripts/`, `tests/`) | Run `--selftest` with Python 3.11 (step 2 of "Sandbox"). Every script prints `selftest ok` |
 | Shared code (a file in `SHARED` or `COPIES`) | Edit the owner, run `python3 tests/skills/check.py --sync`, then the selftests (the loop also runs every copy, so each skill that holds it is checked where it is installed) |
-| Paths or names of skills and their files | Also `desk-migrate`'s selftest (it checks `RESTRUCTURE`), and that `hooks/rules_overlay.py --selftest` still finds the moved files |
+| Paths or names of skills and their files | Also `desk-migrate`'s selftest (it checks `RESTRUCTURE`) |
 | Visual building blocks (`slides.py`, `template.py`, `docs.py`) | Rebuild the template samples and look at the images (themes in `build-slides`, templates in `build-docs`) |
 | JSON page schema and components | `python3 ../tests/render/run.py --judge` builds all samples and compares every page image with `expect.json`. When you add a key to the schema, add it to the samples; when you add a sample page, add it to `expect.json` (selftest checks both) |
 | Descriptions of components, how to write them, or the routes between skills | Give a prompt from `docs/fixtures/` to a child agent with no conversation context, and check that it finds the right files and picks the right components from the descriptions alone ("Test with fixture prompts" in [docs/development.md](docs/development.md)) |
-| Behavior of skills, hooks, and the extension | Open a conversation and go through a scene that uses the changed skill ("Claude Code", "Codex", "pi", and "Check that recipes are appended" in [docs/development.md](docs/development.md)) |
+| Behavior of skills, and when recipes are opened | Open a conversation and go through a scene that uses the changed skill ("Claude Code", "Codex", "pi", and "Check that recipes are opened" in [docs/development.md](docs/development.md)) |
 
 ## Languages
 
@@ -122,7 +120,7 @@ Write instructions that AI reads in English. Write what people read, and rules t
 
 ## Sandbox
 
-Put a test workspace `sandbox/` directly under the worktree, and pass it the worktree's plugin without installing it. `.gitignore` excludes `sandbox/`, so it stays out of commits and goes away with the worktree. [docs/development.md](docs/development.md) covers opening it in Claude Code, Codex, and pi, checking that the recipes are appended, building materials, and cleanup.
+Put a test workspace `sandbox/` directly under the worktree, and pass it the worktree's plugin without installing it. `.gitignore` excludes `sandbox/`, so it stays out of commits and goes away with the worktree. [docs/development.md](docs/development.md) covers opening it in Claude Code, Codex, and pi, checking that the recipes are opened, building materials, and cleanup.
 
 1. **Create.** Run from the worktree root:
 
@@ -137,7 +135,7 @@ Put a test workspace `sandbox/` directly under the worktree, and pass it the wor
 2. **Run the selftests.** Run in `sandbox/` (`template.py` looks for `desk.toml`), with Python 3.11, the lowest supported version, and with `DESK_CONFIG` empty, so that your own `~/.desk.toml` does not change the results:
 
    ```sh
-   for f in ../hooks/*.py ../skills/*/scripts/*.py ../tests/*/*.py; do
+   for f in ../skills/*/scripts/*.py ../tests/*/*.py; do
      grep -q -e --selftest "$f" && echo "$f: $(DESK_CONFIG= uv run -q --python 3.11 "$f" --selftest 2>&1 | tail -1)"
    done
    ```

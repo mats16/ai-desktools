@@ -64,7 +64,6 @@ mkdir -p .codex && { grep -qs 'desk-tools@desk-tools' .codex/config.toml || prin
 - 1 つめで出たときは、Claude Code と同じく `marketplace add` を飛ばし、入れ元（`marketplaceSource`）が違えばユーザーに聞く。
 - 3 つめに出たパスが `<プラグイン>`（`~/.codex/plugins/cache/` の写し）。
 - 4 つめでユーザーの設定の `enabled` を切り、5 つめでワークスペースだけで入れる。4 つめが止まったら、`~/.codex/config.toml` の `[plugins."desk-tools@desk-tools"]` を見せ、`enabled = false` にしてもらう（切らないと、どのフォルダの会話にもスキルが出る）。5 つめは、ワークスペースの `.codex/config.toml` にもう `desk-tools@desk-tools` があれば足さないので、そのときは中身を見て `enabled = true` かを確かめる。ワークスペースの `.codex/config.toml` は、そのフォルダを信頼したときだけ読まれる。
-- hook は、次に対話の Codex をワークスペースで開いたとき、`/hooks` で `desk-tools` の 2 つを信頼してもらう（6 で伝える。信頼するまで `recipes/` のレシピが出ない。`<プラグイン>/docs/codex-plugin.md`）。
 
 **pi**
 
@@ -103,9 +102,9 @@ pi install -l git:github.com/mats16/ai-desktools
 - 置いたもの（init.py の「置いた」「残した」）と、`desk.toml` で埋めた値・空のままの値。既定のテーマ。資料を作る言語。コメントを見張る時間（見張らないなら、そう書く）。
 - 定期の整理を登録したスケジューラーと時刻。手で入れてもらうものが残っていれば、その手順。
 - doctor の結果。残った要確認と、ユーザーが回すもの。
-- 次からの開き方。**ワークスペースの直下で開く**（サブフォルダで開くと、プラグインのスキルも hook も読み込まれない）。
+- 次からの開き方。**ワークスペースの直下で開く**（サブフォルダで開くと、プラグインのスキルが読み込まれない）。
   - Claude Code: `cd <ワークスペース> && claude`。スキルは `/desk-tools:build-slides` のように呼ぶ。
-  - Codex: `cd <ワークスペース> && codex`。初めてはフォルダを信頼し、`/hooks` で `desk-tools` の hook を信頼する。スキルは `$desk-tools:build-slides` のように呼ぶ。
+  - Codex: `cd <ワークスペース> && codex`。初めてはフォルダを信頼する。スキルは `$desk-tools:build-slides` のように呼ぶ。
   - pi: `cd <ワークスペース> && pi`。初めては `/trust` で信頼を保存する（保存しないと、パッケージのスキルが出ない。desk-dreaming の定期の回も読めない）。スキルは `/skill:build-slides` のように呼ぶ。
 - 最初の資料は「〇〇向けの提案のスライドを作って」のように頼めばよい（スキル `deck-workflow` から始まる）。
 
