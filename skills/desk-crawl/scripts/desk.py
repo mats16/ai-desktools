@@ -36,7 +36,7 @@ STEPS = ("gather", "build")  # frontmatter の step の値。書かなければ�
 TRIGGERS = {  # プラグインのファイル（<スキル>/<ファイル>）→ そのファイルの作業（その作業で開くレシピの種類）。make は step のないもの（資料を作るどの作業でも）。
     # 作る会話はこの表を読まない（スキルの md が、その作業でレシピを開くように書く）。ledger.py の --auto（消す項目が、その作業のファイルのどれにもあるか）と、migrate.py（前の paths を step にする）と、desk-dreaming の sessions.py（make のファイルを開いた会話を、作り方の表を開いたと数える）が使う
     "gather": ("deck-workflow/materials.md", "deck-workflow/start.md", "customer-profile/*", "desk-crawl/*", "desk-research/*"),
-    "build": ("build-slides/*", "build-docs/*", "build-vids/*", "deck-design/slides.md", "deck-design/docs.md", "deck-workflow/slides_steps.md", "deck-workflow/prompt_pages.md", "deck-workflow/reuse.md"),
+    "build": ("build-slides/*", "build-docs/*", "build-vids/*", "deck-design/slides.md", "deck-design/slides_patterns.md", "deck-design/docs.md", "deck-workflow/slides_steps.md", "deck-workflow/prompt_pages.md", "deck-workflow/reuse.md"),
     "make": ("deck-workflow/*", "deck-writing/*", "deck-design/*", "deck-review/*", "desk-feedback/SKILL.md", "desk-feedback/routing.md", "build-slides/*", "build-docs/*", "build-vids/*")}
 
 
