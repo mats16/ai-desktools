@@ -25,7 +25,7 @@ README の「会話で入れる」のプロンプトを貼られたエージェ�
 
 見つかったものによって、次のどれかにする（上から順に見て、最初に当たったもの）。
 
-- **もう全体に入っている**（Claude Code の `scope` が `user` で `enabled` が `true`、pi の User packages、Codex は `enabled = true` で `~/.desk.toml` もある）: 3（プラグインを入れる）だけ飛ばし、ほかはこの手順のとおり進める。2 は聞かずに「全体」とし、そのことを伝える。`<プラグイン>` は今入っているもののパス（Claude Code は 3 の最後のコマンドで出るもの、Codex は `codex plugin add desk-tools@desk-tools --json` の `installedPath`〔全体ならユーザーの設定はそのままでよい〕、pi は `~/.pi/agent/git/github.com/mats16/ai-desktools`）。Claude Code では、入れ元（`claude plugin marketplace list --json` の `desk-tools`）が GitHub でなければ、そのことも伝える。`~/.desk.toml` があれば、1 の 1 の候補の先頭にその `workspace` を出す。ほかのフォルダを選んだら、そこは 2 つめのワークスペースになり、設定はそのフォルダの `desk.toml`（4 の `init.py` を `--user` なしで回す）。ほかのワークスペースにもワークスペースだけで入れてあれば、そこではスキルが二重に読まれることも伝える。
+- **もう全体に入っている**（Claude Code の `scope` が `user` で `enabled` が `true`、pi の User packages、Codex は `enabled = true` で `~/.desk.toml` もある）: 3（プラグインを入れる）だけ飛ばし、ほかはこの手順のとおり進める。2 は聞かずに「全体」とし、そのことを伝える。`<プラグイン>` は今入っているもののパス（Claude Code は 3 の最後のコマンドで出るもの、Codex は `codex plugin add desk-tools@desk-tools --json` の `installedPath`〔全体ならユーザーの設定はそのままでよい〕、pi は `${PI_CODING_AGENT_DIR:-~/.pi/agent}/git/github.com/mats16/ai-desktools`（pi の保存先。`PI_CODING_AGENT_DIR` がなければ `~/.pi/agent`））。Claude Code では、入れ元（`claude plugin marketplace list --json` の `desk-tools`）が GitHub でなければ、そのことも伝える。`~/.desk.toml` があれば、1 の 1 の候補の先頭にその `workspace` を出す。ほかのフォルダを選んだら、そこは 2 つめのワークスペースになり、設定はそのフォルダの `desk.toml`（4 の `init.py` を `--user` なしで回す）。ほかのワークスペースにもワークスペースだけで入れてあれば、そこではスキルが二重に読まれることも伝える。
 - **ほかに何かある**（ほかのワークスペースに入れたもの、Codex の設定の行、`~/.desk.toml`）: 2 は聞かずに「ワークスペースだけ」で進め、そのことを伝える。ワークスペースだけの入れ方は、ほかのワークスペースに入れてあっても重ねて使える。全体にしたければ、先に今のものを外してから（「うまくいかないとき」の外し方）この手順をやり直す。ワークスペースだけに入れたものが残ったまま全体に入れると、そこでスキルが二重に読まれる。全体に入れたものに、Codex でワークスペースだけを重ねると、ユーザーの設定を切るので全体のものが消える。
 - **何もない**: 下の 2 も聞く。
 
@@ -97,14 +97,14 @@ pi install -l git:github.com/mats16/ai-desktools   # ワークスペースだけ
 pi install git:github.com/mats16/ai-desktools      # 全体
 ```
 
-`<プラグイン>` は、ワークスペースだけなら `<ワークスペース>/.pi/git/github.com/mats16/ai-desktools`、全体なら `~/.pi/agent/git/github.com/mats16/ai-desktools`。
+`<プラグイン>` は、ワークスペースだけなら `<ワークスペース>/.pi/git/github.com/mats16/ai-desktools`、全体なら `${PI_CODING_AGENT_DIR:-~/.pi/agent}/git/github.com/mats16/ai-desktools`（pi の保存先。`PI_CODING_AGENT_DIR` がなければ `~/.pi/agent`）。
 
 どれも `<プラグイン>/skills/desk-init/SKILL.md` があることを確かめる。
 
 ## 4. ワークスペースを作る
 
 1. `<プラグイン>/skills/desk-init/SKILL.md` を開き、その手順に従う。「このスキルのフォルダ」は `<プラグイン>/skills/desk-init`、ほかのスキルのフォルダは `<プラグイン>/skills/<スキル>`。手順の 1（場所と設定の置き場所）は、ここの 1 で聞いたので飛ばす。
-   - **設定の置き場所。** ここの 1 の 2 で決まる。ワークスペースだけなら、ワークスペースの直下の `desk.toml`（`init.py <ワークスペース>`）。全体なら `~/.desk.toml`（`init.py <ワークスペース> --user`）。全体でワークスペースにもう `desk.toml` があるときは、`<プラグイン>/skills/desk-migrate/SKILL.md` の `to-user` で `~/.desk.toml` に移してから回す。このあとの `desk.toml` は、全体なら `~/.desk.toml` のこと。
+   - **設定の置き場所。** プラグインの範囲（ここの 1 の 2）とは別に、このワークスペースの設定をどこに置くかで決める。ワークスペースだけなら、ワークスペースの直下の `desk.toml`（`init.py <ワークスペース>`）。全体で `~/.desk.toml` がまだないか、その `workspace` がこのフォルダなら、`~/.desk.toml`（`init.py <ワークスペース> --user`）。このときワークスペースにもう `desk.toml` があれば、`<プラグイン>/skills/desk-migrate/SKILL.md` の `to-user` で `~/.desk.toml` に移してから回す。全体でも、`~/.desk.toml` がほかのフォルダを指していれば（2 つめのワークスペース）、このフォルダの `desk.toml`（`init.py <ワークスペース>`。`to-user` は回さず、`~/.desk.toml` は変えない）。このあとの `desk.toml` は、ここで決めた設定のファイルのこと（6 でもそれを返す）。
    - **`init.py` が止まったら**（設定がもうほかの場所にある）、そのメッセージを伝え、ユーザーと決めてから、示された手で直してもう一度回す。ただし `~/.desk.toml` の `workspace` は書き替えない（書き替えると、前のワークスペースがどの会話からも使われなくなる）。メッセージがその手を挙げても、ユーザーには出さない。
    - **書く値。** 3 の `[drive] shared_themes` は、ここの 1 の 3 で聞いた値。`[feedback.google_comments] watch_hours` は、ここの 1 の 5 で選んだ時間（見張らないなら雛形の 0 のまま）。`[desk] default_language` は、ここの 1 の 6 で選んだ言語（日本語なら雛形の `ja` のまま）。設定にもう値があり、ここの 1 の答えと違えば、どちらにするかを聞く（聞かずに上書きしない）。
    - **既定のテーマ。** 3 の `[slides] default_theme`（既定のテンプレート）は、テンプレートを作り、共有のテーマを `slides.py theme <url>` で写したあとで、`<プラグイン>/skills/build-slides/template.md` の「Choosing the default theme」に従って選択式で聞く（1 では聞かない。何を選べるかは、そろってから分かる）。
