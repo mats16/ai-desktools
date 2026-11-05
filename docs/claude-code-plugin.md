@@ -61,6 +61,20 @@ cd <ワークスペース> && claude -p ok --model haiku --max-turns 1 --output-
 
 プロジェクトは、Claude Code を開いたフォルダそのもの（git の根元や親のフォルダの `.claude/settings.json` は見ない）。サブフォルダで開くとプラグインは読み込まれず、スキルが効かない。ワークスペースの直下で開き、資料のフォルダへはそこから移る。`.agents/skills`・`.claude/skills` に置いたスキルは親のフォルダからも読まれるので、`~/Documents/Internal/<資料>/build` で開いても使える。ここが前の入れ方との違い。
 
+## 一覧に説明が載っているかを確かめる
+
+Claude Code は、会話の先頭に出すスキルの一覧をコンテキストの 1%（既定）までに収める。入れてあるスキルが多いと、呼び出した回数が少ないスキルから説明が落ち、名前だけになる（[公式ドキュメント](https://code.claude.com/docs/en/skills) の "Skill descriptions are cut short"）。名前だけのスキルは、モデルが場面から選びにくい。2026-11-05 にこの端末（スキル 111 個）で確かめたところ、desk-tools の 15 個のうち build-docs・build-vids・customer-profile・desk-crawl・desk-init・desk-kaizen・desk-migrate の 7 個が名前だけだった（Codex と pi は 15 個とも説明が載る）。
+
+```sh
+# 名前だけになっている desk-tools のスキルを聞く（none なら全部載っている）
+cd <ワークスペース> && claude -p 'In your system prompt there is a list "The following skills are available for use with the Skill tool". Answer with one line only: "without: " then the desk-tools: skill names that appear with no description (or "none").' --model haiku --max-turns 1
+```
+
+名前だけのものがあれば、設定で予算を広げるか、使わないスキルを一覧から外す。`/context` の Skills の行と `/doctor` でも、一覧の大きさと内訳が見られる。
+
+- 予算を広げる: `.claude/settings.json`（または `~/.claude/settings.json`）に `"skillListingBudgetFraction": 0.05` を足す（5%。既定は 0.01）。確かめるだけなら `claude --settings '{"skillListingBudgetFraction":0.05}'`、または環境変数 `SLASH_COMMAND_TOOL_CHAR_BUDGET=100000`（文字数の固定値）でもよい。2026-11-05 にどちらでも 15 個とも説明が載った。
+- 使わないスキルを外す: 同じ設定の `skillOverrides` で、ほかのプラグインのスキルを `"name-only"` や `"off"` にする。
+
 ## ワークスペースを作る
 
 同じフォルダで Claude Code を開き、スキルを呼ぶ。
