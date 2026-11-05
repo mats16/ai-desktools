@@ -73,7 +73,7 @@ cd <ワークスペース> && claude -p 'In your system prompt there is a list "
 名前だけのものがあれば、設定で予算を広げるか、使わないスキルを一覧から外す。`/context` の Skills の行と `/doctor` でも、一覧の大きさと内訳が見られる。
 
 - 予算を広げる: `.claude/settings.json`（または `~/.claude/settings.json`）に `"skillListingBudgetFraction": 0.05` を足す（5%。既定は 0.01）。確かめるだけなら `claude --settings '{"skillListingBudgetFraction":0.05}'`、または環境変数 `SLASH_COMMAND_TOOL_CHAR_BUDGET=100000`（文字数の固定値）でもよい。2026-11-05 にどちらでも 15 個とも説明が載った。
-- 使わないスキルを外す: 同じ設定の `skillOverrides` で、ほかのプラグインのスキルを `"name-only"` や `"off"` にする。
+- 使わないスキルを外す: 使っていないプラグインは `/plugin` で無効にする（`/skill-doctor` が、どのスキルがいくら使い、呼ばれていないかを出す）。自分で置いたスキル（`.claude/skills/` など）は、同じ設定の `skillOverrides` で `"name-only"` や `"off"` にできる。プラグインのスキルには `skillOverrides` は効かない（公式ドキュメント "Override skill visibility from settings"）。
 
 ## ワークスペースを作る
 
