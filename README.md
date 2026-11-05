@@ -46,7 +46,7 @@ AI Desk Tools を入れて、ワークスペースを作ってください。
 手順は https://raw.githubusercontent.com/mats16/ai-desktools/main/INSTALL.md にあります。WebFetch ではなく curl で読み、そのとおりに進めてください。
 ```
 
-エージェントが [INSTALL.md](INSTALL.md) に従い、ワークスペースにするフォルダと全社の共有テーマのフォルダ、定期の整理を回すか、資料を作る言語を聞き、Python・uv を見て、そのフォルダだけにプラグインを入れる。続けて、入れた `desk-init` の手順（作る・doctor）で `desk.toml`（Google の認証、テーマ、Drive の置き場所、材料を集める道具）を一緒に埋め、要修正が 0 になるまで進める。最後に、定期の整理（desk-dreaming）を回すなら、エージェントが自分の道具にあるスケジューラー（T3 Code・Claude Code Desktop・Omnigent など）に登録する（なければ、launchd か cron の入れ方を示す）。自分で回すのは、ブラウザが開く Google のログインだけ。終わったら、ワークスペースの直下で会話を開き直す。
+エージェントが [INSTALL.md](INSTALL.md) に従い、ワークスペースにするフォルダと全社の共有テーマのフォルダ、定期の整理を回すか、資料を返したあとのコメントを見張るか、資料を作る言語と、入れる範囲（そのフォルダだけか全体か）を聞き、Python・uv を見て、プラグインを入れる。続けて、入れた `desk-init` の手順（作る・doctor）で `desk.toml`（Google の認証、テーマ、Drive の置き場所、材料を集める道具）を一緒に埋め、要修正が 0 になるまで進める。最後に、定期の整理（desk-dreaming）を回すなら、エージェントが自分の道具にあるスケジューラー（T3 Code・Claude Code Desktop・Omnigent など）に登録する（なければ、launchd か cron の入れ方を示す）。自分で回すのは、ブラウザが開く Google のログインだけ。終わったら、会話を開き直す（そのフォルダだけに入れたなら、ワークスペースの直下で）。
 
 ## 前の名前から移る
 
