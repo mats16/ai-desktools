@@ -47,6 +47,7 @@ python3 $K/slides.py merge fix_a.py fix_b.py          # for pages.py materials: 
   | A filled box was made square (`shape: rectangle`) | Remove `shape` unless there is a reason (`deck-design` → slides §4) |
   | A diagram laid out in one horizontal row and joined by arrows | Write it with `"arrows": true` on a `row` (slides-pages-038 in diagrams.md) |
   | An arrow becomes diagonal, a line passes over a component, a label of a diagonal or bent line overlaps a line, arrowheads gather at one point | Change the arrow ends, sides, `route`, or `label_side`, or align the box heights (slides-pages-038 in diagrams.md) |
+  | A mark (`icon`, `num`, `image`) and the plain `text` to its right in a `frame` have different centers | Set the `y` the warning gives, or write the pair as a `list` item ("Free-form diagrams" in diagrams.md) |
   | Components partly overlap | Separate them, or put one fully inside the other (slides-pages-038 in diagrams.md) |
   | An arrow with a number circle (`num`) has no segment long enough for it | Move the boxes apart so that one segment of the line is 0.52 in or longer (the last segment of an arrow with a head also needs the arrowhead: 0.63 in at 1.25pt; the warning shows the length); with `label_side`, only segments in that direction count, so lengthen one of those or change `label_side` (`num` in diagrams.md) |
   | No clear point for an arrow's number circle (and its label) | Move the boxes apart to lengthen the line, shorten the label, or remove `label_side` (`num` in diagrams.md) |
