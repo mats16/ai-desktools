@@ -1,0 +1,18 @@
+{"apiVersion": "slides/v1", "kind": "page",
+ "title": "前の手順へ戻る線は、同じ向きの辺どうしを U 字で結ぶ", "lead": "from・to に同じ向きの辺を書くと U 字になる。底の深さは、ほかの部品と線と札をよけて決まる", "kicker": "arrow U",
+ "body": [
+  {"type": "frame", "h": 2.7, "items": [
+    {"type": "card", "id": "plan", "head": "構成案", "text": "ページの流れを決める", "x": 0, "y": 0, "w": 2.0, "h": 1.5},
+    {"type": "card", "id": "three", "head": "代表の 3 枚", "text": "見た目の型を決める", "x": 2.45, "y": 0, "w": 2.0, "h": 1.5},
+    {"type": "card", "id": "rest", "head": "残りと全体", "text": "残りのページを組み、全体を見る", "x": 4.9, "y": 0, "w": 2.0, "h": 1.5},
+    {"type": "card", "id": "back", "head": "返す", "text": "保存したリビジョンと照らし合わせる", "x": 7.35, "y": 0, "w": 2.0, "h": 1.5},
+    {"type": "arrow", "from": "plan", "to": "three"},
+    {"type": "arrow", "from": "three", "to": "rest"},
+    {"type": "arrow", "from": "rest", "to": "back"},
+    {"type": "arrow", "from": "back.bottom", "to": "plan.bottom", "color": "RED", "label": "前提が変わる → 構成案から"},
+    {"type": "arrow", "from": "back.bottom", "to": "rest.bottom", "color": "RED", "label": "小さく直す → 組み直す"},
+    {"type": "label", "id": "write", "text": "書く", "x": 9.7, "y": 0, "w": 1.3, "h": 0.5, "fill": "PANEL"},
+    {"type": "label", "id": "review", "text": "レビュー", "x": 9.7, "y": 1.0, "w": 1.3, "h": 0.5, "fill": "NAVY"},
+    {"type": "arrow", "from": "write", "to": "review"},
+    {"type": "arrow", "from": "review.right", "to": "write.right", "color": "RED", "label": "要修正", "depth": 0.4}]}],
+ "authorNotes": ["from・to の両方に同じ向きの辺（back.bottom と plan.bottom）を書くと U 字の矢印になる。1 つの辺から 2 本出すと、辺の上に分けて並べ、狭い U 字を内に、広い U 字をその外に回す。札は U 字の外に付く（下の辺なら底の線の下）。深さを決めたいときだけ depth（in）を書く。右の「レビュー」から「書く」へは、右の辺どうしの U 字で、depth で深さを 0.4 in に決めた（書かなければ 0.25 in）。U 字は図形につながない（画面で箱を動かすと付いてこない）。"]}
