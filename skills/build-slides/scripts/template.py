@@ -19,7 +19,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gapi import DRIVE, GSLIDES, PPTX, SLIDES, batch, config, file_id, request, run, subfolder, trash, upload
 from lint import JA, cells, contrast, flatten, lum, paras, solid
-from slides import (BG, BLANK, CARD, CARD_DOWN, COPYRIGHT_PT, DECOR, EMU, GA, HEAD, INSET, NAVY, NAVY_BLOCK, ON_RED, OSS, PAD, PANEL, PREVIEW, RED, RED_ON_NAVY,
+from slides import (BG, BLANK, CARD, CARD_DOWN, COPYRIGHT_PT, DECOR, EMU, GA, HEAD, HEAD_PT, INSET, NAVY, NAVY_BLOCK, ON_RED, OSS, PAD, PANEL, PREVIEW, RED, RED_ON_NAVY,
                     RED_SOFT, RED_TEXT, RULE, SLOTS, STAGE_TEXT, SUB, SUB_ON_NAVY, TEXT, WHITE, W, X, Y_BODY, Y_FOOT, build, cols, make_deck, number_style)
 from slides import (BUILTIN_THEMES, FIXED as FIXED_DEFAULT, FONT_EM, JP_FONTS, LAYOUT_MARK, NAMED, ROLE, THEME_MARK, THEME_PROP, THEMES_DIR, TONES, VARIANTS, is_blank,
                     load_theme, need_brand, placeholders, read_theme, record_template, templates, theme_file, theme_fixed, theme_font, theme_names,
@@ -244,7 +244,7 @@ def specimen(theme, t, origin=()):
 
         s = d.page("部品は役割の色で塗り、大きさと間隔は既定に従う", "カード、パネル、数字、札、正円の番号、表、矢印、結論バンド、出典の行の見本。")
         hw = (W - 0.3) / 2  # d.card の h は、中身を下げる CARD_DOWN の分を足す（下の空きを保つ）
-        d.card(s, X, Y_BODY, hw, 1.5 + CARD_DOWN, "カードの見出し（12pt 太字）", body=["本文は 11pt。", ("強調は太字", {"bold": True}), "。\n",
+        d.card(s, X, Y_BODY, hw, 1.5 + CARD_DOWN, "カードの見出し（本文と同じ大きさの太字）", body=["本文は 11pt。", ("強調は太字", {"bold": True}), "。\n",
                                                                   ("赤の文字", {"color": RED_TEXT, "bold": True}), "は 18pt 未満でも読める色。\n",
                                                                   ("リンク", {"link": docs}), "は周りの色のまま下線を付ける。"])
         d.text(s, X - INSET, 3.4, hw + 2 * INSET, 0.65, [("32", {"size": 32, "bold": True, "color": HEAD}), ("%", {"size": 16, "bold": True, "color": HEAD}),
@@ -274,7 +274,7 @@ def specimen(theme, t, origin=()):
         d.card(s, rx, Y_BODY, hw, 1.5 + CARD_DOWN, "箇条書き（bullets）", body="短い項目を並べるときに使う\n1 つの枠の本文は 8 行まで\n字下げは文字の大きさの 1.3 倍", bullets=True)
         y0 = 3.48
         d.box(s, rx, y0, hw, 1.55, line=SUB, kind="ROUND_RECTANGLE")  # 塗りのない角丸は辺と弧を線でつなぐ。継ぎ目の段をここで見る（api.md）
-        d.text(s, rx + PAD, y0 + 0.1, hw - 2 * PAD, 0.34, "塗りのない角丸の囲み（まとまりを示す）", size=12, color=HEAD, bold=True)
+        d.text(s, rx + PAD, y0 + 0.1, hw - 2 * PAD, 0.34, "塗りのない角丸の囲み（まとまりを示す）", size=HEAD_PT, color=HEAD, bold=True)
         for (x, w), label in zip(cols(2, 0.24, rx + 0.2, hw - 0.4), ("部品 A", "部品 B")):
             d.text(s, x, y0 + 0.55, w, 0.8, label, align="CENTER", valign="MIDDLE", fill=PANEL)
         y1 = 5.2  # 強調の赤い点線の囲み。中のカードと同じ半径（Google 標準の角丸にしない）で、線は赤の既定の 2pt（2026-10-08、ユーザー）
