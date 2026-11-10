@@ -2124,7 +2124,7 @@ class SpecPage:
     def flow(self, items, x, y, w, gap, loc, frame=None):
         """items を上から順に gap を空けて並べ、下端を返す。frame（frame の高さ）を渡すと、部品の x・y を (x, y) からの位置にし、frame の幅 w と高さに収まるかを見る。
         矢印は場所を取らず、ほかの部品を置き終えてから引く（[x, y] の端は (x, y) からの位置）。"""
-        origin, bottom, spans, arrows = (x, y), y, [], False
+        origin, bottom, spans, arrows, first = (x, y), y, [], False, len(self.placed)
         for i, e in enumerate(items):
             l = f"{loc}[{i}]"
             if self.check(e, l, frame is not None) == "arrow":
@@ -2152,7 +2152,34 @@ class SpecPage:
         if frame and arrows and len(spans) >= 3 and max(a for a, _ in spans) < min(b for _, b in spans):  # どの部品も同じ高さの帯にかかる = 横 1 列
             self.warns.append(f"{loc}: 横 1 列に並べて矢印でつないだ図は、row の \"arrows\": true に印のあるカードか label を並べて書ける（幅を本文いっぱいに使い、"
                               "高さと矢印の位置がそろう。../diagrams.md の「Free-form diagrams」）")
+        if frame:  # frame が x・y で置いた部品だけを見る（中の row・stack・grid の部品は、その並べ方が置く）
+            mine = {f"{loc}[{i}]" for i in range(len(items))}
+            self.beside_mark([p for p in self.placed[first:] if p[1] in mine])
         return bottom
+
+    def beside_mark(self, placed):
+        """frame に x・y で置いた印（icon・num・image）と、その右の塗りのない文字の、中心のずれを知らせる。カードと list は印の中心を 1 行目にそろえるが、
+        frame の部品は書いた位置のまま（2026-11-11、囲みの見出しの画像と文字を同じ y に置き、画像が文字より 0.07 in 下に出た）。"""
+        marks = [(l, r, e) for k, l, r, _, _, e in placed if k in ("icon", "num", "image") and r[3] <= MARK_IMG + 0.01]  # 印はカードの画像の大きさまで。大きな写真や画面の画像の横の文字は上寄せのままでよい
+        words = [(l, r, plain and e.get("valign", "top") == "top", e) for k, l, r, _, plain, e in placed if k in ("text", "label")]
+        pairs = {}  # 文字の場所 → いちばん近い左の印（番号とアイコンを並べても、文字の左の 1 つだけと組にする）
+        for ml, (mx, my, mw, mh), me in marks:
+            beside = [t for t in words if mx + mw / 2 < t[1][0] <= mx + mw + 0.5 and t[1][1] < my + mh and my < t[1][1] + t[1][3]]  # 印の右の文字（印の上に重ねた文字は除く）
+            if not beside:
+                continue
+            l, r, checkable, e = min(beside, key=lambda t: t[1][1])  # 印はいちばん上の文字（見出し）にそろえる。その下の補足とは組にしない。見出しが札や塗りの文字なら見ない
+            if checkable and (l not in pairs or mx > pairs[l][1][0]):
+                pairs[l] = (ml, (mx, my, mw, mh), me, r, e)
+        for l, (ml, (mx, my, mw, mh), me, (x, y, w, _h), e) in pairs.items():
+            s, bul = spec_bullets(e["text"])
+            size = e.get("size", 11)
+            line = first_pt(spec_md(s), size, w - (size * 1.3 / 72 if bul else 0)) * 1.2 / 72  # 1 行目の高さ（カードの印と同じ見方。箇条書きは字下げの分だけ狭い。行間 125 も 1 行目の位置は変わらない）
+            d = my + mh / 2 - (y + line / 2)  # 印の中心 − 文字の 1 行目の中心
+            if my >= y + line or round(abs(d), 2) <= 0.02:  # 1 行目が印にかからない文字は組にしない。出す値と同じ桁で比べる
+                continue
+            fix = " にするか、".join(f"{k} y を {v:.2f}" for k, v in (("text の", e["y"] + d), ("印の", me["y"] - d)) if v >= 0)  # frame の外（負の y）は勧めない
+            self.warns.append(f"{l}（text）: 左の {ml}（{me['type']}）と中心が {abs(d):.2f} in ずれる（印が{'下' if d > 0 else '上'}）。"
+                              f"{fix} にする（印と文字を list の項目にすれば、印の中心が 1 行目にそろう）")
 
     def lone_text(self):
         """塗りの箱の中に、ほかの部品がなく、塗りのない文字が 1 つだけ入っていたら止める（札は図形と文字を 1 つにする。角丸と箱の端と文字の間がそろう。
@@ -5060,6 +5087,36 @@ def selftest_spec():
         {"type": "label", "text": "A", "id": "a", "x": 0, "y": 0, "w": 1}, {"type": "label", "text": "B", "id": "b", "x": 2, "y": 0.1, "w": 1},
         {"type": "label", "text": "C", "id": "c", "x": 4, "y": 0, "w": 1}, {"type": "arrow", "from": "a", "to": "b"}, {"type": "arrow", "from": "b", "to": "c"}]}]})
     assert any("横 1 列" in w for w in d.warnings)
+    globals()["iconify"], real_iconify = (lambda name, color=TEXT, w=512: f"https://x/{name}.png"), iconify  # アイコンの名前を問い合わせない
+    try:
+        d, _ = run({"title": "t", "body": [{"type": "frame", "h": 1, "items": [  # 囲みの見出しの印と文字を同じ y に置くと、印が下に出る（2026-11-11）
+            {"type": "icon", "name": "a:b", "x": 0, "y": 0.1, "size": 0.32}, {"type": "text", "text": "**見出し**　補足", "x": 0.4, "y": 0.1, "w": 3},
+            {"type": "icon", "name": "a:b", "x": 0, "y": 0.5, "size": 0.32}, {"type": "text", "text": "そろえた", "x": 0.4, "y": 0.568, "w": 3}]}]})
+        side = [w for w in d.warnings if "中心が" in w]
+        assert len(side) == 1 and "items[1]（text）: 左の spec.body[0].items[0]（icon）と中心が 0.07 in ずれる（印が下）" in side[0] and "y を 0.17 に" in side[0], side
+        d, _ = run({"title": "t", "body": [{"type": "frame", "h": 1, "items": [  # 中の row の部品は frame の x・y で置かないので見ない（row の警告が出る）。入れ子の frame は 1 度だけ
+            {"type": "row", "x": 0, "y": 0, "w": 4, "items": [{"type": "icon", "name": "a:b", "size": 0.32}, {"type": "text", "text": "見出し"}]},
+            {"type": "frame", "x": 0, "y": 0.5, "w": 4, "h": 0.5, "items": [{"type": "icon", "name": "a:b", "x": 0, "y": 0, "size": 0.2}, {"type": "text", "text": "{24:大}", "x": 0.3, "y": 0, "w": 3}]}]}]})
+        side = [w for w in d.warnings if "中心が" in w]
+        assert len(side) == 1 and "印が上" in side[0] and "text の y" not in side[0] and "印の y を 0.10 に" in side[0], side  # text を負の y に上げる案は出さない
+        d, _ = run({"title": "t", "body": [{"type": "frame", "h": 1, "items": [  # 見出しと補足を印の横に重ねた囲み。補足は組にしない。印を負の y に上げる案は出さない
+            {"type": "icon", "name": "a:b", "x": 0, "y": 0, "size": 0.5}, {"type": "text", "text": "見出し", "size": 14, "x": 0.6, "y": 0.133, "w": 3},
+            {"type": "text", "text": "補足", "x": 0.6, "y": 0.37, "w": 3}, {"type": "icon", "name": "a:b", "x": 4, "y": 0, "size": 0.5}, {"type": "text", "text": "ずれ", "x": 4.6, "y": 0, "w": 3}]}]})
+        side = [w for w in d.warnings if "中心が" in w]
+        assert len(side) == 1 and "items[4]（text）" in side[0] and "text の y を 0.16 にする（" in side[0] and "印の y" not in side[0], side
+        d, _ = run({"title": "t", "body": [{"type": "frame", "h": 1, "items": [  # 見出しが札でも、少し印にかかっていても、その下の補足とは組にしない。番号とアイコンを並べた文字は、近いアイコンとだけ組にする
+            {"type": "icon", "name": "a:b", "x": 0, "y": 0, "size": 0.5}, {"type": "label", "text": "名前", "x": 0.6, "y": 0.05, "w": 1, "h": 0.25},
+            {"type": "text", "text": "補足", "x": 0.6, "y": 0.32, "w": 1}, {"type": "icon", "name": "a:b", "x": 2, "y": 0, "size": 0.5},
+            {"type": "text", "text": "見出し", "size": 14, "x": 2.48, "y": 0.133, "w": 1}, {"type": "text", "text": "補足", "x": 2.55, "y": 0.3, "w": 1},
+            {"type": "num", "n": 1, "x": 4, "y": 0}, {"type": "icon", "name": "a:b", "x": 4.4, "y": 0, "size": 0.32}, {"type": "text", "text": "ずれ", "x": 4.8, "y": 0, "w": 2}]}]})
+        side = [w for w in d.warnings if "中心が" in w]
+        assert len(side) == 1 and "items[8]（text）: 左の spec.body[0].items[7]（icon）" in side[0], side
+        d, _ = run({"title": "t", "body": [{"type": "frame", "h": 2.5, "items": [  # 大きな画像の横と上に置いた文字は、印と文字の組ではない
+            {"type": "icon", "name": "a:b", "x": 0, "y": 0, "size": 1.5}, {"type": "text", "text": "**名前**\n役割", "x": 1.7, "y": 0, "w": 2},
+            {"type": "icon", "name": "a:b", "x": 4, "y": 0, "size": 0.5}, {"type": "text", "text": "印の上の文字", "x": 4.1, "y": 0.1, "w": 2}]}]})
+        assert not any("中心が" in w for w in d.warnings), d.warnings
+    finally:
+        globals()["iconify"] = real_iconify
     d, _ = run({"title": "t", "body": [{"type": "box", "h": 0.5, "fill": "PANEL", "shape": "rectangle"}, {"type": "box", "h": 0.5, "line": "RULE", "shape": "rectangle"}]})
     assert sum("四角（shape: rectangle）" in w for w in d.warnings) == 1  # 塗りの箱だけ知らせる（枠線だけの箱は四角が既定）
     d, els = run({"title": "t", "body": [{"type": "row", "items": [{"type": "card", "head": "ピル", "corner": "pill"}, {"type": "card", "num": 1, "head": "印", "corner": "square"},
