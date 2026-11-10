@@ -202,9 +202,27 @@ CARD_DOWN, CARD_END = 0.09, 0.13  # d.card の中身を箱の上から下げる�
 # 同じ見た目にする（2026-10-20 の画像で、前は上 0.2 in・下 0.32 in、これで上下とも 0.3 in ほど）
 
 
-def card_top(w, head):
-    """d.card の本文の枠の上端（箱の上端から、in）。見出し（太字 12pt）が折り返す見込みなら、1 行（0.2 in）ごとに下げる（決め打ちの 0.5 in では、2 行の見出しが本文に重なった）。"""
-    return CARD_DOWN + (0.5 + (est_lines(head, w - 2 * PAD - 2 * INSET, 12, bold=True) - 1) * 0.2 if head else 0.1)
+HEAD_PT = 11  # カードと list の見出しは、既定で本文と同じ大きさの太字（前の 12pt と 11pt は近すぎて差に見えなかった。deck-design-011）。
+# 1.25 倍（14pt）を既定にすると、すでにあるデッキ 125 本で組むときの警告が 1,826 件から 2,230 件に増えたので、大きくするのはモデルが head_size で決める（2026-11-10）
+
+
+def card_grow(pt):
+    """カードの箱の端と文字の間（四方）に足す幅（in）。部品の空きは 12pt までの文字で 1 字分以上になるように決めてあるので、
+    カードの見出しか本文の大きさ（pt。size・head_size）がそれより大きければ、その差だけ広げる（slides-visual-027。12pt までは 0）。d.card と印のあるカードが使う。
+    本文の中の {40:…} の大きな数字は数えない（lint も stat も、大きな数字と説明の枠は説明の大きさで 1 字分を測る）。"""
+    return max(0, (pt - 12) / 72)
+
+
+def card_px(pt=HEAD_PT):
+    """d.card の箱と文字の枠の横の間（in）。いちばん大きい文字 pt に合わせて card_grow だけ広げる。"""
+    return PAD + card_grow(pt)
+
+
+def card_top(w, head, hs=HEAD_PT, pt=None):
+    """d.card の本文の枠の上端（箱の上端から、in）。見出し（太字 hs pt）が折り返す見込みなら、1 行（hs / 60 in。12pt で 0.2 in）ごとに下げる（決め打ちの 0.5 in では、2 行の見出しが本文に重なった）。
+    pt はカードの見出しと本文の大きいほう（見出しがなければ本文。省くと hs）。12pt より大きければ、上の空きも card_grow だけ広げる。"""
+    pt = hs if pt is None else pt
+    return CARD_DOWN + card_grow(pt) + (0.3 + est_lines(head, w - 2 * card_px(pt) - 2 * INSET, hs, bold=True) * hs / 60 if head else 0.1)
 
 
 def card_items(items):
@@ -215,19 +233,21 @@ def card_items(items):
     return parts
 
 
-def card_h(w, head=None, body=None, items=None, step=None, bullets=False, size=11, least=False):
+def card_h(w, head=None, body=None, items=None, step=None, bullets=False, size=11, least=False, hs=None):
     """[slides-component-012] d.card の高さの見込み（in）。d.card の h を省くと、これで中身から決める。隣の列やページの下端に合わせて伸ばすと、
     中身より大きい箱になる（代表の 3 枚の記録で、ほぼすべてのデッキに出た）。列の高さをそろえるなら、並ぶカードの card_h の最大を渡す。
     least なら、文字が枠に収まる最小（JSON のページの h の警告。#52）。最終行と下端の間は、本文の枠の下の 0.1 in だけを残し、step は最後の項目の後ろの空きを除く。
     文字は d.card が置く parts のまま spec_text_h で数える（項目の見出しの太字、run ごとの大きさ）。"""
-    top = card_top(w, head)
-    avail = w - 2 * PAD - 2 * INSET - (size * 1.3 / 72 if bullets else 0)
+    hs = hs or size
+    pt = max(hs, size) if head else size  # 見出しのないカードは head_size を数えない（印のあるカードと同じ）
+    top = card_top(w, head, hs, pt)
+    avail = w - 2 * card_px(pt) - 2 * INSET - (size * 1.3 / 72 if bullets else 0)
     if step is not None:  # 最後の項目の文字が step の間隔より高ければ、その分を足す（下端との間を下の CARD_END と同じだけ空ける）
         n = len(items or [])
-        last = spec_text_h(card_items(items[-1:]), avail, size, 125) + 2 * INSET + (0 if least else CARD_END) if n else 0.1
+        last = spec_text_h(card_items(items[-1:]), avail, size, 125) + 2 * INSET + (0 if least else CARD_END) + card_grow(pt) if n else 0.1
         return top + ((n - 1) * step + last if least and n else max(n * step + 0.1, (n - 1) * step + last))
     parts = card_items(items) if items else [body] if isinstance(body, str) else body or []
-    return top + (spec_text_h(parts, avail, size, 125) + 2 * INSET if any(p if isinstance(p, str) else p[0] for p in parts) else 0) + (0.1 if least else CARD_END)  # 本文の枠は下端の 0.1 in 上まで（d.card）
+    return top + (spec_text_h(parts, avail, size, 125) + 2 * INSET if any(p if isinstance(p, str) else p[0] for p in parts) else 0) + (0.1 if least else CARD_END) + card_grow(pt)  # 本文の枠は下端の 0.1 in 上まで（d.card）
 
 
 def table_grid(rows, n, pad=False):
@@ -759,32 +779,35 @@ class Deck:
             at += u16(ln) + 1
         return e
 
-    def card(self, sid, x, y, w, h=None, head=None, body=None, items=None, fill=CARD, line=RULE, step=None, bullets=False, corner="round"):
+    def card(self, sid, x, y, w, h=None, head=None, body=None, items=None, fill=CARD, line=RULE, step=None, bullets=False, corner="round", size=11, head_size=None):
         """見出しと本文の箱。箱の上に一回り小さい文字の枠を重ねる（文字の枠の内側の余白は変えられないので、枠と文字の間をここで空ける）。
         head・body・items を省くと、白い地に罫線の箱だけを置く（中身を自分で組むカード。h を渡す）。
         body は 1 つの文字の枠に入れるもの（text の parts と同じ。bullets で箇条書き）。
         items は (見出し, 説明) の並びで、既定では 1 つの文字の枠に空行を挟んで流す（1 行と 2 行の項目が混ざっても間がそろう）。
         [slides-component-009] step（in）を渡すと、前のように項目ごとに決まった間隔で置く（左右のカードで項目の上端をそろえたいときだけ。
         決まった間隔だと、行数の違う項目の間がそろわない）。
-        h を省くと中身から決める（card_h）。corner は箱の角（CORNERS）。戻りは箱の下端（in。下に置く要素の位置に使う）。"""
+        h を省くと中身から決める（card_h）。corner は箱の角（CORNERS）。size は本文、head_size は見出しの大きさ（pt。既定は本文と同じ大きさ）。
+        戻りは箱の下端（in。下に置く要素の位置に使う）。"""
         if corner not in CORNERS:
             raise ValueError(f"カードの角 {corner!r} は書けない（{'・'.join(CORNERS)}）")
         if h is None:
             if not (head or body or items):
                 raise ValueError("中身を自分で組むカードは h を渡す")
-            h = card_h(w, head, body, items, step, bullets)
+            h = card_h(w, head, body, items, step, bullets, size=size, hs=head_size)
         self.anchor = self.box(sid, x, y, w, h, fill, line, {"square": "RECTANGLE", "pill": "ROUND_RECTANGLE"}.get(corner),
                                min(w, h) / 2 if corner == "pill" else CORNER_RADIUS)
-        top = y + card_top(w, head)
+        hs = head_size or size
+        pt = max(hs, size) if head else size
+        g, px, top = card_grow(pt), card_px(pt), y + card_top(w, head, hs, pt)
         if head:
-            self.text(sid, x + PAD, y + 0.1 + CARD_DOWN, w - 2 * PAD, top - y - 0.16 - CARD_DOWN, head, size=12, color=HEAD, bold=True, spacing=100)  # card_top は 1 行 0.2 in で下げる
-        bh = max(h - (top - y) - 0.1, 0.2)  # 本文の枠。見出しが折り返して h より高くなっても、高さ 0 以下の枠は送らない（h の警告は SpecPage が出す）
+            self.text(sid, x + px, y + 0.1 + CARD_DOWN + g, w - 2 * px, top - y - 0.16 - CARD_DOWN - g, head, size=hs, color=HEAD, bold=True, spacing=100)  # card_top は 1 行 hs / 60 in で下げる
+        bh = max(h - (top - y) - 0.1 - g, 0.2)  # 本文の枠。見出しが折り返して h より高くなっても、高さ 0 以下の枠は送らない（h の警告は SpecPage が出す）
         if items and step is None:
-            self.text(sid, x + PAD, top, w - 2 * PAD, bh, card_items(items), spacing=125)
+            self.text(sid, x + px, top, w - 2 * px, bh, card_items(items), size=size, spacing=125)
         for i, item in enumerate(items if step is not None else []):
-            self.text(sid, x + PAD, top + i * step, w - 2 * PAD, step - 0.08, card_items([item]), spacing=125)
+            self.text(sid, x + px, top + i * step, w - 2 * px, step - 0.08, card_items([item]), size=size, spacing=125)
         if body:
-            self.text(sid, x + PAD, top, w - 2 * PAD, bh, body, spacing=125, bullets=bullets)
+            self.text(sid, x + px, top, w - 2 * px, bh, body, size=size, spacing=125, bullets=bullets)
         return y + h
 
     def table(self, sid, x, y, widths, rows, size=11, row_h=0.36, header=True, first_col=True, zebra=True, align=None, mono_cols=(), fills=(), vlines=None,
@@ -1052,7 +1075,7 @@ _TEXT = {"size": "p", "color": "c", "bold": "b", "align": tuple(ALIGN), "mono": 
 SPEC_EL = {  # type → (要るキー, 書けるキー)
     "text": ({"text": "md"}, {**_TEXT, **_BOX, "valign": tuple(VALIGN)}),
     "label": ({"text": "md"}, {k: _TEXT[k] for k in ("size", "color", "bold", "align", "mono", "pad")} | {"fill": "c", "radius": "n"}),
-    "card": ({}, {"head": "s", "text": "md", "items": "items", "fill": "c", "line": "c", "step": "p",
+    "card": ({}, {"head": "s", "text": "md", "items": "items", "fill": "c", "line": "c", "step": "p", "size": "p", "head_size": "p",
                   "icon": "s", "num": "ns", "image": "s", "shape": NUM_SHAPES, "align": ("left", "center"), "valign": ("top", "middle"), "corner": CORNERS}),  # icon・num・image は印（どれか 1 つ）。shape は num の形、corner は箱の角
     "stat": ({"value": "s"}, {"unit": "s", "label": "s", "sub": "s", "size": "p", "color": "c", "fill": "c", "line": "c", "align": ("left", "center")}),  # 数字の強調
     "code": ({"text": "s"}, {"hot": "ints", "size": "p", "title": "s"}),  # title でターミナルの窓（d.code）
@@ -1101,7 +1124,7 @@ SPEC_THEME = ({}, {"description": "s", "font": "s", "mono": "s", "copyright": "s
 # raw に書いた Deck の引数のうち、形のキーで書けるもの（type, 引数 → 形のキー）。lint が知らせ、slides.py upgrade が書き換える。形に足したらここにも足す
 # 同じ名前で同じ意味のもの（数え始めや単位の違う mono_cols・hot・fills・widths と、stat の size・color〔数字の大きさと色〕は入れない。2026-10-16 のレビュー）
 _SAME = {"text": "size color bold align valign mono fill line dash weight radius pad spacing", "label": "size color fill bold align mono pad radius",
-         "card": "head fill line step corner", "code": "size title", "table": "size header first_col zebra align valign borders row_h", "image": "alt", "icon": "size color",
+         "card": "head fill line step corner size head_size", "code": "size title", "table": "size header first_col zebra align valign borders row_h", "image": "alt", "icon": "size color",
          "num": "size fill shape", "box": "fill line dash weight radius", "arrow": "color head dash weight", "stat": "fill line align"}
 SPEC_PROMOTED = {(t, k): k for t, ks in _SAME.items() for k in ks.split()} | {("text", "gap"): "para_gap", ("text", "kind"): "shape", ("box", "kind"): "shape"}
 MD = re.compile(r"\\([\\*`\[\]<{}])|\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\{(\d+(?:\.\d+)?):(.+?)\}|`([^`]+)`|\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)|<br>")  # URL の中の 1 段の () も読む
@@ -1419,6 +1442,8 @@ class SpecPage:
             self.gantt_check(e, loc)
         if kind == "bars":
             self.bars_check(e, loc)
+        if kind == "stat" and (bad := next((k for k in ("value", "unit", "label", "sub") if MD.search(str(e.get(k, "")))), None)):  # stat は記法を読まない（「{48:62}」がそのまま出た。2026-11-10）
+            sys.exit(f"{loc}（stat）.{bad}: 記法（{{48:…}}・**・リンク・<br>・`）は書けない。数字の大きさは size で決める")
         if kind == "card" and "shape" in e and "num" not in e:  # カードの shape は番号の形（カードの箱の形ではない）
             sys.exit(f"{loc}（card）.shape: 番号（num）の形なので、num を書いたカードで使う")
         if kind == "list":
@@ -1870,10 +1895,9 @@ class SpecPage:
             return spec_text_h(parts, w - 2 * INSET - 2 * inner, 11, 110, 2) + (2 * INSET if least else 2 * STAT_PAD + 0.1)
         if kind == "card":
             if "step" in e:
-                return card_h(w, e.get("head"), items=[tuple(x) for x in e.get("items", [])], step=e["step"], least=least)
-            body, bul = self.card_body(e, loc)  # card_h は本文をすべて 11pt で数えるので、文字ごとの大きさを見る spec_text_h で、d.card の本文の枠と同じ幅に見込む
-            avail = w - 2 * PAD - 2 * INSET - (11 * 1.3 / 72 if bul else 0)
-            return card_top(w, e.get("head")) + (spec_text_h(body, avail, 11, 125) + 2 * INSET if body else 0) + (0.1 if least else CARD_END)  # 本文の枠は下端の 0.1 in 上まで（d.card）
+                return card_h(w, e.get("head"), items=[tuple(x) for x in e.get("items", [])], step=e["step"], size=size, least=least, hs=e.get("head_size"))
+            body, bul = self.card_body(e, loc)  # 記法の parts のまま card_h に渡す（card_h は文字ごとの大きさを spec_text_h で数え、d.card と同じ空きで見込む）
+            return card_h(w, e.get("head"), body=body, bullets=bul, size=size, least=least, hs=e.get("head_size"))
         if kind == "code":
             lines = e["text"].split("\n")
             term = TERM_BAR + sum(ln.startswith("$ ") for ln in lines[1:]) * TERM_GAP / 72 if "title" in e else 0
@@ -1921,12 +1945,12 @@ class SpecPage:
             sys.exit(f"{loc}（list）: 幅が足りない（{w:.2f} in に、印 {mw:.2f} in と間 {MARK_GAP} in）")
         for i, (it, (kind, v)) in enumerate(zip(e["items"], marks)):
             it, l = {"text": it} if isinstance(it, str) else it, f"{loc}.items[{i}]"
-            head = [(it["head"], {"bold": True, "size": 12})] if it.get("head", "").strip() else []  # 空白だけの見出しは置かない（check と同じ見方）
+            head = [(it["head"], {"bold": True, "size": HEAD_PT})] if it.get("head", "").strip() else []  # 空白だけの見出しは置かない（check と同じ見方）
             body = spec_md(it.get("text", ""), emph, l)
             body = body if spec_plain(body).strip() else []  # 記法を外して空白だけの本文は置かない（check と同じ見方）
-            hh = spec_text_h(head, tw, 12, 100) if head else 0
+            hh = spec_text_h(head, tw, HEAD_PT, 100) if head else 0
             bh = spec_text_h(body, tw, 11) if body else 0
-            first = (12 if head else first_pt(body, 11, tw)) * 1.2 / 72  # 1 行目の高さ。2 行以上の行間 125% は 1 行目の下に足される（2026-10-20 に Google が描いた画像で測った。125% で見込むと 3.5 px 上に出た）
+            first = (HEAD_PT if head else first_pt(body, 11, tw)) * 1.2 / 72  # 1 行目の高さ。2 行以上の行間 125% は 1 行目の下に足される（2026-10-20 に Google が描いた画像で測った。125% で見込むと 3.5 px 上に出た）
             ty, my = max((d - first) / 2, 0), max((first - d) / 2, 0)
             out.append((l, kind, v, head, body, hh, bh, ty, my, max(my + d, ty + hh + (HEAD_GAP if head and body else 0) + bh)))
         return out
@@ -1964,7 +1988,7 @@ class SpecPage:
             else:
                 self.emit("image", f"{l}.image", src=self.src({"src": v}, l), x=mx, y=y + my, w=d, h=d, alt=spec_plain(head or body))
             if head:
-                self.emit("text", f"{l}.head", x=tx, y=y + ty, w=tw, h=max(hh, 0.2), parts=head, size=12, color=on if dark else spec_color("HEAD"), spacing=100, edge=True)
+                self.emit("text", f"{l}.head", x=tx, y=y + ty, w=tw, h=max(hh, 0.2), parts=head, size=HEAD_PT, color=on if dark else spec_color("HEAD"), spacing=100, edge=True)
             if body:  # 見出しがあれば、本文は灰色の補足
                 self.emit("text", f"{l}.text", x=tx, y=y + ty + hh + (HEAD_GAP if head else 0), w=tw, h=max(bh, 0.2), parts=body, size=11,
                           color=spec_color(("SUB_ON_NAVY" if dark else "SUB") if head else on), edge=True)
@@ -1986,7 +2010,7 @@ class SpecPage:
         return True
 
     def marked(self, e, x, y, w, h, loc):
-        """印のあるカード。印を左（align left）か上の中央（center）に置き、見出し（太字 12pt）と本文を横か下に置く。h が None なら置かずに高さ（と、文字と印が収まる最小の高さ least）を返す。
+        """印のあるカード。印を左（align left）か上の中央（center）に置き、見出し（太字 head_size pt。既定は本文と同じ大きさ）と本文（size pt。既定 11）を横か下に置く。h が None なら置かずに高さ（と、文字と印が収まる最小の高さ least）を返す。
         中身は枠の上下の中央に置き、伸ばされたカードと valign top は上寄せにする。横に置く印は 1 行目にそろえる。valign middle は、伸ばされても上下の中央にし、印も文字の中央に置く（構成図の箱など）。"""
         m, fill = self.mark(e), e.get("fill", "CARD")
         on, emph = (spec_color(c) for c in ON_FILL.get(fill, ("TEXT", "RED_TEXT")))
@@ -1996,17 +2020,21 @@ class SpecPage:
         if center and valign == "middle":
             sys.exit(f"{loc}（card）: 印を上に置く align center と、valign middle は一緒に使えない")
         body, bul = self.card_body(e, loc, emph)
-        head = [(e["head"], {"bold": True, "size": 12, "color": spec_color("WHITE" if fill in ON_FILL else "HEAD")})] if e.get("head") else []
-        tw = w - 2 * MARK_IN if center or m is None else w - 2 * MARK_IN - mw - MARK_GAP
-        hh = spec_text_h(head, tw, 12, 100) if head else 0  # 見出しと本文は別の枠（箇条書きが見出しに付かないように。d.card と同じ）
-        bh = spec_text_h(body, tw - (11 * 1.3 / 72 if bul else 0), 11, 125) if body else 0
+        bs = e.get("size", 11)
+        hs = e.get("head_size") or bs
+        head = [(e["head"], {"bold": True, "size": hs, "color": spec_color("WHITE" if fill in ON_FILL else "HEAD")})] if e.get("head") else []
+        g = card_grow(max(hs, bs) if e.get("head") else bs)  # 12pt より大きい文字のカードは、四方の空きをその差だけ広げる（slides-visual-027）
+        mi = MARK_IN + g  # 箱の端と文字の間（左に置く印と箱の端の間は MARK_IN のまま）
+        tw = w - 2 * mi if center or m is None else w - MARK_IN - mi - mw - MARK_GAP
+        hh = spec_text_h(head, tw, hs, 100) if head else 0  # 見出しと本文は別の枠（箇条書きが見出しに付かないように。d.card と同じ）
+        bh = spec_text_h(body, tw - (bs * 1.3 / 72 if bul else 0), bs, 125) if body else 0
         th = hh + (HEAD_GAP if head and body else 0) + bh
         # 中身（印と文字）は、上下の空きが同じに見える位置に置く。横に置く印と枠の間は MARK_IN
-        start, end = MARK_TOP - (0.05 if center else 0), MARK_END + (0.03 if bh > 0.3 else 0)
+        start, end = MARK_TOP - (0.05 if center else 0) + g, MARK_END + (0.03 if bh > 0.3 * max(bs, 12) / 12 else 0) + g  # 0.03 in は本文が 2 行以上のとき（12pt までは前と同じ 0.3 in で見る）
         content = size + (MARK_GAP + th if th else 0) if center else th
-        # 横に置く印は、文字の量によらず、印の中心を 1 行目（見出しの 12pt か、見出しがなければ本文の 1 行目のいちばん大きな文字。list と同じ）の中心にそろえる。
+        # 横に置く印は、文字の量によらず、印の中心を 1 行目（見出しの大きさか、見出しがなければ本文の 1 行目のいちばん大きな文字。list と同じ）の中心にそろえる。
         # 置き方（row・grid・frame・stack）によらず、隣のカードと印の高さがそろう（2026-10-20 の p18。frame に 1 枚ずつ置いたカードで、短い文字を中央に置くと番号がずれた）
-        first = (12 if head or not body else first_pt(body, 11, tw - (11 * 1.3 / 72 if bul else 0))) * 1.2 / 72
+        first = (hs if head or not body else first_pt(body, bs, tw - (bs * 1.3 / 72 if bul else 0))) * 1.2 / 72
         # 印の上端の、文字の上端からの位置。本文の最終行の下には行間の空き（MARK_TOP と MARK_END の差）があるので、文字の上下の中央はその半分だけ上（2026-10-20 の画像で 0.033 in 下に見えた）
         mark = 0 if center else ((th - (MARK_TOP - MARK_END if body else 0) if valign == "middle" else first) - size) / 2
         lo, hi = min(mark, 0), max(content, mark + size)  # 印と文字を合わせた範囲の上端と下端（文字の上端から）
@@ -2048,12 +2076,12 @@ class SpecPage:
                       **({"shape": e["shape"]} if "shape" in e else {}))  # 地によらず赤（数字は ON_RED）
         else:
             self.emit("image", f"{loc}.image", src=self.src({"src": e["image"]}, loc), x=mx, y=my, w=size, h=size, alt=e.get("head"))
-        tx = x + MARK_IN if center or m is None else mx + mw + MARK_GAP
+        tx = x + mi if center or m is None else mx + mw + MARK_GAP
         align = "CENTER" if center else "START"
         if head:
-            self.emit("text", f"{loc}.head", x=tx, y=ty, w=tw, h=max(hh, 0.2), parts=head, size=12, color=on, spacing=100, edge=True, align=align)
+            self.emit("text", f"{loc}.head", x=tx, y=ty, w=tw, h=max(hh, 0.2), parts=head, size=hs, color=on, spacing=100, edge=True, align=align)
         if body:
-            self.emit("text", f"{loc}.text", x=tx, y=ty + hh + (HEAD_GAP if head else 0), w=tw, h=max(bh, 0.2), parts=body, size=11, color=on, spacing=125,
+            self.emit("text", f"{loc}.text", x=tx, y=ty + hh + (HEAD_GAP if head else 0), w=tw, h=max(bh, 0.2), parts=body, size=bs, color=on, spacing=125,
                       edge=True, bullets=bul, align=align)
 
     def stat_parts(self, e):
@@ -2157,9 +2185,12 @@ class SpecPage:
             if (need := self.measure(e, w, loc, least=True)) > e["h"] + 0.05:  # 文字の高さは見積もりなので 0.05 in まで許す
                 full = self.measure({k: v for k, v in e.items() if k != "h"}, w, loc)
                 self.warns.append(f"{loc}（{kind}）: h {e['h']} in では中身が収まらない見込み（中身に要る高さ {need:.2f} in。h を省くと {full:.2f} in）。h を外すか、文字を短くする")
-        if kind == "card" and e.get("corner") == "pill" and min(w, h) > PILL_MAX:  # row・grid で隣に合わせて伸びたときも、組む大きさで見る
-            self.warns.append(f"{loc}（card）: ピルの短い辺が {min(w, h):.2f} in で {PILL_MAX} in より大きく、半円が文字にかかる見込み。"
-                              "背の高いカードと同じ行に置かない、文字を減らす、corner を外すのどれかにする")
+        if kind == "card" and e.get("corner") == "pill":  # row・grid で隣に合わせて伸びたときも、組む大きさで見る
+            bs = e.get("size", 11)
+            pill = PILL_MAX * (1 + card_grow(max(e.get("head_size") or bs, bs) if e.get("head") else bs) / 0.18)  # 文字が card_grow だけ内に入れば、かからない半円もその比で大きい
+            if min(w, h) > pill:
+                self.warns.append(f"{loc}（card）: ピルの短い辺が {min(w, h):.2f} in で {pill:.2f} in より大きく、半円が文字にかかる見込み。"
+                                  "背の高いカードと同じ行に置かない、文字を減らす、corner を外すのどれかにする")
         if e.get("shape") == "rectangle" and (fill or kind == "label"):
             self.warns.append(f"{loc}: 塗りの箱を四角（shape: rectangle）にした。塗りの箱は、書かなければ角丸（slides-visual-018、deck-design）。四角にする理由がなければ shape を外す")
         if kind in ("text", "label"):
@@ -2188,14 +2219,15 @@ class SpecPage:
                 sys.exit(f"{loc}（card）: align・valign は、印（icon・num・image）のあるカードで使う")
             colors = dict(fill=spec_color(e.get("fill", "CARD")), line=spec_color(e.get("line", "RULE" if e.get("fill", "CARD") == "CARD" else None)),
                           **({"corner": e["corner"]} if "corner" in e else {}))
+            sizes = {k: e[k] for k in ("size", "head_size") if k in e}  # 書いたときだけ渡す（既定は Deck.card が決める）
             if "step" in e:  # 項目を決まった間隔で置く（左右のカードで項目の上端をそろえる）。d.card の items のまま渡すので、記法は書けない
                 if not e.get("items") or any(re.search(r"\*\*|\]\(|<br>|\{\d", b) for _, b in e["items"]):
                     sys.exit(f"{loc}（card）: step は items と使い、items に記法を書かない")
                 self.index.append((loc, (e.get("head") or "") + "".join(a + b for a, b in e["items"])))
-                return self.emit("card", loc, e, x=x, y=y, w=w, h=h, head=e.get("head"), items=[tuple(i) for i in e["items"]], step=e["step"], **colors)
+                return self.emit("card", loc, e, x=x, y=y, w=w, h=h, head=e.get("head"), items=[tuple(i) for i in e["items"]], step=e["step"], **colors, **sizes)
             body, bul = self.card_body(e, loc)
             self.index.append((loc, (e.get("head") or "") + spec_plain(body or "")))
-            return self.emit("card", loc, e, x=x, y=y, w=w, h=h, head=e.get("head"), body=body, bullets=bul, **colors)
+            return self.emit("card", loc, e, x=x, y=y, w=w, h=h, head=e.get("head"), body=body, bullets=bul, **colors, **sizes)
         if kind == "code":
             self.index.append((loc, e.get("title", "") + e["text"]))
             return self.emit("code", loc, e, x=x, y=y, w=w, h=h, lines=e["text"].split("\n"), hot=[n - 1 for n in e.get("hot", [])], size=e.get("size", 11),
@@ -2643,8 +2675,9 @@ SPEC_UNIT = {"w": "幅（in）", "h": "高さ（in）", "x": "frame の左上か
              "cell.fill": "そのセルの塗り（濃い色なら文字は白）。行か列の全部は表の fills", "cell.color": "文字の色（書かなければ塗りから決まる）",
              "cell.align": "そのセルの横の寄せ（書かなければ列の align）", "cell.valign": "そのセルの上下の寄せ（書かなければ表の valign）",
              "list.icon": "全部の項目の印（Iconify の名前）。書かなければ番号", "start": "最初の番号（既定 1。印を書いた項目も 1 つと数える）",
+             "card.size": "本文の大きさ（pt。既定 11）", "card.head_size": "見出しの大きさ（pt。既定は size と同じ大きさの太字）",
              "list.size": "印の大きさ（num と同じ。既定は medium）", "list.color": "アイコンの色（既定は本文の色）", "list.fill": "番号の丸の色（既定は RED。図の矢印の番号の凡例は、線の色にそろえる）", "list.gap": "項目の間（in。既定 0.16）",
-             "item.text": "本文（見出しがあれば灰色の補足）", "item.head": "見出し（太字 12pt）", "item.icon": "その項目の印（Iconify の名前）",
+             "item.text": "本文（見出しがあれば灰色の補足）", "item.head": "見出し（太字。本文と同じ大きさ）", "item.icon": "その項目の印（Iconify の名前）",
              "item.num": "その項目の番号", "item.image": "その項目の印の画像（ロゴなど。image の src と同じ書き方）"}
 
 
@@ -4871,7 +4904,7 @@ def selftest_spec():
             nm, hd, tx = (next(e for e in lg if e["call"] == "num" and c == "num" or e["loc"].endswith(f".{c}")) for c in ("num", "head", "text"))
             # 印は、短い文字でも 1 行目にそろえる（1 枚ずつ frame に置いたカードの番号の高さがそろう。2026-10-20 の p18）。
             # valign middle は、最終行の下の行間の空きを除いた文字の中央（本文の行数によらない。PR のレビュー）
-            assert near(nm["cy"], (hd["y"] + tx["y"] + tx["h"] - (MARK_TOP - MARK_END)) / 2 if v else hd["y"] + 12 * 1.2 / 72 / 2), (text, v)
+            assert near(nm["cy"], (hd["y"] + tx["y"] + tx["h"] - (MARK_TOP - MARK_END)) / 2 if v else hd["y"] + HEAD_PT * 1.2 / 72 / 2), (text, v)
     _, lg = run({"title": "t", "body": [{"type": "frame", "h": 1.8, "items": [{"type": "card", "num": i + 1, "head": "段", "text": text, "x": 3 * i, "y": 0, "w": 2.8}
                                                                           for i, text in enumerate(("1 行の本文", "本文<br>2 行目"))]}]})
     nm = [e for e in lg if e["call"] == "num"]
@@ -4917,12 +4950,12 @@ def selftest_spec():
     assert near(icon["x"], cards[0]["x"] + MARK_IN) and near(num["cx"], cards[1]["x"] + MARK_IN + MARK / 2) and near(img["x"], cards[2]["x"] + (cards[2]["w"] - MARK_IMG) / 2)
     by = {e["loc"]: e for e in els}
     h0, b1 = by["spec.body[0].items[0].head"], by["spec.body[0].items[1].text"]
-    assert h0["parts"] == [("表", {"bold": True, "size": 12, "color": "HEAD"})] and near(h0["x"], icon["x"] + MARK + MARK_GAP) and by["spec.body[0].items[2].head"]["align"] == "CENTER"
+    assert h0["parts"] == [("表", {"bold": True, "size": HEAD_PT, "color": "HEAD"})] and near(h0["x"], icon["x"] + MARK + MARK_GAP) and by["spec.body[0].items[2].head"]["align"] == "CENTER"
     assert b1["bullets"] is False and not by["spec.body[0].items[1].head"].get("bullets")  # 見出しは本文と別の枠
     stat = by["spec.body[0].items[3]"]
     assert stat["parts"][:2] == [("16", {"size": 32, "bold": True, "color": RED_TEXT}), (" モデル", {"size": 16, "bold": True, "color": RED_TEXT})] and stat["fill"] == CARD
     dark = by["spec.body[1].head"]
-    assert dark["color"] == WHITE and dark["parts"][0][1]["color"] == WHITE and near(dark["y"], cards[3]["y"] + (cards[3]["h"] - max(dark["h"], 0.2)) / 2)  # 上下の中央
+    assert dark["color"] == WHITE and dark["parts"][0][1]["color"] == WHITE and near(dark["y"], cards[3]["y"] + (cards[3]["h"] - spec_text_h(dark["parts"], dark["w"], HEAD_PT, 100)) / 2)  # 上下の中央（文字の高さで。枠は 0.2 in より低くしない）
     assert any(r.get("updateTextStyle", {}).get("style", {}).get("foregroundColor") == {"opaqueColor": paint(WHITE)} for r in d.reqs)
     _, sl = run({"type": "slide", "bg": "NAVY", "body": [{"type": "text", "text": "***地の文***"}, {"type": "text", "text": "枠", "line": "RULE"}]})
     assert sl[0]["color"] == sl[1]["color"] == WHITE and sl[0]["parts"][0][1]["color"] == RED_ON_NAVY  # 濃い地のページの文字。枠線だけの箱も地を塗らない
@@ -4968,7 +5001,7 @@ def selftest_spec():
     assert (n0["n"], n1["n"]) == (3, 4) and near(t0["y"] + one / 2, n0["cy"]) and near(t1["y"] + one / 2, n1["cy"])  # 2 行の項目も 1 行目（行間 125% の増えた分は 1 行目の下）
     assert near(t0["x"], X + d0 + MARK_GAP) and near(n1["cy"] - d0 / 2, t0["y"] - (d0 - one) / 2 + d0 + LIST_GAP)  # 1 行の項目の高さは円の直径
     ic = by["spec.body[0].items[2].icon"]
-    assert near(h2["y"] + 12 * 1.2 / 72 / 2, ic["y"] + d0 / 2) and h2["color"] == HEAD and s2["color"] == SUB and t0["color"] == TEXT and near(s2["x"], t0["x"])
+    assert near(h2["y"] + HEAD_PT * 1.2 / 72 / 2, ic["y"] + d0 / 2) and h2["color"] == HEAD and s2["color"] == SUB and t0["color"] == TEXT and near(s2["x"], t0["x"])
     assert by["spec.body[1].items[0].num"]["n"] == 9 and by["spec.body[1].items[1].icon"]["name"] == "tabler:check"
     assert "spec.body[1].items[2].head" not in by and by["spec.body[1].items[2].text"]["color"] == TEXT and "spec.body[1].items[3].text" not in by  # 空白だけの見出しと本文は置かない
     assert any("list にする" in w for w in d.warnings)  # row に番号と文字を並べたら知らせる
@@ -5041,7 +5074,7 @@ def selftest_spec():
     small = {"type": "label", "text": "小さい札", "size": 8}
     assert sp.measure(small, 2, "s") == 0.4 and sp.measure(small, 2, "s", least=True) < 0.35  # 札の 0.4 in は既定の下限で、文字に要る高さではない
     steps = {"type": "card", "head": "見出し", "items": [["項目", "説明の文"]] * 3, "step": 1.0}
-    assert near(card_h(4, "見出し", items=[("項目", "説明の文")] * 3, step=1.0, least=True), 2.5 + card_h(4, items=[("項目", "説明の文")], least=True) - 0.2)  # 最後の項目の下端まで（後ろの空きは要らない）
+    assert near(card_h(4, "見出し", items=[("項目", "説明の文")] * 3, step=1.0, least=True), 2.5 + (HEAD_PT - 12) / 60 + card_h(4, items=[("項目", "説明の文")], least=True) - 0.2)  # 最後の項目の下端まで（後ろの空きは要らない）
     assert sp.measure(steps, 4, "c") > sp.measure(steps, 4, "c", least=True) + 0.25
     d, _ = run({"title": "t", "body": [{"type": "stack", "items": [  # 文字に要る高さより 0.05 in を超えて低いものだけ。row の中も、伸ばす前の h で見る
         mid(one, 0.6), mid(two, round(need - 0.04, 2)), mid(two, 0.6), {"type": "row", "items": [mid(two, 0.6), {"type": "card", "head": "高い", "text": two * 6}]},
@@ -5051,10 +5084,33 @@ def selftest_spec():
     w = "\n".join(d.warnings)
     assert w.count("収まらない見込み") == 6 and "items[9]（card）" in w and "items[2]（card）: h 0.6 in では" in w and "items[3].items[0]（card）" in w and "items[5]（text）" in w and "items[6]（stat）" in w, w  # 塗りのない文字は見ない
     assert "items[8]（card）" in w and "items[7]" not in w, w
-    _, els = run({"title": "t", "body": [{"type": "card", "icon": "tabler:database", "valign": "middle", "head": "kuromoji（Java）", "text": "Lucene の日本語", "w": 2.3, "h": 0.8}]})
+    _, els = run({"title": "t", "body": [{"type": "card", "icon": "tabler:database", "valign": "middle", "head": "kuromoji（Java）", "head_size": 12, "text": "Lucene の日本語", "w": 2.3, "h": 0.8}]})  # 字幅を測った 12pt で見る
     hd, tx = (next(e for e in els if e["loc"] == f"spec.body[0].{k}") for k in ("head", "text"))
     assert near(hd["h"], 0.4) and near(tx["y"], hd["y"] + hd["h"] + HEAD_GAP)  # 太字の見出しは Bold の字幅（1.47 in）で 1.44 in の枠から折れる。本文はその下（2026-10-19。Regular の字幅で 1 行と見て、本文に重なった）
-    assert near(card_top(5, "見出し"), 0.5 + CARD_DOWN) and near(card_top(2.5, "長い見出しが二行に折れるカード"), 0.7 + CARD_DOWN)  # d.card も、折り返す見出しの分だけ本文を下げる
+    assert near(card_top(5, "見出し", 12), 0.5 + CARD_DOWN) and near(card_top(2.5, "長い見出しが二行に折れるカード", 12), 0.7 + CARD_DOWN)  # d.card も、折り返す見出しの分だけ本文を下げる
+    assert HEAD_PT == 11 and near(card_top(5, "見出し"), 0.3 + 11 / 60 + CARD_DOWN)  # 見出しの既定は本文と同じ大きさの太字（deck-design-011）
+    assert card_px(12) == PAD and card_px(20) + INSET >= 20 / 72 and card_grow(12) == 0  # 文字を大きくしたカードだけ、四方の空きを広げる（slides-visual-027）
+    assert card_h(4, "見出し", body=["説明 ", ("62%", {"size": 40})]) < card_h(4, "見出し", body=["説明 ", ("62%", {"size": 40})], size=13)  # 本文の中の大きな数字では空きを広げない（説明の大きさで測る）
+    assert near(card_top(4, "見出し", 11, 20) - card_top(4, "見出し", 11, 12), card_grow(20))  # 上の空きも card_grow だけ広げる
+    assert near(card_h(4, None, body="本文", hs=24), card_h(4, None, body="本文"))  # 見出しのないカードは head_size で空きを広げない
+    for hs, warned in ((11, True), (24, False)):  # 文字が内に入ったピルは、短い辺の上限もその比で大きい（1.3 in のピルは 11pt では出し、24pt では出さない）
+        d = Deck("spec")
+        d.spec({"title": "t", "body": [{"type": "card", "corner": "pill", "head": "見出し", "head_size": hs, "text": "本文", "h": 1.3, "w": 4}]})
+        d.finish()
+        assert any("ピルの短い辺" in x for x in d.warnings) == warned, (hs, d.warnings)
+    for card in ({"fill": "NAVY"}, {"icon": "tabler:x"}, {"icon": "tabler:x", "align": "center"}):  # 印のない濃い地、左の印、上の印のどれも
+        _, els = run({"title": "t", "body": [card | {"type": "card", "head": "長い見出しを折り返す長い見出しを折り返す", "text": "本文", "size": 20, "head_size": 14, "w": 4}]})
+        bx = next(e for e in els if e["call"] == "card")
+        tx = [e for e in els if e["loc"].endswith((".head", ".text"))]
+        assert all(t["x"] + t["w"] <= bx["x"] + bx["w"] - 20 / 72 + 1e-6 for t in tx), card  # 右の空きもいちばん大きい文字の 1 字分
+        assert min(t["y"] for t in tx) - bx["y"] >= 20 / 72 and bx["y"] + bx["h"] - max(t["y"] + t["h"] for t in tx) >= 20 / 72 - 0.03, card  # 上下も
+    for bad in ("{48:62}", "6<br>時間", "`62`"):  # stat は記法を読まないので、書くと止める（そのまま字で出る）
+        try:
+            run({"title": "t", "body": [{"type": "stat", "value": bad}]})
+            raise AssertionError(bad)
+        except SystemExit as x:
+            assert "stat）.value" in str(x), x
+    assert card_h(4, "見出し", body="本文", size=14) > card_h(4, "見出し", body="本文") and card_h(4, "見出し", body="本文", hs=24) > card_h(4, "見出し", body="本文")  # 本文と見出しの大きさで高さを見込む
     kj = "kuromoji（Java）"  # Regular で 1 行、Bold で 2 行になる幅（12pt で 1.44 in）。太字で描く部品は、どれも太字の幅で見込む
     assert est_lines(kj, 1.44, 12) == 1 and est_lines(kj, 1.44, 12, bold=True) == 2
     assert sp.measure({"type": "text", "text": kj, "size": 12, "bold": True}, 1.44, "t") > sp.measure({"type": "text", "text": kj, "size": 12}, 1.44, "t")

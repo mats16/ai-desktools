@@ -530,6 +530,12 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
         els = list(flatten(s.get("pageElements", [])))
         ups = dict(ancestry(s.get("pageElements", [])))
         parts = set(group_lines(s.get("pageElements", [])))
+        gbox = {}  # いちばん内側のグループごとの外形（slides.py の角丸・ピルは、四角と円を 1 つのグループに組む。文字と箱の端の間は、真ん中の四角ではなく外形で測る）
+        for e, b in els:
+            if g := ups.get(e.get("objectId")):
+                x0, y0, x1, y1 = gbox.get(g[-1], (b[0], b[1], b[0] + b[2], b[1] + b[3]))
+                gbox[g[-1]] = (min(x0, b[0]), min(y0, b[1]), max(x1, b[0] + b[2]), max(y1, b[1] + b[3]))
+        outer = lambda oid: (lambda t: [t[0], t[1], t[2] - t[0], t[3] - t[1]])(gbox[ups[oid][-1]]) if ups.get(oid) else None
         for e, b in els:
             sh = e.get("shape", {})
             if e.get("objectId") in parts:
@@ -556,7 +562,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
             up = ups.get(e.get("objectId"))
             framed = bool(up and uid and up[-1] in ups.get(uid, ()))  # 下の塗りと同じグループの文字の枠（d.label の角丸）。カードの本文や背景の四角の上の文字は別の図形
             footer = b[1] >= FOOT_TOP
-            if "shape" in e and not footer and not reuse and (m := tight_pad(e["shape"], b, b if own else ub)):
+            if "shape" in e and not footer and not reuse and (m := tight_pad(e["shape"], b, b if own else (outer(uid) or ub))):
                 r.hits[PAD_NG].append(f"p{i}: {m}")
             if own and own == scheme.get("ACCENT1") and under == scheme.get("DARK1") and ub and not dark[-1]:
                 r.hits[BLOCK_ON_NAVY].append(f"p{i}: {b[2] / EMU:.2f} × {b[3] / EMU:.2f} in。PANEL か CARD に濃紺の文字にする")
@@ -1075,6 +1081,9 @@ def selftest():
     stat = shape(1, x=0.8, y=2.1, size=12, text=["97%", "説明"])  # 40pt の数字と 12pt の説明。0.3 in 空けていれば、12pt の 1 字で足りる
     stat["shape"]["text"]["textElements"][1]["textRun"]["style"]["fontSize"]["magnitude"] = 40
     assert pads([card(2, 4), stat]) == 0
+    cap, mid = card(2, 1) | {"objectId": "k"} | box(0.6, 2, 1.0, 4), card(2, 4) | {"objectId": "m"} | box(1.1, 2, 5, 4)  # ピルは端の円と真ん中の四角を 1 つのグループに組む
+    pill = {"objectId": "g", "elementGroup": {"children": [cap, mid]}, "transform": {"scaleX": 1, "scaleY": 1, "unit": "EMU"}}
+    assert pads([mid, shape(1, x=1.16, y=2.1, size=14)]) == 1 and pads([pill, shape(1, x=1.16, y=2.1, size=14)]) == 0  # 外形の端からは 0.66 in 空いている
     frame = {"objectId": "f", "shape": {"shapeType": "RECTANGLE", "shapeProperties": {}}, **box(0.6, 2, 6, 4)}  # 角丸のカードを組む、文字のない枠
     assert hits([card(2, 4), frame, shape(1, y=2.1)]) == (0, 1)  # [slides-lint-021] 文字のない部品は中身に数えない
     assert hits([card(3, 3) | {"title": BAR_MARK}, shape(1, y=3.1, text=["260 百万円/月"])]) == (0, 0) and hits([card(3, 3), shape(1, y=3.1, text=["98 %"])]) == (0, 1)  # 棒（代替テキストの印）だけは見ない

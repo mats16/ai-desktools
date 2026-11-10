@@ -2,7 +2,7 @@
  "title": "どの入口から始めるか", "lead": "同格の選択肢を横 1 列のカードに並べ、本文の上下の中央に置く", "kicker": "row valign",
  "body": [
   {"type": "row", "valign": "middle", "items": [
-    {"type": "card", "icon": "tabler:message-circle", "head": "会話から", "text": "問いを\n言葉で投げる", "align": "center"},
-    {"type": "card", "icon": "tabler:layout-dashboard", "head": "ダッシュボードから", "text": "いつもの指標を\n見に行く", "align": "center"},
-    {"type": "card", "icon": "tabler:code", "head": "コードから", "text": "ノートブックで\n深く掘る", "align": "center"}]}],
- "authorNotes": ["本文の最後の row に \"valign\": \"middle\" を書くと、余った高さの真ん中に置く。上に寄せると下が大きく空く。"]}
+    {"type": "card", "icon": "tabler:message-circle", "head": "会話から", "text": "問いを\n言葉で投げる", "align": "center", "size": 14, "head_size": 20},
+    {"type": "card", "icon": "tabler:layout-dashboard", "head": "ダッシュボードから", "text": "いつもの指標を\n見に行く", "align": "center", "size": 14, "head_size": 20},
+    {"type": "card", "icon": "tabler:code", "head": "コードから", "text": "ノートブックで\n深く掘る", "align": "center", "size": 14, "head_size": 20}]}],
+ "authorNotes": ["本文の最後の row に \"valign\": \"middle\" を書くと、余った高さの真ん中に置く。上に寄せると下が大きく空く。", "要素が 3 つだけのページなので、カードの本文を 14pt、見出しを 20pt にして本文の場所に合わせて大きくした（size・head_size。並ぶカードは同じ大きさにそろえる）。"]}
