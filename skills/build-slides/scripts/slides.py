@@ -1042,6 +1042,7 @@ SHAPES = {k.lower(): k for k in ("RECTANGLE", "ROUND_RECTANGLE", "ELLIPSE", "CHE
 GAP_BODY, GAP, GAP_ARROW, ARROW_PAD = 0.3, 0.24, 0.6, 0.08  # 本文の部品の間、stack・row・grid の間、arrows の row の間、矢印と箱の間（in）
 BOX_IN, EDGED = 0.08, ("card", "box", "label", "code", "stat", "table")  # 囲み（box）の辺と中の部品の間の下限（in。slides-visual-044）、縁の見える部品（塗りか枠線のある text も）
 MARK_CLEAR = 0.03  # 矢印の番号の丸と、ほかの線・丸・札の間の空き（in。線の太さの半分 0.01 in を含む）
+U_GAP = 0.25  # U 字の矢印の底と、辺・よけた部品や線や札の間（in）
 NUM_END = 0.15  # 矢印の番号の丸と、線の端（箱の辺・折れる点・矢じりの付け根）の間の空き（in）
 HEAD_IN = 0.09  # 矢じり（FILL_ARROW）の長さ（in）。線の太さ 1pt あたり（2026-11-04 に Google が描いた画像で測り、1.25pt で 0.117 in、2pt で 0.175 in、3pt で 0.258 in）
 LABEL_GAP = 0.04  # 矢印の札と線の間（in。縦の線の右は 2 倍。文字の上には行の高さの空きがあり、横の左にはない）
@@ -1087,7 +1088,7 @@ SPEC_EL = {  # type → (要るキー, 書けるキー)
     "list": ({"items": "litems"}, {"icon": "s", "start": "pi", "digits": "pi", "size": tuple(NUM), "shape": NUM_SHAPES, "gap": "n", "color": "c", "fill": "c"}),  # 印（番号かアイコン）と文字の並び。印の中心を項目の 1 行目にそろえる。digits は整数の番号を 0 で埋める桁、shape は番号の形、color はアイコンの色、fill は番号の丸の色
     "box": ({}, _BOX),
     "arrow": ({"from": "pt", "to": "pt"}, {"color": "c", "head": "b", "dash": "b", "weight": "p", "route": ("straight", "bent"), "label": "md",
-                         "label_side": ("top", "bottom", "left", "right"), "offset": "f", "num": "pi"}),  # label は線の札、label_side はその置き場所、offset は線を横（縦）にずらす in、num は線の上の番号の丸
+                         "label_side": ("top", "bottom", "left", "right"), "offset": "f", "num": "pi", "depth": "p"}),  # label は線の札、label_side はその置き場所、offset は線を横（縦）にずらす in、num は線の上の番号の丸、depth は U 字の深さ
     "gantt": ({"cols": "cols", "rows": "grows"}, {"today": "p"}),  # 予定表（slides-pages-010）
     "bars": ({"items": "bitems"}, {"unit": "s", "horizontal": "b", "hot": "ints", "tentative": "btent", "line": "bline", "threshold": "bthr", "series": "bseries", "stack": "b"}),  # 棒グラフ（slides-visual-055、deck-design）。折れ線と直線を重ねられる。series で 2〜4 系列（束ねるか積み上げる）。tentative は確定していない数（点線の枠）
     "row": ({"items": "kids"}, {"gap": "n", "widths": "nums", "arrows": "b", "valign": ("top", "middle")}),  # valign は本文の最後の row だけ（余った高さの真ん中に置く）
@@ -1304,6 +1305,22 @@ def rect_cross(a, b):
     return min(a[0] + a[2], b[0] + b[2]) > max(a[0], b[0]) and min(a[1] + a[3], b[1] + b[3]) > max(a[1], b[1])
 
 
+def seg_cross(p, q, a, b, t=0.02):
+    """線分 p–q と a–b が交わるか、同じ直線の上で t in より長く重なるか（端が接するだけ、T 字に接するだけは数えない）。"""
+    def turn(o, u, v):
+        return (u[0] - o[0]) * (v[1] - o[1]) - (u[1] - o[1]) * (v[0] - o[0])
+    d1, d2, d3, d4 = turn(a, b, p), turn(a, b, q), turn(p, q, a), turn(p, q, b)
+    m = math.dist(a, b)
+    if m > 1e-9 and abs(d1) / m < t and abs(d2) / m < t:  # p と q が a–b の直線から t in の内（1.25pt の線では 1 本に見える）
+        n = math.dist(p, q)
+        if n < 1e-9:
+            return False
+        along = lambda r: ((r[0] - p[0]) * (q[0] - p[0]) + (r[1] - p[1]) * (q[1] - p[1])) / n
+        lo, hi = sorted((along(a), along(b)))
+        return min(hi, n) - max(lo, 0) > t
+    return d1 * d2 < 0 and d3 * d4 < 0
+
+
 def seg_hits(p, q, r, m=0.03):
     """線分 p–q が四角 r（x, y, w, h）を m だけ内に縮めた中を通るか（Liang–Barsky）。"""
     lo, hi, t0, t1 = (r[0] + m, r[1] + m), (r[0] + r[2] - m, r[1] + r[3] - m), 0.0, 1.0
@@ -1417,6 +1434,7 @@ class SpecPage:
         # あとで引く矢印、(場所, 文字)、形の外の書き方（場所, キー）
         self.warns, self.placed = [], []  # 組むときの警告（spec_page が d.warn に出す）、置いた部品の (種類, 場所, 位置, 塗りの箱か, 塗りのない文字か, 部品)
         self.anchors, self.body, self.room = {}, None, None  # id → 矢印をつなぐ部品の場所、本文の場所と下端の限り（最後のガントが余った高さを使う）
+        self.slots, self.num_marks = None, []  # U 字の矢印の端の、辺の上の位置（u_slots）。番号のある矢印の丸と札の見込みの四角（line_marks。U 字の深さがよける）
         self.id_loc, self.lines, self.numbered = {}, [], []  # id → 部品の場所、引いた矢印の (場所, 折れ点, 矢じりか, 両端の部品の場所, 札の場所, 番号の場所)（tangles が見る）、番号のある矢印（marks が置く）
 
     def emit(self, call, loc, e=None, **kw):
@@ -2149,7 +2167,8 @@ class SpecPage:
             else:
                 bottom = y + eh
                 y = bottom + gap
-        if frame and arrows and len(spans) >= 3 and max(a for a, _ in spans) < min(b for _, b in spans):  # どの部品も同じ高さの帯にかかる = 横 1 列
+        if frame and arrows and len(spans) >= 3 and max(a for a, _ in spans) < min(b for _, b in spans) \
+                and not any(self.u_ends(c) for c in items if c.get("type") == "arrow"):  # どの部品も同じ高さの帯にかかる = 横 1 列。U 字の戻り道は row では引けない
             self.warns.append(f"{loc}: 横 1 列に並べて矢印でつないだ図は、row の \"arrows\": true に印のあるカードか label を並べて書ける（幅を本文いっぱいに使い、"
                               "高さと矢印の位置がそろう。../diagrams.md の「Free-form diagrams」）")
         if frame:  # frame が x・y で置いた部品だけを見る（中の row・stack・grid の部品は、その並べ方が置く）
@@ -2318,7 +2337,7 @@ class SpecPage:
 
     def link(self, e, loc, origin, bounds=None):
         """ID か [x, y] の両端から矢印を引く。ID なら、箱の向き合う辺の間に、重なる範囲の中央で引く（slides-visual-025）。
-        "<id>.<辺>" で両端の辺を指すと、その辺の中央どうしを結ぶ（直交する辺は 1 回、向き合う辺は 2 回折れる）。"""
+        "<id>.<辺>" で両端の辺を指すと、その辺の中央どうしを結ぶ（直交する辺は 1 回、向き合う辺は 2 回折れる。同じ向きの辺は U 字。u_turn）。"""
         def split(v, k):  # "<id>.<辺>" を id と辺に分ける。id そのものに . が入っていれば、そのまま id
             if not isinstance(v, str) or v in self.ids or "." not in v:
                 return v, None
@@ -2350,6 +2369,8 @@ class SpecPage:
             sys.exit(f"{loc}（arrow）.route: 両端に辺を書いたら route は書かない（線の形は辺から決まる。直交する辺は 1 回、向き合う辺は 2 回折れる）")
         if off and (route != "straight" or sided or not all(isinstance(v, str) for v in (fa, fb))):
             sys.exit(f"{loc}（arrow）.offset: 線をずらすのは、両端を id で指したまっすぐの矢印だけ（折れ線、辺を書いた端、[x, y] の端には書けない）")
+        if "depth" in e and not (sided and sa == sb):
+            sys.exit(f"{loc}（arrow）.depth: 深さは U 字の矢印（両端に同じ向きの辺を書いたもの。\"a.bottom\" から \"b.bottom\" など）だけに書ける")
         boxed = bool(a and b)
         if off:  # ずらした線は辺の中央の接続点に付かないので、図形につながず、箱の辺から辺へ引く（画面で箱を動かすと付いてこない）
             a = b = None
@@ -2359,6 +2380,8 @@ class SpecPage:
         # 両端がつなげる部品なら、図形につなぐ（画面で動かしても付いてくる）。つないだ線は接続点（辺の中央）から引くので、間を空けない
         pa, pb = (ARROW_PAD if (aw or ah) and not boxed else 0), (ARROW_PAD if (bw or bh) and not boxed else 0)  # [x, y] の端はその点まで
         sites = None
+        if sided and sa == sb:
+            return self.u_turn(e, loc, fa, fb, sa, origin, bounds)
         if sided:  # 指した辺の中央どうしを結ぶ。出る辺は相手の入る点に、入る辺は始めの出る点に向いている（線が両端の箱の中を通らない）
             def mid(x, y, w, h, side):
                 return {"top": (x + w / 2, y), "bottom": (x + w / 2, y + h), "left": (x, y + h / 2), "right": (x + w, y + h / 2)}[side]
@@ -2367,8 +2390,6 @@ class SpecPage:
                 return "".join(n for n, c in (("左", px < x), ("右", px > x + w), ("上", py < y), ("下", py > y + h)) if c) or "中"
             (x1, y1), (x2, y2), sites = mid(ax, ay, aw, ah, sa), mid(bx, by, bw, bh, sb), (sa, sb)
             toward = {"right": (1, 0), "left": (-1, 0), "bottom": (0, 1), "top": (0, -1)}
-            if sa == sb:
-                sys.exit(f"{loc}（arrow）: 両端が同じ向きの辺（{sa}）なので、U 字になって引けない。出る辺か入る辺を変える")
             if toward[sa][0] * (x2 - x1) + toward[sa][1] * (y2 - y1) < 0.01:
                 sys.exit(f"{loc}（arrow）.from: 出る辺 {sa} が相手を向いていない（相手の入る点は、始めの箱の{around(x2, y2, ax, ay, aw, ah)}にある。"
                          "その向きの辺にするか、0.01 in より離す）")
@@ -2417,6 +2438,10 @@ class SpecPage:
         if bent:  # Google は横・縦・横（縦・横・縦）の真ん中で折る（見込み）
             m = (x1 + x2) / 2 if sites[0] in ("left", "right") else (y1 + y2) / 2
             pts[1:1] = [(m, y1), (m, y2)] if sites[0] in ("left", "right") else [(x1, m), (x2, m)]
+        self.line_marks(e, loc, pts, fa, fb, color)
+
+    def line_marks(self, e, loc, pts, fa, fb, color):
+        """引いた矢印の折れ点 pts を tangles に渡し、札を置く（番号のある矢印は、札も丸も marks があとで置く）。"""
         if "label_side" in e and "label" not in e:
             sys.exit(f"{loc}（arrow）.label_side: label がない")
         lab, nm = f"{loc}.label" if "label" in e else None, f"{loc}.num" if "num" in e else None
@@ -2425,9 +2450,141 @@ class SpecPage:
             if e["num"] > 99:
                 sys.exit(f"{loc}（arrow）.num: {e['num']} は丸に収まらない（2 桁まで）")
             self.numbered.append((e, loc, pts, color))
+            (px, py), (qx, qy) = pts[len(pts) // 2 - 1], pts[len(pts) // 2]  # marks が最初に試す区間の真ん中（空いていなければ動かす）。あとで引く U 字がよける見込み
+            mx, my, rad, flat = (px + qx) / 2, (py + qy) / 2, NUM["xsmall"][0] / 2, abs(qx - px) >= abs(qy - py)
+            self.num_marks.append((mx - rad, my - rad, 2 * rad, 2 * rad))
+            if "label" in e and ("label_side" not in e or (e["label_side"] in ("top", "bottom")) == flat):  # 向きの合わない区間なら、marks はほかの区間に置く
+                self.num_marks.append(self.arrow_label(e, loc, mx, my, flat, rad, put=False))
         elif "label" in e:  # 札は線の真ん中の区間に付ける（既定は、横なら上、縦なら右）。札を位置で置くと、線から浮くか線に重なる（2026-10-16 の deck-review で 6 件）
             (px, py), (qx, qy) = pts[len(pts) // 2 - 1], pts[len(pts) // 2]  # 折れ線は真ん中の区間、1 回だけ折れる線は出る区間
             self.arrow_label(e, loc, (px + qx) / 2, (py + qy) / 2, abs(qx - px) >= abs(qy - py))
+
+    def u_end(self, v):
+        """"<id>.<辺>" なら (id, 辺)、ほかは None（u_slots と u_span が、止めずに読む。誤りは link がその矢印の場所で止める）。"""
+        if not isinstance(v, str) or v in self.ids or "." not in v:
+            return None
+        i, side = v.rsplit(".", 1)
+        return (i, side) if i in self.ids and side in SITE else None
+
+    def u_ends(self, e):
+        """U 字の矢印（両端が同じ向きの辺）なら、両端の (id, 辺, 辺の中央の辺に沿った座標)。ほかは None。"""
+        ends = [self.u_end(e.get(k)) for k in ("from", "to")]
+        if None in ends or ends[0][1] != ends[1][1]:
+            return None
+        def along(i, side):  # 辺の中央の、辺に沿った座標
+            x, y, w, h = self.ids[i]
+            return x + w / 2 if side in ("top", "bottom") else y + h / 2
+        return [(i, side, along(i, side)) for i, side in ends]
+
+    def u_span(self, e):
+        """U 字の矢印の両端の間（辺に沿った長さ）。ほかの矢印は 0。狭い U 字から先に引き、広い U 字はその外を回る（spec_page が並べ替える）。"""
+        ends = self.u_ends(e)
+        return abs(ends[0][2] - ends[1][2]) if ends else 0
+
+    def u_slots(self):
+        """U 字の矢印の端の、辺の上の位置（辺の左か上の端から 0〜1）。1 つの辺に k 本の端が集まれば、辺を k + 1 等分した点に並べる。相手が左（上）にある線を左（上）に、
+        右（下）にある線を右（下）に置き、相手が近い線（浅い U 字）ほど辺の端に、遠い線（深い U 字）ほど辺の中央寄りに置く。こうすると、外を回る線の縦の区間が、
+        内の線の底を横切らない（2026-11-10、社内向けの資料の戻り道の図。手で 3 本に分けて描いた形）。辺の中央にほかの矢印がつながっていれば（つないだ線は中央から出る）、
+        中央を空け、左（上）へ向かう線を中央より左（上）の半分に、右（下）へ向かう線を右（下）の半分に等分して並べる。U 字はほかの矢印を引いたあとに引くので、
+        初めて呼ぶときには、ほかの矢印の線はそろっている（spec_page の並べ替え）。"""
+        if self.slots is None:
+            groups = {}
+            for n, (e, *_) in enumerate(self.arrows):
+                if ends := self.u_ends(e):
+                    for j, k in enumerate(("from", "to")):
+                        d = ends[1 - j][2] - ends[j][2]
+                        # 相手が左（上）の線が先で近い順、右（下）の線が後で遠い順。同じ長さの線は、先に書いた線を両方の箱で内（相手寄り）に置く（入れ子になる）
+                        groups.setdefault(ends[j][:2], []).append(((d > 0, -d, -n if d > 0 else n), id(e), k))
+            self.slots = {}
+            for (i, side), g in groups.items():
+                x, y, w, h = self.ids[i]
+                c = {"top": (x + w / 2, y), "bottom": (x + w / 2, y + h), "left": (x, y + h / 2), "right": (x + w, y + h / 2)}[side]
+                g.sort(key=lambda t: t[0])
+                if any(math.dist(c, pt) <= ARROW_PAD + 0.01 for _, ps, *_ in self.lines for pt in (ps[0], ps[-1])):  # 中央はほかの線の端
+                    for half, lo in ((False, 0), (True, 0.5)):
+                        part = [t for t in g if t[0][0] == half]
+                        self.slots |= {(t[1], t[2]): lo + 0.5 * (n + 1) / (len(part) + 1) for n, t in enumerate(part)}
+                else:
+                    self.slots |= {(t[1], t[2]): (n + 1) / (len(g) + 1) for n, t in enumerate(g)}
+        return self.slots
+
+    def u_turn(self, e, loc, fa, fb, side, origin, bounds):
+        """両端が同じ向きの辺の矢印（U 字。後の手順から前の手順へ戻る線など）を、辺から外へ出て、底を渡り、戻って入る 3 本の線で引く。
+        Google の折れ線は曲がり具合を API で決められず、四角の接続点は辺の中央に 1 つだけで同じ辺の 2 本が重なるので、図形につながずに座標で引く
+        （画面で箱を動かすと付いてこない。offset の線と同じ）。底の位置は depth（両端の辺の外側にあるほうから in）。書かなければ、そこから U_GAP の位置から始め、
+        底の線の渡る範囲（辺に沿った両端の間）にあるものから深さの向きに U_GAP 離れるまで、また札がほかのものに触れなくなるまで外へ出す。よけるものは、両端の箱と両端を収める囲みのほかのすべての部品・線・札（除く決まりで選ぶ形は、一方の端だけを収める囲みや、同じ箱から先に引いた U 字の底を見落とした。2026-11-11 のレビュー）。両端を収める囲み（box など）があれば、その中のものだけをよけ、縁までの空きの半分が U_GAP より狭ければ、それを使う（脚の横にあるものは深さで避けられないので、tangles と交わりの警告が出す）。"""
+        flat, sign = side in ("top", "bottom"), 1 if side in ("bottom", "right") else -1  # 底が横の線か。外の向き
+        out = lambda p: sign * (p[1] if flat else p[0])  # 外への座標
+
+        def at(p, depth):  # 点 p を、外への座標 depth の位置へ
+            return (p[0], sign * depth) if flat else (sign * depth, p[1])
+
+        def far(r):  # 四角の、外への座標のいちばん外
+            return max(out((r[0], r[1])), out((r[0] + r[2], r[1] + r[3])))
+
+        def near(r):  # 四角の、外への座標のいちばん内
+            return min(out((r[0], r[1])), out((r[0] + r[2], r[1] + r[3])))
+
+        def across(r):  # 四角が、底の線の渡る範囲（辺に沿った両端の間）にかかるか。脚の横にあるもの（両端の箱から出るほかの線など）は数えない
+            a0, a1 = (r[0], r[0] + r[2]) if flat else (r[1], r[1] + r[3])
+            return a1 > span[0] + 0.01 and a0 < span[1] - 0.01
+
+        def point(i, k):
+            x, y, w, h = self.ids[i]
+            t = self.u_slots()[id(e), k]
+            return {"top": (x + w * t, y), "bottom": (x + w * t, y + h), "left": (x, y + h * t), "right": (x + w, y + h * t)}[side]
+        p1, p2 = point(fa, "from"), point(fb, "to")
+        span = sorted((p1[0], p2[0]) if flat else (p1[1], p2[1]))
+        if abs(p1[0] - p2[0] if flat else p1[1] - p2[1]) < 0.01:
+            sys.exit(f"{loc}（arrow）: 両端の点が辺に沿って同じ位置なので、U 字にならない（両端の箱を辺に沿ってずらすか、向き合う辺にする）")
+        if "label" in e:  # 札は既定で U 字の外（下の辺の U 字なら底の線の下）。内に置くと、狭い U 字の中で両端の箱に近づく
+            e = {**e, "label_side": e.get("label_side", side)}
+        ends = {self.id_loc[fa], self.id_loc[fb]}
+        grow = lambda r, m: (r[0] - m, r[1] - m, r[2] + 2 * m, r[3] + 2 * m)
+        solids = [(l, r) for l, _, r in self.solids() if l not in ends]
+        holders = [(l, r) for l, r in solids if rect_in(self.ids[fa], r) and rect_in(self.ids[fb], r)]  # 両端の箱を収める囲み（U 字はその中に収める。辺に接して置いた箱は囲みではない）
+        # 両端を収める囲みのほかは、一方の端だけを収める囲みもよける（深く回せば縁から離れる）
+        rects = [r for l, r in solids if (l, r) not in holders] + \
+                [grow((min(p[0], q[0]), min(p[1], q[1]), abs(q[0] - p[0]), abs(q[1] - p[1])), 0.06) for _, ps, *_ in self.lines for p, q in zip(ps, ps[1:])] + \
+                self.num_marks  # 線は太さのある四角として見る。番号のある矢印の丸と札は marks があとで置くので、その見込み
+        rad = NUM["xsmall"][0] / 2 if "num" in e else 0  # 番号の丸の半径（札は丸の外。marks と同じ）
+        if holders:  # 囲みの中の U 字は、その囲み（いちばん小さいもの）の中のものだけをよける。外のもの（囲みの縁から出る矢印など）とは縁が隔てる
+            inner = min((r for _, r in holders), key=lambda r: r[2] * r[3])
+            rects = [r for r in rects if rect_in(r, inner)]
+
+        def shape(depth):  # 底の両端と札の四角
+            q1, q2 = at(p1, depth), at(p2, depth)
+            return q1, q2, self.arrow_label(e, loc, (q1[0] + q2[0]) / 2, (q1[1] + q2[1]) / 2, flat, rad, put=False) if "label" in e else None
+        base = max(out(p1), out(p2))
+        room = min((far(r) - base for _, r in holders), default=9e9)  # 囲みの縁までの空き。U_GAP より狭ければ、間をその半分にする（囲みの中の狭い U 字）
+        gap = min(U_GAP, room / 2) if room > 0 else U_GAP
+        depth = base + e.get("depth", gap)
+        while "depth" not in e:
+            q1, q2, lab = shape(depth)
+            hit = [far(r) + gap for r in rects if across(r) and near(r) < depth + gap and far(r) > depth - gap] + \
+                  [depth + far(r) - near(lab) + gap / 4 for r in rects + [self.ids[fa], self.ids[fb]] if lab and rect_cross(grow(lab, gap / 4), r)]  # 底の線は、渡る範囲にあるものから深さの向きに gap 離す。U 字の内に置いた札は両端の箱もよける
+            if not (hit := [v for v in hit if v > depth + 1e-6]):
+                break
+            depth = max(hit)
+        q1, q2, lab = shape(depth)
+        for (p, q), z in (((p1, q1), fb), ((p2, q2), fa)):
+            if seg_hits(p, q, self.ids[z]):
+                sys.exit(f"{loc}（arrow）: U 字の{'縦' if flat else '横'}の区間が「{z}」の上を通る（両端の箱が {side} の向きに重なっている）。出る辺か入る辺を変える")
+        reach = max(depth, far(lab) if lab else depth)  # U 字（と札）のいちばん外
+        for l, r in holders + ([("frame", (origin[0], origin[1], bounds[0], bounds[1]))] if bounds else []):
+            if (over := reach - far(r)) > 0.01:
+                self.warns.append(f"{loc}: U 字の矢印の{'底と札' if lab else '底'}が{' frame ' if l == 'frame' else f'囲みの {l} '}の外に {over:.2f} in 出る。"
+                                  f"{'frame を広げて図を内に寄せる' if l == 'frame' else '囲みを広げるか、中の部品を辺から離す'}か、"
+                                  + ("depth を小さくする" if "depth" in e else "札を U 字の内に置く（label_side）" if lab else "両端の箱を縁から離す"))
+        color = e.get("color", "SUB")
+        pts = [p1, q1, q2, p2]
+        for l, ps, *_ in self.lines:  # 深さで避けるのは底の線と札だけなので、ほかの線と交わる・重なる形は、ここで知らせる（入り組んだ 2 本の U 字など）
+            if any(seg_cross(p, q, a, b) for p, q in zip(pts, pts[1:]) for a, b in zip(ps, ps[1:])):
+                self.warns.append(f"{loc}: U 字の矢印の線が {l} の線と交わるか重なる。U 字の両端の辺か箱の位置を変える（U 字どうしなら、一方の両端の間にもう一方を収める）")
+        for n, (p, q) in enumerate(zip(pts, pts[1:])):  # 矢じりは最後の線だけ
+            self.emit("arrow", loc, e, x1=p[0], y1=p[1], x2=q[0], y2=q[1], color=spec_color(color), head=e.get("head", True) and n == 2,
+                      dash=e.get("dash", False), weight=e.get("weight", 1.25))
+        self.line_marks(e, loc, pts, fa, fb, color)
 
     def arrow_label(self, e, loc, mx, my, flat, r=0, put=True):
         """矢印の札を、区間の (mx, my) の横（横の線は上か下、縦の線は右か左）に置き、札の四角 (x, y, w, h) を返す。r は番号の丸の半径（札は丸の外）。
@@ -2638,7 +2795,7 @@ def spec_page(d, p, base, loc, name=None):
     sp.body, sp.room = f"{loc}.body", limit
     bottom = sp.flow(p.get("body", []), X, Y_BODY if p.get("lead") else Y_BODY_NOLEAD, W, GAP_BODY, f"{loc}.body")
     sp.lone_text()
-    for e, l, origin, bounds in sp.arrows:
+    for e, l, origin, bounds in sorted(sp.arrows, key=lambda a: (bool(sp.u_ends(a[0])), sp.u_span(a[0]))):  # U 字は狭いものから引き、広いものがその外を回る（ほかの矢印は書いた順のまま先に）
         sp.link(e, l, origin, bounds)
     sp.marks()
     sp.tangles()
@@ -2690,6 +2847,7 @@ SPEC_UNIT = {"w": "幅（in）", "h": "高さ（in）", "x": "frame の左上か
              "route": "bent は折れ線（両端を id でつないだとき）。id の両端が箱なら、線は箱につながる。出る辺・入る辺を決めるときは、route を書かずに from・to を \"<id>.<辺>\" にする", "today": "今日の縦線の位置（1 が 1 列目の左端、1.5 が 1 列目の中ほど）",
              "label_side": "札の置き場所。横の線は top（既定）か bottom、縦の線は right（既定）か left",
              "arrow.num": "線の上の番号（1〜99）。線の色の小さな丸（num の xsmall）で、ほかの線がかからない点（まず札を置く区間の、矢じりを除いた真ん中）に置く。説明は図の下の list に同じ番号で書く",
+             "depth": "U 字の矢印（両端が同じ向きの辺）の深さ in。両端の辺の外側にあるほうから底の線まで。書かなければ、ほかの部品・線・札をよける深さに決まる",
              "offset": "線を箱の中央からずらす in。横の線は下が正、縦の線は右が正。ずらした線は箱につながない（同じ 2 つの箱の間に 2 本引くとき）",
              "bars.unit": "数のあとに付ける単位", "stat.unit": "単位（数字の半分の大きさ）", "horizontal": "横の棒（名前が長い・順位）。既定は縦の棒（時の流れ）", "bars.hot": "強調する棒の番号（1 から。赤）",
              "series": "系列の名前（2〜4 個。items の数を系列ごとの並びにする）。上に凡例の行を置き、unit は数ごとに付けず凡例の行の右に 1 回だけ書く。色は部品が決める。hot・line・horizontal とは書けない",
@@ -5264,12 +5422,86 @@ def selftest_spec():
     assert any("折れ線の札（label）が線に重なる" in w for w in d.warnings), d.warnings
     short = {"type": "label", "id": "d", "text": "D", "x": 1.5, "y": 0.8, "w": 1.01, "h": 0.4}  # 中央が a の右の辺の 0.005 in 外
     for bad, want in [([A("a.right", "b")], "辺は両端に書く"), ([A("a.right", [3, 1])], "両端を id にする"), ([A("a.right", "b.bottom", route="bent")], "route は書かない"),
-                      ([A("a.right", "b.right")], "U 字"), ([A("a.left", "b.bottom")], "出る辺 left が相手を向いていない（相手の入る点は、始めの箱の右上"),
+                      ([A("a.left", "b.bottom")], "出る辺 left が相手を向いていない（相手の入る点は、始めの箱の右上"),
                       ([A("a.right", "b.top")], "入る辺 top が始めの箱を向いていない（始めの出る点は、相手の箱の左下"), ([short, A("a.right", "d.bottom")], "出る辺 right"),
                       ([A("a.rihgt", "b.top")], "辺「rihgt」はない"), ([A("x.right", "b.top")], "id「x」の部品がない"),
                       ([A("a.right", "b.bottom", offset=0.1)], "まっすぐの矢印だけ")]:
         try:
             elbow(*bad)
+            raise AssertionError(bad)
+        except SystemExit as ex:
+            assert want in str(ex), (bad, ex)
+    # U 字の矢印（両端が同じ向きの辺）。図形につながず 3 本の線で引き、狭い U 字から引いて、広い U 字はその札の外を回る
+    flow = lambda *arrows: run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [{"type": "label", "id": "p", "text": "P", "x": 0, "y": 0, "w": 2, "h": 0.6},
+        {"type": "label", "id": "q", "text": "Q", "x": 3, "y": 0, "w": 2, "h": 0.6}, {"type": "label", "id": "r", "text": "R", "x": 6, "y": 0, "w": 2, "h": 0.6}, *arrows]}]})
+    d, els = flow(A("r.bottom", "p.bottom", label="大きく戻る", color="RED"), A("r.bottom", "q.bottom", label="小さく戻る"))
+    segs, (il, ol) = [e for e in els if e["call"] == "arrow"], [e for e in els if e["loc"].endswith(".label")]
+    inner, outer, top = segs[:3], segs[3:], Y_BODY_NOLEAD + 0.6
+    assert not d.warnings and [s["head"] for s in segs] == [False, False, True] * 2 and not any("link" in s or "bent" in s for s in segs), (d.warnings, segs)
+    assert inner[0]["loc"].endswith("items[4]") and outer[0]["color"] == spec_color("RED")  # 狭い U 字（書いた順は 2 本目）から引く
+    assert near(inner[0]["x1"], X + 6 + 2 / 3) and near(outer[0]["x1"], X + 6 + 4 / 3), segs  # r の下の辺を 3 等分し、狭い U 字を相手の側（左）に
+    assert near(inner[0]["y1"], top) and near(inner[1]["y1"], top + U_GAP) and near(inner[2]["x2"], X + 4) and near(inner[2]["y2"], top) and near(outer[2]["x2"], X + 1)
+    assert near(il["y"], top + U_GAP + LABEL_GAP) and near(il["x"] + il["w"] / 2, X + (4 + 6 + 2 / 3) / 2)  # 札は U 字の外（底の線の下）の中央
+    assert near(outer[1]["y1"], il["y"] + il["h"] + U_GAP) and ol["y"] > outer[1]["y1"], (outer, il)  # 広い U 字は、狭い U 字の札の外を回る
+    d, els = flow(A("r.bottom", "p.bottom"), A("r.bottom", "q.bottom"))  # 札のない入れ子も、広い U 字は狭い U 字の底の線（両端の箱につながる線）の外を回る
+    segs = [e for e in els if e["call"] == "arrow"]
+    assert not d.warnings and near(segs[4]["y1"], segs[1]["y1"] + 0.06 + U_GAP), (d.warnings, segs)
+    lab3 = lambda k, x, y, w=2, h=0.5: {"type": "label", "id": k, "text": k, "x": x, "y": y, "w": w, "h": h}
+    for pair2 in ([A("r.bottom", "p.bottom", label="一"), A("r.bottom", "p.bottom", label="二")], [A("r.bottom", "p.bottom"), A("p.bottom", "r.bottom")]):
+        d, els = flow(*pair2)  # 同じ 2 つの箱の間の 2 本は、先に書いた線を両方の箱で内に置き、入れ子にする（両方の箱で同じ順に並べると交わった）
+        segs = [e for e in els if e["call"] == "arrow"]
+        assert not d.warnings and segs[4]["y1"] > segs[1]["y1"] and min(segs[3]["x1"], segs[5]["x1"]) < min(segs[0]["x1"], segs[2]["x1"]) \
+            and max(segs[3]["x1"], segs[5]["x1"]) > max(segs[0]["x1"], segs[2]["x1"]), (d.warnings, segs)
+    d, els = run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [lab3("p", 0, 0, h=0.6), lab3("r", 4, 0, h=0.6),
+        {"type": "box", "x": 0, "y": 0.61, "w": 6, "h": 1, "fill": "PANEL"}, A("r.bottom", "p.bottom")]}]})  # 両端の辺に接して置いた塗りの箱は囲みではないので、その外を回る
+    assert near([e for e in els if e["call"] == "arrow"][1]["y1"], Y_BODY_NOLEAD + 1.61 + U_GAP), els
+    d, els = run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [lab3("a", 0, 0), lab3("b", 5, 0), lab3("c", 2, 0.8, w=0.6, h=0.4), lab3("d", 3.4, 0.8, w=0.6, h=0.4),
+        A("b.bottom", "a.bottom"), A("c", "d", num=1, label="札", label_side="bottom")]}]})  # U 字でない矢印の丸と札も、marks があとで置くので見込みでよける
+    nl = next(e for e in els if e["loc"].endswith("items[5].label"))
+    assert not d.warnings and [e for e in els if e["call"] == "arrow"][2]["y1"] >= nl["y"] + nl["h"] + U_GAP - 0.001, (d.warnings, nl)
+    d, els = flow(A("r.bottom", "p.bottom", depth=0.5))
+    assert not d.warnings and near([e for e in els if e["call"] == "arrow"][1]["y1"], top + 0.5)  # depth で深さを決める
+    d, _ = flow(A("r.bottom", "p.bottom", depth=3))
+    assert any("frame の外に" in w for w in d.warnings), d.warnings
+    d, els = run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [{"type": "box", "id": "bx", "x": 0, "y": 0, "w": 2.4, "h": 2, "fill": "PANEL"},
+        {"type": "label", "id": "w", "text": "W", "x": 0.2, "y": 0.2, "w": 1.8, "h": 0.4, "fill": "WHITE"}, {"type": "label", "id": "v", "text": "V", "x": 0.2, "y": 1.2, "w": 1.8, "h": 0.4, "fill": "WHITE"},
+        {"type": "label", "id": "o", "text": "O", "x": 3, "y": 0.7, "w": 1, "h": 0.6}, A("bx", "o"), A("w", "v"), A("v.right", "w.right")]}]})
+    u = [e for e in els if e["call"] == "arrow"][2:]  # 囲みの縁から外へ出る矢印（bx→o）は、囲みの中の U 字がよけるものに入らない
+    assert not d.warnings and near(u[0]["x2"], X + 2.2) and near(u[1]["y2"], Y_BODY_NOLEAD + 0.4), (d.warnings, u)  # 囲みの中の U 字は、縁までの空き 0.4 in の半分
+    d, els = flow({"type": "label", "id": "s", "text": "S", "x": 3, "y": 1.5, "w": 2, "h": 0.6}, A("p.bottom", "s.left"), A("p.bottom", "r.bottom"))  # 辺の中央はほかの矢印の端
+    u = [e for e in els if e["call"] == "arrow"][1:]
+    assert not d.warnings and near(u[0]["x1"], X + 1.5) and near(u[2]["x2"], X + 7), (d.warnings, u)  # 右へ向かう U 字は、中央を空けて右の半分の真ん中から
+    d, els = flow(A("r.bottom", "p.bottom", num=1, label="大きく"), A("r.bottom", "q.bottom", num=2, label="小さく"))  # 番号のある狭い U 字の札は、marks があとで置く
+    assert not d.warnings, d.warnings  # 広い U 字は、その札と丸の見込みの外を回る
+    d, _ = run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [*({"type": "label", "id": k, "text": k, "x": i * 2.5, "y": 0, "w": 2, "h": 0.6} for i, k in enumerate("abcd")),
+        A("a.bottom", "c.bottom"), A("b.bottom", "d.bottom")]}]})  # 両端の間が入り組んだ 2 本は交わる
+    assert any("の線と交わるか重なる" in w for w in d.warnings), d.warnings
+    assert seg_cross((0, 0), (2, 0), (1, -1), (1, 1)) and not seg_cross((0, 0), (2, 0), (1, 0), (1, 1)) and seg_cross((0, 0), (2, 0), (1, 0), (3, 0)) \
+        and not seg_cross((0, 0), (2, 0), (2, 0), (3, 0)) and seg_cross((0, 0), (2, 0), (0.5, 0.005), (1.5, 0.005))  # 交わる・T 字に接するだけ・同じ直線の上で重なる・端が接するだけ・1 本に見える平行な線
+    d, els = run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [lab3("a", 0, 0), lab3("c", 0, 1.5), lab3("d", 4, 0), A("a", "d"), A("c.right", "a.right")]}]})
+    u = [e for e in els if e["call"] == "arrow"][1:]  # 両端の箱から出るほかの線（a→d）は、深さでよけない（低い箱で底が d の先まで押し出された）
+    assert not d.warnings and near(u[1]["x1"], X + 2 + U_GAP) and near(u[2]["y2"], Y_BODY_NOLEAD + 0.375), (d.warnings, u)
+    d, els = flow(A("r.top", "r.top"), {"type": "label", "id": "s", "text": "S", "x": 0, "y": 2, "w": 2, "h": 0.6}, A("p", "s"), A("p.bottom", "r.bottom"))
+    u = [e for e in els if e["call"] == "arrow"]  # 両端の間が 0 の U 字（1 つの箱の同じ辺）を先に書いても、U 字はほかの矢印のあとに引く
+    assert near(next(e for e in u if e["loc"].endswith("items[6]"))["x1"], X + 1.5), u
+    d, els = run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [lab3("p", 0, 0, h=0.6), lab3("r", 4, 0, h=0.6), lab3("z", 1.5, 0.95, w=3, h=0.4),
+        A("r.bottom", "p.bottom")]}]})  # 底の線は、ほかの部品から U_GAP 離す（0.10 in に近づいた）
+    assert near([e for e in els if e["call"] == "arrow"][1]["y1"], Y_BODY_NOLEAD + 1.35 + U_GAP), els
+    d, els = run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [lab3("p", 0, 0, h=0.6), lab3("r", 4, 0, h=0.6), lab3("q", 2.5, 0, w=1, h=0.6),
+        A("r.bottom", "p.bottom", label="内の札", label_side="top")]}]})  # U 字の内に置いた札も、かかったものの外まで札ごと動かす
+    ql = next(e for e in els if e["loc"].endswith(".label"))
+    assert ql["y"] >= Y_BODY_NOLEAD + 0.6 + U_GAP / 4 - 0.001 and not d.warnings, (ql, d.warnings)
+    d, els = run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [{"type": "box", "x": 0, "y": 0, "w": 2.4, "h": 0.85, "fill": "PANEL"},
+        {"type": "box", "x": 3, "y": 0, "w": 2.4, "h": 0.85, "fill": "PANEL"}, lab3("a", 0.2, 0.1), lab3("b", 3.2, 0.1), A("b.bottom", "a.bottom")]}]})
+    assert near([e for e in els if e["call"] == "arrow"][1]["y1"], Y_BODY_NOLEAD + 0.85 + U_GAP), els  # 一方の端だけを収める囲みはよける（底の線が囲みの縁に重なった）
+    d, els = run({"title": "t", "body": [{"type": "frame", "h": 3, "items": [lab3("p", 0, 0, h=0.6), lab3("r", 2.6, 0, h=0.6),
+        A("r.bottom", "p.bottom", label="内に置いた長い札の名前", label_side="top")]}]})  # U 字の内に置いた札は、両端の箱もよける
+    ql = next(e for e in els if e["loc"].endswith(".label"))
+    assert ql["y"] >= Y_BODY_NOLEAD + 0.6 + U_GAP / 4 - 0.001 and not d.warnings, (ql, d.warnings)
+    for bad, want in [([A("p", "q", depth=0.3)], "U 字の矢印"), ([{"type": "label", "id": "s", "text": "S", "x": 0, "y": 2, "w": 2, "h": 0.6}, A("p.bottom", "s.bottom")], "U 字にならない"),
+                      ([{"type": "label", "id": "s", "text": "S", "x": 6.5, "y": 1.5, "w": 2, "h": 0.6}, A("r.bottom", "s.bottom")], "「s」の上を通る")]:
+        try:
+            flow(*bad)
             raise AssertionError(bad)
         except SystemExit as ex:
             assert want in str(ex), (bad, ex)
