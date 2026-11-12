@@ -11,7 +11,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # スライドと同じ部品（gapi・brand・textlint）は、build-slides のものの写しを隣に持つ
 import gapi, textlint  # noqa: E402
 from brand import FONT, MONO_DEFAULT  # noqa: E402
-from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, facts_hit, load_facts,  # noqa: E402
+from textlint import (FEED, FEED_LINK, HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, facts_hit, load_facts,  # noqa: E402
                       not_in_facts, workspace_checks)  # load_facts は docs.py が doc_lint から引く
 
 FIG_HEAD, TAB_HEAD = r"図 ?\d+|Figure \d+\.", r"表 ?\d+|Table \d+\."  # 図表の題の先頭（docs.py が付ける）。英語は「Table 3 shows …」の文と分けるため「.」まで見る
@@ -116,6 +116,8 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
         for u in links_of(p):
             if "utm_source=" in u:
                 r.hits[UTM_NG].append(f"{where}: {u[:80]}。検索の道具が足した印なので消す")
+            if FEED.search(u):
+                r.hits[FEED_LINK].append(f"{where}: {u[:80]}。フィードやデータでなく、人の読むページにつなぐ")
         for x in p.get("elements", []):
             if "inlineObjectElement" in x:
                 o = images.get(x["inlineObjectElement"]["inlineObjectId"], {})
@@ -226,7 +228,7 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
     print("\n".join(firsts) or "（見出しも本文もない）")
     print(f"\n== 本文の字数: {body} 字（見出し・表・図表の題・出典・引用を除く）、1 行 約 {per_line:.0f} 字 ==")
     hard = r.show(list(HARD) + [FONT_NG, MONO_NG, A4_NG, UTM_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
-    r.show(list(WARN) + textlint.YOMI_NAMES + [f"{DOC_MIN_PT}pt 未満の文字", NOT_IN_FACTS, NO_LINK] + list(DOC_ONLY), "要確認")
+    r.show(list(WARN) + textlint.YOMI_NAMES + [f"{DOC_MIN_PT}pt 未満の文字", NOT_IN_FACTS, NO_LINK, FEED_LINK] + list(DOC_ONLY), "要確認")
     hard += workspace_checks("doc", doc, r)
     return hard
 HARD_NAMES = textlint.HARD_NAMES | {A4_NG, UTM_NG}
@@ -260,13 +262,13 @@ def selftest():
                                                              {"textRun": {"content": "説明です。\n", "textStyle": {}}}],
                                                 "paragraphStyle": {"namedStyleType": "NORMAL_TEXT"}, "bullet": {"listId": "L2"}}}, gp("二つ目", bullet="L2"),
                                  gp("題のない表"), {"table": {"tableRows": [{"tableCells": [cell]}]}},
-                                 gp("4. 空の章", "HEADING_1"), gp("出典", link={"url": "https://a.b/?utm_source=openai"}), gp("おわりです。"), gp("まとめ", "HEADING_1"), gp("以上です。")]}}
+                                 gp("4. 空の章", "HEADING_1"), gp("出典", link={"url": "https://a.b/?utm_source=openai"}), gp("出典：障害の情報", link={"url": "https://a.b/rss/x.rss"}), gp("おわりです。"), gp("まとめ", "HEADING_1"), gp("以上です。")]}}
     with contextlib.redirect_stdout(io.StringIO()):
         lint_gdoc(gdoc, g := Report())
     for k in ("見出しの段の飛び", "見出しの段が深い", "子が 1 つだけの見出し", "中身のない見出し", "文体の混在", "数字に出典のリンクがない", "空の段落の連続",
               "9pt 未満の文字", FONT_NG, "表の題がない", "図の題がない", "本文の幅を超える図", "題が「について」で終わる", "冒頭に要旨がない",
               "末尾の「まとめ」", "見出しの重複", "太字の段落を見出しにしている", "コロンで終わる文", "1 項目だけの箇条書き", "箇条書きの句点の混在",
-              "太字とコロンで始まる箇条書き", "追跡の印の付いたリンク"):
+              "太字とコロンで始まる箇条書き", "追跡の印の付いたリンク", FEED_LINK):
         assert g.hits[k], k
     assert len(g.hits["文体の混在"]) == 1 and not g.hits["用紙が A4 でない"] and not g.hits["1 行の字数が多い"]
     assert "9pt 未満の文字" not in g.hard  # 小さい字は要確認（記録に残る）。表の中・注などで小さくてよいことがあるので止めない

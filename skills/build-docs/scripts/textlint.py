@@ -99,6 +99,10 @@ def contrast(a, b):
 
 
 NO_LINK = "出典の行にリンクがない"
+# [deck-lint-029] リンクの先は人の読むページ。RSS・Atom のフィードは、開くと生の XML が出る（deck-content-033、deck-writing）。フィードそのものを示すこともあるので要確認。
+# .xml・.json 一般は見ない（GitHub の /blob/…/pom.xml のように、人の読むファイルのページがある）
+FEED_LINK = "人の読むページでないリンク"
+FEED = re.compile(r"\.(rss|atom)(?=[?#]|$)|/(rss|atom|feeds?)(\.xml)?(?=[/?#]|$)|[?&](feed|format)=(rss|atom)", re.I)
 # [deck-lint-026] ページの数字は出典の表にあるものだけ。足すときは先に表へ足す（deck-content-064、deck-writing）。表は refs.py が資料のフォルダから読む
 NOT_IN_FACTS = "出典の表にない数字"
 HEAD_PERIOD, BULLET_PERIOD = "見出しの句点", "箇条書きの句点の混在"  # deck-content-066・deck-content-067（deck-writing）。名前は Docs の規則と同じ（Docs は見出しのスタイル、箇条書きのリストごと）
@@ -266,6 +270,9 @@ def selftest():
     assert WARN["空疎な言い回し"].search("業務効率化を実現する") and not WARN["空疎な言い回し"].search("実現の条件")
     assert HARD["絵文字"].search("完了 ✅") and not HARD["絵文字"].search("○ × △")
     assert HARD["長いダッシュ"].search("— 売っていない") and not HARD["長いダッシュ"].search("—")
+    assert all(FEED.search(u) for u in ("https://status.aws.amazon.com/rss/ec2-ap-northeast-1.rss", "https://ex.com/blog/feed/", "https://ex.com/feed.xml?x=1", "https://ex.com/?feed=rss2", "https://ex.com/atom.xml"))
+    assert not any(FEED.search(u) for u in ("https://ex.com/feedback", "https://ex.com/blog/rss-guide", "https://status.aws.amazon.com/", "https://ex.com/docs/xml-parsing",
+                                      "https://github.com/a/b/blob/main/pom.xml", "https://ex.com/a.json"))
     assert not WARN["和欧間のスペース抜け"].search("Apps・Lakebase")
     assert WARN["英語の大文字ラベル"].search("KEY POINTS") and not WARN["英語の大文字ラベル"].search("F9F7F4")  # 色の値はラベルでない
     assert HARD["差し替えの仮ページ"].search("差し替え：紹介資料 p.10") and "差し替えの仮ページ" not in WARN
