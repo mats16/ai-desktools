@@ -11,7 +11,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # スライドと同じ部品（gapi・brand・textlint）は、build-slides のものの写しを隣に持つ
 import gapi, textlint  # noqa: E402
 from brand import FONT, MONO_DEFAULT  # noqa: E402
-from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, facts_hit, load_facts,  # noqa: E402
+from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, HTML, HTML_TAG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, facts_hit, load_facts,  # noqa: E402
                       not_in_facts, workspace_checks)  # load_facts は docs.py が doc_lint から引く
 
 FIG_HEAD, TAB_HEAD = r"図 ?\d+|Figure \d+\.", r"表 ?\d+|Table \d+\."  # 図表の題の先頭（docs.py が付ける）。英語は「Table 3 shows …」の文と分けるため「.」まで見る
@@ -98,10 +98,11 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
     for k, (n, p, tab, before_table) in enumerate(paras):
         text, style = gdoc_text(p).rstrip("\n"), p["paragraphStyle"].get("namedStyleType", "NORMAL_TEXT")
         where = f"段落 {n}" + (f"（表 {tab}）" if tab else "")
-        rs = runs_of(p)
+        rs, plain = runs_of(p), ""  # plain は等幅でない字（HTML のタグを見る）
         for x in rs:
             st, t = x.get("textStyle", {}), x["content"].strip()
             f = eff(p, st, "weightedFontFamily").get("fontFamily", "")
+            plain += x["content"] if f != mono else ""
             size = eff(p, st, "fontSize").get("magnitude", 11)
             if f == mono and re.search(f"[{JA}]", t):
                 r.hits[MONO_NG].append(f"{where}: 「{t[:20]}」")
@@ -135,6 +136,7 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
             continue
         empty = 0
         r.scan(where, text, {**HARD, **WARN})
+        r.scan(where, plain, HTML)  # コード（等幅の字）の中のタグは書いたとおり
         if "borderLeft" not in p["paragraphStyle"] and "shading" not in p["paragraphStyle"]:  # 引用（元のまま）とコードは見ない
             r.wording(where, text, slides=False)
         if re.match(r"(出典|Sources?)[：:]", text, re.I) and not links_of(p):
@@ -225,7 +227,7 @@ def lint_gdoc(doc, r, template=False, font=FONT, mono=MONO_DEFAULT, facts=None):
     print("== 見出しと段落の 1 文目。見出しだけで話が通るか、1 文目を順に読んで要約になるか ==")
     print("\n".join(firsts) or "（見出しも本文もない）")
     print(f"\n== 本文の字数: {body} 字（見出し・表・図表の題・出典・引用を除く）、1 行 約 {per_line:.0f} 字 ==")
-    hard = r.show(list(HARD) + [FONT_NG, MONO_NG, A4_NG, UTM_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
+    hard = r.show(list(HARD) + [HTML_TAG, FONT_NG, MONO_NG, A4_NG, UTM_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
     r.show(list(WARN) + textlint.YOMI_NAMES + [f"{DOC_MIN_PT}pt 未満の文字", NOT_IN_FACTS, NO_LINK] + list(DOC_ONLY), "要確認")
     hard += workspace_checks("doc", doc, r)
     return hard
@@ -278,6 +280,9 @@ def selftest():
         lint_gdoc({**gdoc, "body": {"content": [gp("要旨", "HEADING_1"), gp("本文です。"), gp("移行の順をご確認ください", "HEADING_1"), gp("本文です。"),
                                                 gp("移行は夜間にする。", "HEADING_1"), gp("本文です。")]}}, g := Report())
     assert g.hits[HEAD_POLITE] and g.hits[HEAD_PERIOD] and not any("要旨" in h for h in g.hits[HEAD_POLITE] + g.hits[HEAD_PERIOD])
+    with contextlib.redirect_stdout(io.StringIO()):
+        lint_gdoc({**gdoc, "body": {"content": [gp("要旨", "HEADING_1"), gp("1 行目<br/>2 行目です。"), gp("<b>x</b>", weightedFontFamily={"fontFamily": MONO_DEFAULT})]}}, g := Report())
+    assert len(g.hits[HTML_TAG]) == 1 and "<br/>" in g.hits[HTML_TAG][0]  # 漏れた記法は止め、コード（等幅）の中のタグは通す
     gdoc["documentStyle"]["pageSize"]["height"]["magnitude"] = 792  # レター
     gdoc["documentStyle"]["marginLeft"]["magnitude"] = 40  # 1 行 49 字
     with contextlib.redirect_stdout(io.StringIO()):

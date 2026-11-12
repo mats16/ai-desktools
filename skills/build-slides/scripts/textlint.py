@@ -20,6 +20,13 @@ HARD = {
     "置き換え忘れ": re.compile(r"TODO|FIXME|XXX|lorem|ipsum|〇〇|○○|ここに.{0,6}(入|書)|\[insert", re.I),
     "差し替えの仮ページ": re.compile(r"差し替え："),  # 札の残り。人には Drive の URL で渡し、差し替える人はいない（2026-10-07）
 }
+# [deck-lint-029] 組んだ文に残った HTML のタグ（<br/>・<b> など）と文字参照（&nbsp;）。記法として読まれずに字のまま出たもの（<br> は組むときに改行になる）。
+# 等幅の字（コード）の中は見ないので、HARD と分け、それぞれの lint が等幅でない字だけにかける。ノートは見ない。HTML を見せるのはコード（スライドの code、ドキュメントの ```）（2026-11-12）
+# 拾うのは HTML としか読めない形だけ: <br>・<br/>、閉じタグ（</b>）、属性のあるタグ（<span style="…">）、/> で閉じるタグ。
+# 開くだけの <table>・<code>・<a> は、山かっこの仮の名前（DESCRIBE HISTORY <table>）や記号（案 <a>）と見分けられないので拾わない
+HTML_TAG = "HTML のタグ"
+_TAGS = r"(b|i|u|em|strong|sup|sub|span|div|p|font|small|mark|code|pre|ul|ol|li|table|tr|td|th|a|img|hr|h[1-6])"
+HTML = {HTML_TAG: re.compile(rf"<br\s*/?>|</{_TAGS}>|<{_TAGS}(\s+[\w-]+=(\"[^\"]*\"|'[^']*'|[^\s<>]+))+\s*/?>|<{_TAGS}\s*/>|&(nbsp|amp|lt|gt|quot|#\d+);")}
 WARN = {
     "空疎な言い回し": re.compile(r"(を|の)(実現|加速|最適化|効率化|高度化|強化|推進|促進|変革|最大化)(する|します|。|$)"
                           r"|革新的|次世代の|シームレス|ゲームチェンジ|新たな価値|可能性を広げ|解き放|圧倒的|劇的に|飛躍的"),
@@ -107,7 +114,7 @@ HEAD_POLITE = "見出しが「ください・します」で終わる"
 POLITE_END = re.compile(r"(ください|します|しましょう)$")
 FONT_NG = f"書体が {FONT} でない"  # スライドはテンプレートの書体（deck_font）と比べる。Google Fonts にない書体は、API が受け付けても黙って別の書体で描かれる（api.md）。英数字だけの MONO（コード）は通す
 MONO_NG = f"等幅の {MONO_DEFAULT} に和文"  # 名前は既定の書体のまま（台帳と lint_runs.jsonl が名前で数える）。テーマの mono なら指摘にその名前を出す。MONO に和文の字形はなく、Google が別の書体で描く。和文は FONT にする（slides.py の mono_reqs。slides-visual-014、deck-design）
-HARD_NAMES = set(HARD) | {HEAD_PERIOD, HEAD_POLITE, FONT_NG, MONO_NG}  # スライドとドキュメントで同じ要修正（それぞれの lint が足す）
+HARD_NAMES = set(HARD) | {HTML_TAG, HEAD_PERIOD, HEAD_POLITE, FONT_NG, MONO_NG}  # スライドとドキュメントで同じ要修正（それぞれの lint が足す）
 
 
 def load_facts(folder=".."):
@@ -158,7 +165,7 @@ class Report:
         self.where = lambda hit: ""  # 指摘の後ろに付ける、作ったものの中の場所（slides.py lint が JSON のページの部品の場所を引く）
 
     def scan(self, where, text, rules):
-        text = URL.sub("", text).strip()
+        text = (text if rules is HTML else URL.sub("", text)).strip()  # HTML のタグは URL の中とすぐあと（href="…"、URL&nbsp;）にも残るので、URL を外さずに見る
         for name, rx in rules.items():
             m = rx.search(text)
             if m:
@@ -269,6 +276,14 @@ def selftest():
     assert not WARN["和欧間のスペース抜け"].search("Apps・Lakebase")
     assert WARN["英語の大文字ラベル"].search("KEY POINTS") and not WARN["英語の大文字ラベル"].search("F9F7F4")  # 色の値はラベルでない
     assert HARD["差し替えの仮ページ"].search("差し替え：紹介資料 p.10") and "差し替えの仮ページ" not in WARN
+    assert all(HTML[HTML_TAG].search(t) for t in ("1 行目<br/>2 行目", "<br />", "<b>太字</b>", "A&nbsp;B", '<span style="x">', "<img src='a.png'/>", "<td/>"))
+    assert not any(HTML[HTML_TAG].search(t) for t in ("List<String>", "a < b > c", "<名前>", "R&D", "<bar>", "案 <A> と案 <B>", "Pair<a, b>", "<p.10 参照>", "文頭の <s> と文末の </s>",
+                                                       "DESCRIBE HISTORY <table> で見る", "<catalog>.<schema>.<table>", "案 <a> と案 <b>", "条件 <a または b>", "--code <code>"))
+    u = Report()  # URL のすぐあとと属性の中の URL でも、タグは残す
+    for t in ('詳細は <a href="https://example.com">こちら</a>', "https://x.com/a<br/>次の行", "https://example.com&nbsp;を参照", "https://x.com/?a=1&amp;b=2"):
+        u.scan("p1", t, HTML)
+    u.scan("p1", "https://example.com/TODO", HARD)  # ほかの規則は、これまでどおり URL を外して見る
+    assert len(u.hits[HTML_TAG]) == 4 and not u.hits["置き換え忘れ"], dict(u.hits)
     w = Report()  # 言い回し（yomiyasu）: 名前は YOMI の名前。見出しの読点はスライドだけ。英字だけの文と、残す読点（条件）は出さない
     for t in ("4 つの構成の比べ", "前の版のファイルを書き換える", "Run the build"):
         w.wording("p1", t)

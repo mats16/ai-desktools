@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import textlint  # noqa: E402
 from notes import flatten, note_text, paras, ptext  # noqa: E402  要素の位置とノートの文字（build-vids と同じ部品）
 from brand import CLASSIFICATION, COPYRIGHT_FOOTER  # noqa: E402
-from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, contrast, facts_hit,  # noqa: E402
+from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, HTML, HTML_TAG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, contrast, facts_hit,  # noqa: E402
                       load_facts, lum, not_in_facts, workspace_checks)  # load_facts・lum・JA は slides.py・template.py が lint から引く
 from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMPH_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_KICK, Y_LEAD, deck_card, deck_copyright, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
 
@@ -594,9 +594,10 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                     if footer and WARN["社外秘の表示"].search(t):  # フッターの Internal Only は 1 件にまとめる（社内向けなら意図どおり）
                         foot_secret.append(i)
                     mono = all(st.get("fontFamily") == MONO for c, st in para[1] if c.strip())  # コードの行は大文字のラベル・数字の出典の検査から外す
+                    raw = "".join(c for c, st in para[1] if st.get("fontFamily") != MONO)
                     if not copyright_footer:  # 著作権表示の文はテーマのファイルに書いた値のまま
                         r.scan(f"p{i}", t, {k: v for k, v in {**HARD, **WARN, **SLIDE_ONLY}.items() if not (footer and k == "社外秘の表示") and not (mono and k == "英語の大文字ラベル")})
-                    raw = "".join(c for c, st in para[1] if st.get("fontFamily") != MONO)
+                        r.scan(f"p{i}", raw, HTML)  # コード（等幅の字）の中のタグは書いたとおり
                     one_line = False  # 見出しと 1 行の箇条（折り返さない段落）。表のセルは幅を見積もらないので入れない
                     if "shape" in e and not footer and not mono and re.search(f"[{JA}]", t):  # 表のセルは列の幅を見積もりに通していないので見ない
                         avail = b[2] / EMU * 72 - 2 * INS - para[0].get("indentStart", {}).get("magnitude", 0)
@@ -785,7 +786,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
     print("\n".join(titles))
     print(f"\n== 本文の字数（見出し・リード・出典・フッターを除く。話す資料は {TALK_MAX} 字まで） ==")
     print(" / ".join(chars))
-    hard = r.show(list(HARD) + [COPYRIGHT_NG, FONT_NG, MONO_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
+    hard = r.show(list(HARD) + [HTML_TAG, COPYRIGHT_NG, FONT_NG, MONO_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
     r.show(list(WARN) + textlint.YOMI_NAMES + list(SLIDE_ONLY) + [f"{MIN_PT}pt 未満の文字", NO_SOURCE, NOT_IN_FACTS, NO_LINK, BODY_LINES, TWO_LINES, HEAD_CLAIMS, BULLET_PERIOD, TALK, ARROW_MID, TEXT_OVER, LINE_GRID, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, PAD_NG, NUM_NO_UNIT, OPEN_HEAD, PHRASE_BREAK, COL_SHIFT, DASH_ROUND, RED_THIN, STAGE_NG, CODE_NOT_MONO, BLOCK_ON_NAVY, MANY_BANDS, BAND_ECHO, KICKERS, PANEL_BANDS, CODE_HEAD, AXIS_NEAR, NO_COVER, NO_DIVIDER, SHORT_CH], "要確認")
     hard += workspace_checks("slides", p, r)
     print("\n== 文字サイズ（pt: run の数） ==")
@@ -923,6 +924,8 @@ def selftest():
     assert hard == 1 and len(res.hits[FONT_NG]) == 1
     res, _, hard = run(deck([(NAVY, [title(), shape(1, font=MONO, text=["import mlflow"])])]))
     assert hard == 0  # 英数字だけの等幅は通す
+    res, _, hard = run(deck([(NAVY, [title(), shape(1, text=["1 行目<br/>2 行目"]), shape(1, font=MONO, y=3, text=["print('<br>')"])])], notes="<b> タグを説明する"))
+    assert hard == 1 and len(res.hits[HTML_TAG]) == 1 and "<br/>" in res.hits[HTML_TAG][0]  # 漏れた記法は止め、コードの中とノートのタグは通す
     res, _, hard = run(deck([(NAVY, [title(), shape(1, font=MONO, text=["# 名前"])])]))
     assert hard == 1 and len(res.hits[MONO_NG]) == 1
     import slides  # テーマの mono（マスターの代替テキストのテーマの目印の値）と比べる
