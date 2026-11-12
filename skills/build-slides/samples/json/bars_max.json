@@ -1,0 +1,7 @@
+{"apiVersion": "slides/v1", "kind": "page",
+ "title": "自社のエージェントは、タスクの 9 割を通した", "lead": "同じタスクを 3 つのエージェントに解かせて、通った割合を比べた", "kicker": "bars・max・label・ticks",
+ "body": [
+  {"type": "bars", "horizontal": true, "label": "通ったタスクの割合", "unit": "%", "max": 100, "ticks": true, "hot": [3], "h": 2.7,
+   "items": [["主要な AI エージェント A", 45], ["主要な AI エージェント B", 58], ["自社のエージェント", 91]]}],
+ "band": {"text": "割合は max に 100 を書き、100 を幅いっぱいにする", "sub": "強調する棒のほかは灰色になる"},
+ "authorNotes": ["割合なので max を 100 にする。書かなければ 91 % の棒が幅いっぱいになり、すべて通ったように見える。"]}
