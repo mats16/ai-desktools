@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import textlint  # noqa: E402
 from notes import flatten, note_text, paras, ptext  # noqa: E402  要素の位置とノートの文字（build-vids と同じ部品）
 from brand import CLASSIFICATION, COPYRIGHT_FOOTER  # noqa: E402
-from textlint import (HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, contrast, facts_hit,  # noqa: E402
+from textlint import (FEED, FEED_LINK, HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, contrast, facts_hit,  # noqa: E402
                       load_facts, lum, not_in_facts, workspace_checks)  # load_facts・lum・JA は slides.py・template.py が lint から引く
 from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMPH_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_KICK, Y_LEAD, deck_card, deck_copyright, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
 
@@ -579,6 +579,9 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                     thin_red.append(w)  # 角丸の囲みは辺の線と角の円弧に分かれるので、ページごとに 1 件にまとめる
             if "shape" in e and src_without_link(e["shape"]):
                 r.hits[NO_LINK].append(f"p{i}: 「{''.join(ptext(x) for x in paras(e['shape'].get('text'))).strip()[:30]}」")
+            for u in dict.fromkeys(st["link"].get("url", "") for text, _ in texts for x in paras(text) for _, st in x[1] if "link" in st):
+                if FEED.search(u):
+                    r.hits[FEED_LINK].append(f"p{i}: {u[:80]}。フィードやデータでなく、人の読むページにつなぐ")
             lines_ = [x for text, _ in texts for x in paras(text) if ptext(x).strip()]
             code_box = ("shape" in e and not own and ub is not None and under == scheme.get("DARK1") and lines_
                         and all(any(st.get("fontFamily") == MONO and c.strip() for c, st in x[1]) for x in lines_))  # slides.py の code の形（濃紺の箱に重ねた塗りのない文字の枠で、どの行にも等幅の字がある。和文の字は本文の書体で組む）。言い回しは見ない。地の文に等幅の語が混ざっただけの枠や、濃紺の地のページの文は見る
@@ -786,7 +789,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
     print(f"\n== 本文の字数（見出し・リード・出典・フッターを除く。話す資料は {TALK_MAX} 字まで） ==")
     print(" / ".join(chars))
     hard = r.show(list(HARD) + [COPYRIGHT_NG, FONT_NG, MONO_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
-    r.show(list(WARN) + textlint.YOMI_NAMES + list(SLIDE_ONLY) + [f"{MIN_PT}pt 未満の文字", NO_SOURCE, NOT_IN_FACTS, NO_LINK, BODY_LINES, TWO_LINES, HEAD_CLAIMS, BULLET_PERIOD, TALK, ARROW_MID, TEXT_OVER, LINE_GRID, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, PAD_NG, NUM_NO_UNIT, OPEN_HEAD, PHRASE_BREAK, COL_SHIFT, DASH_ROUND, RED_THIN, STAGE_NG, CODE_NOT_MONO, BLOCK_ON_NAVY, MANY_BANDS, BAND_ECHO, KICKERS, PANEL_BANDS, CODE_HEAD, AXIS_NEAR, NO_COVER, NO_DIVIDER, SHORT_CH], "要確認")
+    r.show(list(WARN) + textlint.YOMI_NAMES + list(SLIDE_ONLY) + [f"{MIN_PT}pt 未満の文字", NO_SOURCE, NOT_IN_FACTS, NO_LINK, FEED_LINK, BODY_LINES, TWO_LINES, HEAD_CLAIMS, BULLET_PERIOD, TALK, ARROW_MID, TEXT_OVER, LINE_GRID, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, PAD_NG, NUM_NO_UNIT, OPEN_HEAD, PHRASE_BREAK, COL_SHIFT, DASH_ROUND, RED_THIN, STAGE_NG, CODE_NOT_MONO, BLOCK_ON_NAVY, MANY_BANDS, BAND_ECHO, KICKERS, PANEL_BANDS, CODE_HEAD, AXIS_NEAR, NO_COVER, NO_DIVIDER, SHORT_CH], "要確認")
     hard += workspace_checks("slides", p, r)
     print("\n== 文字サイズ（pt: run の数） ==")
     print(", ".join(f"{k:g}: {v}" for k, v in sorted(sizes.items())))
@@ -817,7 +820,7 @@ def selftest():
         for t in (text or [prefix + "あ" * 10] * lines):
             st = {"fontFamily": font, "fontSize": {"magnitude": size, "unit": "PT"}}
             if link:
-                st["link"] = {"url": "https://example.com"}
+                st["link"] = {"url": link if isinstance(link, str) else "https://example.com"}
             if color:
                 st["foregroundColor"] = {"opaqueColor": color}
             els += [{"paragraphMarker": {"style": {}}}, {"textRun": {"content": t + "\n", "style": st}}]
@@ -851,6 +854,8 @@ def selftest():
     assert body_lines(*flat(shape(1, text=["あ" * 90]))) == 9 and body_lines(*flat(shape(1, size=24))) == 2  # 1 段落の折り返しも数える
     res, _, _ = run(deck([(OAT, [title(), shape(1, text=["Revenue grew 40%"]), shape(1, y=6.6, prefix="Source: ", link=True)])]))
     assert not res.hits[NO_SOURCE]  # 英語の出典の行も出典に数える
+    res, _, _ = run(deck([(OAT, [title(), shape(1, y=6.6, prefix="出典：", link="https://status.aws.amazon.com/rss/ec2-ap-northeast-1.rss")])]))
+    assert res.hits[FEED_LINK] == ["p1: https://status.aws.amazon.com/rss/ec2-ap-northeast-1.rss。フィードやデータでなく、人の読むページにつなぐ"], res.hits[FEED_LINK]
     assert src_without_link(shape(1, prefix="出典：")["shape"]) and not src_without_link(shape(1)["shape"]) and not src_without_link(shape(1, prefix="出典：", link=True)["shape"])
     for lines in (8, 9):
         res, _, hard = run(deck([(NAVY, [title(), shape(lines), shape(9, y=7.08), shape(9, prefix="出典：")])]))
