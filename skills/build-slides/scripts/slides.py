@@ -16,6 +16,8 @@ usage（資料の build/ で。deck.json か pages.py は今いるフォルダ�
   slides.py wording [<URL か ID>]   日本語の点検（build-slides の lint.md の「Japanese check」）。組まずに、deck.json か pages.py から build と同じデッキを作り、
                                           本文・表のセル・図の札・ノートの言い回しの指摘を、ページのファイルと JSON の場所つきで出す。直す前に通した文と比べて意味の変わる恐れを出し、
                                           資料のフォルダの wording.json に残す（wording.py）。テーマは lint と同じ（URL はテーマのファイルがないデッキだけに要る）
+  slides.py patch [<ファイル>.json] <場所>=<文> | <場所>:=<JSON> | --del <場所> | --sub <今の文> <新しい文> …   JSON のページの値を、場所（lint の出す p05.json.body[0].text）を指して
+                                          書き換え、lint を回す。どれかの場所か文が見つからなければ何も書かずに止める（../commands.md の slides-command-039）
   slides.py dry [<ファイル>] [<URL か ID>]   組まずに make を走らせ、組むときの警告・枚数・ノートのないページを出す（既定は deck.json か pages.py。サブエージェントが書いた JSON のページの .json か build/pages_<担当>.py を確かめる。
                                           テーマは lint と同じ。../pages.md）
   slides.py resolve [<ファイル>.json] [<URL か ID>]   JSON のページを解いた形（in の位置とすべての値。Deck のメソッドの呼び出し）を出す（../pages.md の slides-pages-034）
@@ -37,7 +39,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True  # build/ と scripts/ に __pycache__ を残さない
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import brand, gapi
+import brand, gapi, textlint
 from gapi import (DRIVE, GSLIDES, PPTX, SLIDES, batch, carry, delete, config, config_path, file_id, folder_id, png, request, run, slide_ids, thumbnail,
                   trash, u16, upload)
 from textlint import contrast  # 番号の数字の色を塗りから決める（Deck.num）
@@ -152,44 +154,168 @@ def all_bold(parts, bold=False):
     return all(vis) if vis else bold
 
 
-def wrap_lines(s, avail, size, mono=False, bold=False):
-    """1 段落を幅 avail（in）で折り返したときの (行数, 最終行の幅 em) の見込み。和文は 1 字ずつ、英数字の語はまとめて次の行へ送る。
+TOKEN = re.compile(r"[!-~]+| +|[\n\v]|.")  # Google の折り返しの単位: 英数字の語、空白の並び、改行、ほかは 1 字
+
+
+def flow(t, ws, avail, cur=0.0, forced=(), a0=0, b0=None):
+    """t[a0:b0] を、幅 cur まで埋まった行から幅 avail に流したときの (増えた行の数, 最終行の幅)。ws は字ごとの幅（avail と同じ単位）。
+    Google の送り方: 和文は 1 字ずつ、英数字の語はまとめて次の行へ送り、1 行より長い語は字で折る。\\n・\\v と forced の位置（組む側が \\v を入れる位置）で行を改める。
     ponytail: 行頭の句読点を前の行に戻す禁則は見ない"""
-    n, cur, cap = 1, 0.0, max(avail, 0.05) * 72 / size
-    for word in re.findall(r"[!-~]+| +|.", s):
-        for t in (word if em_width(word, mono, bold) > cap else [word]):  # 1 行より長い語（長い識別子・URL）は、字で折る
-            tw = em_width(t, mono, bold)
-            if cur + tw > cap + 1e-9 and cur > 0:
-                n, cur = n + 1, (0.0 if t.isspace() else tw)
-            else:
-                cur += tw
-    return n, cur
-
-
-def run_lines(runs, avail, mono=False):
-    """runs（(文字, pt, 太字) の並び）の 1 段落を幅 avail（in）で折り返した行数の見込み。wrap_lines と同じ送り方（英数字の語はまとめて次の行へ、
-    1 行より長い語は字で折る）を、文字ごとの大きさと太さで見る（lint の wrap_breaks と同じ）。\n で改行する。"""
-    t = "".join(c for c, *_ in runs)
-    ws = [em_width(ch, mono, b) * sz / 72 for c, sz, b in runs for ch in c]
-    n, cur = 1, 0.0
-    for m in re.finditer(r"[!-~]+| +|\n|.", t):
-        if m.group() == "\n":
-            n, cur = n + 1, 0.0
-            continue
+    n = 0
+    for m in TOKEN.finditer(t, a0, len(t) if b0 is None else b0):
         a, z = m.span()
-        for k, e in ([(k, k + 1) for k in range(a, z)] if sum(ws[a:z]) > avail + 1e-9 else [(a, z)]):
+        if t[a] in "\n\v" or a in forced:
+            n, cur = n + 1, 0.0
+            if t[a] in "\n\v":
+                continue
+        for k, e in ([(k, k + 1) for k in range(a, z)] if sum(ws[a:z]) > avail + 1e-9 else [(a, z)]):  # 1 行より長い語（長い識別子・URL）は、字で折る
             w = sum(ws[k:e])
             if cur + w > avail + 1e-9 and cur > 0:
                 n, cur = n + 1, (0.0 if t[k].isspace() else w)
             else:
                 cur += w
-    return n
+    return n, cur
+
+
+NO_HEAD = "、。，．）」』】〕・ー!?！？：；ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ々"  # 行頭に来ない字（禁則で前の行に戻る。lint の文節の点検も使う）
+SHORT_NOUN = 2  # 「の」のあとに、この字数以下のかなか漢字で終わる語（「間」「数」「周で」「うち」）が続けば、そこでは切らない（外の物差しのレビューが「周の／間」「依頼の／数」「前の／周で」を直すと数えた）
+OPEN_BRACKET = "（「『【〔［〈《"  # 前で改行しない字（行頭に来ると半字下がって見え、左端がそろわない。slides-visual-013、deck-design）
+JA_CHAR = re.compile(f"[{textlint.JA}]")
+SHORT_AFTER_NO = re.compile(f"[{textlint.JA}]{{1,{SHORT_NOUN}}}(?![{textlint.JA}])")
+PHRASES = {}  # 段落の文字 → 文節の切れ目（BudouX）の位置の集合。phrase_prefetch が組む前に埋める。None は分けられなかった段落
+COLLECT = None  # phrase_prefetch が 1 回目に make を走らせるあいだ、文節を問い合わせる段落を集める集合
+SEGMENT = None  # 文節に分ける関数（文字列の並び → {文字列: 切れ目の集合} か None）。None なら lint.segment（selftest が差し替える）
+
+
+def phrase_cuts(t):
+    """行 t（手の改行のない 1 行）の文節の切れ目。組む前に phrase_prefetch が分けた行だけ（ほかは None で、Google の折り返しに任せる）。和文のない行は None。"""
+    if "\v" in t or "\n" in t or not JA_CHAR.search(t):
+        return None
+    if COLLECT is not None:
+        COLLECT.add(t)
+        return None
+    return PHRASES.get(t)
+
+
+def auto_breaks(t, ws, avail, cuts):
+    """段落 t を幅 avail（in）に置くとき、組む側が \\v を入れる位置（次の行の先頭の字の位置）の並び。ws は字ごとの幅（in）、cuts は文節の切れ目。
+    slides-component-027（../pages.md）。Google Slides は和文を 1 字ずつ折り返し、自動の折り返しの半分が文節の途中に入った（slides-visual-013、deck-design）。そこで文節の切れ目で行を決める。
+    1 行に収まる見込みの段落は入れない（幅を文字に合わせた札を割らない）。折り返す段落は、1 行を半字分狭く詰める（<br> を外して組んだ 6 本で、Google の行の幅は見積もりより最大 0.27 字狭く、広い外れはなかった。
+    見積もりより早く折れた残りは禁則の追い出し。外れると Google がもう 1 度折るので、少しだけ余裕を取る）。
+    切らない位置: 行頭に来ない字・開き括弧の前、数字のあと（「10 倍」）、英数字の語の中、「・」のあと（「組む・確かめる」）、「この・その・あの・どの」のあと
+    （次の語にかかる。BudouX はここで切るが、外の物差しのレビューが「その／組み直し」を文節の途中と数えた）、「の」のあとの 2 字以下の語の前（「周の／間」「前の／周で」。行が増えるなら切る）。
+    1 行より長い文節は、中の「・」「、」のあと、なければ空白のあと（数字のあとを除く）で切り、それでも長い分は Google に任せる。最終行が 2 字以下になるなら、前の行から文節を送る。"""
+    if sum(ws) <= avail + 1e-9:
+        return []
+    cap = avail - max((w for c, w in zip(t, ws) if JA_CHAR.match(c) or "　" <= c <= "〿" or "＀" <= c <= "｠"), default=0) / 2  # 半字分の余裕（いちばん大きい和文の字）
+    def pick(keep_no):
+        ok, cs = set(), sorted(set(cuts) | {k + 1 for k, c in enumerate(t) if c == "／"})  # 「／」で並べた語の切れ目（BudouX は「中央値／周の」とつなぐ）
+        for i, k in enumerate(cs):
+            while k < len(t) and t[k] == " ":  # 空白の前で切れたら、空白の後ろで改行する（行末の空白は見えない）
+                k += 1
+            nxt = next((c for c in cs[i + 1:] if c > k), len(t))
+            if 0 < k < len(t) and t[k] not in NO_HEAD + OPEN_BRACKET and t[k - 1] not in OPEN_BRACKET and not ("!" <= t[k - 1] <= "~" and "!" <= t[k] <= "~") \
+                    and not t[:k].rstrip()[-1:].isdigit() and t[k - 1] != "・" and not (t[max(k - 2, 0):k] in ("この", "その", "あの", "どの") and not JA_CHAR.match(t[k - 3:k - 2] or " ")) \
+                    and not (keep_no and t[k - 1] == "の" and SHORT_AFTER_NO.match(t, k, nxt)):  # 「周の／間」「依頼の／数」「75 回の／うち 12 回」: 「の」のあとの短い語は前の語から離さない
+                ok.add(k)
+        bounds = [0, *sorted(ok), len(t)]
+        for a, b in zip(bounds[:-1], bounds[1:]):  # 1 行より長い文節は、中の「・」「、」のあと、なければ空白で切る（Google に任せると「2 周目／5.5」「スライド 1／本」と数を割った）
+            mid = [k for k in range(a + 1, b) if t[k] not in NO_HEAD + OPEN_BRACKET + " "]
+            if sum(ws[a:a + len(t[a:b].rstrip())]) > cap:
+                ok |= set([k for k in mid if t[k - 1] in "・、"] or [k for k in mid if t[k - 1] == " " and not t[:k].rstrip()[-1:].isdigit()])
+        bounds = [0, *sorted(ok), len(t)]
+        starts, cur, wrapped = [], 0.0, -1  # wrapped: Google が中で折る、1 行より長い文節の始まり
+        for a, b in zip(bounds, bounds[1:]):
+            w, fit = sum(ws[a:b]), sum(ws[a:a + len(t[a:b].rstrip())])  # 行末の空白は幅に数えない
+            if fit > cap:
+                cur, wrapped = flow(t, ws, avail, cur, (), a, b)[1], a
+            elif cur > 0 and cur + fit > cap:
+                starts.append(a)
+                cur = w
+            else:
+                cur += w
+        if starts and wrapped < starts[-1] and len(t[starts[-1]:].strip()) <= 2:  # 最終行が 1〜2 字（レビューの指摘で 38 件）: 前の行の最後の文節を送る
+            tail = len(t.rstrip())
+            c = max((k for k in ok if (starts[-2] if len(starts) > 1 else 0) < k < starts[-1]), default=None)
+            if c is not None and sum(ws[c:tail]) <= cap:
+                starts[-1] = c
+        return starts
+    soft, hard = pick(True), pick(False)  # 「の」のあとの短い語を離さないのは、行が増えないときだけ（増えると「毎朝の／アップデートの段を／重ねる」と短い行が出た）
+    return soft if flow(t, ws, avail, forced=set(soft))[0] <= flow(t, ws, avail, forced=set(hard))[0] else hard
+
+
+def line_breaks(t, ws, avail):
+    """t を手の改行（\\n・\\v。JSON の <br>）で分けた行ごとに、組む側が \\v を入れる位置（auto_breaks。t の中の位置）。手の改行はそのまま残す
+    （<br> を文の終わりに書いた段落で、続く長い行を Google が「自動／62 回」と 1 字ずつ折った。2026-11-17 の通しの計測）。"""
+    at, i = [], 0
+    for q in re.split(r"[\n\v]", t):
+        if cuts := phrase_cuts(q):
+            at += [i + k for k in auto_breaks(q, ws[i:i + len(q)], avail, cuts)]
+        i += len(q) + 1
+    return at
+
+
+def wrap_lines(s, avail, size, mono=False, bold=False, auto=True):
+    """1 段落を幅 avail（in）で折り返したときの (行数, 最終行の幅 em) の見込み。和文は 1 字ずつ、英数字の語はまとめて次の行へ送る（flow）。
+    auto なら、組む側が文節の切れ目に入れる改行（auto_breaks）も数える。mono（コード）には入れない。"""
+    ws = [em_width(c, mono, bold) * size / 72 for c in s]
+    n, cur = flow(s, ws, max(avail, 0.05), forced=set(line_breaks(s, ws, avail)) if auto and not mono else ())
+    return n + 1, cur * 72 / size
+
+
+def run_lines(runs, avail, mono=False):
+    """runs（(文字, pt, 太字) の並び）の 1 段落を幅 avail（in）で折り返した行数の見込み。wrap_lines と同じ送り方（flow）を、文字ごとの大きさと太さで見る
+    （lint の wrap_breaks と同じ）。\\n・\\v で改行し、組む側が文節の切れ目に入れる改行も数える。"""
+    t = "".join(c for c, *_ in runs)
+    ws = [em_width(ch, mono, b) * sz / 72 for c, sz, b in runs for ch in c]
+    return flow(t, ws, avail, forced=set() if mono else set(line_breaks(t, ws, avail)))[0] + 1
 
 
 def est_lines(s, avail, size, mono=False, bold=False):
-    """幅 avail（in。文字の枠の内側）に size pt で置いたときの行数の見込み。\n と \v で改行する。英数字の語は行をまたがない
-    （1 字ずつ詰めて数えると、英語の多いカードで 1 行少なく見込み、h を省いたカードから文字がはみ出した。2026-10-13）。"""
-    return sum(wrap_lines(p, avail, size, mono, bold)[0] for p in re.split(r"[\n\v]", s))
+    """幅 avail（in。文字の枠の内側）に size pt で置いたときの行数の見込み。\\n と \\v で改行する。英数字の語は行をまたがない
+    （1 字ずつ詰めて数えると、英語の多いカードで 1 行少なく見込み、h を省いたカードから文字がはみ出した。2026-10-13）。文節の改行も数える。"""
+    return sum(wrap_lines(q, avail, size, mono, bold)[0] for p in s.split("\n") for q in p.split("\v"))
+
+
+def phrase_parts(parts, avail, size=11, bold=False, mono=False):
+    """parts（Deck.text の文字）の段落ごとに、文節の切れ目の改行（auto_breaks の \\v）を入れた parts。見込み（wrap_lines・run_lines）と同じ位置に入れる。"""
+    if mono:
+        return parts
+    runs = [(p, size, bold) if isinstance(p, str) else (p[0], p[1].get("size", size), p[1].get("bold", bold)) for p in ([parts] if isinstance(parts, str) else parts)]
+    full = "".join(c for c, *_ in runs)
+    at = line_breaks(full, [em_width(ch, False, b) * sz / 72 for c, sz, b in runs for ch in c], avail)
+    if not at:
+        return parts
+    out, i = [], 0
+    for p in [parts] if isinstance(parts, str) else parts:
+        s, st = (p, None) if isinstance(p, str) else p
+        ks = [k - i for k in at if i <= k < i + len(s)]
+        s2 = "".join("\v" * (j in ks) + c for j, c in enumerate(s))
+        out.append(s2 if st is None else (s2, st))
+        i += len(s)
+    return out[0] if isinstance(parts, str) else out
+
+
+def phrase_prefetch(make, name="dry"):
+    """組む前に、make を 1 回だけ改行を入れずに走らせて段落を集め、まだ分けていない段落を BudouX にまとめて 1 回で分ける（lint.segment。キャッシュは lint と同じ）。
+    見込みと組む要求は、ここで分けた段落にだけ文節の改行を入れる。uv か BudouX が使えなければ、改行を入れずに組み、そう出す。"""
+    global COLLECT
+    COLLECT = set()
+    try:
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            make(Deck(name))
+    except (Exception, SystemExit):  # 止まる資料は、2 回目の make がそのまま止まる
+        pass
+    finally:
+        texts, COLLECT = COLLECT, None
+    if new := sorted(t for t in texts if t not in PHRASES):
+        if SEGMENT is None:
+            sys.modules.setdefault("slides", sys.modules[__name__])  # lint の「from slides import …」に、このモジュールをそのまま渡す
+            import lint
+        got = (SEGMENT or lint.segment)(new)
+        if got is None:
+            print("（uv か BudouX が使えないので、文節の切れ目で改行せずに組む。Google が 1 字ずつ折り返す）", file=sys.stderr)
+        PHRASES.update({t: (got or {}).get(t) for t in new})
 
 
 def mono_reqs(oid, s, cell=None):
@@ -666,12 +792,15 @@ class Deck:
                         over.add(ln)
                         self.warn(f"手で改行した行が枠に収まらない見込み「{ln}」（{em_width(ln, mono, b) * sz / 72:.2f} in > {avail:.2f} in）")
             # [slides-component-013] 自動で折り返す行の、最終行の 1〜2 字（代表の 3 枚の記録で、ほぼすべてのデッキに出た）。ponytail: size の 1 つの大きさで見る
+            # lint も同じ決まりで、表のセルと fit でない枠も見て、直す位置まで出す。これは lint を回さずに組んだときの網（2026-10-13 の決めたこと）
             for ln in re.split(r"[\n\v]", full):
                 n, last = wrap_lines(ln, avail, size, mono, all_bold(parts, bold))
                 if n > 1 and last <= 2 and ln not in over:
                     self.warn(f"折り返した最終行が 2 字以下の見込み「{ln}」（{n} 行。言い換えか \\v で行を決める）")
         if spacing is None:
             spacing = 125 if est_lines(full.strip("\n"), avail, size, mono, all_bold(parts, bold)) > 1 else 100
+        parts = phrase_parts(parts, avail, size, bold, mono)  # 文節の切れ目の改行（見込みの行数と同じ位置）
+        full = spec_plain(parts)
         if ring and kind != "ELLIPSE":  # 角丸は box が背景を組む。負の inner で文字の枠を背景より広げる
             e = self.box(sid, *ring, fill, line, kind, radius, -(w - ring[2]) / 2, dash, weight)
         elif ring:
@@ -868,7 +997,9 @@ class Deck:
             if not s:
                 continue
             loc, color = {"rowIndex": r, "columnIndex": c}, d.get("color") or (WHITE if head else HEAD if first else TEXT)
-            spacing = 120 if est_lines(s, avail, size, bold=head or first) > 1 else 100
+            spacing = 120 if est_lines(s, avail, size, mono, head or first) > 1 else 100
+            parts = phrase_parts(parts, avail, size, head or first, mono)  # 文節の切れ目の改行（table_h の見込みと同じ位置）
+            s = spec_plain(parts)
             self.reqs += [{"insertText": {"objectId": t, "cellLocation": loc, "insertionIndex": 0, "text": s}},
                           {"updateTextStyle": {"objectId": t, "cellLocation": loc, "textRange": {"type": "ALL"},
                                                "style": {"fontFamily": FONT, "fontSize": pt(size), "bold": head or first, "foregroundColor": {"opaqueColor": paint(color)}},
@@ -1021,6 +1152,7 @@ class Deck:
 
 
 def make_deck(make, name):
+    phrase_prefetch(make, name)
     d = Deck(name)
     make(d)
     d.finish()
@@ -1411,7 +1543,7 @@ def spec_text_h(parts, avail, size, spacing=None, gap=0, mono=False, bold=False)
         for k, piece in enumerate(t.split("\n")):
             if k:
                 paras.append([])
-            paras[-1].append((piece.replace("\v", "\n"), sz, b))
+            paras[-1].append((piece, sz, b))
     full = "\n".join("".join(t for t, *_ in q) for q in paras)
     sp = spacing or (125 if est_lines(full.strip("\n"), avail, size, mono, all_bold(parts, bold)) > 1 else 100)  # Deck.text と同じ見方
     h = 0
@@ -2876,7 +3008,7 @@ def spec_where(deck):
         if not n or not q or int(n.group(1)) > len(deck.slides):
             return ""
         t = re.sub(r"[\s\v⏎]", "", q.group(1).split(" / ")[0]).strip("…")[:12]
-        locs = [loc for loc, s in deck.spec_index.get(deck.slides[int(n.group(1)) - 1], []) if t and t in re.sub(r"[\s\v]", "", s)]
+        locs = [loc for loc, s in deck.spec_index.get(deck.slides[int(n.group(1)) - 1], []) if t and t in re.sub(r"[\s\v]|<br>", "", s)]  # 見出しなどの索引は JSON の文字のまま（<br> が残る）
         return f"（{'・'.join(dict.fromkeys(locs))}）" if locs else ""  # 同じ文で始まる部品が 2 つ以上なら、どれかを決めずに全部出す
     return where
 
@@ -3896,6 +4028,10 @@ def local_json(reqs, deck, p):
             for row in rows[r0:r0 + rng["rowSpan"]]:
                 for cell in row["tableCells"][c0:c0 + rng["columnSpan"]]:
                     merge(cell["tableCellProperties"], v["tableCellProperties"], v["fields"])
+        elif k == "updateTableColumnProperties":  # 列の幅（lint が表のセルの折り返しを見積もる）
+            cols = els[o][0]["table"].setdefault("tableColumns", [{} for _ in range(els[o][0]["table"]["columns"])])
+            for j in v["columnIndices"]:
+                merge(cols[j], v["tableColumnProperties"], v["fields"])
         elif k == "mergeTableCells":  # 結合したセルは、左上のセルが rowSpan・columnSpan を持つ
             rng = v["tableRange"]
             els[o][0]["table"]["tableRows"][rng["location"]["rowIndex"]]["tableCells"][rng["location"]["columnIndex"]] |= {"rowSpan": rng["rowSpan"], "columnSpan": rng["columnSpan"]}
@@ -4080,8 +4216,9 @@ def dry(path="pages.py", url=None, show=False):
     if Path(path).parent != Path("."):  # 今いるフォルダから読むので、別のフォルダのファイルを黙って取り違えない
         sys.exit(f"dry はファイルのあるフォルダ（build/）で、名前だけを渡して回す: {path}")
     deck_context(path, url)
-    d = Deck("dry")
-    load_make(path).make(d)
+    d, make = Deck("dry"), load_make(path).make
+    phrase_prefetch(make)
+    make(d)
     if show:  # slides.py resolve: JSON のページの解いた形
         print(json.dumps(d.resolved, ensure_ascii=False, indent=1))
     print(json.dumps({"file": path, "slides": len(d.slides), "warnings": len(d.warnings)}, ensure_ascii=False), file=sys.stderr if show else sys.stdout)
@@ -4130,6 +4267,7 @@ def lint_local(path="pages.py", url=None, talk=False, pages=None):
     _, _, p = deck_context(path, url)
     m = load_make(path)
     with contextlib.redirect_stderr(io.StringIO()) as err:  # 組むときの警告は、見るページのものだけを出す
+        phrase_prefetch(m.make)
         deck = Deck(getattr(m, "NAME", "dry"))
         m.make(deck)
         if path not in ("pages.py", "deck.json"):  # 子のファイルと JSON のページの、ページへのリンクは、全体の番号を指すので、親が組むときに確かめる（dry と同じ）
@@ -4163,7 +4301,134 @@ def lint_local(path="pages.py", url=None, talk=False, pages=None):
     warnings = sum(int(re.match(r"\[p(\d+)\]", w).group(1)) in pages for w in deck.warnings)
     print(f"\n{LOCAL_ONLY}\n" + json.dumps({"file": path, "slides": len(deck.slides), "pages": sorted(pages), "warnings": warnings}, ensure_ascii=False))
     if hard:
-        sys.exit("lint の要修正が残っている（上の出力を直す）")
+        sys.exit(LINT_HARD)
+
+
+LINT_HARD = "lint の要修正が残っている（上の出力を直す）"
+PATCH_STOP = "要修正: patch を止めた（何も書いていない）。"  # モデルは出力を「要修正」で grep するので、止まる文はこの語で始める
+PATCH_USAGE = ("slides.py patch [<ファイル>.json] <場所>=<文> | <場所>:=<JSON> | --del <場所> | --sub <今の文> <新しい文> …"
+               "（場所は lint の出す p05.json.body[0].items[1].text か、前に渡したファイルの中の body.0.items.1.text）")
+
+
+def patch_target(s, cur):
+    """patch の場所 s（「p05.json.body[0].text」か、cur のファイルの中の「body.0.text」）を、ファイルとキー・番号の並びにする。"""
+    f, rest = (m.group(1), s[m.end():]) if (m := re.match(r"(.+?\.json)(?:\.|$)", s)) else (cur, s)
+    if f is None:
+        sys.exit(f"{PATCH_STOP}{s!r} のファイルが分からない（p05.json.lead のように頭にファイルを書くか、前にファイルを渡す）")
+    if rest and not re.fullmatch(r"[^.\[\]]+(\.[^.\[\]]+|\[\d+\])*", rest):
+        sys.exit(f"{PATCH_STOP}場所 {s!r} が読めない（body[0].items[1].text か body.0.items.1.text）")
+    return f, [int(k) if k.isdigit() else k for k in re.findall(r"[^.\[\]]+", rest)]
+
+
+def patch_step(o, k, where):
+    """o の中の k。なければ、あるキーか長さを添えて止める（何も書く前）。"""
+    if isinstance(o, list) and isinstance(k, int) and k < len(o):
+        return o[k]
+    if isinstance(o, dict) and str(k) in o:
+        return o[str(k)]
+    sys.exit(f"{PATCH_STOP}{where} がない（" + (f"{len(o)} 個の並び。番号は 0 から" if isinstance(o, list) else f"あるキー: {'・'.join(o)}" if isinstance(o, dict) else "その上は文字か数") + "）")
+
+
+def cmd_patch(args):
+    """JSON のページの値を、場所を指して書き換える（slides-command-039）。すべての直しを手元で当ててから書き、場所・文が見つからなければ何も書かずに止める。
+    書いたあとに lint（deck.json があればデッキの既定の範囲）を回す。直しで書く形が崩れた（知らないキー・値の型）なら、書いたファイルを戻して止める。"""
+    if Path("pages.py").is_file():
+        sys.exit(f"{PATCH_STOP}pages.py のデッキは patch で直さない（ページの関数を直す。../legacy.md）")
+    docs, before, cur, i, short = {}, {}, None, 0, lambda v: (s := json.dumps(v, ensure_ascii=False))[:60] + ("…" if len(s) > 60 else "")
+    text = lambda s: s.replace("\\n", "\n").replace("\\v", "\v")  # シェルで書いた \n・\v は改行（ページの文に \ と n は書かない）
+
+    def doc(f):
+        f = os.path.relpath(Path(f).resolve())  # ./・絶対パス・シンボリックリンクでも、同じファイルの直しを重ねる
+        if f not in docs:
+            try:
+                before[f] = Path(f).read_text(encoding="utf-8")
+                docs[f] = json.loads(before[f])
+            except (OSError, json.JSONDecodeError) as e:
+                sys.exit(f"{PATCH_STOP}{f} が読めない（{e}）")
+        return docs[f]
+    out = []
+    while i < len(args):
+        x, i = args[i], i + 1
+        if x == "--sub":
+            if cur is None or len(args) < i + 2:
+                sys.exit(PATCH_USAGE if cur else f"{PATCH_STOP}--sub の前にファイルを渡す（p05.json --sub 今の文 新しい文）")
+            old, new, i = text(args[i]), text(args[i + 1]), i + 2
+            hits = [(loc, o, k) for loc, _ in json_leaves(doc(cur)) for o, k in [patch_parent(doc(cur), loc)] if old in o[k]]
+            if (n := sum(o[k].count(old) for _, o, k in hits)) != 1:
+                sys.exit(f"{PATCH_STOP}{cur} に「{old}」が {n} か所" + (f"（{'・'.join(loc for loc, _, _ in hits)}）。今の文を長くするか、場所=新しい文で書く" if n else ""))
+            loc, o, k = hits[0]
+            out.append(f"{cur} {loc}: {short(o[k])} → {short(o[k].replace(old, new))}")
+            o[k] = o[k].replace(old, new)
+            continue
+        if x == "--del":
+            if i >= len(args):
+                sys.exit(PATCH_USAGE)
+            cur, keys = patch_target(args[i], cur)
+            i += 1
+            op, val = "del", None
+        elif "=" in x:
+            t, v = x.split("=", 1)
+            op = "json" if t.endswith(":") else "set"
+            cur, keys = patch_target(t.removesuffix(":"), cur)
+            try:
+                val = json.loads(v) if op == "json" else text(v)
+            except json.JSONDecodeError as e:
+                sys.exit(f"{PATCH_STOP}{x!r} の値が JSON でない（{e}。文なら := ではなく = で書く）")
+        elif x.endswith(".json"):
+            cur = x
+            doc(x)
+            continue
+        else:
+            sys.exit(PATCH_USAGE)
+        if not keys:
+            sys.exit(f"{PATCH_STOP}{x!r} に場所がない（ファイルを丸ごと書き換えない）")
+        o, where = doc(cur), cur
+        for k in keys[:-1]:
+            where += f"[{k}]" if isinstance(k, int) else f".{k}"
+            o = patch_step(o, k, where)
+        k, loc = keys[-1], re.sub(r"^\.", "", "".join(f"[{k}]" if isinstance(k, int) else f".{k}" for k in keys))
+        append = isinstance(o, list) and op != "del" and k == len(o)  # 並びの長さと同じ番号は、末尾に足す
+        if op == "del" or isinstance(o, list) and not append:
+            patch_step(o, k, f"{cur}.{loc}")  # 消すものと、並びの中の書き換えは、もうあるものだけ
+        if not isinstance(o, (dict, list)):
+            sys.exit(f"{PATCH_STOP}{cur}.{loc} の上が文字か数")
+        k = str(k) if isinstance(o, dict) else k
+        out.append(f"{cur} {loc}: {'（なし）' if append or isinstance(o, dict) and k not in o else short(o[k])} → {'（消した）' if op == 'del' else short(val)}")
+        if op == "del":
+            del o[k]
+        elif append:
+            o.append(val)
+        else:
+            o[k] = val
+    if not out:
+        sys.exit(PATCH_USAGE)
+    wrote = [f for f in docs if json.dumps(docs[f]) != json.dumps(json.loads(before[f]))]  # JSON の型も比べる（Python では 1 == True）。書式だけ違うファイルは書き直さない
+    for f in wrote:
+        Path(f).write_text(json.dumps(docs[f], ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    print("\n".join(out), flush=True)
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            for f in wrote:  # デッキにまだ並んでいないページも、lint の要修正で止まる前に形を確かめる
+                deck_context("deck.json" if Path("deck.json").is_file() else f)
+                Deck("patch").spec(f)
+        for f in ["deck.json"] if Path("deck.json").is_file() else docs:
+            lint_local(f)
+    except BaseException as e:
+        if isinstance(e, SystemExit) and e.code in (None, 0, LINT_HARD):  # 通常の lint の要修正は、直しを残す
+            raise
+        for f in wrote:  # ページを読めない例外の種類によらず、全ファイルを戻す
+            Path(f).write_text(before[f], encoding="utf-8")
+        if not isinstance(e, (Exception, SystemExit)):  # 中断は、戻してから伝える
+            raise
+        sys.exit(f"{e}\n要修正: patch を止めた（書いたファイルを戻した: {'・'.join(wrote)}）。直しを当てると、上のとおりページの JSON として読めない")
+
+
+def patch_parent(o, loc):
+    """json_leaves の場所（body[2].text）の 1 つ手前の入れ物と、最後のキー。"""
+    keys = [int(k) if k.isdigit() else k for k in re.findall(r"[^.\[\]]+", loc)]
+    for k in keys[:-1]:
+        o = o[k]
+    return o, keys[-1]
 
 
 def slide_units(p, notes=None):
@@ -4286,6 +4551,8 @@ def merge(pages, fixes):
 
 
 def selftest():
+    global SEGMENT
+    SEGMENT = lambda ts: {t: set() for t in ts}  # 文節の改行は selftest_phrase だけで見る（ほかの組み方の確かめは、uv を呼ばず、改行を入れない）
     assert gapi.find_config.cache_info().currsize == 0  # import で [brand] を読んでも、gapi の覚えた結果を作らない（あとで今いるフォルダを変える desk-init の doctor.py のため）
     assert paint(NAVY) == {"themeColor": "DARK1"} and paint("FFFFFF") == {"rgbColor": {"red": 1.0, "green": 1.0, "blue": 1.0}}
     assert u16("𝄞あ") == 3  # サロゲートペアは 2
@@ -4823,7 +5090,169 @@ def selftest():
     selftest_spec()
     selftest_sample()
     selftest_wording()
+    selftest_patch()
+    selftest_phrase()
     print("selftest ok")
+
+
+def selftest_patch():
+    """slides.py patch: lint の形の場所（括弧）と点の場所、文の一部の差し替え、:= の JSON、消す、2 つのファイルを 1 回で直し、lint を回す。
+    場所・文が見つからない、文が 2 か所ある、書く形の外になる直しは、どのファイルも書かずに止める（書く形の外は、書いてから戻す）。Google は呼ばない。"""
+    real, cwd = globals()["request"], os.getcwd()
+    globals()["request"] = lambda *a, **k: (_ for _ in ()).throw(AssertionError(f"Google を呼んだ: {a[:2]}"))
+    page = lambda **kw: {"apiVersion": API_VERSION, "kind": "page", **kw}
+    def go(*args):
+        with contextlib.redirect_stdout(io.StringIO()) as o, contextlib.redirect_stderr(io.StringIO()):
+            try:
+                cmd_patch(list(args))
+                return 0, o.getvalue()
+            except SystemExit as e:
+                return e.code, o.getvalue()
+    try:
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "build").mkdir()
+            os.chdir(Path(t) / "build")
+            Path("deck.json").write_text(json.dumps({"apiVersion": API_VERSION, "kind": "deck", "name": "t", "theme": "navy", "pages": ["p01.json", "p02.json"]}))
+            Path("p01.json").write_text(json.dumps(page(title="直す前の見出し", lead="今の文を短くする", band={"text": "結論"},
+                                                        body=[{"type": "row", "items": [{"type": "card", "head": "左", "text": "1 つ目"}, {"type": "card", "head": "右", "text": "2 つ目"}]}]), ensure_ascii=False))
+            Path("p02.json").write_text(json.dumps(page(title="次のページ", body=[{"type": "text", "text": "同じ語と同じ語"}]), ensure_ascii=False))
+            first = {f: Path(f).read_text() for f in ("p01.json", "p02.json")}
+            for args, want in [(["p01.json.body[0].items[3].text=x"], "items[3] がない（2 個の並び"),  # 番号の外
+                               (["p01.json.body.0.items.0.txt.a=x"], "txt がない（あるキー: type・head・text"),  # 途中のキーの打ち間違い
+                               (["p01.json.lead=新", "p02.json", "--sub", "ない文", "x"], "「ない文」が 0 か所"),  # 前の直しは当たっても、何も書かない
+                               (["p02.json", "--sub", "同じ語", "x"], "2 か所"), (["p01.json", "--del", "kicker"], "kicker がない"),
+                               (["p01.json.lead:=新しい文"], "JSON でない"), (["lead=x"], "ファイルが分からない"), (["p01.json.body[0]..text=x"], "読めない")]:
+                code, _ = go(*args)
+                assert want in str(code) and str(code).startswith("要修正: patch を止めた（何も書いていない）。"), (args, code)  # モデルは出力を「要修正」で grep するので、その語で始める
+                assert {f: Path(f).read_text() for f in first} == first, args  # どのファイルも書かない
+            code, out = go("p01.json.title=直したあとの見出し", "p01.json.body[0].items[1].text=2 つ目を\\n2 行に", "--sub", "今の文を短くする", "短い文",
+                           "--del", "band", "p02.json", "body.0.text:=\"別の語\"", "--sub", "別の", "新しい", "body.1:={\"type\": \"text\", \"text\": \"足した段\"}")
+            assert code in (0, None), code
+            a, b = json.loads(Path("p01.json").read_text()), json.loads(Path("p02.json").read_text())
+            assert a["title"] == "直したあとの見出し" and a["lead"] == "短い文" and "band" not in a and a["body"][0]["items"][1]["text"] == "2 つ目を\n2 行に", a
+            assert b["body"][0]["text"] == "新しい語" and b["body"][1]["text"] == "足した段" and "p01.json lead: \"今の文を短くする\" → \"短い文\"" in out and "手元の lint" in out, out  # 直したことの 1 行と、lint の出力
+            assert go("p02.json.title=句点で終わる見出し。")[0] == LINT_HARD and json.loads(Path("p02.json").read_text())["title"].endswith("。")  # 要修正は書いたまま止める
+            keep = Path("p01.json").read_text()
+            code, _ = go("p01.json.body[0].foo:=1")  # 書く形の外: lint が場所を付けて止め、書いたファイルを戻す
+            assert "foo" in str(code) and "\n要修正: patch を止めた（書いたファイルを戻した: p01.json）" in str(code) and Path("p01.json").read_text() == keep, code
+            Path("deck.json").write_text(json.dumps({"apiVersion": API_VERSION, "kind": "deck", "name": "t", "theme": "navy", "pages": ["p01.json"]}))
+            keep = {f: Path(f).read_text() for f in first}
+            for standalone in (False, True):
+                if standalone:
+                    Path("deck.json").unlink()
+                code, _ = go("p01.json.title=句点で終わる見出し。", "p02.json.body.0.foo:=1")  # 一覧にないページ・先のページに lint の要修正がある場合も、全ファイルを戻す
+                assert "foo" in str(code) and "書いたファイルを戻した" in str(code), code
+                assert {f: Path(f).read_text() for f in keep} == keep
+            Path("alias.json").symlink_to("p01.json")
+            for n, alias in enumerate(("./p01.json", str(Path("p01.json").resolve()), "alias.json")):
+                go(f"p01.json.title=別の表記 {n}", f"{alias}.lead=短いリード {n}")
+                a = json.loads(Path("p01.json").read_text())
+                assert a["title"] == f"別の表記 {n}" and a["lead"] == f"短いリード {n}", a
+            keep = Path("p01.json").read_text()
+            assert "戻した" in str(go("p01.json.title=別の表記", "alias.json.body.0.foo:=1")[0]) and Path("p01.json").read_text() == keep
+            for number, flag in ((1, True), (0, False)):
+                a = json.loads(Path("p01.json").read_text())
+                a["body"][0]["arrows"] = number
+                Path("p01.json").write_text(json.dumps(a))
+                code, _ = go(f"p01.json.body.0.arrows:={json.dumps(flag)}")
+                assert code in (0, None, LINT_HARD) and json.loads(Path("p01.json").read_text())["body"][0]["arrows"] is flag, code
+                keep = Path("p01.json").read_text()
+                assert "戻した" in str(go(f"p01.json.body.0.arrows:={number}")[0]) and Path("p01.json").read_text() == keep
+                assert "手元の lint" in go(f"p01.json.body.0.arrows:={json.dumps(flag)}")[1] and Path("p01.json").read_text() == keep  # 同じ値でも lint は回し、書式は変えない
+            real_load = load_theme
+            globals()["load_theme"] = lambda name: {**real_load("navy"), "cover": [{"layout": "First"}, {"layout": "Second"}], "section": [{"layout": "Divider"}, {"layout": "Divider2"}]} if name == "patchtest" else real_load(name)
+            try:
+                Path("deck.json").write_text(json.dumps({"apiVersion": API_VERSION, "kind": "deck", "name": "t", "theme": "patchtest", "pages": ["p01.json", "p02.json"]}))
+                Path("p01.json").write_text(json.dumps(page(type="cover", title="表紙", kicker="小見出し", variant=2)))
+                Path("p02.json").write_text(json.dumps(page(type="divider", title="扉", num="01", variant=2)))
+                use_layouts({})  # 検査が実際のテーマを読む前は、パターン 2 を使えない
+                code, _ = go("p01.json.title=直した表紙", "p02.json.title=直した扉")
+                assert code in (0, None, LINT_HARD) and json.loads(Path("p01.json").read_text())["title"] == "直した表紙", code
+                keep = {f: Path(f).read_text() for f in first}
+                code, _ = go("p01.json.variant:=3", "p02.json.title=別の扉")  # ValueError で止まる場合も、2 ファイルとも戻す
+                assert "パターン 3 がない" in str(code) and "戻した" in str(code), code
+                assert {f: Path(f).read_text() for f in keep} == keep
+                real_lint = lint_local
+                for error in (TypeError("点検が失敗"), KeyboardInterrupt()):
+                    globals()["lint_local"] = lambda *a: (_ for _ in ()).throw(error)
+                    try:
+                        code, _ = go("p01.json.title=途中の表紙", "p02.json.title=途中の扉")
+                        assert isinstance(error, TypeError) and "戻した" in str(code), code
+                    except KeyboardInterrupt:
+                        assert isinstance(error, KeyboardInterrupt)
+                    finally:
+                        globals()["lint_local"] = real_lint
+                    assert {f: Path(f).read_text() for f in keep} == keep
+            finally:
+                globals()["load_theme"] = real_load
+            Path("pages.py").write_text("")
+            assert str(go("p01.json.title=x")[0]).startswith("要修正: patch を止めた（何も書いていない）。pages.py")
+    finally:
+        os.chdir(cwd)
+        globals()["request"] = real
+
+
+def selftest_phrase():
+    """slides-component-027（pages.md）の文節の切れ目の改行: 切る位置（auto_breaks）、見込みと組む要求で同じ位置（phrase_parts・est_lines・spec_text_h）、組む前にまとめて分ける（phrase_prefetch）。
+    BudouX の代わりに、決まった切れ目を PHRASES と SEGMENT で渡す。"""
+    global SEGMENT
+    one, ws = 12 / 72, lambda t: [em_width(c) * 12 / 72 for c in t]  # 12pt の全角 1 字（in）
+    t = "データを見て判断する仕組みを作る"  # データを|見て|判断する|仕組みを|作る
+    cuts = {4, 6, 10, 14, 16}
+    assert auto_breaks(t, ws(t), 16 * one, cuts) == []  # 1 行に収まる見込みなら入れない（幅を文字に合わせた札を割らない）
+    assert auto_breaks(t, ws(t), 12 * one, cuts) == [10]  # 1 行を半字分狭く（11.5 字まで）詰める
+    assert auto_breaks(t, ws(t), 10 * one, cuts) == [6, 10]  # 詰めると最終行が「作る」の 2 字になるので、前の行から「仕組みを」を送る
+    assert auto_breaks("仕組みを作る（案）を見る", ws("仕組みを作る（案）を見る"), 7 * one, {4, 6, 9, 12}) == [4, 9]  # 開き括弧の前（6）では切らない
+    assert auto_breaks("合計は 10 倍になる", ws("合計は 10 倍になる"), 6 * one, {3, 7, 9}) == [4]  # 数字のあと（7）では切らない。空白の前の切れ目（3）は空白の後ろ（4）
+    assert auto_breaks("あいう Databricks です", ws("あいう Databricks です"), 6 * one, {3, 8, 15}) == [4, 15]  # 英数字の語の中（8）では切らない
+    assert auto_breaks("ああ。いいいいいいいいいいいい", ws("ああ。いいいいいいいいいいいい"), 6 * one, {2, 3}) == []  # 行頭に来ない字の前（2）では切らない。1 行より長い文節は前で切らずに Google に任せる
+    assert auto_breaks("組む・確かめる仕組み", ws("組む・確かめる仕組み"), 8 * one, {3, 7}) == [7]  # 「・」のあと（3）では切らない
+    assert auto_breaks("件が減り、その組み直しも減る", ws("件が減り、その組み直しも減る"), 10 * one, {5, 7, 12}) == [5]  # 「その」のあと（7）では切らない
+    lp = "最初に渡すまでの稼働／渡したあとの依頼の数（速くして依頼が増えていないか）"
+    assert auto_breaks(lp, ws(lp), 24 * one, {3, 8, 11, 14, 17, 20, 21, 26, 29}) == [17]  # 「依頼の／数」（20）: 「の」のあとの短い語は前から離さない
+    assert auto_breaks("渡したあとの依頼の数（案）を見る", ws("渡したあとの依頼の数（案）を見る"), 10 * one, {3, 6, 9, 10, 13, 15}) == [9]  # 離すと 3 行になるなら、切る
+    assert auto_breaks("周の間と依頼の数を見る", ws("周の間と依頼の数を見る"), 6 * one, {2, 3, 4, 7, 8, 9}) == [4, 8]  # 「周の／間」（2）も「依頼の／数」（7）も切らない
+    assert auto_breaks("中央値／周の間／二周目以降の数", ws("中央値／周の間／二周目以降の数"), 8 * one, {4, 6, 8, 14}) == [4, 8]  # 「間／」は約物を数えず 1 字（6 で切らない）
+    lp = "deck-review の 1 本の中央値／周の間／2 周目以降の「直す」"
+    assert auto_breaks(lp, ws(lp), 24 * one, {14, 20, 26, 34, 39}) == [26]  # 「／」のあとでも切る（BudouX は「中央値／周の」とつなぐ）。「周の／間」（24）では切らない
+    lp = "2,700 万字／75〜95 分／75 回のうち 12 回／38 回"
+    assert auto_breaks(lp, ws(lp), 14 * one, {22}) == [17]  # 「75 回の／うち 12 回」（22）: 「うち」は 2 字で、そのあとが和文でないので短い語
+    lp = "約 5 分（中央値 1 周目 4.4・2 周目 5.5・3 周目 4.9 分）"
+    assert auto_breaks(lp, ws(lp), 14 * one, {4}) == [19]  # 1 行より長い文節は「・」のあとで切る（Google は「2 周目／5.5」と数の前で折った）
+    assert auto_breaks("スライド 1 本の時間", ws("スライド 1 本の時間"), 6 * one, {8}) == [5]  # 「・」「、」がなければ空白のあと。数字のあとの空白（7）では切らない
+    PHRASES.clear()
+    PHRASES[t] = cuts
+    try:
+        parts = [("データを", {"bold": True}), "見て判断する仕組みを作る"]
+        got = phrase_parts(parts, 10 * one, 12)
+        assert spec_plain(got) == "データを見て\v判断する\v仕組みを作る" and got[0] == ("データを", {"bold": True})  # run の書式はそのまま
+        assert phrase_parts(t, 10 * one, 12) == "データを見て\v判断する\v仕組みを作る" and phrase_parts(t, 10 * one, 12, mono=True) == t  # コードには入れない
+        assert phrase_parts("前\n" + t, 10 * one, 12) == "前\n" + "データを見て\v判断する\v仕組みを作る"  # 段落ごと
+        assert phrase_parts("前。\v" + t, 10 * one, 12) == "前。\v" + "データを見て\v判断する\v仕組みを作る" and est_lines("前。\v" + t, 10 * one, 12) == 4  # 手の改行は残し、その中の行も文節で改行する
+        assert est_lines(t, 10 * one, 12) == 3 == est_lines(spec_plain(got), 10 * one, 12) and wrap_lines(t, 10 * one, 12, auto=False)[0] == 2  # 見込みは入れたあとの行数（1 字ずつなら 2 行）
+        h = spec_text_h(parts, 10 * one, 12)
+        assert h == spec_text_h(got, 10 * one, 12)  # 太さの交ざる段落（run_lines）も、入れたあとと同じ行数
+        assert phrase_cuts("abc") is None and phrase_cuts("未知の段落") is None
+        PHRASES.clear()
+        assert spec_text_h(parts, 10 * one, 12) < h  # 分けていない段落は Google の折り返しのまま（2 行）
+        calls = []
+        SEGMENT = lambda ts: calls.append(list(ts)) or {x: cuts if x == t else set() for x in ts}
+        make = lambda d: (d.text(d.page("見出し"), X, Y_BODY, 10 * one + 2 * INSET, 1, t, size=12), d.card(d.slides[-1], X, 3, 3, head="カード", body=t))
+        with contextlib.redirect_stderr(io.StringIO()):
+            d = make_deck(make, "t")
+        assert len(calls) == 1 and t in calls[0] and "見出し" in calls[0]  # 1 回目に集めた段落を、まとめて 1 回で分ける
+        assert "データを見て\v判断する\v仕組みを作る" in [r["insertText"]["text"] for r in d.reqs if "insertText" in r]
+        with contextlib.redirect_stderr(io.StringIO()):
+            make_deck(make, "t")
+        assert len(calls) == 1  # 分けた段落は覚えている（lint の SEG_CACHE のほかに、同じプロセスの中で）
+        PHRASES.clear()
+        SEGMENT = lambda ts: None  # uv か BudouX が使えない
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            d = make_deck(make, "t")
+        assert "改行せずに組む" in err.getvalue() and not any("\v" in r["insertText"]["text"] for r in d.reqs if "insertText" in r)
+    finally:
+        PHRASES.clear()
+        SEGMENT = lambda ts: {x: set() for x in ts}
 
 
 def selftest_wording():
@@ -6094,6 +6523,7 @@ def selftest_diff():
     table = next(e for e in s2["pageElements"] if "table" in e)
     assert table["size"]["width"]["magnitude"] == 3000000 and table["table"]["tableRows"][1]["tableCells"][1]["text"]["textElements"][1]["textRun"]["content"] == "値\n"
     assert table["table"]["tableRows"][0]["tableCells"][0]["columnSpan"] == 2  # 結合したセルは左上のセルが持つ
+    assert [c["columnWidth"] for c in table["table"]["tableColumns"]] == [emu(2), emu(2)]  # 列の幅（lint が表のセルの折り返しを見積もる）
     assert any("elementGroup" in e for e in s2["pageElements"]) and s2["slideProperties"]["notesPage"]["pageElements"][0]["shape"]["text"]["textElements"][1]["textRun"]["content"] == "ノート。\n"
     assert not any(e["objectId"] == s2["objectId"] + "_n" for e in s2["pageElements"])  # ページ番号の枠は Google が作るので、手元にはない
     import lint
@@ -6503,6 +6933,8 @@ def main():
         return dry(next((x for x in a[1:] if x.endswith(PAGE_FILES)), None) or default_pages(), next((x for x in a[1:] if not x.endswith(PAGE_FILES)), None), a[0] == "resolve")
     if a[:1] == ["wording"] and len(a) <= 3:
         return cmd_wording(next((x for x in a[1:] if x.endswith(PAGE_FILES)), None) or default_pages(), next((x for x in a[1:] if not x.endswith(PAGE_FILES)), None))
+    if a[:1] == ["patch"]:
+        return cmd_patch(a[1:])
     if a[:1] == ["lint"]:
         if bad := [x for x in a[1:] if x.startswith("--") and x not in ("--pages", "--all", "--talk")]:
             sys.exit(f"slides.py lint が知らないフラグ: {' '.join(bad)}（--pages 3,5・--all・--talk）")

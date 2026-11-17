@@ -154,7 +154,7 @@ def facts_hit(where, miss, facts):
 
 class Report:
     """指摘の入れ物。hard は記録（log_run）に残さない要修正の名前、estimate は見積もりから出す指摘の名前（スライドの lint.py と build-docs の doc_lint.py が足す）。"""
-    hard, estimate = HARD_NAMES, frozenset()
+    hard, estimate, full = HARD_NAMES, frozenset(), frozenset()  # full は 6 件で切らずに全部出す指摘の名前（スライドの改行の直す位置）
 
     def __init__(self):
         self.hits = defaultdict(list)
@@ -179,10 +179,11 @@ class Report:
         n, est = sum(len(self.hits[k]) for k in names), sum(len(self.hits[k]) for k in names if k in self.estimate)
         print(f"\n== {title}: {n}" + (f"（うち見積もり {est}。画像で確定する）" if est else "") + " ==")
         for k in names:
-            for line in self.hits[k][:6]:
+            cap = None if k in self.full else 6
+            for line in self.hits[k][:cap]:
                 print(f"[{k}] {line}" + self.where(line) + ("（見積もり）" if k in self.estimate else ""))
-            if len(self.hits[k]) > 6:
-                print(f"[{k}] ほか {len(self.hits[k]) - 6} 件")
+            if cap and len(self.hits[k]) > cap:
+                print(f"[{k}] ほか {len(self.hits[k]) - cap} 件")
         return n
 
 

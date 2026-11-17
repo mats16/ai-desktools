@@ -11,11 +11,11 @@ from collections import Counter, defaultdict
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gapi, textlint  # noqa: E402
-from notes import flatten, note_text, paras, ptext  # noqa: E402  要素の位置とノートの文字（build-vids と同じ部品）
+from notes import flatten, mag, note_text, paras, ptext  # noqa: E402  要素の位置とノートの文字（build-vids と同じ部品）
 from brand import CLASSIFICATION, COPYRIGHT_FOOTER  # noqa: E402
 from textlint import (FEED, FEED_LINK, HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, contrast, facts_hit,  # noqa: E402
                       load_facts, lum, not_in_facts, workspace_checks)  # load_facts・lum・JA は slides.py・template.py が lint から引く
-from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMPH_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_KICK, Y_LEAD, deck_card, deck_copyright, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
+from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMPH_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, NO_HEAD, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_KICK, Y_LEAD, deck_card, deck_copyright, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
 
 MIN_PT = 11  # [slides-lint-001] スライドの文字の下限（slides-visual-002、deck-design）。下回ると要確認（詰まった図の説明など、ページによっては小さくてよい）。社内資料の差し替え用（名前に「差し替え用」）は元の大きさのままなので見ない
 FIG_MIN_PT = MIN_PT - 2  # [slides-lint-022] 塗りのある図形の中の文字（ガントのバー、図のラベル）は本文から 2pt 下まで（slides-visual-037）。表のセル、塗りのない文字、別の図形の塗りに重ねた文字（カードの本文、背景の四角の上の出典）は MIN_PT のまま
@@ -47,7 +47,10 @@ EMPTY_HOLE = "本文の中ほどが空いている"  # [slides-lint-005] 要素�
 PAD_NG = "塗りの箱の端と文字の間が 1 字分より狭い"  # slides-visual-027（deck-design）
 NUM_NO_UNIT = "大きな数字に単位がない"  # [slides-lint-006] slides-visual-015（deck-design）。数字だけの段落は何の数か分からない
 PHRASE_BREAK = "自動の折り返しが文節の途中に入る見込み"  # [slides-lint-024] slides-visual-013（deck-design）。Google Slides は和文を 1 字ずつ折り返す。レビューで直した改行でいちばん多かった
-NO_HEAD = "、。，．）」』】〕・ー!?！？：；"  # 行頭に来ない字（禁則で前の行に戻るので、見込みの位置で折れない）
+# 2026-11-17 から slides.py が組むときに文節の切れ目で改行する（slides-component-027）ので、残るのは「・」「、」も空白もない 1 行より長い文節、等幅の文字、BudouX なしで組んだ資料と前に組んだ資料
+NO_TAIL = "（「『【〔［｛〈《“‘(["  # 行末に来ない字。Google は次の行へ送る
+TIGHT = 0.1  # 字の幅の 1 割より小さくはみ出す字は、Google が前の行に入れることが多い（2026-11-17、<br> を外した 16 本の PDF: はみ出しが 1 pt 未満の 11pt の和文の字は 15 字中 13 字が前の行に入った）
+LAST_SHORT = "自動の折り返しの最終行が 1〜2 字の見込み"  # slides-component-013（slides.py）・slides-visual-013（deck-design）。組むときの警告（fit の枠だけ）と同じ決まりで、表のセルと fit でない枠も見て、直す位置まで出す
 OPEN_HEAD = "手の改行のあとの行頭に全角の開き括弧"  # [slides-lint-007] slides-visual-013（deck-design）の「改行」。行頭の「（」「「」は半字下がって見え、左端がそろわない
 TEXT_OVER = "文字が枠の下からはみ出し、下の文字に重なる見込み"  # [slides-lint-025] 枠の高さを決め打ちにした見出しが折り返したとき（2026-10-19。カードの太字の見出しを Regular の字幅で見込み、2 行目が本文に重なった）
 COL_SHIFT = "隣り合う列の箱の上端か下端がずれている"  # [slides-lint-008] slides-visual-024（deck-design）。片方の列にだけ小見出しを置くと、箱の上下がそろわない
@@ -70,7 +73,7 @@ THIN = 0.05 * EMU  # これより細い四角は線として数える（四角�
 MONO = MONO_DEFAULT  # 見ている資料の等幅の書体。lint_slides がデッキのテーマから入れ直す（is_mono などが読む。ponytail: 1 つずつ見る前提の大域の値）
 DECK_WIDE = {NO_COVER, NO_DIVIDER, SHORT_CH, MANY_BANDS, KICKERS, PANEL_BANDS, HEAD_CLAIMS}  # デッキ全体を見て出す規則。lint_slides の only で絞らない（ページの番号が付いていても、ほかのページで決まる）
 PAGE_ONLY = {NO_SOURCE, NOT_IN_FACTS, NO_LINK, TALK, TWO_LINES, BAND_ECHO, HEAD_PERIOD, HEAD_POLITE, EMPTY_BELOW, EMPTY_HOLE}  # ページを見て出す規則。部品だけを見るときは出さない
-ESTIMATE = {TWO_LINES, BODY_LINES, PHRASE_BREAK, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, TEXT_OVER, textlint.SLIDE_COMMA}  # 字幅と行の高さの見積もりから出す指摘。Google が描いた画像で確定する（ほかは JSON で決まる）
+ESTIMATE = {TWO_LINES, BODY_LINES, PHRASE_BREAK, LAST_SHORT, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, TEXT_OVER, textlint.SLIDE_COMMA}  # 字幅と行の高さの見積もりから出す指摘。Google が描いた画像で確定する（ほかは JSON で決まる）
 HARD_NAMES = textlint.HARD_NAMES | {COPYRIGHT_NG}
 INS = INSET * 72  # 文字の枠の内側の余白（pt）。Slides API の既定は 0.1 in で、変えられない
 BODY_TOP, BODY_BOTTOM = Y_BODY_NOLEAD * EMU, BAND_BOTTOM * EMU  # 本文の領域（slides-visual-051、deck-design）
@@ -156,6 +159,15 @@ def cells(e, scheme=None):
             for row in e.get("table", {}).get("tableRows", []) for c in row.get("tableCells", [])]
 
 
+def cell_places(e):
+    """cells と同じ順の、セルごとの (列の幅 pt, 行, 列)。結合したセルは覆う列の幅を足す。図形と、列の幅のない表は None。"""
+    if "table" not in e:
+        return [None]
+    ws = [mag(c.get("columnWidth", {})) / EMU * 72 for c in e["table"].get("tableColumns", [])]
+    return [(sum(ws[j:j + c.get("columnSpan", 1)]), c.get("location", {}).get("rowIndex", 0), j) if ws else None
+            for row in e["table"].get("tableRows", []) for c in row.get("tableCells", []) for j in [c.get("location", {}).get("columnIndex", 0)]]
+
+
 def body_chars(els, title=None):
     """見出し・リード・出典・フッターを除いた本文の字数（空白は数えない）。図形と表の文字を数える。"""
     return sum(len(re.sub(r"\s", "", ptext(x))) for e, b in els if e is not title and BODY_TOP <= b[1] < BODY_BOTTOM
@@ -181,27 +193,44 @@ def est_lines(para, avail):
 
 def wrap_breaks(para, avail):
     """段落を幅 avail（pt）で自動で折り返したときに、行頭になる字の位置（段落の文字列の位置）の見込み。数え方は slides.py の wrap_lines と同じ
-    （和文は 1 字ずつ、英数字の語はまとめて次の行へ、1 行より長い語は字で折る）。run ごとの大きさを見る。文字の大きさの分からない run があれば []"""
+    （和文は 1 字ずつ、英数字の語はまとめて次の行へ、1 行より長い語は字で折る）。run ごとの大きさを見る。文字の大きさの分からない run があれば []。
+    禁則も見る: 行頭に来ない字（NO_HEAD）と行末に来ない字（NO_TAIL）は、前の字ごと次の行へ送る（Google と同じ追い出し。<br> を外した 16 本の PDF で、
+    見積もりより 1 字前で折れた 16 か所のうち 12 か所がこれだった）"""
     if any(size_of(st) is None for c, st in para[1] if c.strip()):
         return []
     ws = [em_width(ch, st.get("fontFamily") == MONO, st.get("bold", False)) * (size_of(st) or 0) for c, st in para[1] for ch in c]
-    t, out, cur = "".join(c for c, _ in para[1]), [], 0.0
+    t, out, cur, start = "".join(c for c, _ in para[1]), [], 0.0, 0
     for m in re.finditer(r"[!-~]+| +|\v|.", t):
         if m.group() == "\v":
-            cur = 0.0
+            cur, start = 0.0, m.end()
             continue
         a, b = m.span()
         for k, e in ([(k, k + 1) for k in range(a, b)] if sum(ws[a:b]) > avail + 1e-9 else [(a, b)]):
             w = sum(ws[k:e])
             if cur + w > avail + 1e-9 and cur > 0:
                 if t[k].isspace():  # 行末の空白は次の行に送らない
-                    cur = 0.0
+                    cur, start = 0.0, e
                 else:
+                    while k - 1 > start and (t[k] in NO_HEAD or t[k - 1] in NO_TAIL):
+                        k -= 1
                     out.append(k)
-                    cur = w
+                    cur, start = sum(ws[k:e]), k
             else:
                 cur += w
     return out
+
+
+def para_text(para):
+    return "".join(c for c, _ in para[1])
+
+
+def with_break(para, k):
+    """段落の k 字目の前に手の改行（\\v）を入れた段落（直す案の行の数を見る）。"""
+    runs, n = [], 0
+    for c, st in para[1]:
+        runs.append((c[:k - n] + "\v" + c[k - n:] if n <= k < n + len(c) else c, st))
+        n += len(c)
+    return para[0], runs
 
 
 BUDOUX = "budoux==0.9.3"  # バージョンを固定して文節の分け方をそろえる
@@ -244,16 +273,54 @@ def segment(texts):
     return {t: set(cache[t]) for t in texts}
 
 
-def mid_phrase(cands):
-    """cands は (場所, 段落の文字列, 折り返しの位置) の並び。文節の切れ目にない折り返しを返す。候補がなければ uv を呼ばない。
-    行頭に来ない字の前と、空白の後（英数字の語の切れ目）は数えない。文節が分からなければ None"""
+def line_fixes(cands):
+    """cands は (場所, 段落, 幅 pt) の並び。(文節の途中の折り返しの指摘, 最終行が 1〜2 字の指摘) を返し、どちらにも直す案（どの語のあとに <br> を入れるか、
+    そのとき行が増えるか、言い換えのほうがよい目安）を付ける。候補がなければ uv を呼ばない。文節が分からなければ、前のものは None で、後のものは案を言い換えだけにする。
+    文節の途中は、見積もりの位置と、はみ出しが字の幅の 1 割（TIGHT）より小さいときに Google が 1 字多く入れた位置の両方を見る。
+    行頭に来ない字の前と、空白の後（英数字の語の切れ目）は数えない"""
     if not cands:
-        return []
-    cuts = segment(sorted({t for _, t, _ in cands}))
-    if cuts is None:
-        return None
-    return [f"{where}: 「{t[max(0, k - 8):k]}／{t[k:k + 6]}」".replace("\v", "⏎") + "。文節の切れ目で手で改行するか、言い換えるか、枠の幅を変える（見込みなので画像で確かめる）"
-            for where, t, bs in cands for k in bs if k not in cuts[t] and t[k] not in NO_HEAD and t[k - 1] not in " 　"]
+        return [], []
+    cuts = segment(sorted({para_text(p) for _, p, _ in cands}))
+    mids, shorts = ([] if cuts is not None else None), []
+    for where, para, avail in cands:
+        t, est = para_text(para), wrap_breaks(para, avail)
+        if not est:
+            continue
+        cut = cuts[t] if cuts is not None else None
+        wide = wrap_breaks(para, avail + TIGHT * max(size_of(st) or 0 for c, st in para[1] if c.strip()))
+        lines = lambda p: len(wrap_breaks(p, avail)) + para_text(p).count("\v") + 1
+        n0, head = lines(para), "「" + t[:12].replace("\v", "⏎") + ("…」" if len(t) > 12 else "」")
+        starts = [max(est[i - 1] if i else 0, t.rfind("\v", 0, k) + 1) for i, k in enumerate(est)]  # その行の先頭
+        ok = lambda x: t[x] not in NO_HEAD + "\v" and t[x - 1] not in NO_TAIL + "\v"  # 手で改行してよい位置
+        br = lambda b, start: f"「{t[min([y for y in cut if start <= y < b and b - y <= 8] or [max(start, b - 8)]):b].strip()}」のあとに <br>"  # 切れ目の前の 8 字までの文節
+        if cut is not None:
+            for i, k in enumerate(est):
+                ks = list(dict.fromkeys([k] + ([wide[i]] if i < len(wide) and abs(wide[i] - k) <= 2 else [])))
+                bad = [x for x in ks if x not in cut and ok(x) and t[x - 1] not in " 　"]
+                if not bad:
+                    continue
+                x, lo, start = bad[0], min(ks), starts[i]
+                hit = f"{where}: {head}の「{t[max(start, x - 8):x]}／{t[x:x + 6]}」".replace("\v", "⏎") + ("" if len(bad) == len(ks) else "（字の幅の見積もりの 1 字の差で決まる）")
+                b = max((y for y in cut if start < y <= lo and ok(y)), default=None)
+                if b is None:
+                    hit += "。この行に文節の切れ目がない。言い換えるか、枠の幅を変える"
+                else:
+                    n1 = lines(with_break(para, b))
+                    hit += "。" + br(b, start) + (f"（{n0} 行が {n1} 行になる。行を増やせなければ言い換える）" if n1 > n0 else "")
+                    if lo - b > (lo - start) / 2:
+                        hit += "。行の半分より前に戻るので、言い換えか枠の幅のほうがよい"
+                mids.append(hit)
+        for i, k in enumerate(est):  # 手の改行で区切った塊ごとの、最後の自動の折り返し
+            end = t.find("\v", k)
+            end = len(t) if end < 0 else end
+            tail = re.sub(r"\s", "", t[k:end])
+            if not tail or len(tail) > 2 or any(k < y < end for y in est):
+                continue
+            hit = f"{where}: {head}の最終行「{tail}」。{len(tail)} 字ほど縮めると 1 行減る"
+            b = max((y for y in (cut or ()) if starts[i] < y < k and ok(y) and len(re.sub(r"\s", "", t[y:end])) >= 3
+                     and lines(with_break(para, y)) == n0), default=None)  # 行の数を変えずに、最終行を 3 字以上にする
+            shorts.append(hit + (f"か、{br(b, starts[i])}" if b is not None else ""))
+    return mids, shorts
 
 
 def body_lines(e, b, title=None):
@@ -529,7 +596,7 @@ def hit_page(h):
 
 
 class Report(textlint.Report):
-    hard, estimate = HARD_NAMES, ESTIMATE
+    hard, estimate, full = HARD_NAMES, ESTIMATE, {PHRASE_BREAK, LAST_SHORT}  # 改行の 2 つは直す位置の一覧なので、6 件で切らずに全部出す
 
 
 def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=None):
@@ -609,7 +676,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
             lines_ = [x for text, _ in texts for x in paras(text) if ptext(x).strip()]
             code_box = ("shape" in e and not own and ub is not None and under == scheme.get("DARK1") and lines_
                         and all(any(st.get("fontFamily") == MONO and c.strip() for c, st in x[1]) for x in lines_))  # slides.py の code の形（濃紺の箱に重ねた塗りのない文字の枠で、どの行にも等幅の字がある。和文の字は本文の書体で組む）。言い回しは見ない。地の文に等幅の語が混ざっただけの枠や、濃紺の地のページの文は見る
-            for text, f in texts:
+            for (text, f), place in zip(texts, cell_places(e)):
                 items = [ptext(x).strip() for x in paras(text) if x[0].get("bullet") and ptext(x).strip()]
                 if len({t.endswith("。") for t in items}) > 1:  # 1 つの枠の箇条書き（ひとまとまり）で、句点のある項目とない項目が混ざる
                     r.hits[BULLET_PERIOD].append(f"p{i}: 「{items[0][:20]}」から {len(items)} 項目。文なら全部に「。」、語なら全部なし")
@@ -624,14 +691,14 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                     if not copyright_footer:  # 著作権表示の文はテーマのファイルに書いた値のまま
                         r.scan(f"p{i}", t, {k: v for k, v in {**HARD, **WARN, **SLIDE_ONLY}.items() if not (footer and k == "社外秘の表示") and not (mono and k == "英語の大文字ラベル")})
                     raw = "".join(c for c, st in para[1] if st.get("fontFamily") != MONO)
-                    one_line = False  # 見出しと 1 行の箇条（折り返さない段落）。表のセルは幅を見積もらないので入れない
-                    if "shape" in e and not footer and not mono and re.search(f"[{JA}]", t):  # 表のセルは列の幅を見積もりに通していないので見ない
-                        avail = b[2] / EMU * 72 - 2 * INS - para[0].get("indentStart", {}).get("magnitude", 0)
+                    one_line = False  # 見出しと 1 行の箇条（折り返さない段落）。表のセルは入れない（読点の点検は図形の段落だけ）
+                    width = b[2] / EMU * 72 if "shape" in e else place and place[0]  # 表のセルは列の幅（組むときの「表のセルが折り返す見込み」と同じ。内側の余白も図形と同じ 0.1 in）
+                    if width and not footer and not mono and re.search(f"[{JA}]", t):
+                        avail = width - 2 * INS - para[0].get("indentStart", {}).get("magnitude", 0)
                         if avail > 0:
-                            bs = wrap_breaks(para, avail)
-                            one_line = est_lines(para, avail) == 1  # 大きさの分からない run があれば None（1 行とは数えない）
-                            if bs:
-                                wraps.append((f"p{i}", "".join(c for c, _ in para[1]), bs))
+                            one_line = "shape" in e and est_lines(para, avail) == 1  # 大きさの分からない run があれば None（1 行とは数えない）
+                            if wrap_breaks(para, avail):
+                                wraps.append((f"p{i}" + (f" 表の {place[1] + 1} 行 {place[2] + 1} 列" if place else ""), para, avail))
                     if not footer and not mono and not code_box:
                         r.wording(f"p{i}", t, one_line=one_line, obj=e.get("objectId"), table="table" in e)  # obj・table は日本語の点検（wording.py）が場所に使う
                     if m := re.search(r"\v\s*[（「『]", raw):
@@ -803,9 +870,11 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
         for k in PAGE_ONLY:
             r.hits.pop(k, None)
         titles, chars = [], []
-    if (mp := mid_phrase(wraps)) is None:
+    mids, shorts = line_fixes(wraps)
+    if mids is None:
         print(f"（uv か BudouX が使えないので、「{PHRASE_BREAK}」は数えていない）")
-    r.hits[PHRASE_BREAK] += mp or []
+    r.hits[PHRASE_BREAK] += mids or []
+    r.hits[LAST_SHORT] += shorts
     if foot_secret and scope == "deck":
         r.hits["社外秘の表示"].append(f"フッター: {len(foot_secret)} ページ（p{foot_secret[0]}〜p{foot_secret[-1]}）。社内向けなら意図どおり、顧客向けなら外す")
     print("== 見出し（各ページでいちばん大きい文字）とリード（字下げ）。順に読んで話が通るか ==")
@@ -813,7 +882,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
     print(f"\n== 本文の字数（見出し・リード・出典・フッターを除く。話す資料は {TALK_MAX} 字まで） ==")
     print(" / ".join(chars))
     hard = r.show(list(HARD) + [COPYRIGHT_NG, FONT_NG, MONO_NG, HEAD_PERIOD, HEAD_POLITE], "要修正")
-    r.show(list(WARN) + textlint.YOMI_NAMES + list(SLIDE_ONLY) + [f"{MIN_PT}pt 未満の文字", NO_SOURCE, NOT_IN_FACTS, NO_LINK, FEED_LINK, BODY_LINES, TWO_LINES, HEAD_CLAIMS, BULLET_PERIOD, TALK, ARROW_MID, TEXT_OVER, LINE_GRID, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, PAD_NG, NUM_NO_UNIT, OPEN_HEAD, PHRASE_BREAK, COL_SHIFT, DASH_ROUND, RED_THIN, STAGE_NG, CODE_NOT_MONO, BLOCK_ON_NAVY, MANY_BANDS, BAND_ECHO, KICKERS, PANEL_BANDS, CODE_HEAD, AXIS_NEAR, NO_COVER, NO_DIVIDER, SHORT_CH], "要確認")
+    r.show(list(WARN) + textlint.YOMI_NAMES + list(SLIDE_ONLY) + [f"{MIN_PT}pt 未満の文字", NO_SOURCE, NOT_IN_FACTS, NO_LINK, FEED_LINK, BODY_LINES, TWO_LINES, HEAD_CLAIMS, BULLET_PERIOD, TALK, ARROW_MID, TEXT_OVER, LINE_GRID, EMPTY_BELOW, EMPTY_BOX, EMPTY_HOLE, PAD_NG, NUM_NO_UNIT, OPEN_HEAD, PHRASE_BREAK, LAST_SHORT, COL_SHIFT, DASH_ROUND, RED_THIN, STAGE_NG, CODE_NOT_MONO, BLOCK_ON_NAVY, MANY_BANDS, BAND_ECHO, KICKERS, PANEL_BANDS, CODE_HEAD, AXIS_NEAR, NO_COVER, NO_DIVIDER, SHORT_CH], "要確認")
     hard += workspace_checks("slides", p, r)
     print("\n== 文字サイズ（pt: run の数） ==")
     print(", ".join(f"{k:g}: {v}" for k, v in sorted(sizes.items())))
@@ -995,18 +1064,31 @@ def selftest():
     from slides import wrap_lines
     assert all(len(wrap_breaks(pa((x, 12)), 60)) + 1 == wrap_lines(x, 60 / 72, 12)[0] for x in (t, "あいう Databricks の", "あ abcdefghijklmnopqrstu"))  # 組む側と同じ行の数（行末の空白で折れる文は、空白の後を数えないので除く）
     assert wrap_breaks(pa((t, None)), 120) == []  # 大きさの分からない run（プレースホルダーの継承）は見ない
-    cuts = {t: {4, 6, 8, 12, 14}, "あいう Databricks": {4, 15}}  # 「データを／見る／人と／評価者が／いる」
+    assert wrap_breaks(pa(("あいうえおかきくけ。こ", 12)), 108) == [8] and wrap_breaks(pa(("あいうえおかきく（けこ", 12)), 108) == [8]  # 禁則: 行頭の「。」と行末の「（」は、前の字ごと次の行へ
+    cuts = {t: {4, 6, 8, 12, 14}, "あいう Databricks": {4, 15}, "あ" * 11: {4, 8, 11}, t + "ことを確かめる": {4, 6, 8, 12, 14, 17, 21}}  # 「データを／見る／人と／評価者が／いる」
     globals()["segment"] = lambda ts: {x: cuts.get(x, set()) for x in ts}
-    assert len(mid_phrase([("p1", t, [10])])) == 1 and "評価／者がいる" in mid_phrase([("p1", t, [10])])[0]
-    assert mid_phrase([("p1", t, [8])]) == [] and mid_phrase([("p1", "あいう Databricks", [4])]) == []  # 文節の先頭と、空白の後
-    assert mid_phrase([("p1", "見込みの位置、で", [6])]) == []  # 行頭に来ない字の前は、禁則で前の行に戻る
+    mids, shorts = line_fixes([("p1", pa((t, 12)), 120)])
+    assert len(mids) == 1 and "「データを見る人と評価者が…」の「タを見る人と評価／者がいる」。「見る人と」のあとに <br>" == mids[0][4:] and not shorts, mids  # 行は 2 行のまま
+    assert line_fixes([("p1", pa((t, 12)), 96)])[0] == [] and line_fixes([("p1", pa(("あいう Databricks", 12)), 90)])[0] == []  # 文節の先頭と、空白の後
+    weak = line_fixes([("p1", pa((t, 12)), 95.5)])[0]  # 8 字目の「評」が 0.5 pt はみ出す（字の幅の 1 割より小さい）。見積もりは「と」の前、Google は「評」の前で折りうる
+    assert len(weak) == 1 and "人／と評価者" in weak[0] and "1 字の差" in weak[0] and "「見る」のあとに <br>（2 行が 3 行になる" in weak[0], weak  # <br> で行が増えるときは、その数を出す
+    assert "1 字の差" not in line_fixes([("p1", pa((t, 12)), 119.5)])[0][0]  # 見積もり（「価」の前）も 1 字多い位置（「者」の前）も文節の途中
+    far = line_fixes([("p1", pa(("あ" * 12, 12)), 120)])[0]  # 行の中に文節の切れ目がない
+    assert len(far) == 1 and "切れ目がない。言い換えるか" in far[0], far
+    third = line_fixes([("p1", pa((t + "ことを確かめる", 12)), 72)])[0]  # 6 字ずつの 4 行。3 行目の「確」のあとだけが文節の途中
+    assert len(third) == 1 and third[0].endswith("「いることを確／かめる」。「いることを」のあとに <br>"), third
+    mids, shorts = line_fixes([("p1", pa(("あ" * 11, 12)), 120)])
+    assert shorts == ["p1: 「あああああああああああ」の最終行「あ」。1 字ほど縮めると 1 行減るか、「ああああ」のあとに <br>"], shorts  # 最終行を 3 字以上に（2 行のまま）
+    assert line_fixes([("p1", pa(("あ" * 14, 12)), 120)])[1] == [] and line_fixes([("p1", pa(("あ" * 10, 12)), 120)])[1] == []  # 最終行が 4 字、1 行
     wrapped = lambda **kw: shape(1, text=[t], **kw)  # 幅は 12pt で 10 字
     res, _, hard = run(deck([(NAVY, [title()]), (oat, [title(), wrapped()])]))
     assert len(res.hits[PHRASE_BREAK]) == 1 and hard == 0
     assert not run(deck([(NAVY, [title()]), (oat, [title(), wrapped(y=7.08)])]))[0].hits[PHRASE_BREAK]  # フッター
     assert not run(deck([(NAVY, [title()]), (oat, [title(), wrapped(font=MONO_DEFAULT)])]))[0].hits[PHRASE_BREAK]  # 等幅だけの段落
-    cell = {"objectId": "t", **box(0, 2, (120 + 2 * INS) / 72, 2), "table": {"tableRows": [{"tableCells": [{"text": wrapped()["shape"]["text"]}]}]}}
-    assert not run(deck([(NAVY, [title()]), (oat, [title(), cell])]))[0].hits[PHRASE_BREAK]  # 表のセル
+    cell = {"objectId": "t", **box(0, 2, 3, 2), "table": {"tableRows": [{"tableCells": [{"text": wrapped()["shape"]["text"]}]}]}}
+    assert not run(deck([(NAVY, [title()]), (oat, [title(), cell])]))[0].hits[PHRASE_BREAK]  # 列の幅のない表（古い手元の JSON）は見ない
+    cell["table"]["tableColumns"] = [{"columnWidth": {"magnitude": (120 + 2 * INS) / 72 * EMU, "unit": "EMU"}}]  # 表のセルは列の幅で見る（表の要素の大きさでなく）
+    assert [h[:12] for h in run(deck([(NAVY, [title()]), (oat, [title(), cell])]))[0].hits[PHRASE_BREAK]] == ["p2 表の 1 行 1 列"[:12]]
     globals()["segment"] = lambda ts: None
     res2, out, hard2 = run(deck([(NAVY, [title()]), (oat, [title(), wrapped()])]))
     assert not res2.hits[PHRASE_BREAK] and "は数えていない" in out and hard2 == hard

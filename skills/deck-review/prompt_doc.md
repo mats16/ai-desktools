@@ -32,7 +32,7 @@ First check whether the document can be read and judged on its own (the reader c
 
 ## How to reply
 First, for each image you opened, write one line on what you saw (the headings, tables, and figures).
-Then one line per defect: `p<ページ> | <出所: 一覧・画像・テキスト> | <観点 1〜5> | <重さ: 直す／見直す／聞く> | <何が起きているか> | <直し方の案>`. For cross-page items, list the pages like 「p3・p5・p7」.
+Then one line per defect: `p<ページ> | <出所: 一覧・画像・テキスト> | <観点 1〜5> | <直す／見直す／聞く> | <何が起きているか> | <直し方の案>`. For cross-page items, list the pages like 「p3・p5・p7」.
 Finally, up to 3 lines on tendencies worth fixing across the whole material. For an aspect with no defects, write 「なし」.
 Write all of the above to <findings file>, and in your reply write only the counts (per severity) and that path.
 ```

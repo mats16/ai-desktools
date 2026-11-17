@@ -82,7 +82,8 @@ def paras(text):
 
 
 def ptext(para):
-    return "".join(c for c, _ in para[1]).replace("\v", " ")
+    """段落の文字。段落の中の改行（\\v）は、英数字の語と語の間なら空白にし、ほかは詰める（slides.py が文節の切れ目に入れる改行で、和文に空白を入れない）。"""
+    return re.sub(r"(?<=[!-~])\v(?=[!-~])", " ", "".join(c for c, _ in para[1])).replace("\v", "")
 
 
 def note_text(s):
@@ -133,6 +134,7 @@ def selftest():
         assert revision("x") == "8"  # リビジョンの一覧は古い順。最後のページの最後の ID（空のページが続いても前の ID）
     finally:
         gapi.request = saved
+    assert [ptext((None, [(t, {})])) for t in ("データを\v見る", "Unity\vCatalog", "Databricks の \vUnity", "10\v倍")] == ["データを見る", "Unity Catalog", "Databricks の Unity", "10倍"]
     assert PAGE_KEY.search(f"x_k{page_key('p01')}h{'0' * 16}").group(1) == page_key("p01")
     print("selftest ok")
 
