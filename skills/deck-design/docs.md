@@ -1,6 +1,6 @@
 # Visual rules for documents (Google Docs)
 
-Visual rules for building proposals, research reports, explanatory materials, and PoC plans in Google Docs (created on 2026-10-09). The slide rules ([docs.md](slides.md) in build-slides) do not apply (§6 below). For how to write the content, see `deck-writing` → content (same as for slides); for how to build, see `build-docs`. The values are in the page area constants and `STYLES` of `docs.py` and are applied on every build, so do not write formatting in doc.md.
+Visual rules for building proposals, research reports, explanatory materials, and PoC plans in Google Docs (created on 2026-10-09). The slide rules ([slides.md](slides.md)) do not apply (§6 below). For how to write the content, see `deck-writing` → content (same as for slides); for how to build, see `build-docs`. The values are in the page area constants and `STYLES` of `docs.py` and are applied on every build, so do not write formatting in doc.md.
 
 How each rule is checked (the "Verifying rules" section of `desk-feedback` → routing): "lint" (「lint が」) means `lint_gdoc` in `doc_lint.py`, and "measured on images" (「画像で測る」) means `doc_layout.py` (`docs.py check` runs both. check also compares doc.md, the built document, and the template; `build-docs` §2). Rules with no tag are checked in review (the aspects in `deck-review` → the documents review prompt). The abbreviations in parentheses are reports in the workspace's `Research/deck_research/log/`: 「文書」 is `20261009_jp_doc_content_visual.md`, and 「Docs」 is `20261009_en_gdocs_generation.md`.
 
