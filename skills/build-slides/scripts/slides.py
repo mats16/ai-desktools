@@ -16,6 +16,8 @@ usage（資料の build/ で。deck.json か pages.py は今いるフォルダ�
   slides.py wording [<URL か ID>]   日本語の点検（build-slides の lint.md の「Japanese check」）。組まずに、deck.json か pages.py から build と同じデッキを作り、
                                           本文・表のセル・図の札・ノートの言い回しの指摘を、ページのファイルと JSON の場所つきで出す。直す前に通した文と比べて意味の変わる恐れを出し、
                                           資料のフォルダの wording.json に残す（wording.py）。テーマは lint と同じ（URL はテーマのファイルがないデッキだけに要る）
+  slides.py patch [<ファイル>.json] <場所>=<文> | <場所>:=<JSON> | --del <場所> | --sub <今の文> <新しい文> …   JSON のページの値を、場所（lint の出す p05.json.body[0].text）を指して
+                                          書き換え、lint を回す。どれかの場所か文が見つからなければ何も書かずに止める（../commands.md の slides-command-039）
   slides.py dry [<ファイル>] [<URL か ID>]   組まずに make を走らせ、組むときの警告・枚数・ノートのないページを出す（既定は deck.json か pages.py。サブエージェントが書いた JSON のページの .json か build/pages_<担当>.py を確かめる。
                                           テーマは lint と同じ。../pages.md）
   slides.py resolve [<ファイル>.json] [<URL か ID>]   JSON のページを解いた形（in の位置とすべての値。Deck のメソッドの呼び出し）を出す（../pages.md の slides-pages-034）
@@ -4163,7 +4165,134 @@ def lint_local(path="pages.py", url=None, talk=False, pages=None):
     warnings = sum(int(re.match(r"\[p(\d+)\]", w).group(1)) in pages for w in deck.warnings)
     print(f"\n{LOCAL_ONLY}\n" + json.dumps({"file": path, "slides": len(deck.slides), "pages": sorted(pages), "warnings": warnings}, ensure_ascii=False))
     if hard:
-        sys.exit("lint の要修正が残っている（上の出力を直す）")
+        sys.exit(LINT_HARD)
+
+
+LINT_HARD = "lint の要修正が残っている（上の出力を直す）"
+PATCH_STOP = "要修正: patch を止めた（何も書いていない）。"  # モデルは出力を「要修正」で grep するので、止まる文はこの語で始める
+PATCH_USAGE = ("slides.py patch [<ファイル>.json] <場所>=<文> | <場所>:=<JSON> | --del <場所> | --sub <今の文> <新しい文> …"
+               "（場所は lint の出す p05.json.body[0].items[1].text か、前に渡したファイルの中の body.0.items.1.text）")
+
+
+def patch_target(s, cur):
+    """patch の場所 s（「p05.json.body[0].text」か、cur のファイルの中の「body.0.text」）を、ファイルとキー・番号の並びにする。"""
+    f, rest = (m.group(1), s[m.end():]) if (m := re.match(r"(.+?\.json)(?:\.|$)", s)) else (cur, s)
+    if f is None:
+        sys.exit(f"{PATCH_STOP}{s!r} のファイルが分からない（p05.json.lead のように頭にファイルを書くか、前にファイルを渡す）")
+    if rest and not re.fullmatch(r"[^.\[\]]+(\.[^.\[\]]+|\[\d+\])*", rest):
+        sys.exit(f"{PATCH_STOP}場所 {s!r} が読めない（body[0].items[1].text か body.0.items.1.text）")
+    return f, [int(k) if k.isdigit() else k for k in re.findall(r"[^.\[\]]+", rest)]
+
+
+def patch_step(o, k, where):
+    """o の中の k。なければ、あるキーか長さを添えて止める（何も書く前）。"""
+    if isinstance(o, list) and isinstance(k, int) and k < len(o):
+        return o[k]
+    if isinstance(o, dict) and str(k) in o:
+        return o[str(k)]
+    sys.exit(f"{PATCH_STOP}{where} がない（" + (f"{len(o)} 個の並び。番号は 0 から" if isinstance(o, list) else f"あるキー: {'・'.join(o)}" if isinstance(o, dict) else "その上は文字か数") + "）")
+
+
+def cmd_patch(args):
+    """JSON のページの値を、場所を指して書き換える（slides-command-039）。すべての直しを手元で当ててから書き、場所・文が見つからなければ何も書かずに止める。
+    書いたあとに lint（deck.json があればデッキの既定の範囲）を回す。直しで書く形が崩れた（知らないキー・値の型）なら、書いたファイルを戻して止める。"""
+    if Path("pages.py").is_file():
+        sys.exit(f"{PATCH_STOP}pages.py のデッキは patch で直さない（ページの関数を直す。../legacy.md）")
+    docs, before, cur, i, short = {}, {}, None, 0, lambda v: (s := json.dumps(v, ensure_ascii=False))[:60] + ("…" if len(s) > 60 else "")
+    text = lambda s: s.replace("\\n", "\n").replace("\\v", "\v")  # シェルで書いた \n・\v は改行（ページの文に \ と n は書かない）
+
+    def doc(f):
+        f = os.path.relpath(Path(f).resolve())  # ./・絶対パス・シンボリックリンクでも、同じファイルの直しを重ねる
+        if f not in docs:
+            try:
+                before[f] = Path(f).read_text(encoding="utf-8")
+                docs[f] = json.loads(before[f])
+            except (OSError, json.JSONDecodeError) as e:
+                sys.exit(f"{PATCH_STOP}{f} が読めない（{e}）")
+        return docs[f]
+    out = []
+    while i < len(args):
+        x, i = args[i], i + 1
+        if x == "--sub":
+            if cur is None or len(args) < i + 2:
+                sys.exit(PATCH_USAGE if cur else f"{PATCH_STOP}--sub の前にファイルを渡す（p05.json --sub 今の文 新しい文）")
+            old, new, i = text(args[i]), text(args[i + 1]), i + 2
+            hits = [(loc, o, k) for loc, _ in json_leaves(doc(cur)) for o, k in [patch_parent(doc(cur), loc)] if old in o[k]]
+            if (n := sum(o[k].count(old) for _, o, k in hits)) != 1:
+                sys.exit(f"{PATCH_STOP}{cur} に「{old}」が {n} か所" + (f"（{'・'.join(loc for loc, _, _ in hits)}）。今の文を長くするか、場所=新しい文で書く" if n else ""))
+            loc, o, k = hits[0]
+            out.append(f"{cur} {loc}: {short(o[k])} → {short(o[k].replace(old, new))}")
+            o[k] = o[k].replace(old, new)
+            continue
+        if x == "--del":
+            if i >= len(args):
+                sys.exit(PATCH_USAGE)
+            cur, keys = patch_target(args[i], cur)
+            i += 1
+            op, val = "del", None
+        elif "=" in x:
+            t, v = x.split("=", 1)
+            op = "json" if t.endswith(":") else "set"
+            cur, keys = patch_target(t.removesuffix(":"), cur)
+            try:
+                val = json.loads(v) if op == "json" else text(v)
+            except json.JSONDecodeError as e:
+                sys.exit(f"{PATCH_STOP}{x!r} の値が JSON でない（{e}。文なら := ではなく = で書く）")
+        elif x.endswith(".json"):
+            cur = x
+            doc(x)
+            continue
+        else:
+            sys.exit(PATCH_USAGE)
+        if not keys:
+            sys.exit(f"{PATCH_STOP}{x!r} に場所がない（ファイルを丸ごと書き換えない）")
+        o, where = doc(cur), cur
+        for k in keys[:-1]:
+            where += f"[{k}]" if isinstance(k, int) else f".{k}"
+            o = patch_step(o, k, where)
+        k, loc = keys[-1], re.sub(r"^\.", "", "".join(f"[{k}]" if isinstance(k, int) else f".{k}" for k in keys))
+        append = isinstance(o, list) and op != "del" and k == len(o)  # 並びの長さと同じ番号は、末尾に足す
+        if op == "del" or isinstance(o, list) and not append:
+            patch_step(o, k, f"{cur}.{loc}")  # 消すものと、並びの中の書き換えは、もうあるものだけ
+        if not isinstance(o, (dict, list)):
+            sys.exit(f"{PATCH_STOP}{cur}.{loc} の上が文字か数")
+        k = str(k) if isinstance(o, dict) else k
+        out.append(f"{cur} {loc}: {'（なし）' if append or isinstance(o, dict) and k not in o else short(o[k])} → {'（消した）' if op == 'del' else short(val)}")
+        if op == "del":
+            del o[k]
+        elif append:
+            o.append(val)
+        else:
+            o[k] = val
+    if not out:
+        sys.exit(PATCH_USAGE)
+    wrote = [f for f in docs if json.dumps(docs[f]) != json.dumps(json.loads(before[f]))]  # JSON の型も比べる（Python では 1 == True）。書式だけ違うファイルは書き直さない
+    for f in wrote:
+        Path(f).write_text(json.dumps(docs[f], ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    print("\n".join(out), flush=True)
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            for f in wrote:  # デッキにまだ並んでいないページも、lint の要修正で止まる前に形を確かめる
+                deck_context("deck.json" if Path("deck.json").is_file() else f)
+                Deck("patch").spec(f)
+        for f in ["deck.json"] if Path("deck.json").is_file() else docs:
+            lint_local(f)
+    except BaseException as e:
+        if isinstance(e, SystemExit) and e.code in (None, 0, LINT_HARD):  # 通常の lint の要修正は、直しを残す
+            raise
+        for f in wrote:  # ページを読めない例外の種類によらず、全ファイルを戻す
+            Path(f).write_text(before[f], encoding="utf-8")
+        if not isinstance(e, (Exception, SystemExit)):  # 中断は、戻してから伝える
+            raise
+        sys.exit(f"{e}\n要修正: patch を止めた（書いたファイルを戻した: {'・'.join(wrote)}）。直しを当てると、上のとおりページの JSON として読めない")
+
+
+def patch_parent(o, loc):
+    """json_leaves の場所（body[2].text）の 1 つ手前の入れ物と、最後のキー。"""
+    keys = [int(k) if k.isdigit() else k for k in re.findall(r"[^.\[\]]+", loc)]
+    for k in keys[:-1]:
+        o = o[k]
+    return o, keys[-1]
 
 
 def slide_units(p, notes=None):
@@ -4823,7 +4952,105 @@ def selftest():
     selftest_spec()
     selftest_sample()
     selftest_wording()
+    selftest_patch()
     print("selftest ok")
+
+
+def selftest_patch():
+    """slides.py patch: lint の形の場所（括弧）と点の場所、文の一部の差し替え、:= の JSON、消す、2 つのファイルを 1 回で直し、lint を回す。
+    場所・文が見つからない、文が 2 か所ある、書く形の外になる直しは、どのファイルも書かずに止める（書く形の外は、書いてから戻す）。Google は呼ばない。"""
+    real, cwd = globals()["request"], os.getcwd()
+    globals()["request"] = lambda *a, **k: (_ for _ in ()).throw(AssertionError(f"Google を呼んだ: {a[:2]}"))
+    page = lambda **kw: {"apiVersion": API_VERSION, "kind": "page", **kw}
+    def go(*args):
+        with contextlib.redirect_stdout(io.StringIO()) as o, contextlib.redirect_stderr(io.StringIO()):
+            try:
+                cmd_patch(list(args))
+                return 0, o.getvalue()
+            except SystemExit as e:
+                return e.code, o.getvalue()
+    try:
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "build").mkdir()
+            os.chdir(Path(t) / "build")
+            Path("deck.json").write_text(json.dumps({"apiVersion": API_VERSION, "kind": "deck", "name": "t", "theme": "navy", "pages": ["p01.json", "p02.json"]}))
+            Path("p01.json").write_text(json.dumps(page(title="直す前の見出し", lead="今の文を短くする", band={"text": "結論"},
+                                                        body=[{"type": "row", "items": [{"type": "card", "head": "左", "text": "1 つ目"}, {"type": "card", "head": "右", "text": "2 つ目"}]}]), ensure_ascii=False))
+            Path("p02.json").write_text(json.dumps(page(title="次のページ", body=[{"type": "text", "text": "同じ語と同じ語"}]), ensure_ascii=False))
+            first = {f: Path(f).read_text() for f in ("p01.json", "p02.json")}
+            for args, want in [(["p01.json.body[0].items[3].text=x"], "items[3] がない（2 個の並び"),  # 番号の外
+                               (["p01.json.body.0.items.0.txt.a=x"], "txt がない（あるキー: type・head・text"),  # 途中のキーの打ち間違い
+                               (["p01.json.lead=新", "p02.json", "--sub", "ない文", "x"], "「ない文」が 0 か所"),  # 前の直しは当たっても、何も書かない
+                               (["p02.json", "--sub", "同じ語", "x"], "2 か所"), (["p01.json", "--del", "kicker"], "kicker がない"),
+                               (["p01.json.lead:=新しい文"], "JSON でない"), (["lead=x"], "ファイルが分からない"), (["p01.json.body[0]..text=x"], "読めない")]:
+                code, _ = go(*args)
+                assert want in str(code) and str(code).startswith("要修正: patch を止めた（何も書いていない）。"), (args, code)  # モデルは出力を「要修正」で grep するので、その語で始める
+                assert {f: Path(f).read_text() for f in first} == first, args  # どのファイルも書かない
+            code, out = go("p01.json.title=直したあとの見出し", "p01.json.body[0].items[1].text=2 つ目を\\n2 行に", "--sub", "今の文を短くする", "短い文",
+                           "--del", "band", "p02.json", "body.0.text:=\"別の語\"", "--sub", "別の", "新しい", "body.1:={\"type\": \"text\", \"text\": \"足した段\"}")
+            assert code in (0, None), code
+            a, b = json.loads(Path("p01.json").read_text()), json.loads(Path("p02.json").read_text())
+            assert a["title"] == "直したあとの見出し" and a["lead"] == "短い文" and "band" not in a and a["body"][0]["items"][1]["text"] == "2 つ目を\n2 行に", a
+            assert b["body"][0]["text"] == "新しい語" and b["body"][1]["text"] == "足した段" and "p01.json lead: \"今の文を短くする\" → \"短い文\"" in out and "手元の lint" in out, out  # 直したことの 1 行と、lint の出力
+            assert go("p02.json.title=句点で終わる見出し。")[0] == LINT_HARD and json.loads(Path("p02.json").read_text())["title"].endswith("。")  # 要修正は書いたまま止める
+            keep = Path("p01.json").read_text()
+            code, _ = go("p01.json.body[0].foo:=1")  # 書く形の外: lint が場所を付けて止め、書いたファイルを戻す
+            assert "foo" in str(code) and "\n要修正: patch を止めた（書いたファイルを戻した: p01.json）" in str(code) and Path("p01.json").read_text() == keep, code
+            Path("deck.json").write_text(json.dumps({"apiVersion": API_VERSION, "kind": "deck", "name": "t", "theme": "navy", "pages": ["p01.json"]}))
+            keep = {f: Path(f).read_text() for f in first}
+            for standalone in (False, True):
+                if standalone:
+                    Path("deck.json").unlink()
+                code, _ = go("p01.json.title=句点で終わる見出し。", "p02.json.body.0.foo:=1")  # 一覧にないページ・先のページに lint の要修正がある場合も、全ファイルを戻す
+                assert "foo" in str(code) and "書いたファイルを戻した" in str(code), code
+                assert {f: Path(f).read_text() for f in keep} == keep
+            Path("alias.json").symlink_to("p01.json")
+            for n, alias in enumerate(("./p01.json", str(Path("p01.json").resolve()), "alias.json")):
+                go(f"p01.json.title=別の表記 {n}", f"{alias}.lead=短いリード {n}")
+                a = json.loads(Path("p01.json").read_text())
+                assert a["title"] == f"別の表記 {n}" and a["lead"] == f"短いリード {n}", a
+            keep = Path("p01.json").read_text()
+            assert "戻した" in str(go("p01.json.title=別の表記", "alias.json.body.0.foo:=1")[0]) and Path("p01.json").read_text() == keep
+            for number, flag in ((1, True), (0, False)):
+                a = json.loads(Path("p01.json").read_text())
+                a["body"][0]["arrows"] = number
+                Path("p01.json").write_text(json.dumps(a))
+                code, _ = go(f"p01.json.body.0.arrows:={json.dumps(flag)}")
+                assert code in (0, None, LINT_HARD) and json.loads(Path("p01.json").read_text())["body"][0]["arrows"] is flag, code
+                keep = Path("p01.json").read_text()
+                assert "戻した" in str(go(f"p01.json.body.0.arrows:={number}")[0]) and Path("p01.json").read_text() == keep
+                assert "手元の lint" in go(f"p01.json.body.0.arrows:={json.dumps(flag)}")[1] and Path("p01.json").read_text() == keep  # 同じ値でも lint は回し、書式は変えない
+            real_load = load_theme
+            globals()["load_theme"] = lambda name: {**real_load("navy"), "cover": [{"layout": "First"}, {"layout": "Second"}], "section": [{"layout": "Divider"}, {"layout": "Divider2"}]} if name == "patchtest" else real_load(name)
+            try:
+                Path("deck.json").write_text(json.dumps({"apiVersion": API_VERSION, "kind": "deck", "name": "t", "theme": "patchtest", "pages": ["p01.json", "p02.json"]}))
+                Path("p01.json").write_text(json.dumps(page(type="cover", title="表紙", kicker="小見出し", variant=2)))
+                Path("p02.json").write_text(json.dumps(page(type="divider", title="扉", num="01", variant=2)))
+                use_layouts({})  # 検査が実際のテーマを読む前は、パターン 2 を使えない
+                code, _ = go("p01.json.title=直した表紙", "p02.json.title=直した扉")
+                assert code in (0, None, LINT_HARD) and json.loads(Path("p01.json").read_text())["title"] == "直した表紙", code
+                keep = {f: Path(f).read_text() for f in first}
+                code, _ = go("p01.json.variant:=3", "p02.json.title=別の扉")  # ValueError で止まる場合も、2 ファイルとも戻す
+                assert "パターン 3 がない" in str(code) and "戻した" in str(code), code
+                assert {f: Path(f).read_text() for f in keep} == keep
+                real_lint = lint_local
+                for error in (TypeError("点検が失敗"), KeyboardInterrupt()):
+                    globals()["lint_local"] = lambda *a: (_ for _ in ()).throw(error)
+                    try:
+                        code, _ = go("p01.json.title=途中の表紙", "p02.json.title=途中の扉")
+                        assert isinstance(error, TypeError) and "戻した" in str(code), code
+                    except KeyboardInterrupt:
+                        assert isinstance(error, KeyboardInterrupt)
+                    finally:
+                        globals()["lint_local"] = real_lint
+                    assert {f: Path(f).read_text() for f in keep} == keep
+            finally:
+                globals()["load_theme"] = real_load
+            Path("pages.py").write_text("")
+            assert str(go("p01.json.title=x")[0]).startswith("要修正: patch を止めた（何も書いていない）。pages.py")
+    finally:
+        os.chdir(cwd)
+        globals()["request"] = real
 
 
 def selftest_wording():
@@ -6503,6 +6730,8 @@ def main():
         return dry(next((x for x in a[1:] if x.endswith(PAGE_FILES)), None) or default_pages(), next((x for x in a[1:] if not x.endswith(PAGE_FILES)), None), a[0] == "resolve")
     if a[:1] == ["wording"] and len(a) <= 3:
         return cmd_wording(next((x for x in a[1:] if x.endswith(PAGE_FILES)), None) or default_pages(), next((x for x in a[1:] if not x.endswith(PAGE_FILES)), None))
+    if a[:1] == ["patch"]:
+        return cmd_patch(a[1:])
     if a[:1] == ["lint"]:
         if bad := [x for x in a[1:] if x.startswith("--") and x not in ("--pages", "--all", "--talk")]:
             sys.exit(f"slides.py lint が知らないフラグ: {' '.join(bad)}（--pages 3,5・--all・--talk）")
