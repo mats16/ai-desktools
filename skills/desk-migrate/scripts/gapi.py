@@ -4,7 +4,7 @@
 authorized_user の認証情報の JSON（GOOGLE_APPLICATION_CREDENTIALS、なければ gcloud の ADC のファイル）の refresh_token で取る。401・403 や認証情報がないときは desk-init の doctor.py で確かめる。
 設定の uc_connections.proxy にあるホストは、Databricks の Unity Catalog の connection の proxy を通して呼ぶ（Google のトークンは connection が持つ。route）。
 usage: python3 gapi.py --selftest"""
-import datetime, functools, getpass, json, os, re, socket, subprocess, sys, tempfile, threading, time, tomllib, urllib.error, urllib.parse, urllib.request, uuid
+import concurrent.futures, datetime, functools, getpass, json, os, re, socket, subprocess, sys, tempfile, threading, time, tomllib, urllib.error, urllib.parse, urllib.request, uuid
 from pathlib import Path
 
 import desk  # ワークスペースと設定のファイルの探し方
@@ -21,6 +21,7 @@ _TOK = None
 _DBTOK = None  # proxy に渡す Databricks のトークン
 _HOSTS = {}  # profile ごとのワークスペースの URL（取れたものだけ）
 REJECTED = "connection の proxy が断った"  # proxy が自分で断ったときの ApiError の先頭（desk-init の doctor.py が見分ける）
+_TOKLOCK = threading.Lock()  # 並べて呼んだ取り手が、そろって Google のトークンを取りに行かないように（CLI の _DBLOCK とは分ける）
 _DBLOCK = threading.Lock()  # 取り手が並んでも、CLI を 1 回だけ呼ぶ（429 の _LOCK とは分ける。CLI は 2 分かかりうる）
 WAITED = []  # 429・5xx・回線のエラーで取り直す前に待った秒（request が足す。Clock が回数と秒を出す）
 _HOLD = [0.0]  # 429 の分の枠が明ける時刻。並べて取るほかの取り手も、それまで送らない
@@ -156,9 +157,12 @@ def file_token():
 def token():
     """アクセストークン。環境変数 GOOGLE_OAUTH_ACCESS_TOKEN があればそれ、なければ認証情報の JSON から取る。"""
     global _TOK
-    if not _TOK:
-        _TOK = os.environ.get("GOOGLE_OAUTH_ACCESS_TOKEN") or file_token()
-    return _TOK
+    if _TOK:
+        return _TOK
+    with _TOKLOCK:
+        if not _TOK:
+            _TOK = os.environ.get("GOOGLE_OAUTH_ACCESS_TOKEN") or file_token()
+        return _TOK
 
 
 def uc(cfg=None):
@@ -387,14 +391,24 @@ def trash(fid):  # ゴミ箱に移す（30 日は戻せる）。共有ドライ�
     request("PATCH", f"{DRIVE}/files/{fid}?supportsAllDrives=true", {"trashed": True})
 
 
+def parallel(*fns):
+    """引数のない関数を並べて呼び、戻りを同じ順で返す（Google への往復を重ねる。1 回 0.3〜1.4 秒）。どれかが例外を上げれば、全部が終わってから最初のものを上げる。"""
+    with concurrent.futures.ThreadPoolExecutor(len(fns)) as ex:
+        futs = [ex.submit(f) for f in fns]
+    return [f.result() for f in futs]
+
+
 def guard(fid, rev, key, src, stop=True):
     """前に組んだあとに画面で直されていたら（rev が key に残したリビジョンか指紋と違う）、または未解決のコメントがあれば、止める。
-    組み直すと画面での修正は消え、コメントは付け先を失う。src は直しを入れる先（pages.py・doc.md）。stop=False なら止めずに理由の並びを返す（slides.py plan）。"""
-    last = request("GET", f"{DRIVE}/files/{fid}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(key)
+    組み直すと画面での修正は消え、コメントは付け先を失う。src は直しを入れる先（pages.py・doc.md）。stop=False なら止めずに理由の並びを返す（slides.py plan）。
+    rev は値か、引数のない関数（リビジョンの取得を、ほかの 2 つの読み取りと並べて呼ぶ）。"""
     st = workspace() / ".desk" / "comments.json"  # 見張りの知らせ（deck-workflow の comments.py watch）は、直すコメントでないので数えない
     notice = {n["id"] for n in json.loads(st.read_text()).get("notice", {}).values()} if st.is_file() else set()
-    comments = [c for c in request("GET", f"{DRIVE}/files/{fid}/comments?pageSize=100&fields=comments(id,resolved,deleted,content,quotedFileContent(value))")
-                .get("comments", []) if not c.get("resolved") and not c.get("deleted") and c.get("id") not in notice]
+    rev, props, listed = parallel(rev if callable(rev) else lambda: rev,
+                                  lambda: request("GET", f"{DRIVE}/files/{fid}?supportsAllDrives=true&fields=appProperties"),
+                                  lambda: request("GET", f"{DRIVE}/files/{fid}/comments?pageSize=100&fields=comments(id,resolved,deleted,content,quotedFileContent(value))"))
+    last = props.get("appProperties", {}).get(key)
+    comments = [c for c in listed.get("comments", []) if not c.get("resolved") and not c.get("deleted") and c.get("id") not in notice]
     for c in comments[:5]:  # どの文に付いた、どんなコメントか（直す先を探しやすいように）
         print(f"コメント: 「{c.get('quotedFileContent', {}).get('value', '')[:30]}」に「{c.get('content', '')[:60]}」", file=sys.stderr)
     why = (["前に組んだあとに画面で直されている"] if last and last != rev else []) + ([f"未解決のコメントが {len(comments)} 件ある"] if comments else [])
