@@ -19,7 +19,7 @@ python3 <deck-workflow folder>/scripts/flow.py record <material folder> <step nu
 |---|---|---|---|
 | `ts` | the script (UTC, seconds) | When the record was made | LangGraph checkpoint `created_at`; Temporal event time |
 | `step` | you (`1`–`11`; 1–4 are one step) | The step of "Overall flow" in `SKILL.md` | Codex `update_plan` `step`; LangGraph `metadata.step` |
-| `status` | you | 「始めた」, 「済んだ」, 「飛ばした」 (the step does not apply, such as step 6 for a deck of 10 pages or fewer), or 「止まった」 (waiting for the user's answer or other work) | Codex and Claude Code `pending` / `in_progress` / `completed`; GitHub Actions `skipped`; beads `blocked` |
+| `status` | you | 「始めた」, 「済んだ」, 「飛ばした」 (the step does not apply, such as step 6 for a deck of 20 pages or fewer), or 「止まった」 (waiting for the user's answer or other work) | Codex and Claude Code `pending` / `in_progress` / `completed`; GitHub Actions `skipped`; beads `blocked` |
 | `inputs` | the script, from `--files` | Your scope: the files you work on (paths from the material folder), each with the sha256 of its content when you recorded. A file not written yet (planned, or dropped and deleted) can be named in any status but 「済んだ」, with no hash. Without `--files`, the scope is the whole material | Bazel action inputs; Dagster data versions |
 | `out` | you (`--out`, repeatable) | Facts your work produced that files do not show, as name=value pairs | LangGraph `metadata.writes`; GitHub Actions step `outputs`; OpenTelemetry span attributes |
 | `note` | you | What was decided, what was dropped and why, what is waited for | beads `notes`; Codex `explanation`; `claude-progress.txt` in Anthropic's long-running harness |

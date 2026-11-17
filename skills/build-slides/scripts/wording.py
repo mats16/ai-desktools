@@ -316,8 +316,11 @@ def show(st, tool="wording", folder=None):
     elif s["状態"] == "済み":
         print("点検: 済み" + (f"（聞く {s['聞く']} 件は、渡すときの問いの一覧に入れる）" if s["聞く"] else "") + f"。{last.get('source') or '?'} を点検した")
     else:
+        # 写せばそのまま通る形で出す（フォルダは絶対パス、ID は並べたまま）。変数で渡すと、シェルによって ID が 1 つの引数にまとまる（2026-11-17）
+        w, f = f"python3 {os.path.abspath(__file__)}", os.path.abspath(folder) if folder is not None else "<資料のフォルダ>"
+        ids = " ".join(r["id"] for r in open_r) if open_r else "<R…>"
         print(f"点検: 未完。ページの JSON（ドキュメントは doc.md）を直して {tool} をもう一度回す。直さないものは "
-              f"wording.py keep・ask、変えてよい恐れは wording.py ok（<資料のフォルダ> <ID> … --why …）で閉じる")
+              f"{w} keep・ask {f} <ID> … --why …、変えてよい恐れは {w} ok {f} {ids} --why … で閉じる（ID はいくつでも並べられる）")
     if folder is not None:
         sv, state = st.get("saved") or {}, saved_state(st, folder)
         print(f"保存した資料との照合: {state}" + (f"（{sv.get('url')} リビジョン {sv.get('revision')}・{sv.get('ts')}）" if sv else "")
@@ -525,7 +528,12 @@ def selftest():
             if want == "済み":
                 decide(d, "ok", [r["id"] for r in load(d)["last"]["risks"]], "意図した値")
             assert load(d)["summary"]["状態"] == want, (price, load(d)["summary"])
-        decide(d, "ok", [r["id"] for r in load(d)["last"]["risks"]], "意図した値")
+        run(d, "slides", p5("価格は月 700 円"), {})
+        rs = [r["id"] for r in load(d)["last"]["risks"]]
+        with contextlib.redirect_stdout(io.StringIO()):
+            main(["ok", d, "", "--why", "意図した値"])  # 閉じる ID がない（集めた結果が空）。断らない
+            main(["ok", d, " ".join(rs + rs), "--why", "意図した値"])  # zsh が 1 つの引数にまとめた ID
+        assert load(d)["summary"]["状態"] == "済み" and rs, rs
         # 道具が見つけた通らない理由（画面で直された・画像を取っていない）は、指摘がなくても通さない
         assert not run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {}, ["組んだあとに画面で直された"])
         # 書き直しの上限: 未判断の指摘のある文を書き換え続けても、上限のあとは keep・ask で閉じるように出す（回り続けない）
@@ -617,9 +625,12 @@ def selftest():
 def main(argv):
     if argv[:1] and argv[0] in ("keep", "ask", "ok"):
         ap = argparse.ArgumentParser(prog=f"wording.py {argv[0]}")
-        ap.add_argument("folder"); ap.add_argument("ids", nargs="+"); ap.add_argument("--why", required=True)
+        ap.add_argument("folder"); ap.add_argument("ids", nargs="*"); ap.add_argument("--why", required=True)
         a = ap.parse_args(argv[1:])
-        return decide(a.folder, argv[0], a.ids, a.why)
+        ids = [i for x in a.ids for i in x.split()]  # zsh は引用符のない $IDS を空白で分けず 1 つの引数で渡す（14/16 本で断られた。2026-11-17）
+        if not ids:  # 閉じるものがない（ID を集めた結果が空）。断らずに今の状態を出す
+            return show(load(a.folder), "docs.py wording <URL>" if load(a.folder).get("kind") == "docs" else "slides.py wording", a.folder)
+        return decide(a.folder, argv[0], ids, a.why)
     if len(argv) == 1 and not argv[0].startswith("-"):
         st = load(argv[0])
         s = show(st, folder=argv[0])
