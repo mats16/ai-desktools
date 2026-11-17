@@ -19,7 +19,7 @@ Open before you start any child agent (plan review, source check, three-page rev
     - Three-page review child agent (6): the JSON of the remaining pages (for split decks, the draft of 「書き方の取り決め」 and the request texts; slides-flow-016 in 7)
     - Child agents writing the remaining pages (7): fixes to the three representative pages that affect only that page (step 3 of 6)
     - Source-check child agents (5, 9; deck-flow-019): nothing waits for them; continue the step you are on
-    - `/deck-review` child agents (9): the records up to the previous round (the findings table, 「あと」 in the three-representative-pages log), `references.md`, the lint `要確認`, and fixes you found yourself
+    - `/deck-review` child agents (9): in round 1, the whole-deck pass of step 8 (build warnings, `check --all` findings, the contact sheet; `slides_steps.md` §8); in every round, the delivery that does not depend on the findings (`deliver.md`: `refs.py check --fetch`, the report's frame and its list of questions so far), the records up to the previous round (the findings table, 「あと」 in the three-representative-pages log), `references.md`, the lint `要確認`, and fixes you found yourself
 
 ## Evidence
 
