@@ -433,7 +433,7 @@ def decide(folder, status, ids, why):
 
 
 def selftest():
-    import tempfile
+    import subprocess, tempfile
     textlint.yomiyasu()
     u = lambda key, text, **kw: unit(kw.pop("where", key), text, key, kw.pop("kind", "本文"), **kw)
     # 指摘: lint の要確認と同じ規則。かぎかっこの中・出典の行・英字だけの文は出さない。ノートは表記の規則を見ない
@@ -534,6 +534,10 @@ def selftest():
             main(["ok", d, "", "--why", "意図した値"])  # 閉じる ID がない（集めた結果が空）。断らない
             main(["ok", d, " ".join(rs + rs), "--why", "意図した値"])  # zsh が 1 つの引数にまとめた ID
         assert load(d)["summary"]["状態"] == "済み" and rs, rs
+        for action in ("keep", "ask", "ok"):
+            for ids in ([], [""]):
+                result = subprocess.run([sys.executable, __file__, action, d, *ids, "--why", "意図した値"], capture_output=True, text=True)
+                assert result.returncode == 0 and not result.stderr and "点検: 済み" in result.stdout, result  # CLI の終了コードも成功にする
         # 道具が見つけた通らない理由（画面で直された・画像を取っていない）は、指摘がなくても通さない
         assert not run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 300 円"), {}, ["組んだあとに画面で直された"])
         # 書き直しの上限: 未判断の指摘のある文を書き換え続けても、上限のあとは keep・ask で閉じるように出す（回り続けない）
@@ -629,7 +633,8 @@ def main(argv):
         a = ap.parse_args(argv[1:])
         ids = [i for x in a.ids for i in x.split()]  # zsh は引用符のない $IDS を空白で分けず 1 つの引数で渡す（14/16 本で断られた。2026-11-17）
         if not ids:  # 閉じるものがない（ID を集めた結果が空）。断らずに今の状態を出す
-            return show(load(a.folder), "docs.py wording <URL>" if load(a.folder).get("kind") == "docs" else "slides.py wording", a.folder)
+            show(load(a.folder), "docs.py wording <URL>" if load(a.folder).get("kind") == "docs" else "slides.py wording", a.folder)
+            return
         return decide(a.folder, argv[0], ids, a.why)
     if len(argv) == 1 and not argv[0].startswith("-"):
         st = load(argv[0])
