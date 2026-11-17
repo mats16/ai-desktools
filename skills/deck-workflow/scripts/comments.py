@@ -370,6 +370,8 @@ def selftest():
                 return {"id": "r9"}
             if url.startswith(SLIDES):
                 return {"slides": [{"objectId": "s1"}, {"objectId": "s2"}]}
+            if "fields=appProperties" in url:  # guard が組んだリビジョンを読む（コメントと並べて取るので、順に頼らない）
+                return {}
             return pages.pop(0) if pages else {"comments": []}
 
         def call(*argv):
@@ -440,7 +442,7 @@ def selftest():
             until = saved()["notice"]["X1"]["until"]
             posts = [a for a in asked if a[0] == "POST"]
             assert posts == [("POST", f"{DRIVE}/files/X1/comments/r9/replies?fields=id", {"content": f"見張りを終える時刻を {when(until)} に延ばします"})], posts
-            pages[:] = [{}, {"comments": [{"id": "r9", "content": "AI が", "author": {"me": True}, "createdTime": T(23), "modifiedTime": T(23)}]}]  # リビジョン、コメントの順に取る
+            pages[:] = [{"comments": [{"id": "r9", "content": "AI が", "author": {"me": True}, "createdTime": T(23), "modifiedTime": T(23)}]}]
             assert gapi.guard("X1", "v", "k", "build", stop=False) is None and not pages  # 組むときも、知らせは未解決のコメントと数えない
             notes["r9"], asked[:] = {"resolved": True}, []  # 読む人が知らせを解決した
             call("watch", "--start", "--hours", "1", "X1")

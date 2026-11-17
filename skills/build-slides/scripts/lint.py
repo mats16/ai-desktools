@@ -5,12 +5,12 @@
 書いたルールのうち、機械で見られるものを数える。本文の表記の決まり・出典の照合・記録はドキュメントと同じ textlint.py。ドキュメントは build-docs の doc_lint.py。
 標準ライブラリだけで動く。要修正（HARD）が 1 つでもあれば exit 1。要確認（WARN）は 1 件ずつ見て、直すか、残す理由を言えるようにする。
 ルールの出典は deck-design → slides・deck-writing と、ワークスペースの Research/deck_research/log/。pptx を読んでいたバージョンは Archive/pptx_pipeline_20261007/。"""
-import itertools, json, math, os, re, subprocess, sys
+import contextlib, itertools, json, math, os, re, subprocess, sys, tempfile
 from collections import Counter, defaultdict
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import textlint  # noqa: E402
+import gapi, textlint  # noqa: E402
 from notes import flatten, note_text, paras, ptext  # noqa: E402  要素の位置とノートの文字（build-vids と同じ部品）
 from brand import CLASSIFICATION, COPYRIGHT_FOOTER  # noqa: E402
 from textlint import (FEED, FEED_LINK, HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, contrast, facts_hit,  # noqa: E402
@@ -204,19 +204,44 @@ def wrap_breaks(para, avail):
     return out
 
 
+BUDOUX = "budoux==0.9.3"  # バージョンを固定して文節の分け方をそろえる
+SEG_CACHE = os.path.join(tempfile.gettempdir(), f"lint_budoux_{BUDOUX}_{gapi.user()}.json")  # 文ごとの切れ目。同じバージョンの BudouX は同じ文を同じに分けるので、前に分けた文には uv を呼ばない（呼ぶと 1 回 0.5 秒。lint の時間の半分だった）
+SEG_KEEP = 20000  # キャッシュに残す文の数（新しいほうから）
+
+
 def segment(texts):
     """文字列ごとの文節の切れ目の位置の集合。BudouX を uv で別に呼ぶ（lint.py は標準ライブラリだけのまま。box_pad.py の Pillow と同じ）。
-    uv か BudouX が使えないとき・時間切れ・形の合わない結果のときは None（この点検を数えない）"""
-    code = "import sys, json, budoux; p = budoux.load_default_japanese_parser(); print(json.dumps([p.parse(t) for t in json.load(sys.stdin)]))"
+    前に分けた文は SEG_CACHE から読み、まだの文だけを渡す。uv か BudouX が使えないとき・時間切れ・形の合わない結果のときは None（この点検を数えない）"""
     try:
-        res = subprocess.run(["uv", "run", "-q", "--no-project", "--with", "budoux==0.9.3", "python", "-c", code], input=json.dumps(texts),
-                             capture_output=True, text=True, timeout=60)  # バージョンを固定して文節の分け方をそろえる。初めてだけ BudouX を取りにネットワークが要る
-        segs = json.loads(res.stdout) if res.returncode == 0 else None
-        if isinstance(segs, list) and len(segs) == len(texts) and all("".join(x) == t for x, t in zip(segs, texts)):
-            return {t: set(itertools.accumulate(map(len, x))) for t, x in zip(texts, segs)}
-    except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
-        pass
-    return None
+        with open(SEG_CACHE, encoding="utf-8") if SEG_CACHE else contextlib.nullcontext() as f:
+            cache = json.load(f) if f else {}
+    except (OSError, ValueError):  # ない・書きかけ・壊れた。分け直す
+        cache = {}
+    cache = cache if isinstance(cache, dict) else {}
+    new = [t for t in texts if not (isinstance(c := cache.get(t), list) and all(isinstance(k, int) for k in c) and (c or [0])[-1] == len(t))]  # 形の合わない記録は分け直す
+    if new:
+        code = "import sys, json, budoux; p = budoux.load_default_japanese_parser(); print(json.dumps([p.parse(t) for t in json.load(sys.stdin)]))"
+        try:
+            res = subprocess.run(["uv", "run", "-q", "--no-project", "--with", BUDOUX, "python", "-c", code], input=json.dumps(new),
+                                 capture_output=True, text=True, timeout=60)  # 初めてだけ BudouX を取りにネットワークが要る
+            segs = json.loads(res.stdout) if res.returncode == 0 else None
+            if not (isinstance(segs, list) and len(segs) == len(new) and all(isinstance(x, list) and "".join(x) == t for x, t in zip(segs, new))):
+                return None
+            for t, x in zip(new, segs):
+                cache.pop(t, None)  # 新しく分けた文を末尾に（残すのは新しいほうから）
+                cache[t] = list(itertools.accumulate(map(len, x)))
+        except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+            return None
+        if SEG_CACHE:
+            tmp = f"{SEG_CACHE}.{os.getpid()}"
+            try:  # 書きかけをほかの lint に読ませない（別の名前に書いてから置き換える）
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(dict(list(cache.items())[-SEG_KEEP:]), f, ensure_ascii=False)
+                os.replace(tmp, SEG_CACHE)
+            except (OSError, ValueError):  # 書けなければ（対のないサロゲートの文も）、次も分け直すだけ。書きかけは残さない
+                with contextlib.suppress(OSError):
+                    os.remove(tmp)
+    return {t: set(cache[t]) for t in texts}
 
 
 def mid_phrase(cands):
@@ -289,15 +314,14 @@ def empty_space(els, scheme):
     body = [(e, b, ink_bottom(e, b, scheme)) for e, b in els if b[1] < floor - 0.01 * EMU and b[1] + b[3] > BODY_TOP]
     top = min((b[1] for _, b, _ in body if b[1] >= BODY_TOP), default=Y_BODY * EMU)  # 本文の領域で始まる最初の要素（見出し・リードの枠が下へ伸びていても数えない）
     below = floor - max(k for *_, k in body) - max(0, top - Y_BODY * EMU) if body else 0
-    boxes = []
+    boxes, content = [], [(e2, b2, k) for e2, b2, k in body if has_text(e2) or "table" in e2 or "image" in e2]  # 文字のない図形（角丸を組む部品・枠線）は中身に数えない。箱ごとに数え直さない
     for e, b, _ in body:
         sh = e.get("shape")  # 箱は塗りで見分ける（slides.py は文字の枠も塗りのない RECTANGLE で作る）
         if not sh or not solid(sh.get("shapeProperties", {}).get("shapeBackgroundFill"), scheme) or min(b[2], b[3]) < THIN:
             continue
         if e.get("title") == BAR_MARK:  # 棒グラフの棒（slides.py の bars）。棒の中の数字の下が空くのは決まった形
             continue
-        inner = [k for e2, b2, k in body if e2 is not e and (has_text(e2) or "table" in e2 or "image" in e2)  # 文字のない図形（角丸を組む部品・枠線）は中身に数えない
-                 and b[0] <= b2[0] + b2[2] / 2 <= b[0] + b[2] and b[1] <= b2[1] + b2[3] / 2 <= b[1] + b[3]]
+        inner = [k for e2, b2, k in content if e2 is not e and b[0] <= b2[0] + b2[2] / 2 <= b[0] + b[2] and b[1] <= b2[1] + b2[3] / 2 <= b[1] + b[3]]
         own = text_bottom(sh, b) if sh.get("text") else None
         if inner or own:
             boxes.append(b[1] + b[3] - max(inner + [own or 0]))
@@ -988,13 +1012,21 @@ def selftest():
     assert not res2.hits[PHRASE_BREAK] and "は数えていない" in out and hard2 == hard
     assert {k: v for k, v in res2.hits.items() if v} == {k: v for k, v in res.hits.items() if v and k != PHRASE_BREAK}  # ほかの指摘は変わらない
     import types
-    sp_run = subprocess.run
+    sp_run, cache_path = subprocess.run, SEG_CACHE
     try:
+        globals()["SEG_CACHE"] = None  # 前に分けた文を読まず、毎回 uv を呼ぶ形を見る
         for got in ([0, json.dumps([["データを", "見る"]])], [1, json.dumps([["データを見る"]])], [0, json.dumps([["データ"]])], [0, "["], [0, json.dumps([[1]])], OSError()):
             subprocess.run = lambda *a, **k: (_ for _ in ()).throw(got) if isinstance(got, Exception) else types.SimpleNamespace(returncode=got[0], stdout=got[1])
             assert real_segment(["データを見る"]) == ({"データを見る": {4, 6}} if got == [0, json.dumps([["データを", "見る"]])] else None)  # 起動の失敗・形の合わない結果は数えない
+        with tempfile.TemporaryDirectory() as td:  # 分けた文はキャッシュから読み、まだの文だけを uv に渡す
+            globals()["SEG_CACHE"], sent = os.path.join(td, "c.json"), []
+            subprocess.run = lambda *a, **k: sent.append(json.loads(k["input"])) or types.SimpleNamespace(returncode=0, stdout=json.dumps([[t[:2], t[2:]] for t in json.loads(k["input"])]))
+            assert real_segment(["データを見る"]) == {"データを見る": {2, 6}} and real_segment(["データを見る", "表を読む"]) == {"データを見る": {2, 6}, "表を読む": {2, 4}}
+            assert sent == [["データを見る"], ["表を読む"]]
+            open(SEG_CACHE, "w").write("{壊れた")
+            assert real_segment(["データを見る"]) == {"データを見る": {2, 6}} and len(sent) == 3  # 壊れたキャッシュは分け直す
     finally:
-        subprocess.run = sp_run
+        subprocess.run, globals()["SEG_CACHE"] = sp_run, cache_path
     globals()["segment"] = lambda ts: {t: set(range(len(t) + 1)) for t in ts}
     _, out, _ = run(deck([(NAVY, [title()]), (OAT, [title(), shape(1, color={"themeColor": "ACCENT5"})])]))
     assert "618794 / F9F7F4  3.64" in out

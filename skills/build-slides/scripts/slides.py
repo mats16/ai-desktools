@@ -32,6 +32,7 @@ usage（資料の build/ で。deck.json か pages.py は今いるフォルダ�
 見た目の決まりは deck-design → slides §1。"""
 import ast, atexit, contextlib, decimal, functools, hashlib, importlib, inspect, io, itertools, json, math, os, re, shutil, subprocess, sys, tempfile, time, tomllib, types, urllib.error, urllib.parse, urllib.request
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # build/ と scripts/ に __pycache__ を残さない
@@ -42,7 +43,7 @@ from gapi import (DRIVE, GSLIDES, PPTX, SLIDES, batch, carry, delete, config, co
 from textlint import contrast  # 番号の数字の色を塗りから決める（Deck.num）
 from brand import (ASCII_BOLD_EM, ASCII_EM, BRAND_COPYRIGHT, COMPANY as BRAND_COMPANY, COPYRIGHT_PT, DM_SANS_BOLD_EM, DM_SANS_EM, FONT, FONT_EM, JP_FONTS, LIGATURE_MONO, LOGO,
                    MONO_DEFAULT, PLACEHOLDER_COPYRIGHT, RULE, TEXT, WHITE, asset, theme_font, theme_mono)  # 書体・字幅・色の既定・著作権表示はドキュメントと同じ
-from notes import DECK_FIELDS, PAGE_KEY, STAMP, THEME_MARK, deck_font, deck_mark, deck_theme, note_reqs, notes_of, page_key, revision  # スピーカーノートとテーマの目印（build-vids と同じ部品）
+from notes import DECK_FIELDS, PAGE_KEY, STAMP, THEME_MARK, deck_font, deck_mark, deck_theme, note_reqs, note_text, notes_of, page_key, revision  # スピーカーノートとテーマの目印（build-vids と同じ部品）
 
 # ---- テンプレート。ID・置き場所・既定のテーマは人ごとに違うので、設定（ワークスペースの desk.toml か ~/.desk.toml）の [slides] に置く（作り方は template.py） ----
 BLANK = "Content E - Blank"  # テンプレートに残した、置き物のないレイアウト。ページ番号の枠だけを持つ
@@ -3547,13 +3548,51 @@ def pages_of(deck, reqs):
     return owner, digest(False), links, digest(True)
 
 
-def build_plan(pid, deck, force=False, theme=None, only=None):
+PLAN_FIELDS = (f"slides(objectId,slideProperties(notesPage(notesProperties,pageElements(objectId,shape(text)))),"
+               f"pageElements(objectId,image(contentUrl,sourceUrl),elementGroup(children(objectId,image(contentUrl,sourceUrl))))),{DECK_FIELDS}")  # テーマ・差分・前のノート・前に組んだ画像を 1 回の GET で読む
+IMG_SHA = re.compile(r"i([0-9a-f]{12})$")  # build が手元の画像の ID の末尾に付ける、画像の中身のハッシュ
+
+
+def placed_path(pid):  # この機械の build が入れた手元の画像（ID → createImage に渡した URL）。gslides.py check と同じフォルダ
+    return f"/tmp/slides_{pid[:8]}/images.json"
+
+
+def read_placed(pid):
+    try:
+        d = json.loads(Path(placed_path(pid)).read_text())
+    except (OSError, ValueError):
+        return {}
+    return d.get("images", {}) if isinstance(d, dict) and d.get("pid") == pid and isinstance(d.get("images"), dict) else {}
+
+
+def write_placed(pid, images):
+    os.makedirs(os.path.dirname(f := placed_path(pid)), exist_ok=True)
+    Path(tmp := f"{f}.{os.getpid()}").write_text(json.dumps({"pid": pid, "images": images}))
+    os.replace(tmp, f)
+
+
+def deck_elements(p):  # ページの要素（群の中は 1 段）
+    for s in p.get("slides", []):
+        yield from s.get("pageElements", []) + [c for g in s.get("pageElements", []) for c in g.get("elementGroup", {}).get("children", [])]
+
+
+def deck_images(p, placed):
+    """前に組んだ手元の画像の中身のハッシュ → その画像の URL（presentations.get の contentUrl。30 分は Slides API が読める）。使うのは、この機械の build が入れた
+    ときの URL（placed）と、今の sourceUrl が同じ要素だけ。画面や API で画像を置き換えると、ID はそのままで sourceUrl が変わる（2026-11-17 に確かめた）ので、
+    置き換えた画像・記録のないデッキ（ほかの機械で組んだもの、複製）は使わない。"""
+    return {m.group(1): img["contentUrl"] for e in deck_elements(p) if (m := IMG_SHA.search(e.get("objectId", ""))) and (img := e.get("image", {})).get("contentUrl")
+            and (u := placed.get(e["objectId"])) and u == img.get("sourceUrl")}  # 記録のない要素は、sourceUrl がなくても（画面で上げた画像）使わない
+
+
+def build_plan(pid, deck, force=False, theme=None, only=None, p=None):
     """[slides-component-016] build が送るもの（まだ送らない。slides.py plan はこれを出すだけ）。変わったページだけを作り直す。ページの ID の末尾に中身のハッシュ（pages_of）を付け、
     デッキに同じハッシュのページがあれば残して並べ替えるだけにする。ハッシュのないページ（前のバージョンの build で組んだもの、画面で足したもの）は消して作り直す。
     force なら、全ページを作り直す（画面での修正も消す）。theme（(名前, テーマの表)）があれば、マスターとの違い（theme_diff）を出し、書いたあとの書体で組む。
-    only（ページの名前の集合）を渡すと、ほかのページは前に組んだスライドを残す（中身が変わっていても。そのページへのリンクを作り直すときと、前に組んでいないときは作る）。"""
-    p = request("GET", f"{SLIDES}/{pid}?fields=slides(objectId),{DECK_FIELDS}")
-    gapi.CLOCK.lap("GET")
+    only（ページの名前の集合）を渡すと、ほかのページは前に組んだスライドを残す（中身が変わっていても。そのページへのリンクを作り直すときと、前に組んでいないときは作る）。
+    p は pid を PLAN_FIELDS で読んだもの（main がテーマを読むときに取っていれば、読み直さない）。"""
+    if p is None:
+        p = request("GET", f"{SLIDES}/{pid}?fields={PLAN_FIELDS}")
+        gapi.CLOCK.lap("GET")
     themed = theme_diff(*theme, p) if theme else []
     q = {**p, "masters": theme_pages(*theme)["masters"]} if themed else p  # マスターをテーマの値にしたあとの書体
     reqs = json.loads(resolved(deck, q))
@@ -3612,46 +3651,92 @@ def build_plan(pid, deck, force=False, theme=None, only=None):
                                  rebuilt=[i for i, s in enumerate(deck.slides, 1) if s not in keep])
 
 
-def build(pid, deck, force=False, theme=None, only=None):
+GUARD_SRC = "ページのファイル（deck.json・pages.py）"
+
+
+def build(pid, deck, force=False, theme=None, only=None, p=None, guarded=None):
     """pid のプレゼンのページを、deck のページに置き換える（build_plan のとおりに送る）。force=False なら、先に guard で画面での修正とコメントを確かめる。
-    theme を渡すと、確かめたあとでマスターをその値にそろえる（先に書くと、自分の書いたリビジョンを画面での修正と取り違える）。"""
+    theme を渡すと、確かめたあとでマスターをその値にそろえる（先に書くと、自分の書いたリビジョンを画面での修正と取り違える）。
+    p は build_plan に渡す（読んだばかりのデッキ）。guarded は main が先に始めた guard（の Future）。Google への往復は重ねる: guard の読み取りは差分を出すのと並べ、
+    手元の画像を運ぶのと書くのは guard が通ってから（止まる build は Drive に何も上げない）。"""
     need_brand()
-    if not force:
-        gapi.guard(pid, revision(pid), STAMP, "ページのファイル（deck.json・pages.py）")
-        gapi.CLOCK.lap("画面での修正の確認")
-    x = build_plan(pid, deck, force, theme, only)
-    ids, keep, body, old, moves, font = x.ids, x.keep, x.body, x.old, x.moves, x.font
-    if x.themed:
-        batch(pid, theme_reqs(*theme, *deck_parts(x.p)))
-        if not force:  # 自分の書き込みのリビジョンを残す（このあとページを組めずに止まっても、次の build が画面での修正と取り違えない）
-            gapi.stamp(pid, revision(pid), STAMP)
-        if os.path.exists(shots := f"/tmp/slides_{pid[:8]}/shots.json"):  # ID の変わらないページも色が替わるので、gslides.py check が前の画像を使わずに全ページを取る
-            os.remove(shots)
-        print(f"テーマ {theme[0]} のファイルの値（{'・'.join(x.themed)}）を、デッキのマスターに書いた", file=sys.stderr)
-    carrier = None
-    try:
-        if used := sorted({int(i) for i in re.findall(r'"@IMG(\d+)"', body)}):  # 作り直すページの手元の画像だけを運ぶ
-            urls, carrier = carry([deck.images[i] for i in used])
-            body = re.sub(r'"@IMG(\d+)"', lambda m: json.dumps(urls[used.index(int(m.group(1)))]), body)
-            gapi.CLOCK.lap("手元の画像を運ぶ")
-        send = json.loads(body) + old + moves
-        batch(pid, send)
-        gapi.CLOCK.lap(f"batchUpdate（{len(send)} 件）")
-    finally:
-        if carrier:  # 貼った画像はデッキの中に写し取られているので、仮のファイルは消してよい
-            delete(carrier)
-    # ノートは 2 回目に書く（作ったページのノートの枠は、作ったあとでないと ID が分からない）。残したページも、ノートが変わっていれば書き換える（ノートはハッシュに入れない）
-    p = request("GET", f"{SLIDES}/{pid}?fields=slides(objectId,slideProperties(notesPage(notesProperties,pageElements(objectId,shape(text)))))")
-    names = {sid: n for n, sid in deck.page_names.items()}
-    skip = lambda s: s in keep and only is not None and names.get(s) not in only  # 選んでいないページは、ノートも前のまま
-    want = {str(i): None if skip(s) else (deck.notes.get(s) or "").rstrip("\n") for i, s in enumerate(deck.slides, 1)}
-    before = notes_of(p["slides"])
-    renoted = [i for i, s in enumerate(deck.slides, 1) if s in keep and want[str(i)] not in (None, before[str(i)])]  # 残したページで、ノートを書き換えたもの
-    if nreqs := note_reqs(p["slides"], want, font):
-        batch(pid, nreqs)
-    gapi.CLOCK.lap("ノート（GET と batchUpdate）")
-    gapi.stamp(pid, revision(pid), STAMP)
-    gapi.CLOCK.lap("リビジョンの記録")
+    carried = cleanup = None
+    carriers, reused = [], []  # 運んだ画像の仮のファイル。前に組んだ画像の URL を使った番号
+    with ThreadPoolExecutor(2) as ex:
+        guarded = guarded or (None if force else ex.submit(gapi.guard, pid, lambda: revision(pid), STAMP, GUARD_SRC))
+        try:
+            x = build_plan(pid, deck, force, theme, only, p)
+            ids, keep, body, old, moves, font = x.ids, x.keep, x.body, x.old, x.moves, x.font
+            if guarded:
+                guarded.result()
+                gapi.CLOCK.lap("画面での修正の確認")
+            urls = {}  # 手元の画像の番号 → Slides API が読める URL
+            if used := sorted({int(i) for i in re.findall(r'"@IMG(\d+)"', body)}):  # 作り直すページの手元の画像だけを運ぶ
+                sha = {i: hashlib.sha256(Path(deck.images[i]).read_bytes()).hexdigest()[:12] for i in used}
+                for m in list(re.finditer(r'"createImage": \{"objectId": "([^"]+)", "url": "@IMG(\d+)"', body)):  # 画像の ID の末尾に中身のハッシュを付ける（次の build が下で見つける）
+                    body = body.replace(f'"{m.group(1)}"', f'"{m.group(1)}i{sha[int(m.group(2))]}"')
+                have = deck_images(x.p, read_placed(pid))  # 前に組んだ同じ画像の URL（運ぶのと同じ画素）。運ぶと 1 回 4〜5 秒（Drive が pptx を変換する）
+                urls = {i: have[sha[i]] for i in used if sha[i] in have}
+                reused = list(urls)
+                if fresh := [i for i in used if i not in urls]:
+                    carried = ex.submit(carry, [deck.images[i] for i in fresh])
+            tmpl = body
+            if x.themed:
+                batch(pid, theme_reqs(*theme, *deck_parts(x.p)))
+                if not force:  # 自分の書き込みのリビジョンを残す（このあとページを組めずに止まっても、次の build が画面での修正と取り違えない）
+                    gapi.stamp(pid, revision(pid), STAMP)
+                if os.path.exists(shots := f"/tmp/slides_{pid[:8]}/shots.json"):  # ID の変わらないページも色が替わるので、gslides.py check が前の画像を使わずに全ページを取る
+                    os.remove(shots)
+                print(f"テーマ {theme[0]} のファイルの値（{'・'.join(x.themed)}）を、デッキのマスターに書いた", file=sys.stderr)
+            if carried:
+                got, carrier = carried.result()
+                carriers.append(carrier)
+                urls |= dict(zip(fresh, got))
+                gapi.CLOCK.lap("手元の画像を運ぶ")
+            fill = lambda: re.sub(r'"@IMG(\d+)"', lambda m: json.dumps(urls[int(m.group(1))]), tmpl)
+            send = json.loads(fill()) + old + moves
+            try:
+                batch(pid, send)
+            except gapi.ApiError as e:  # 前に組んだ画像の URL を Google が読めなかった。運び直して 1 回だけ送り直す（まとめて送った要求は、失敗すれば 1 つも入らない）
+                bad = re.search(r"requests\[(\d+)\]\.createImage", str(e))
+                if not (bad and int(bad[1]) < len(send) and send[int(bad[1])].get("createImage", {}).get("url") in {urls[i] for i in reused}):
+                    raise
+                print("前に組んだ画像の URL で組めなかったので、画像を運び直して送り直す", file=sys.stderr)
+                got, carrier = carry([deck.images[i] for i in reused])
+                carriers.append(carrier)
+                urls |= dict(zip(reused, got))
+                send, reused = json.loads(fill()) + old + moves, []
+                batch(pid, send)
+            gapi.CLOCK.lap(f"batchUpdate（{len(send)} 件{f'。前に組んだ画像 {len(reused)} 枚は運ばない' if reused else ''}）")
+        except BaseException:
+            if carried and not carried.cancel() and carried.exception() is None and carried.result()[1] not in carriers:  # 運んだ画像の仮のファイルを残さない（guard で止まったときも）
+                carriers.append(carried.result()[1])
+            for c in carriers:
+                delete(c)
+            raise
+        if carriers:  # 貼った画像はデッキの中に写し取られているので、仮のファイルは消してよい（ノートとリビジョンの記録と並べる）
+            cleanup = ex.submit(lambda: [delete(c) for c in carriers])
+        # ノートは 2 回目に書く（作ったページのノートの枠は、作ったあとでないと ID が分からない）。残したページも、ノートが変わっていれば書き換える（ノートはハッシュに入れない）
+        names = {sid: n for n, sid in deck.page_names.items()}
+        skip = lambda s: s in keep and only is not None and names.get(s) not in only  # 選んでいないページは、ノートも前のまま
+        want = {str(i): None if skip(s) else (deck.notes.get(s) or "").rstrip("\n") for i, s in enumerate(deck.slides, 1)}
+        prev = {sl["objectId"]: note_text(sl).rstrip("\n") for sl in x.p.get("slides", [])}  # 組む前のノート（残したページはそのまま、作ったページは空）
+        before = {str(i): prev.get(keep[s], "") if s in keep else "" for i, s in enumerate(deck.slides, 1)}
+        renoted = [i for i, s in enumerate(deck.slides, 1) if s in keep and want[str(i)] not in (None, before[str(i)])]  # 残したページで、ノートを書き換えたもの
+        nreqs = []
+        if any(t is not None and t != before[i] for i, t in want.items()):  # 書くノートがなければ、ノートの枠を読み直さない
+            q = request("GET", f"{SLIDES}/{pid}?fields=slides(objectId,slideProperties(notesPage(notesProperties,pageElements(objectId,shape(text)))))")
+            if nreqs := note_reqs(q["slides"], want, font):
+                batch(pid, nreqs)
+            gapi.CLOCK.lap("ノート（GET と batchUpdate）")
+        gapi.stamp(pid, revision(pid), STAMP)
+        gapi.CLOCK.lap("リビジョンの記録")
+    if used or read_placed(pid):  # 入れた画像の URL を残す（次の build が sourceUrl と比べる）。消したページの ID は落とす。残せなくても組んだことは変わらない（次は運ぶだけ）
+        gone = {r["deleteObject"]["objectId"] for r in old}
+        now = {e["objectId"] for e in deck_elements({"slides": [sl for sl in x.p.get("slides", []) if sl["objectId"] not in gone]})}
+        with contextlib.suppress(OSError):
+            write_placed(pid, {o: u for o, u in read_placed(pid).items() if o in now}
+                         | {v["objectId"]: v["url"] for r in send if (v := r.get("createImage")) and IMG_SHA.search(v["objectId"])})
     d = f"/tmp/slides_{pid[:8]}"  # gslides.py check と同じフォルダ。画像は check が取り、同じファイルに画像のパスと指摘を足して書き直す
     os.makedirs(d, exist_ok=True)
     json.dump({"url": f"https://docs.google.com/presentation/d/{pid}/edit", "by": "build", "slides": len(deck.slides),
@@ -3661,6 +3746,8 @@ def build(pid, deck, force=False, theme=None, only=None):
                       "requests": len(send) + len(nreqs), "notes_rewritten": renoted,
                       "warnings": len(deck.warnings)}, ensure_ascii=False))
     gapi.CLOCK.show("build ")
+    if cleanup and (e := cleanup.exception()):  # 仮のファイルを消せなくても組めている。消せなかったことだけを知らせる
+        print(f"警告: 画像を運んだ仮のファイル（My Drive の直下の tmp_images）を消せなかった。手で消す: {e}", file=sys.stderr)
 
 
 def chosen(files, deck, mark):
@@ -3682,11 +3769,11 @@ def chosen(files, deck, mark):
     return names
 
 
-def cmd_plan(pid, deck, theme, only):
+def cmd_plan(pid, deck, theme, only, p=None):
     """[slides-component-023] slides.py plan: build が送るもの（build_plan）と、画面での修正・コメント（あれば build は止まる）を出す。Google には書かない。
     rebuild は作り直す・作るページ、frozen は中身が変わったが選んでいないので前のまま残すページ（番号はデッキの何枚目）。"""
-    screen = gapi.guard(pid, revision(pid), STAMP, "pages.py", stop=False) or []
-    x = build_plan(pid, deck, False, theme, only)
+    screen = gapi.guard(pid, lambda: revision(pid), STAMP, "pages.py", stop=False) or []
+    x = build_plan(pid, deck, False, theme, only, p)
     print(json.dumps({"presentationId": pid, "theme": x.themed, "rebuild": x.rebuilt, "frozen": [i for i, s in enumerate(deck.slides, 1) if s in x.frozen],
                       "kept": len(x.keep) - len(x.frozen), "remove": len(x.old), "moves": len(x.moves), "notes": notes_changed(pid, deck), "screen": screen}, ensure_ascii=False))
 
@@ -3728,8 +3815,9 @@ def local_json(reqs, deck, p):
             if c == "\n":
                 ps = dict(ps)
                 out.append({"paragraphMarker": {"style": ps, **({"bullet": {}} if ps.pop("_bullet", False) else {})}})
-                for st, g in itertools.groupby(t[start:j + 1], key=lambda x: json.dumps(x[1], sort_keys=True)):
-                    out.append({"textRun": {"content": "".join(x[0] for x in g), "style": json.loads(st)}})
+                for _, g in itertools.groupby(t[start:j + 1], key=lambda x: x[1]):  # 同じ書式の字をまとめる（dict の比較。1 字ずつ JSON にすると、81 枚で 0.2 秒かかった）
+                    g = list(g)
+                    out.append({"textRun": {"content": "".join(x[0] for x in g), "style": json.loads(json.dumps(g[0][1]))}})
                 start = j + 1
         return {"textElements": out}
 
@@ -6083,6 +6171,69 @@ def selftest_diff():
         e = make_deck(swap(2, 3), "t")
         assert pages_of(e, json.loads(resolved(e, p)))[1][e.slides[0]] != hs[0]
 
+    # build の手元の画像: この機械の build が入れたときの URL（images.json）と今の sourceUrl が同じ要素だけ、その contentUrl を使って運ばない。
+    # 記録のない要素・画面で置き換えた要素（ID はそのまま、sourceUrl が変わる）は運ぶ。入れた画像の URL を記録に足す。
+    # 使った URL を Google が読めなければ（その createImage が断られる）、運び直して 1 回だけ送り直す。ほかの失敗では運ばない
+    with tempfile.TemporaryDirectory() as t:
+        img = os.path.join(t, "x.png")
+        Path(img).write_bytes(b"png")
+        h, pid = hashlib.sha256(b"png").hexdigest()[:12], "x" * 10
+        oid = f"r1_0002i{h}"
+        live = [{"objectId": "old", "pageElements": [{"objectId": oid, "image": {"contentUrl": "https://deck/img", "sourceUrl": "https://sent/before"}}]}]
+        sent, carried, fails = [], [], []
+
+        def fake_batch(pid, reqs):
+            if fails:  # 断る要求の番号は、送った要求の中の位置（{kind} の最初のもの）
+                kind = fails.pop()
+                raise gapi.ApiError(f"400 Invalid requests[{next(i for i, r in enumerate(reqs) if kind in r)}].{kind}: There was a problem")
+            sent.append(reqs)
+        saved = {k: globals()[k] for k in ("request", "batch", "revision", "carry", "delete")}, gapi.guard, gapi.stamp, Path(placed_path(pid)).read_bytes() if os.path.exists(placed_path(pid)) else None
+        globals().update(request=lambda *a, **k: {**p, "slides": live}, batch=fake_batch, revision=lambda pid: "rev", delete=lambda fid: None,
+                         carry=lambda paths: carried.append(paths) or (["https://carried/img"] * len(paths), "tmp"))
+        gapi.guard = gapi.stamp = lambda *a: None
+        made = lambda: [v for r in sent[-1] for k, v in r.items() if k == "createImage"]
+        deck_of = lambda: make_deck(lambda d: d.image(d.page("画像"), img, X, 3, 1, 1), "t")
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                for record, url, src in (({oid: "https://sent/before"}, "https://deck/img", "https://sent/before"), ({}, "https://carried/img", "https://sent/before"),
+                                         ({oid: "https://sent/other"}, "https://carried/img", "https://sent/before"), ({}, "https://carried/img", None)):  # 最後は、画面で上げた画像（sourceUrl がない）
+                    write_placed(pid, record)
+                    live[0]["pageElements"][0]["image"] = {"contentUrl": "https://deck/img", **({"sourceUrl": src} if src else {})}
+                    sent.clear(), carried.clear()
+                    build(pid, deck_of(), force=True)
+                    new = made()
+                    assert [(c["url"], c["objectId"].endswith(f"i{h}")) for c in new] == [(url, True)] and len(carried) == (url != "https://deck/img"), (record, new, carried)
+                    assert read_placed(pid) == {new[0]["objectId"]: url}  # 入れた URL を足し、消したページ（old）の ID の記録は落とす
+                live[0]["pageElements"][0]["image"] = {"contentUrl": "https://deck/img", "sourceUrl": "https://sent/before"}
+                write_placed(pid, {oid: "https://sent/before"})
+                sent.clear(), carried.clear()
+                fails.append("createImage")
+                build(pid, deck_of())
+                assert [c["url"] for c in made()] == ["https://carried/img"] and len(carried) == 1
+                write_placed(pid, {oid: "https://sent/before"})
+                sent.clear(), carried.clear()
+                fails.append("createShape")
+                try:
+                    build(pid, deck_of())
+                    raise AssertionError("画像でない失敗で送り直した")
+                except gapi.ApiError:
+                    assert not carried
+                stamps, wp = [], globals()["write_placed"]  # 記録を書けなくても、組んだリビジョンは残す（次の build が画面での修正と取り違えない）
+                gapi.stamp = lambda *a: stamps.append(a)
+                globals()["write_placed"] = lambda *a: (_ for _ in ()).throw(OSError("read-only"))
+                try:
+                    build(pid, deck_of())
+                finally:
+                    globals()["write_placed"], gapi.stamp = wp, lambda *a: None
+                assert len(stamps) == 1
+        finally:
+            globals().update(saved[0])
+            gapi.guard, gapi.stamp = saved[1], saved[2]
+            if saved[3] is None:
+                Path(placed_path(pid)).unlink(missing_ok=True)
+            else:
+                Path(placed_path(pid)).write_bytes(saved[3])
+
     # build: 前に組んだページと同じハッシュのページは残し、変わったページだけを作って、古いページを消し、順をそろえる
     sent, live, notes, real = [], [], {}, {k: globals()[k] for k in ("request", "batch", "revision")}
     old_g, old_s = gapi.guard, gapi.stamp
@@ -6374,7 +6525,8 @@ def main():
     if a[0] == "new":
         need_theme(theme)
     src = template_id(theme or default_theme()) if a[0] == "new" else file_id(a[1])
-    p = request("GET", f"{SLIDES}/{src}?fields={DECK_FIELDS}")  # テーマの名前はデッキ（new ならテンプレート）の目印。複製は同じ代替テキストを持つ
+    guarded = ThreadPoolExecutor(1).submit(gapi.guard, src, lambda: revision(src), STAMP, GUARD_SRC) if a[0] == "build" and "--force" not in a else None  # 画面での修正とコメントの確認（読むだけ）を、テーマを読む GET と並べる
+    p = request("GET", f"{SLIDES}/{src}?fields={PLAN_FIELDS if a[0] == 'build' else DECK_FIELDS if a[0] == 'new' else f'slides(objectId),{DECK_FIELDS}'}")  # テーマの名前はデッキ（new ならテンプレート）の目印。複製は同じ代替テキストを持つ。build・plan は差分にも使う（plan は画像とノートを読まない）
     mark = deck_theme(p)
     if a[0] == "new":
         need_mark(theme or default_theme(), mark)
@@ -6394,9 +6546,9 @@ def main():
     gapi.CLOCK.lap("要求を作る")
     only = chosen(files, deck, mark) if files else None
     if a[0] == "plan":
-        return cmd_plan(src, deck, own, only)
+        return cmd_plan(src, deck, own, only, p)
     if a[0] == "build":
-        out = build(src, deck, "--force" in a, own, only)
+        out = build(src, deck, "--force" in a, own, only, p, guarded)
         if only is None:  # ページを選んだときは、前のまま残したページの形の外の書き方が数えられないので残さない（次に全体を組んだときに残す）
             spec_record(deck, src)
         return out

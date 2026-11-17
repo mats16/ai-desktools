@@ -22,7 +22,7 @@ from slides import STAMP, page_numbers, revision, slide_units
 from gapi import DRIVE, PPTX, SLIDES, batch, file_id, folder_id, request, run, slide_ids, thumbnail, trash
 
 SHEET = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sheet.py")  # 隣の sheet.py（このスキルが持ち主）
-THREADS = 6  # サムネイルを並べて取る数。12 枚で約 5 秒（2026-10-07 に測った。PDF に書き出して画像にするのと同じ）
+THREADS = 12  # サムネイルを並べて取る数。組み直したばかりの 26 枚で、6 本は 6.7 秒、9〜12 本は 5.0 秒、16 本は 5.8 秒（2026-11-17 に測った。多すぎると Google の返事が遅くなる）
 
 
 def save_thumb(pid, obj, out):
@@ -94,29 +94,55 @@ def cmd_check(src, *opts):
     前に組んだあとに画面で直されていたら（組んだときのリビジョンと今のリビジョンが違う）、全ページを取る。--all で全ページ、--pages 3,5 でそのページだけ。
     取ったページの番号・画像・そのページの lint と box_pad の指摘を changed.json に書く（親がページ担当の子に渡す。../SKILL.md の「Reading the results」）。"""
     pid = file_id(src)
-    p = request("GET", f"{SLIDES}/{pid}")
-    gapi.CLOCK.lap("GET")
     d = f"/tmp/slides_{pid[:8]}"
     os.makedirs(d, exist_ok=True)
-    json.dump(p, open(f"{d}/deck.json", "w", encoding="utf-8"), ensure_ascii=False)
-    open(f"{d}/deck.md", "w", encoding="utf-8").write(text_of(p))
-    print(f"{p['title']}（{len(p['slides'])} 枚）\n")
-    hard = lint.lint_slides(p, r := lint.Report(), "差し替え用" in p["title"], "--talk" in opts)
-    if not any(w in p["title"].lower() for w in ("tmp", "template", "作業用", "テンプレート")):  # 一時のデッキ・流用元の作業用の写し・テンプレートは、組み直して直すものでないので数えない
-        textlint.log_run(r, pid)  # 要確認の残り方を textlint.py --stats で数える（desk-dreaming/run.md の 5）
-    gapi.CLOCK.lap("lint")
-    ids = [s["objectId"] for s in p["slides"]]
     shots = f"{d}/shots.json"  # p-NN.webp ごとの、取ったときのページの objectId
     try:
         prev = json.load(open(shots))
     except (OSError, ValueError):  # ない、か書きかけで切れた（止まったときなど）。記録がないものとして全ページを取る
         prev = []
+    asks = "--all" not in opts and "--pages" not in opts and prev  # 前の画像を使えるかを、組んだリビジョンで確かめる回。デッキの GET と並べて読む
+    for f in glob.glob(f"{d}/pre-*.png"):  # 前の回が止まって残した、先に取った画像（同じデッキの別の check が消したものは飛ばす）
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(f)
+    ex, ahead = ThreadPoolExecutor(THREADS), {}
+    try:
+        built_pages = json.load(open(f"{d}/changed.json")) if asks else {}
+    except (OSError, ValueError):
+        built_pages = {}
+    if built_pages.get("by") == "build":  # build が作り直したページ（新しい ID）の画像は、デッキの GET を待たずに取り始める。使わなかったものは捨てる
+        ahead = {x["objectId"]: ex.submit(save_thumb, pid, x["objectId"], f"{d}/pre-{x['objectId']}.png") for x in built_pages.get("pages", []) if x.get("objectId")}
+    try:
+        return _check(pid, d, shots, prev, asks, ex, ahead, opts)
+    finally:
+        ex.shutdown(wait=True)
+        for f in glob.glob(f"{d}/pre-*.png"):
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(f)
+
+
+def _check(pid, d, shots, prev, asks, ex, ahead, opts):
+    """cmd_check の残り（ex は画像を取るスレッド、ahead は先に取り始めた画像。objectId → Future）。"""
+
+    def stamp_of():  # 組んだリビジョン。読めないときの例外は、今のリビジョンが読めたときだけ上げる（前は読めたときだけ読んでいた）
+        try:
+            return request("GET", f"{DRIVE}/files/{pid}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(STAMP)
+        except (gapi.ApiError, OSError) as e:  # OSError は回線のエラー（取り直しても通らなかった）
+            return e
+    p, now, stamped = gapi.parallel(lambda: request("GET", f"{SLIDES}/{pid}"), (lambda: built(pid)) if asks else lambda: None, stamp_of if asks else lambda: None)
+    if now is not None and isinstance(stamped, Exception):
+        raise stamped
+    gapi.CLOCK.lap("GET")
+    json.dump(p, open(f"{d}/deck.json", "w", encoding="utf-8"), ensure_ascii=False)
+    open(f"{d}/deck.md", "w", encoding="utf-8").write(text_of(p))
+    print(f"{p['title']}（{len(p['slides'])} 枚）\n")
+    ids = [s["objectId"] for s in p["slides"]]
     for f in glob.glob(f"{d}/p-*.png") + glob.glob(f"{d}/p-*.webp.tmp"):  # WebP にする前やその途中で止まった回の PNG と書きかけ、前のバージョンの PNG。使わない
         os.remove(f)
     old = glob.glob(f"{d}/p-*.webp")
-    moved, why = 0, None
+    moved, why, told = 0, None, ""
     if "--pages" in opts and len(old) != len(ids):  # ページが増えたり減ったりしたあとは、番号がずれるので全部を取り直す
-        print(f"ページの数が変わった（画像 {len(old)} 枚 → {len(ids)} 枚）ので、--pages を使わずに全ページを取り直す")
+        told = f"ページの数が変わった（画像 {len(old)} 枚 → {len(ids)} 枚）ので、--pages を使わずに全ページを取り直す\n"  # lint の出力のあとに出す（前と同じ順）
         opts, why = [o for o in opts if o != "--pages"], "ページの数が変わった"
     if os.path.exists(shots):  # 画像を動かす・取るあいだに止まっても、次の check が古い記録で別のページの画像を使わないように、先に消す
         os.remove(shots)
@@ -131,7 +157,7 @@ def cmd_check(src, *opts):
                 why = "--all"
             elif not prev:
                 why = "前に取った画像の記録がない"
-            elif (now := built(pid)) is None or now != request("GET", f"{DRIVE}/files/{pid}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(STAMP):
+            elif now is None or now != stamped:
                 why = "slides.py build で組んだリビジョンでない（画面で直されたか、ほかの道具で変えた）"
         if why:
             want = list(range(1, len(ids) + 1))
@@ -145,8 +171,21 @@ def cmd_check(src, *opts):
     for n in want:  # 取り直すページの前の画像（--pages では reuse_shots を通らないので残っている）。WebP にできなかったとき、古い画像を今の画像と取り違えない
         if os.path.exists(f := f"{d}/p-{n:02d}.webp"):
             os.remove(f)
-    with ThreadPoolExecutor(THREADS) as ex:
-        list(ex.map(lambda n: save_thumb(pid, ids[n - 1], f"{d}/p-{n:02d}.png"), want))
+    early = {n: ahead[ids[n - 1]] for n in want if ids[n - 1] in ahead}
+    taking = [ex.submit(save_thumb, pid, ids[n - 1], f"{d}/p-{n:02d}.png") for n in want if n not in early]
+    hard = lint.lint_slides(p, r := lint.Report(), "差し替え用" in p["title"], "--talk" in opts)  # 画像を取るあいだに lint をかける（画像は Google を待ち、lint は手元で数える）
+    if not any(w in p["title"].lower() for w in ("tmp", "template", "作業用", "テンプレート")):  # 一時のデッキ・流用元の作業用の写し・テンプレートは、組み直して直すものでないので数えない
+        textlint.log_run(r, pid)  # 要確認の残り方を textlint.py --stats で数える（desk-dreaming/run.md の 5）
+    print(told, end="")
+    gapi.CLOCK.lap("lint")
+    for n, a in early.items():
+        try:
+            a.result()
+            os.replace(f"{d}/pre-{ids[n - 1]}.png", f"{d}/p-{n:02d}.png")
+        except Exception:  # 先に取れなかった。もう一度取る（2 度目の失敗は上げる）
+            taking.append(ex.submit(save_thumb, pid, ids[n - 1], f"{d}/p-{n:02d}.png"))
+    for t in taking:
+        t.result()
     failed = []  # WebP にできず、画像のないページ
     if want:  # Slides API は PNG でしか返さない。同じ画素の WebP（PNG の 4 割ほど）にして、会話に積もるバイトを減らす（Pillow が要るので uv）
         try:
@@ -215,8 +254,9 @@ def cmd_wording(src):
     if os.path.basename(os.getcwd()) != "build":
         sys.exit("wording は資料の build/ で回す（資料のフォルダの wording.json の点検と比べる）")
     pid = file_id(src)
-    p = request("GET", f"{SLIDES}/{pid}")
-    rev, stamp = built(pid), request("GET", f"{DRIVE}/files/{pid}?supportsAllDrives=true&fields=appProperties").get("appProperties", {}).get(STAMP)
+    p, rev, props, pending = gapi.parallel(lambda: request("GET", f"{SLIDES}/{pid}"), lambda: built(pid),  # 読むだけの 4 つを並べる（組んでいない直しは slides.py plan を別に動かす）
+                                           lambda: request("GET", f"{DRIVE}/files/{pid}?supportsAllDrives=true&fields=appProperties"), lambda: unbuilt(src))
+    stamp = props.get("appProperties", {}).get(STAMP)
     problems = []
     if rev is None or rev != stamp:
         problems.append("slides.py build で組んだリビジョンでない（画面で直されたか、ほかの道具で変えた）。直しをページの JSON に写し、slides.py wording で点検してから組み直す")
@@ -228,7 +268,7 @@ def cmd_wording(src):
     if miss := [n for n, o in enumerate(ids, 1) if n > len(shots) or shots[n - 1] != o]:
         problems.append(f"組んだあとの画像を取っていないページ: {', '.join(f'p{n}' for n in miss[:12])}{' ほか' if len(miss) > 12 else ''}"
                         f"（gslides.py check {src} で取り、直したページの画像を見てから回す）")
-    problems += unbuilt(src)
+    problems += pending
     if not wording.verify(os.path.dirname(os.getcwd()), f"https://docs.google.com/presentation/d/{pid}/edit", rev, slide_units(p), problems, "slides.py wording"):
         sys.exit(1)
 
@@ -338,6 +378,13 @@ def check_selftest():
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             cmd_check(pid)
             assert [page(n) for n in (1, 2, 3)] == ["a", "b", "c"]
+            deck["ids"] = ["a", "y", "c"]  # build が作り直したページ（changed.json）は先に取る。デッキにないページ（z）の先取りは捨てる
+            write_json(f"{d}/changed.json", {"by": "build", "pages": [{"page": 2, "objectId": "y"}, {"page": 3, "objectId": "z"}]})
+            cmd_check(pid)
+            assert [page(n) for n in (1, 2, 3)] == ["a", "y", "c"] and [x["page"] for x in json.load(open(f"{d}/changed.json"))["pages"]] == [2]
+            assert not glob.glob(f"{d}/pre-*")
+            deck["ids"] = ["a", "b", "c"]
+            cmd_check(pid)
             deck["ids"], fail = ["c", "x", "a"], {"x"}  # 並べ替えて 1 枚足し、その画像を取るところで止まる
             try:
                 cmd_check(pid)
