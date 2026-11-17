@@ -12,7 +12,7 @@ usage: wording.py <資料のフォルダ>                            今の点�
 直したあとは、前に通した文（base）と今の文を比べ、守る語（数・URL・コード・英字の語・かぎかっこの中・否定・語と助詞の組）の崩れと、yomiyasu_diff の
 意味の変わる恐れを出す。恐れが残るうちは base を進めない（2 度目に直したときに 1 度目の崩れが見えなくならないように）。
 点検（last）と照合（saved）は別の事実: 点検が済みでも、組んで保存した資料の文が点検した文と同じで、組んだあとの画像を見るまでは、照合は済みにならない。"""
-import argparse, collections, contextlib, difflib, functools, hashlib, importlib.util, io, json, os, re, sys, time, unicodedata
+import argparse, collections, contextlib, difflib, functools, hashlib, importlib.util, io, json, os, re, shlex, sys, time, unicodedata
 
 sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -317,7 +317,8 @@ def show(st, tool="wording", folder=None):
         print("点検: 済み" + (f"（聞く {s['聞く']} 件は、渡すときの問いの一覧に入れる）" if s["聞く"] else "") + f"。{last.get('source') or '?'} を点検した")
     else:
         # 写せばそのまま通る形で出す（フォルダは絶対パス、ID は並べたまま）。変数で渡すと、シェルによって ID が 1 つの引数にまとまる（2026-11-17）
-        w, f = f"python3 {os.path.abspath(__file__)}", os.path.abspath(folder) if folder is not None else "<資料のフォルダ>"
+        w = shlex.join(["python3", os.path.abspath(__file__)])
+        f = shlex.quote(os.path.abspath(folder)) if folder is not None else "<資料のフォルダ>"
         ids = " ".join(r["id"] for r in open_r) if open_r else "<R…>"
         print(f"点検: 未完。ページの JSON（ドキュメントは doc.md）を直して {tool} をもう一度回す。直さないものは "
               f"{w} keep・ask {f} <ID> … --why …、変えてよい恐れは {w} ok {f} {ids} --why … で閉じる（ID はいくつでも並べられる）")
@@ -499,6 +500,12 @@ def selftest():
         run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 100 円"), {})
         (r,) = load(d)["last"]["risks"]
         assert r["kind"] == "数" and load(d)["summary"]["状態"] == "未完"
+        from unittest.mock import patch
+        script, folder = os.path.join(d, "plugin '1'", "wording.py"), os.path.join(d, "資料 '1'")
+        with patch.dict(globals(), {"__file__": script}), contextlib.redirect_stdout(io.StringIO()) as hint_out:
+            show(load(d), folder=folder)
+        cmd = hint_out.getvalue().split("変えてよい恐れは ", 1)[1].split(" で閉じる", 1)[0]
+        assert shlex.split(cmd) == ["python3", script, "ok", folder, r["id"], "--why", "…"]  # 写した命令は空白・引用符を含むパスも 1 引数として保つ
         decide(d, "ok", [r["id"]], "出典の表 F3 の値に合わせた")
         assert load(d)["summary"]["状態"] == "済み"
         run(d, "slides", page("4 つの構成を比べる", "顧客は「前の版の比べ」と言った", "検証は不要ではない", "前の版の手順へ戻す", "価格は月 100 円"), {})

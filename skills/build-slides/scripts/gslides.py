@@ -278,6 +278,7 @@ def cmd_pages(src):
     for n, s in enumerate(p["slides"], 1):
         t = "".join(r.get("textRun", {}).get("content", "") for e in s.get("pageElements", [])
                     for r in e.get("shape", {}).get("text", {}).get("textElements", []))
+        t = re.sub(r"(?<=[!-~])\v(?=[!-~])", " ", t).replace("\v", "")  # slides.py が文節の切れ目に入れる改行で、和文に空白を出さない（notes.ptext と同じ）
         print(f"p{n}\t{s['objectId']}\t{' '.join(t.split())[:60]}")
 
 

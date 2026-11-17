@@ -15,7 +15,7 @@ from notes import flatten, mag, note_text, paras, ptext  # noqa: E402  要素の
 from brand import CLASSIFICATION, COPYRIGHT_FOOTER  # noqa: E402
 from textlint import (FEED, FEED_LINK, HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, contrast, facts_hit,  # noqa: E402
                       load_facts, lum, not_in_facts, workspace_checks)  # load_facts・lum・JA は slides.py・template.py が lint から引く
-from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMPH_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_KICK, Y_LEAD, deck_card, deck_copyright, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
+from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMPH_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, NO_HEAD, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_KICK, Y_LEAD, deck_card, deck_copyright, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
 
 MIN_PT = 11  # [slides-lint-001] スライドの文字の下限（slides-visual-002、deck-design）。下回ると要確認（詰まった図の説明など、ページによっては小さくてよい）。社内資料の差し替え用（名前に「差し替え用」）は元の大きさのままなので見ない
 FIG_MIN_PT = MIN_PT - 2  # [slides-lint-022] 塗りのある図形の中の文字（ガントのバー、図のラベル）は本文から 2pt 下まで（slides-visual-037）。表のセル、塗りのない文字、別の図形の塗りに重ねた文字（カードの本文、背景の四角の上の出典）は MIN_PT のまま
@@ -47,7 +47,7 @@ EMPTY_HOLE = "本文の中ほどが空いている"  # [slides-lint-005] 要素�
 PAD_NG = "塗りの箱の端と文字の間が 1 字分より狭い"  # slides-visual-027（deck-design）
 NUM_NO_UNIT = "大きな数字に単位がない"  # [slides-lint-006] slides-visual-015（deck-design）。数字だけの段落は何の数か分からない
 PHRASE_BREAK = "自動の折り返しが文節の途中に入る見込み"  # [slides-lint-024] slides-visual-013（deck-design）。Google Slides は和文を 1 字ずつ折り返す。レビューで直した改行でいちばん多かった
-NO_HEAD = "、。，．）」』】〕・ー!?！？：；ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ々"  # 行頭に来ない字。Google は前の字ごと次の行へ送る（wrap_breaks）
+# 2026-11-17 から slides.py が組むときに文節の切れ目で改行する（slides-component-027）ので、残るのは「・」「、」も空白もない 1 行より長い文節、等幅の文字、BudouX なしで組んだ資料と前に組んだ資料
 NO_TAIL = "（「『【〔［｛〈《“‘(["  # 行末に来ない字。Google は次の行へ送る
 TIGHT = 0.1  # 字の幅の 1 割より小さくはみ出す字は、Google が前の行に入れることが多い（2026-11-17、<br> を外した 16 本の PDF: はみ出しが 1 pt 未満の 11pt の和文の字は 15 字中 13 字が前の行に入った）
 LAST_SHORT = "自動の折り返しの最終行が 1〜2 字の見込み"  # slides-component-013（slides.py）・slides-visual-013（deck-design）。組むときの警告（fit の枠だけ）と同じ決まりで、表のセルと fit でない枠も見て、直す位置まで出す

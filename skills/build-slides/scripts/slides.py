@@ -39,7 +39,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True  # build/ と scripts/ に __pycache__ を残さない
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import brand, gapi
+import brand, gapi, textlint
 from gapi import (DRIVE, GSLIDES, PPTX, SLIDES, batch, carry, delete, config, config_path, file_id, folder_id, png, request, run, slide_ids, thumbnail,
                   trash, u16, upload)
 from textlint import contrast  # 番号の数字の色を塗りから決める（Deck.num）
@@ -154,44 +154,168 @@ def all_bold(parts, bold=False):
     return all(vis) if vis else bold
 
 
-def wrap_lines(s, avail, size, mono=False, bold=False):
-    """1 段落を幅 avail（in）で折り返したときの (行数, 最終行の幅 em) の見込み。和文は 1 字ずつ、英数字の語はまとめて次の行へ送る。
+TOKEN = re.compile(r"[!-~]+| +|[\n\v]|.")  # Google の折り返しの単位: 英数字の語、空白の並び、改行、ほかは 1 字
+
+
+def flow(t, ws, avail, cur=0.0, forced=(), a0=0, b0=None):
+    """t[a0:b0] を、幅 cur まで埋まった行から幅 avail に流したときの (増えた行の数, 最終行の幅)。ws は字ごとの幅（avail と同じ単位）。
+    Google の送り方: 和文は 1 字ずつ、英数字の語はまとめて次の行へ送り、1 行より長い語は字で折る。\\n・\\v と forced の位置（組む側が \\v を入れる位置）で行を改める。
     ponytail: 行頭の句読点を前の行に戻す禁則は見ない"""
-    n, cur, cap = 1, 0.0, max(avail, 0.05) * 72 / size
-    for word in re.findall(r"[!-~]+| +|.", s):
-        for t in (word if em_width(word, mono, bold) > cap else [word]):  # 1 行より長い語（長い識別子・URL）は、字で折る
-            tw = em_width(t, mono, bold)
-            if cur + tw > cap + 1e-9 and cur > 0:
-                n, cur = n + 1, (0.0 if t.isspace() else tw)
-            else:
-                cur += tw
-    return n, cur
-
-
-def run_lines(runs, avail, mono=False):
-    """runs（(文字, pt, 太字) の並び）の 1 段落を幅 avail（in）で折り返した行数の見込み。wrap_lines と同じ送り方（英数字の語はまとめて次の行へ、
-    1 行より長い語は字で折る）を、文字ごとの大きさと太さで見る（lint の wrap_breaks と同じ）。\n で改行する。"""
-    t = "".join(c for c, *_ in runs)
-    ws = [em_width(ch, mono, b) * sz / 72 for c, sz, b in runs for ch in c]
-    n, cur = 1, 0.0
-    for m in re.finditer(r"[!-~]+| +|\n|.", t):
-        if m.group() == "\n":
-            n, cur = n + 1, 0.0
-            continue
+    n = 0
+    for m in TOKEN.finditer(t, a0, len(t) if b0 is None else b0):
         a, z = m.span()
-        for k, e in ([(k, k + 1) for k in range(a, z)] if sum(ws[a:z]) > avail + 1e-9 else [(a, z)]):
+        if t[a] in "\n\v" or a in forced:
+            n, cur = n + 1, 0.0
+            if t[a] in "\n\v":
+                continue
+        for k, e in ([(k, k + 1) for k in range(a, z)] if sum(ws[a:z]) > avail + 1e-9 else [(a, z)]):  # 1 行より長い語（長い識別子・URL）は、字で折る
             w = sum(ws[k:e])
             if cur + w > avail + 1e-9 and cur > 0:
                 n, cur = n + 1, (0.0 if t[k].isspace() else w)
             else:
                 cur += w
-    return n
+    return n, cur
+
+
+NO_HEAD = "、。，．）」』】〕・ー!?！？：；ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ々"  # 行頭に来ない字（禁則で前の行に戻る。lint の文節の点検も使う）
+SHORT_NOUN = 2  # 「の」のあとに、この字数以下のかなか漢字で終わる語（「間」「数」「周で」「うち」）が続けば、そこでは切らない（外の物差しのレビューが「周の／間」「依頼の／数」「前の／周で」を直すと数えた）
+OPEN_BRACKET = "（「『【〔［〈《"  # 前で改行しない字（行頭に来ると半字下がって見え、左端がそろわない。slides-visual-013、deck-design）
+JA_CHAR = re.compile(f"[{textlint.JA}]")
+SHORT_AFTER_NO = re.compile(f"[{textlint.JA}]{{1,{SHORT_NOUN}}}(?![{textlint.JA}])")
+PHRASES = {}  # 段落の文字 → 文節の切れ目（BudouX）の位置の集合。phrase_prefetch が組む前に埋める。None は分けられなかった段落
+COLLECT = None  # phrase_prefetch が 1 回目に make を走らせるあいだ、文節を問い合わせる段落を集める集合
+SEGMENT = None  # 文節に分ける関数（文字列の並び → {文字列: 切れ目の集合} か None）。None なら lint.segment（selftest が差し替える）
+
+
+def phrase_cuts(t):
+    """行 t（手の改行のない 1 行）の文節の切れ目。組む前に phrase_prefetch が分けた行だけ（ほかは None で、Google の折り返しに任せる）。和文のない行は None。"""
+    if "\v" in t or "\n" in t or not JA_CHAR.search(t):
+        return None
+    if COLLECT is not None:
+        COLLECT.add(t)
+        return None
+    return PHRASES.get(t)
+
+
+def auto_breaks(t, ws, avail, cuts):
+    """段落 t を幅 avail（in）に置くとき、組む側が \\v を入れる位置（次の行の先頭の字の位置）の並び。ws は字ごとの幅（in）、cuts は文節の切れ目。
+    slides-component-027（../pages.md）。Google Slides は和文を 1 字ずつ折り返し、自動の折り返しの半分が文節の途中に入った（slides-visual-013、deck-design）。そこで文節の切れ目で行を決める。
+    1 行に収まる見込みの段落は入れない（幅を文字に合わせた札を割らない）。折り返す段落は、1 行を半字分狭く詰める（<br> を外して組んだ 6 本で、Google の行の幅は見積もりより最大 0.27 字狭く、広い外れはなかった。
+    見積もりより早く折れた残りは禁則の追い出し。外れると Google がもう 1 度折るので、少しだけ余裕を取る）。
+    切らない位置: 行頭に来ない字・開き括弧の前、数字のあと（「10 倍」）、英数字の語の中、「・」のあと（「組む・確かめる」）、「この・その・あの・どの」のあと
+    （次の語にかかる。BudouX はここで切るが、外の物差しのレビューが「その／組み直し」を文節の途中と数えた）、「の」のあとの 2 字以下の語の前（「周の／間」「前の／周で」。行が増えるなら切る）。
+    1 行より長い文節は、中の「・」「、」のあと、なければ空白のあと（数字のあとを除く）で切り、それでも長い分は Google に任せる。最終行が 2 字以下になるなら、前の行から文節を送る。"""
+    if sum(ws) <= avail + 1e-9:
+        return []
+    cap = avail - max((w for c, w in zip(t, ws) if JA_CHAR.match(c) or "　" <= c <= "〿" or "＀" <= c <= "｠"), default=0) / 2  # 半字分の余裕（いちばん大きい和文の字）
+    def pick(keep_no):
+        ok, cs = set(), sorted(set(cuts) | {k + 1 for k, c in enumerate(t) if c == "／"})  # 「／」で並べた語の切れ目（BudouX は「中央値／周の」とつなぐ）
+        for i, k in enumerate(cs):
+            while k < len(t) and t[k] == " ":  # 空白の前で切れたら、空白の後ろで改行する（行末の空白は見えない）
+                k += 1
+            nxt = next((c for c in cs[i + 1:] if c > k), len(t))
+            if 0 < k < len(t) and t[k] not in NO_HEAD + OPEN_BRACKET and t[k - 1] not in OPEN_BRACKET and not ("!" <= t[k - 1] <= "~" and "!" <= t[k] <= "~") \
+                    and not t[:k].rstrip()[-1:].isdigit() and t[k - 1] != "・" and not (t[max(k - 2, 0):k] in ("この", "その", "あの", "どの") and not JA_CHAR.match(t[k - 3:k - 2] or " ")) \
+                    and not (keep_no and t[k - 1] == "の" and SHORT_AFTER_NO.match(t, k, nxt)):  # 「周の／間」「依頼の／数」「75 回の／うち 12 回」: 「の」のあとの短い語は前の語から離さない
+                ok.add(k)
+        bounds = [0, *sorted(ok), len(t)]
+        for a, b in zip(bounds[:-1], bounds[1:]):  # 1 行より長い文節は、中の「・」「、」のあと、なければ空白で切る（Google に任せると「2 周目／5.5」「スライド 1／本」と数を割った）
+            mid = [k for k in range(a + 1, b) if t[k] not in NO_HEAD + OPEN_BRACKET + " "]
+            if sum(ws[a:a + len(t[a:b].rstrip())]) > cap:
+                ok |= set([k for k in mid if t[k - 1] in "・、"] or [k for k in mid if t[k - 1] == " " and not t[:k].rstrip()[-1:].isdigit()])
+        bounds = [0, *sorted(ok), len(t)]
+        starts, cur, wrapped = [], 0.0, -1  # wrapped: Google が中で折る、1 行より長い文節の始まり
+        for a, b in zip(bounds, bounds[1:]):
+            w, fit = sum(ws[a:b]), sum(ws[a:a + len(t[a:b].rstrip())])  # 行末の空白は幅に数えない
+            if fit > cap:
+                cur, wrapped = flow(t, ws, avail, cur, (), a, b)[1], a
+            elif cur > 0 and cur + fit > cap:
+                starts.append(a)
+                cur = w
+            else:
+                cur += w
+        if starts and wrapped < starts[-1] and len(t[starts[-1]:].strip()) <= 2:  # 最終行が 1〜2 字（レビューの指摘で 38 件）: 前の行の最後の文節を送る
+            tail = len(t.rstrip())
+            c = max((k for k in ok if (starts[-2] if len(starts) > 1 else 0) < k < starts[-1]), default=None)
+            if c is not None and sum(ws[c:tail]) <= cap:
+                starts[-1] = c
+        return starts
+    soft, hard = pick(True), pick(False)  # 「の」のあとの短い語を離さないのは、行が増えないときだけ（増えると「毎朝の／アップデートの段を／重ねる」と短い行が出た）
+    return soft if flow(t, ws, avail, forced=set(soft))[0] <= flow(t, ws, avail, forced=set(hard))[0] else hard
+
+
+def line_breaks(t, ws, avail):
+    """t を手の改行（\\n・\\v。JSON の <br>）で分けた行ごとに、組む側が \\v を入れる位置（auto_breaks。t の中の位置）。手の改行はそのまま残す
+    （<br> を文の終わりに書いた段落で、続く長い行を Google が「自動／62 回」と 1 字ずつ折った。2026-11-17 の通しの計測）。"""
+    at, i = [], 0
+    for q in re.split(r"[\n\v]", t):
+        if cuts := phrase_cuts(q):
+            at += [i + k for k in auto_breaks(q, ws[i:i + len(q)], avail, cuts)]
+        i += len(q) + 1
+    return at
+
+
+def wrap_lines(s, avail, size, mono=False, bold=False, auto=True):
+    """1 段落を幅 avail（in）で折り返したときの (行数, 最終行の幅 em) の見込み。和文は 1 字ずつ、英数字の語はまとめて次の行へ送る（flow）。
+    auto なら、組む側が文節の切れ目に入れる改行（auto_breaks）も数える。mono（コード）には入れない。"""
+    ws = [em_width(c, mono, bold) * size / 72 for c in s]
+    n, cur = flow(s, ws, max(avail, 0.05), forced=set(line_breaks(s, ws, avail)) if auto and not mono else ())
+    return n + 1, cur * 72 / size
+
+
+def run_lines(runs, avail, mono=False):
+    """runs（(文字, pt, 太字) の並び）の 1 段落を幅 avail（in）で折り返した行数の見込み。wrap_lines と同じ送り方（flow）を、文字ごとの大きさと太さで見る
+    （lint の wrap_breaks と同じ）。\\n・\\v で改行し、組む側が文節の切れ目に入れる改行も数える。"""
+    t = "".join(c for c, *_ in runs)
+    ws = [em_width(ch, mono, b) * sz / 72 for c, sz, b in runs for ch in c]
+    return flow(t, ws, avail, forced=set() if mono else set(line_breaks(t, ws, avail)))[0] + 1
 
 
 def est_lines(s, avail, size, mono=False, bold=False):
-    """幅 avail（in。文字の枠の内側）に size pt で置いたときの行数の見込み。\n と \v で改行する。英数字の語は行をまたがない
-    （1 字ずつ詰めて数えると、英語の多いカードで 1 行少なく見込み、h を省いたカードから文字がはみ出した。2026-10-13）。"""
-    return sum(wrap_lines(p, avail, size, mono, bold)[0] for p in re.split(r"[\n\v]", s))
+    """幅 avail（in。文字の枠の内側）に size pt で置いたときの行数の見込み。\\n と \\v で改行する。英数字の語は行をまたがない
+    （1 字ずつ詰めて数えると、英語の多いカードで 1 行少なく見込み、h を省いたカードから文字がはみ出した。2026-10-13）。文節の改行も数える。"""
+    return sum(wrap_lines(q, avail, size, mono, bold)[0] for p in s.split("\n") for q in p.split("\v"))
+
+
+def phrase_parts(parts, avail, size=11, bold=False, mono=False):
+    """parts（Deck.text の文字）の段落ごとに、文節の切れ目の改行（auto_breaks の \\v）を入れた parts。見込み（wrap_lines・run_lines）と同じ位置に入れる。"""
+    if mono:
+        return parts
+    runs = [(p, size, bold) if isinstance(p, str) else (p[0], p[1].get("size", size), p[1].get("bold", bold)) for p in ([parts] if isinstance(parts, str) else parts)]
+    full = "".join(c for c, *_ in runs)
+    at = line_breaks(full, [em_width(ch, False, b) * sz / 72 for c, sz, b in runs for ch in c], avail)
+    if not at:
+        return parts
+    out, i = [], 0
+    for p in [parts] if isinstance(parts, str) else parts:
+        s, st = (p, None) if isinstance(p, str) else p
+        ks = [k - i for k in at if i <= k < i + len(s)]
+        s2 = "".join("\v" * (j in ks) + c for j, c in enumerate(s))
+        out.append(s2 if st is None else (s2, st))
+        i += len(s)
+    return out[0] if isinstance(parts, str) else out
+
+
+def phrase_prefetch(make, name="dry"):
+    """組む前に、make を 1 回だけ改行を入れずに走らせて段落を集め、まだ分けていない段落を BudouX にまとめて 1 回で分ける（lint.segment。キャッシュは lint と同じ）。
+    見込みと組む要求は、ここで分けた段落にだけ文節の改行を入れる。uv か BudouX が使えなければ、改行を入れずに組み、そう出す。"""
+    global COLLECT
+    COLLECT = set()
+    try:
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            make(Deck(name))
+    except (Exception, SystemExit):  # 止まる資料は、2 回目の make がそのまま止まる
+        pass
+    finally:
+        texts, COLLECT = COLLECT, None
+    if new := sorted(t for t in texts if t not in PHRASES):
+        if SEGMENT is None:
+            sys.modules.setdefault("slides", sys.modules[__name__])  # lint の「from slides import …」に、このモジュールをそのまま渡す
+            import lint
+        got = (SEGMENT or lint.segment)(new)
+        if got is None:
+            print("（uv か BudouX が使えないので、文節の切れ目で改行せずに組む。Google が 1 字ずつ折り返す）", file=sys.stderr)
+        PHRASES.update({t: (got or {}).get(t) for t in new})
 
 
 def mono_reqs(oid, s, cell=None):
@@ -675,6 +799,8 @@ class Deck:
                     self.warn(f"折り返した最終行が 2 字以下の見込み「{ln}」（{n} 行。言い換えか \\v で行を決める）")
         if spacing is None:
             spacing = 125 if est_lines(full.strip("\n"), avail, size, mono, all_bold(parts, bold)) > 1 else 100
+        parts = phrase_parts(parts, avail, size, bold, mono)  # 文節の切れ目の改行（見込みの行数と同じ位置）
+        full = spec_plain(parts)
         if ring and kind != "ELLIPSE":  # 角丸は box が背景を組む。負の inner で文字の枠を背景より広げる
             e = self.box(sid, *ring, fill, line, kind, radius, -(w - ring[2]) / 2, dash, weight)
         elif ring:
@@ -871,7 +997,9 @@ class Deck:
             if not s:
                 continue
             loc, color = {"rowIndex": r, "columnIndex": c}, d.get("color") or (WHITE if head else HEAD if first else TEXT)
-            spacing = 120 if est_lines(s, avail, size, bold=head or first) > 1 else 100
+            spacing = 120 if est_lines(s, avail, size, mono, head or first) > 1 else 100
+            parts = phrase_parts(parts, avail, size, head or first, mono)  # 文節の切れ目の改行（table_h の見込みと同じ位置）
+            s = spec_plain(parts)
             self.reqs += [{"insertText": {"objectId": t, "cellLocation": loc, "insertionIndex": 0, "text": s}},
                           {"updateTextStyle": {"objectId": t, "cellLocation": loc, "textRange": {"type": "ALL"},
                                                "style": {"fontFamily": FONT, "fontSize": pt(size), "bold": head or first, "foregroundColor": {"opaqueColor": paint(color)}},
@@ -1024,6 +1152,7 @@ class Deck:
 
 
 def make_deck(make, name):
+    phrase_prefetch(make, name)
     d = Deck(name)
     make(d)
     d.finish()
@@ -1414,7 +1543,7 @@ def spec_text_h(parts, avail, size, spacing=None, gap=0, mono=False, bold=False)
         for k, piece in enumerate(t.split("\n")):
             if k:
                 paras.append([])
-            paras[-1].append((piece.replace("\v", "\n"), sz, b))
+            paras[-1].append((piece, sz, b))
     full = "\n".join("".join(t for t, *_ in q) for q in paras)
     sp = spacing or (125 if est_lines(full.strip("\n"), avail, size, mono, all_bold(parts, bold)) > 1 else 100)  # Deck.text と同じ見方
     h = 0
@@ -4087,8 +4216,9 @@ def dry(path="pages.py", url=None, show=False):
     if Path(path).parent != Path("."):  # 今いるフォルダから読むので、別のフォルダのファイルを黙って取り違えない
         sys.exit(f"dry はファイルのあるフォルダ（build/）で、名前だけを渡して回す: {path}")
     deck_context(path, url)
-    d = Deck("dry")
-    load_make(path).make(d)
+    d, make = Deck("dry"), load_make(path).make
+    phrase_prefetch(make)
+    make(d)
     if show:  # slides.py resolve: JSON のページの解いた形
         print(json.dumps(d.resolved, ensure_ascii=False, indent=1))
     print(json.dumps({"file": path, "slides": len(d.slides), "warnings": len(d.warnings)}, ensure_ascii=False), file=sys.stderr if show else sys.stdout)
@@ -4137,6 +4267,7 @@ def lint_local(path="pages.py", url=None, talk=False, pages=None):
     _, _, p = deck_context(path, url)
     m = load_make(path)
     with contextlib.redirect_stderr(io.StringIO()) as err:  # 組むときの警告は、見るページのものだけを出す
+        phrase_prefetch(m.make)
         deck = Deck(getattr(m, "NAME", "dry"))
         m.make(deck)
         if path not in ("pages.py", "deck.json"):  # 子のファイルと JSON のページの、ページへのリンクは、全体の番号を指すので、親が組むときに確かめる（dry と同じ）
@@ -4420,6 +4551,8 @@ def merge(pages, fixes):
 
 
 def selftest():
+    global SEGMENT
+    SEGMENT = lambda ts: {t: set() for t in ts}  # 文節の改行は selftest_phrase だけで見る（ほかの組み方の確かめは、uv を呼ばず、改行を入れない）
     assert gapi.find_config.cache_info().currsize == 0  # import で [brand] を読んでも、gapi の覚えた結果を作らない（あとで今いるフォルダを変える desk-init の doctor.py のため）
     assert paint(NAVY) == {"themeColor": "DARK1"} and paint("FFFFFF") == {"rgbColor": {"red": 1.0, "green": 1.0, "blue": 1.0}}
     assert u16("𝄞あ") == 3  # サロゲートペアは 2
@@ -4958,6 +5091,7 @@ def selftest():
     selftest_sample()
     selftest_wording()
     selftest_patch()
+    selftest_phrase()
     print("selftest ok")
 
 
@@ -5056,6 +5190,69 @@ def selftest_patch():
     finally:
         os.chdir(cwd)
         globals()["request"] = real
+
+
+def selftest_phrase():
+    """slides-component-027（pages.md）の文節の切れ目の改行: 切る位置（auto_breaks）、見込みと組む要求で同じ位置（phrase_parts・est_lines・spec_text_h）、組む前にまとめて分ける（phrase_prefetch）。
+    BudouX の代わりに、決まった切れ目を PHRASES と SEGMENT で渡す。"""
+    global SEGMENT
+    one, ws = 12 / 72, lambda t: [em_width(c) * 12 / 72 for c in t]  # 12pt の全角 1 字（in）
+    t = "データを見て判断する仕組みを作る"  # データを|見て|判断する|仕組みを|作る
+    cuts = {4, 6, 10, 14, 16}
+    assert auto_breaks(t, ws(t), 16 * one, cuts) == []  # 1 行に収まる見込みなら入れない（幅を文字に合わせた札を割らない）
+    assert auto_breaks(t, ws(t), 12 * one, cuts) == [10]  # 1 行を半字分狭く（11.5 字まで）詰める
+    assert auto_breaks(t, ws(t), 10 * one, cuts) == [6, 10]  # 詰めると最終行が「作る」の 2 字になるので、前の行から「仕組みを」を送る
+    assert auto_breaks("仕組みを作る（案）を見る", ws("仕組みを作る（案）を見る"), 7 * one, {4, 6, 9, 12}) == [4, 9]  # 開き括弧の前（6）では切らない
+    assert auto_breaks("合計は 10 倍になる", ws("合計は 10 倍になる"), 6 * one, {3, 7, 9}) == [4]  # 数字のあと（7）では切らない。空白の前の切れ目（3）は空白の後ろ（4）
+    assert auto_breaks("あいう Databricks です", ws("あいう Databricks です"), 6 * one, {3, 8, 15}) == [4, 15]  # 英数字の語の中（8）では切らない
+    assert auto_breaks("ああ。いいいいいいいいいいいい", ws("ああ。いいいいいいいいいいいい"), 6 * one, {2, 3}) == []  # 行頭に来ない字の前（2）では切らない。1 行より長い文節は前で切らずに Google に任せる
+    assert auto_breaks("組む・確かめる仕組み", ws("組む・確かめる仕組み"), 8 * one, {3, 7}) == [7]  # 「・」のあと（3）では切らない
+    assert auto_breaks("件が減り、その組み直しも減る", ws("件が減り、その組み直しも減る"), 10 * one, {5, 7, 12}) == [5]  # 「その」のあと（7）では切らない
+    lp = "最初に渡すまでの稼働／渡したあとの依頼の数（速くして依頼が増えていないか）"
+    assert auto_breaks(lp, ws(lp), 24 * one, {3, 8, 11, 14, 17, 20, 21, 26, 29}) == [17]  # 「依頼の／数」（20）: 「の」のあとの短い語は前から離さない
+    assert auto_breaks("渡したあとの依頼の数（案）を見る", ws("渡したあとの依頼の数（案）を見る"), 10 * one, {3, 6, 9, 10, 13, 15}) == [9]  # 離すと 3 行になるなら、切る
+    assert auto_breaks("周の間と依頼の数を見る", ws("周の間と依頼の数を見る"), 6 * one, {2, 3, 4, 7, 8, 9}) == [4, 8]  # 「周の／間」（2）も「依頼の／数」（7）も切らない
+    assert auto_breaks("中央値／周の間／二周目以降の数", ws("中央値／周の間／二周目以降の数"), 8 * one, {4, 6, 8, 14}) == [4, 8]  # 「間／」は約物を数えず 1 字（6 で切らない）
+    lp = "deck-review の 1 本の中央値／周の間／2 周目以降の「直す」"
+    assert auto_breaks(lp, ws(lp), 24 * one, {14, 20, 26, 34, 39}) == [26]  # 「／」のあとでも切る（BudouX は「中央値／周の」とつなぐ）。「周の／間」（24）では切らない
+    lp = "2,700 万字／75〜95 分／75 回のうち 12 回／38 回"
+    assert auto_breaks(lp, ws(lp), 14 * one, {22}) == [17]  # 「75 回の／うち 12 回」（22）: 「うち」は 2 字で、そのあとが和文でないので短い語
+    lp = "約 5 分（中央値 1 周目 4.4・2 周目 5.5・3 周目 4.9 分）"
+    assert auto_breaks(lp, ws(lp), 14 * one, {4}) == [19]  # 1 行より長い文節は「・」のあとで切る（Google は「2 周目／5.5」と数の前で折った）
+    assert auto_breaks("スライド 1 本の時間", ws("スライド 1 本の時間"), 6 * one, {8}) == [5]  # 「・」「、」がなければ空白のあと。数字のあとの空白（7）では切らない
+    PHRASES.clear()
+    PHRASES[t] = cuts
+    try:
+        parts = [("データを", {"bold": True}), "見て判断する仕組みを作る"]
+        got = phrase_parts(parts, 10 * one, 12)
+        assert spec_plain(got) == "データを見て\v判断する\v仕組みを作る" and got[0] == ("データを", {"bold": True})  # run の書式はそのまま
+        assert phrase_parts(t, 10 * one, 12) == "データを見て\v判断する\v仕組みを作る" and phrase_parts(t, 10 * one, 12, mono=True) == t  # コードには入れない
+        assert phrase_parts("前\n" + t, 10 * one, 12) == "前\n" + "データを見て\v判断する\v仕組みを作る"  # 段落ごと
+        assert phrase_parts("前。\v" + t, 10 * one, 12) == "前。\v" + "データを見て\v判断する\v仕組みを作る" and est_lines("前。\v" + t, 10 * one, 12) == 4  # 手の改行は残し、その中の行も文節で改行する
+        assert est_lines(t, 10 * one, 12) == 3 == est_lines(spec_plain(got), 10 * one, 12) and wrap_lines(t, 10 * one, 12, auto=False)[0] == 2  # 見込みは入れたあとの行数（1 字ずつなら 2 行）
+        h = spec_text_h(parts, 10 * one, 12)
+        assert h == spec_text_h(got, 10 * one, 12)  # 太さの交ざる段落（run_lines）も、入れたあとと同じ行数
+        assert phrase_cuts("abc") is None and phrase_cuts("未知の段落") is None
+        PHRASES.clear()
+        assert spec_text_h(parts, 10 * one, 12) < h  # 分けていない段落は Google の折り返しのまま（2 行）
+        calls = []
+        SEGMENT = lambda ts: calls.append(list(ts)) or {x: cuts if x == t else set() for x in ts}
+        make = lambda d: (d.text(d.page("見出し"), X, Y_BODY, 10 * one + 2 * INSET, 1, t, size=12), d.card(d.slides[-1], X, 3, 3, head="カード", body=t))
+        with contextlib.redirect_stderr(io.StringIO()):
+            d = make_deck(make, "t")
+        assert len(calls) == 1 and t in calls[0] and "見出し" in calls[0]  # 1 回目に集めた段落を、まとめて 1 回で分ける
+        assert "データを見て\v判断する\v仕組みを作る" in [r["insertText"]["text"] for r in d.reqs if "insertText" in r]
+        with contextlib.redirect_stderr(io.StringIO()):
+            make_deck(make, "t")
+        assert len(calls) == 1  # 分けた段落は覚えている（lint の SEG_CACHE のほかに、同じプロセスの中で）
+        PHRASES.clear()
+        SEGMENT = lambda ts: None  # uv か BudouX が使えない
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            d = make_deck(make, "t")
+        assert "改行せずに組む" in err.getvalue() and not any("\v" in r["insertText"]["text"] for r in d.reqs if "insertText" in r)
+    finally:
+        PHRASES.clear()
+        SEGMENT = lambda ts: {x: set() for x in ts}
 
 
 def selftest_wording():
