@@ -666,6 +666,7 @@ class Deck:
                         over.add(ln)
                         self.warn(f"手で改行した行が枠に収まらない見込み「{ln}」（{em_width(ln, mono, b) * sz / 72:.2f} in > {avail:.2f} in）")
             # [slides-component-013] 自動で折り返す行の、最終行の 1〜2 字（代表の 3 枚の記録で、ほぼすべてのデッキに出た）。ponytail: size の 1 つの大きさで見る
+            # lint も同じ決まりで、表のセルと fit でない枠も見て、直す位置まで出す。これは lint を回さずに組んだときの網（2026-10-13 の決めたこと）
             for ln in re.split(r"[\n\v]", full):
                 n, last = wrap_lines(ln, avail, size, mono, all_bold(parts, bold))
                 if n > 1 and last <= 2 and ln not in over:
@@ -2876,7 +2877,7 @@ def spec_where(deck):
         if not n or not q or int(n.group(1)) > len(deck.slides):
             return ""
         t = re.sub(r"[\s\v⏎]", "", q.group(1).split(" / ")[0]).strip("…")[:12]
-        locs = [loc for loc, s in deck.spec_index.get(deck.slides[int(n.group(1)) - 1], []) if t and t in re.sub(r"[\s\v]", "", s)]
+        locs = [loc for loc, s in deck.spec_index.get(deck.slides[int(n.group(1)) - 1], []) if t and t in re.sub(r"[\s\v]|<br>", "", s)]  # 見出しなどの索引は JSON の文字のまま（<br> が残る）
         return f"（{'・'.join(dict.fromkeys(locs))}）" if locs else ""  # 同じ文で始まる部品が 2 つ以上なら、どれかを決めずに全部出す
     return where
 
@@ -3896,6 +3897,10 @@ def local_json(reqs, deck, p):
             for row in rows[r0:r0 + rng["rowSpan"]]:
                 for cell in row["tableCells"][c0:c0 + rng["columnSpan"]]:
                     merge(cell["tableCellProperties"], v["tableCellProperties"], v["fields"])
+        elif k == "updateTableColumnProperties":  # 列の幅（lint が表のセルの折り返しを見積もる）
+            cols = els[o][0]["table"].setdefault("tableColumns", [{} for _ in range(els[o][0]["table"]["columns"])])
+            for j in v["columnIndices"]:
+                merge(cols[j], v["tableColumnProperties"], v["fields"])
         elif k == "mergeTableCells":  # 結合したセルは、左上のセルが rowSpan・columnSpan を持つ
             rng = v["tableRange"]
             els[o][0]["table"]["tableRows"][rng["location"]["rowIndex"]]["tableCells"][rng["location"]["columnIndex"]] |= {"rowSpan": rng["rowSpan"], "columnSpan": rng["columnSpan"]}
@@ -6094,6 +6099,7 @@ def selftest_diff():
     table = next(e for e in s2["pageElements"] if "table" in e)
     assert table["size"]["width"]["magnitude"] == 3000000 and table["table"]["tableRows"][1]["tableCells"][1]["text"]["textElements"][1]["textRun"]["content"] == "値\n"
     assert table["table"]["tableRows"][0]["tableCells"][0]["columnSpan"] == 2  # 結合したセルは左上のセルが持つ
+    assert [c["columnWidth"] for c in table["table"]["tableColumns"]] == [emu(2), emu(2)]  # 列の幅（lint が表のセルの折り返しを見積もる）
     assert any("elementGroup" in e for e in s2["pageElements"]) and s2["slideProperties"]["notesPage"]["pageElements"][0]["shape"]["text"]["textElements"][1]["textRun"]["content"] == "ノート。\n"
     assert not any(e["objectId"] == s2["objectId"] + "_n" for e in s2["pageElements"])  # ページ番号の枠は Google が作るので、手元にはない
     import lint

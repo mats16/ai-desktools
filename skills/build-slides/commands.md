@@ -39,7 +39,7 @@ python3 $K/slides.py merge fix_a.py fix_b.py          # for pages.py materials: 
   | Warning | How to fix |
   |---|---|
   | A manually broken line likely does not fit the frame | Rephrase, or move the line break |
-  | The last line of auto-wrapped text likely has 2 characters or fewer | Rephrase, or fix the lines with `\v` (slides-visual-013) |
+  | The last line of auto-wrapped text likely has 2 characters or fewer | Rephrase, or fix the lines with `\v` (slides-visual-013). lint reports the same with where to put `<br>` |
   | The title was shrunk, or the lead likely runs to 2 lines | Shorten the title and the lead (`deck-writing` → content §4) |
   | A table cell likely wraps | Rephrase, or change the column widths (`widths`) |
   | The content of a component with `h` likely does not fit that height | Remove `h` (height comes from the content), or shorten the text |
