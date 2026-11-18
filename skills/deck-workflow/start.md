@@ -27,7 +27,7 @@ Search `references_index.md` (sources used before) and `drive_folders.md` (mater
 
 ## 4. Gather customer information
 
-From meeting records and internal chat (`[sources]` in `desk.toml`), pick up the customer's interests, the history, and what was discussed so far ([materials.md](materials.md)). Meetings cited before are in `references_index.md`. Add every source you read in 3 and 4 to `references.md` with `refs.py add`, and note each fact you may use with the source ID and the place in it (「S3 の Regions の表」) ("Ledger" in materials.md). Child agents that read sources add their rows the same way and return facts with the IDs.
+From meeting records and internal chat (the tools in your tool list that serve `meetings` and `chat`; "Internal materials" in [materials.md](materials.md)), pick up the customer's interests, the history, and what was discussed so far ([materials.md](materials.md)). Meetings cited before are in `references_index.md`. Add every source you read in 3 and 4 to `references.md` with `refs.py add`, and note each fact you may use with the source ID and the place in it (「S3 の Regions の表」) ("Ledger" in materials.md). Child agents that read sources add their rows the same way and return facts with the IDs.
 
 ## 5. Agree on the structure
 

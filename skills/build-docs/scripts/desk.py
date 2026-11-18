@@ -35,7 +35,7 @@ COPIES = {"desk-migrate/templates/drive_folders.md": "desk-init/templates/drive_
 STEPS = ("gather", "build")  # frontmatter の step の値。書かなければ、資料を作るどの作業でも開く（per_material: true は、資料ごとに選ぶ）
 TRIGGERS = {  # プラグインのファイル（<スキル>/<ファイル>）→ そのファイルの作業（その作業で開くレシピの種類）。make は step のないもの（資料を作るどの作業でも）。
     # 作る会話はこの表を読まない（スキルの md が、その作業でレシピを開くように書く）。ledger.py の --auto（消す項目が、その作業のファイルのどれにもあるか）と、migrate.py（前の paths を step にする）と、desk-dreaming の sessions.py（make のファイルを開いた会話を、作り方の表を開いたと数える）が使う
-    "gather": ("deck-workflow/materials.md", "deck-workflow/start.md", "customer-profile/*", "desk-crawl/*", "desk-research/*"),
+    "gather": ("deck-workflow/materials.md", "deck-workflow/start.md", "deck-review/prompt_sources.md", "customer-profile/*", "desk-crawl/*", "desk-research/*"),
     "build": ("build-slides/*", "build-docs/*", "build-vids/*", "deck-design/slides.md", "deck-design/slides_patterns.md", "deck-design/docs.md", "deck-workflow/slides_steps.md", "deck-workflow/prompt_pages.md", "deck-workflow/reuse.md"),
     "make": ("deck-workflow/*", "deck-writing/*", "deck-design/*", "deck-review/*", "desk-feedback/SKILL.md", "desk-feedback/routing.md", "build-slides/*", "build-docs/*", "build-vids/*")}
 
@@ -492,6 +492,7 @@ def selftest():
         assert copied("x/build-docs/assets/gcp/a.png") and not copied("/p/skills/build-docs/assets/README.md") and not copied("x/build-slides/assets/README.md")
         assert copied("x/build-docs/scripts/gapi.py") and not copied("x/build-slides/scripts/gapi.py") and copied("x/deck-review/scripts/yomiyasu/scripts/yomiyasu_diff.py") and not copied("x/build-docs/scripts/docs.py")
         assert triggers("deck-workflow/materials.md") == {"gather", "make"} and triggers("build-slides/pages.md") == {"build", "make"} and triggers("deck-review/SKILL.md") == {"make"}
+        assert triggers("deck-review/prompt_sources.md") == {"gather", "make"}
         assert triggers("customer-profile/SKILL.md") == {"gather"} and triggers("desk-init/doctor.md") == set()  # 資料づくりの外の作業では、step のないものは開かない
         for f, t in (("cxo/RECIPE.md", "---\ndescription: CxO に提案するとき\nper_material: true\naudience: [顧客向け]\n---\n"), ("tools/RECIPE.md", "---\ndescription: 社内の道具\nstep: gather\n---\n"),
                      ("logo/RECIPE.md", "---\ndescription: ロゴ\nstep: build\n---\n")):

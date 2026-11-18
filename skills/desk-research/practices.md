@@ -24,7 +24,7 @@ Research results go into the knowledge skills `deck-writing` (content and wordin
    - Japanese-language: practice of making slides with AI agents
    - English-language: how to write skills and project instructions
    - English-language: methods and research on AI slide generation
-   - Internal: the tools in `[sources]` of `desk.toml` (search, chat, wiki) and the plugins on this Mac
+   - Internal: the tools in your tool list that serve search, chat, and wiki (such as Genie One, Glean, Slack, Notion, Confluence; `deck-workflow` → gathering materials) and the plugins on this Mac
    [deck-research-001] Japanese-language posts are higher quality for material content, and English-language posts are more plentiful for the mechanisms (skills, instructions) (an assessment; the first run also found this).
 3. [deck-research-002] **Run one subagent per theme in parallel.** Run them in the background at the same time. Pass the main agent's model and reasoning effort explicitly (deck-agents-008 in `deck-workflow` → child agents). Use the prompt template below. Have them write the full report in `log/` and return only the key points here (saves conversation context and survives compaction).
 4. **Read the reports and compare with state.md.** Exclude what was already adopted or passed over; pick only what is new or changed since last time.

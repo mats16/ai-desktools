@@ -1,6 +1,6 @@
 # How to read each kind of source
 
-The child agents read this file (`prompt_collect.md` points here). A source id is `<kind>:<ref>`. The tool for each kind is the one named in `[sources]` of `desk.toml` (`chat`, `search`, `wiki`); the examples below use the Slack, Gmail, and Glean MCP servers. Topic-specific markers and noise go into the source's notes (`crawl.py set … note=…` or `lessons`), not here.
+The child agents read this file (`prompt_collect.md` points here). A source id is `<kind>:<ref>`. The tool for each kind is the one in your tool list that serves that role (`chat`, `search`, `wiki`; `deck-workflow` → gathering materials): Slack or Microsoft Teams for chat, Genie One or Glean for search, Notion or Confluence for a wiki. The examples below use the Slack, Gmail, and Glean MCP servers. Topic-specific markers and noise go into the source's notes (`crawl.py set … note=…` or `lessons`), not here.
 
 | Kind | Ref | Read with |
 |---|---|---|
