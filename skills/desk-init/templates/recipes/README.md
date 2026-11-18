@@ -33,7 +33,7 @@ per_material: true
 
 ## 点検: `recipes/<名前>/checks.py`
 
-lint が毎回、`recipes/` の下のすべての `checks.py` を読み込む。その点検が見る決まりのレシピのフォルダに置く。スライドの lint（`slides.py lint`・`gslides.py check`）は `slides(p, r)` にスライドの JSON（presentations.get）を、ドキュメントの lint（`docs.py check`）は `doc(doc, r)` にドキュメントの JSON（documents.get）を渡す。持っている関数だけが呼ばれる。どちらも指摘を `r.hits["<規則の名前>"].append("<場所>: <中身>")` で足す。`HARD` に入れた名前は要修正（exit 1）、ほかは要確認。スライドの部品（`lint`）はドキュメントの lint からは読めないので、import は関数の中に書く。
+lint が毎回、`recipes/` の下のすべての `checks.py` を読み込む。その点検が見る決まりのレシピのフォルダに置く。スライドの lint（`build_slides.py lint`・`check_slides.py check`）は `slides(p, r)` にスライドの JSON（presentations.get）を、ドキュメントの lint（`docs.py check`）は `doc(doc, r)` にドキュメントの JSON（documents.get）を渡す。持っている関数だけが呼ばれる。どちらも指摘を `r.hits["<規則の名前>"].append("<場所>: <中身>")` で足す。`HARD` に入れた名前は要修正（exit 1）、ほかは要確認。スライドの部品（`lint`）はドキュメントの lint からは読めないので、import は関数の中に書く。
 
 ```python
 # recipes/brand/checks.py

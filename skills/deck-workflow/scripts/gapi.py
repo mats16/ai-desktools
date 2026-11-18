@@ -57,7 +57,7 @@ def window_end(body, now=None):
 
 
 class Clock:
-    """工程ごとの秒を数え、標準エラーに 1 行で出す（slides.py build・gslides.py check。記録から長い回の原因を分けるため）。429 と上限を見越した待ちも出す。"""
+    """工程ごとの秒を数え、標準エラーに 1 行で出す（build_slides.py build・check_slides.py check。記録から長い回の原因を分けるため）。429 と上限を見越した待ちも出す。"""
 
     def __init__(self):
         self.t, self.parts = time.time(), []
@@ -78,7 +78,7 @@ CLOCK = Clock()  # 読み込んだときから数える
 
 def locate():
     """(設定のファイル, ワークスペース)。探し方は desk.py（今いるフォルダから上へ desk.toml、なければ ~/.desk.toml の workspace）。なければ None。
-    結果を覚えない。import のときに読むもの（slides.py の [brand]）はこちらを使う（覚えると、あとで今いるフォルダを変える desk-init の doctor.py が古い結果を使う）。"""
+    結果を覚えない。import のときに読むもの（build_slides.py の [brand]）はこちらを使う（覚えると、あとで今いるフォルダを変える desk-init の doctor.py が古い結果を使う）。"""
     return desk.locate()
 
 
@@ -115,7 +115,7 @@ def language():
 
 
 def source_head():
-    """出典の行頭（slides.py・docs.py が、書いていなければ足す）。ja でなければ英語（lint はどちらも出典の行と見る）。"""
+    """出典の行頭（build_slides.py・docs.py が、書いていなければ足す）。ja でなければ英語（lint はどちらも出典の行と見る）。"""
     return "出典: " if language() == "ja" else "Source: "
 
 
@@ -400,7 +400,7 @@ def parallel(*fns):
 
 def guard(fid, rev, key, src, stop=True):
     """前に組んだあとに画面で直されていたら（rev が key に残したリビジョンか指紋と違う）、または未解決のコメントがあれば、止める。
-    組み直すと画面での修正は消え、コメントは付け先を失う。src は直しを入れる先（pages.py・doc.md）。stop=False なら止めずに理由の並びを返す（slides.py plan）。
+    組み直すと画面での修正は消え、コメントは付け先を失う。src は直しを入れる先（pages.py・doc.md）。stop=False なら止めずに理由の並びを返す（build_slides.py plan）。
     rev は値か、引数のない関数（リビジョンの取得を、ほかの 2 つの読み取りと並べて呼ぶ）。"""
     st = workspace() / ".desk" / "comments.json"  # 見張りの知らせ（deck-workflow の comments.py watch）は、直すコメントでないので数えない
     notice = {n["id"] for n in json.loads(st.read_text()).get("notice", {}).values()} if st.is_file() else set()
@@ -482,7 +482,7 @@ def png(url, w=1024):
 def carry(paths):
     """手元の画像（PNG・JPG・GIF・SVG）を Slides API が読める URL にする。API は公開された URL の画像しか読めないので、pptxgenjs で 1 枚に
     1 つずつ入れた pptx を Drive で Google Slides に変換し、その画像の URL（30 分で切れる）を取る。SVG は API が貼れないので sharp で PNG にする。
-    [deck-google-010] slides.py・docs.py の build の中で呼ぶので、pages.py では手元のパスを d.image に渡すだけでよい。戻り: (URL の並び, あとで消す仮のファイルの ID)。"""
+    [deck-google-010] build_slides.py・docs.py の build の中で呼ぶので、pages.py では手元のパスを d.image に渡すだけでよい。戻り: (URL の並び, あとで消す仮のファイルの ID)。"""
     with tempfile.TemporaryDirectory() as d:
         out = os.path.join(d, "images.pptx")
         js = ("const p = new (require('pptxgenjs'))(); p.layout = 'LAYOUT_WIDE';"

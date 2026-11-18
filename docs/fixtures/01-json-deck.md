@@ -8,7 +8,7 @@
 build-slides のスキルを使い、社内向けの資料「データ基盤の段の分け方｜Internal Only」を JSON のページで 4 枚書いてください。
 表紙、取り込み・整える・集計の 3 つの段を並べたカードのページ、段ごとの持ち主と更新の間隔の表のページ、
 業務のデータベースからデータレイクを通って画面と予測のモデルに分かれる構成図のページ。
-Internal/fixture_01/build/ に deck.json と 1 ページ 1 ファイルの JSON を書き、slides.py lint deck.json を回して要修正を 0 にしてください。組まないでください。
+Internal/fixture_01/build/ に deck.json と 1 ページ 1 ファイルの JSON を書き、build_slides.py lint deck.json を回して要修正を 0 にしてください。組まないでください。
 ```
 
 ## 見るところ
@@ -16,4 +16,4 @@ Internal/fixture_01/build/ に deck.json と 1 ページ 1 ファイルの JSON 
 - 要修正が 0 で、`raw` を使っていない。
 - 箇条書きと地の文を 1 つの `text` に交ぜていない。説明のない項目を `items` に並べていない。
 - 構成図の矢印を部品の `id` でつなぎ、枝分かれを `"route": "bent"` で書いている。塗りの箱に文字だけを重ねていない（`label` か印のあるカード）。
-- 組んで画像で見るなら、`slides.py new` で検証用のフォルダに組み、`gslides.py check --all`。
+- 組んで画像で見るなら、`build_slides.py new` で検証用のフォルダに組み、`check_slides.py check --all`。

@@ -13,7 +13,7 @@ Things we tried and confirmed on 2026-10-09 (for Docs, the workspace's `Research
 - **Tables:** `insertTable` inserts one newline before the table. docs.py makes that paragraph the table title. Get cell positions from the JSON after insertion, and fill from the last cell backward (so earlier cell positions do not shift).
 - **A line break within a paragraph is `\v`.** The code background does not break between lines.
 - **Shading (`shading`) has no inner padding.** Add a border of the same color as the shading and get padding from its `padding`. The border sticks out by the indentation, so put padding plus line width into `indentStart`, `indentFirstLine`, and `indentEnd` to align with the body edges (`d.code`).
-- **Text positions are in UTF-16 units** (`u16` in `slides.py`).
+- **Text positions are in UTF-16 units** (`u16` in `build_slides.py`).
 - **Line spacing:** Line pitch is "1.88 × font size × line spacing %" (Noto Sans JP. Measured in the PDF by building an 11-line paragraph at 70, 85, and 100%). At 120% it became 2.3 times and looked loose.
 - **Punctuation at the start of a line:** Text has no language field (`TextStyle` has no `language`), but Google Docs pushes it to the next line together with the preceding character.
 - **Bullet symbols and numbers are rendered in Arial.** There is no request to change list formatting.

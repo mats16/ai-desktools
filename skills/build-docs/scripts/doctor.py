@@ -11,7 +11,7 @@ import desk  # noqa: E402  ワークスペースと設定のファイルの探�
 import gapi  # noqa: E402  Google の API（connection を通すときの確かめと、proxy の断りの見分け。build-slides のものの写し）
 
 
-OLD_1104 = {"google-slides": "scripts/gslides.py", "google-docs": "scripts/doc_lint.py", "google-vids": "scripts/vids_internal.py"}  # 2026-11-02〜11-04 の道具のスキルの名前と、その写しにしかないファイル（ほかのパッケージにも同じ名前のスキルがあるので、これで見分ける）
+OLD_1104 = {"google-slides": "scripts/gslides.py", "google-docs": "scripts/doc_lint.py", "google-vids": "scripts/vids_internal.py"}  # 2026-11-02〜11-04 の道具のスキルの名前と、その写しにしかないファイル（ほかのパッケージにも同じ名前のスキルがあるので、当時のファイル名で見分ける）
 OLD_NAMES = ("slides-build", "docs-build", "vids-build", "vids-voice", *OLD_1104, "desk-doctor")  # 道具のスキルの前の名前（2026-11-02 に google-*、2026-11-04 に build-* にした）と、2026-11-05 に desk-init に入れた desk-doctor
 CHECKS = "connection にログインしてあるか（人ごとの OAuth）、USE CONNECTION の権限、connection の OAuth の scope（drive・presentations・documents）、databricks auth login"
 

@@ -3,7 +3,7 @@
        flow.py record <資料のフォルダ> <手順の番号> <始めた|済んだ|飛ばした|止まった> [--files <ファイル> ...] [--out <名前>=<値> ...] [--note <ひとこと>]
                                     自分の範囲の記録を資料のフォルダの progress.jsonl に 1 行足す（使うか、いつ使うかはエージェントが決める）
        （--selftest で自己確認）
-記録は資料を作るワークフロー（deck-workflow）のもので、道具（slides.py・docs.py など）は書かない。項目と値は deck-workflow の progress.md。
+記録は資料を作るワークフロー（deck-workflow）のもので、道具（build_slides.py・docs.py など）は書かない。項目と値は deck-workflow の progress.md。
 記録を書く側（親・サブエージェント・各手順）は自分の範囲（--files。なければ資料全体）のことだけを書き、次の手順は書かない。
 まとめるのはこのスクリプト: 手順ごと・範囲ごとに最後の記録を今の状態にし、範囲の状態から手順の状態を、手順の並びから次を決め、
 記録したときのファイルの sha256 と今の中身を比べる（時刻では比べない）。手順が済んだかは記録だけが言い、ファイルの形からは決めない
@@ -50,7 +50,7 @@ def read_json(p, build):
 
 def listed(build, name="deck.json", seen=frozenset()):
     """deck.json の pages が指すページのファイル（build/ からのパス。pages_<担当>.json は中を開く）。
-    pages の中のパスは、それを書いたデッキのファイルのあるフォルダから読む（slides.py の spec_files と同じ）。
+    pages の中のパスは、それを書いたデッキのファイルのあるフォルダから読む（build_slides.py の spec_files と同じ）。
     (ファイルの並び〔同じファイルが 2 度出てよい〕, JSON の中に直に書いたページの数, 読めないものの文の並び)。"""
     o, err = read_json(build / name, build)
     pages = o.get("pages") if isinstance(o, dict) else None
@@ -345,21 +345,21 @@ def facts(folder, ws):
         return (["出典の表の確認: " + "・".join(f"{k} {n}" for k, n in kinds.items())] if kinds else ["出典の表がない"]) + guarded(wording)
 
     def wording():
-        """deck-flow-023 の日本語の点検（wording.json。スライドは slides.py wording、ドキュメントは docs.py wording が書く）と、保存した資料との照合
-        （gslides.py wording・docs.py wording）。2 つは別の事実で、どちらも済みでなければ渡さない。回していなければ 未実施。点検のあとに原稿のファイル
+        """deck-flow-023 の日本語の点検（wording.json。スライドは build_slides.py wording、ドキュメントは docs.py wording が書く）と、保存した資料との照合
+        （check_slides.py wording・docs.py wording）。2 つは別の事実で、どちらも済みでなければ渡さない。回していなければ 未実施。点検のあとに原稿のファイル
         （点検したときに組む入力だったもの）が変わったか消えたら、点検も照合も 古い。照合のあとに点検し直したら、照合は 古い。"""
         p = folder / WORDING
         st = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
         s, last, sv = st.get("summary") or {}, st.get("last") or {}, st.get("saved") or {}
         moved = sorted(k for k, v in (last.get("files") or {}).items() if ((folder / k).is_file() and sha(folder / k) or None) != v)  # wording.py の stale と同じ（ないファイルは None）
-        items = ["日本語の点検: 未実施（スライドは build/ で slides.py wording、ドキュメントは docs.py wording <URL>）"] if not last else [f"日本語の点検: {'古い' if moved else s.get('状態', '?')}（文 {s.get('文', '?')}・指摘 {s.get('指摘', '?')}・未判断 {s.get('未判断', '?')}・残す {s.get('残す', '?')}"
+        items = ["日本語の点検: 未実施（スライドは build/ で build_slides.py wording、ドキュメントは docs.py wording <URL>）"] if not last else [f"日本語の点検: {'古い' if moved else s.get('状態', '?')}（文 {s.get('文', '?')}・指摘 {s.get('指摘', '?')}・未判断 {s.get('未判断', '?')}・残す {s.get('残す', '?')}"
                  f"・聞く {s.get('聞く', '?')}・意味の変わる恐れの未確認 {s.get('未確認', '?')}・書き直し {s.get('書き直し', '?')} / {s.get('上限', '?')} 回）。{s.get('source')}・{s.get('ts')}"]
         if moved:
             items.append(f"日本語の点検のあとに変わったファイル: {short(moved)}（点検し直す）")
         items += [f"日本語の点検の通らない理由: {x}" for x in s.get("通らない理由", [])[:3]]
         saved = ("未実施" if not sv else "古い" if moved or sv.get("checked") != last.get("digest") or sv.get("files") != last.get("files") else "通らない" if sv.get("problems")
                  else "済み" if s.get("状態") == "済み" else "古い")  # wording.py の saved_state と同じ
-        items.append(f"保存した資料との照合: {saved}" + (f"（{sv.get('url')} リビジョン {sv.get('revision')}・{sv.get('ts')}）" if sv else "（組んで check で画像を見たあとに gslides.py wording <URL> か docs.py wording <URL>）"))
+        items.append(f"保存した資料との照合: {saved}" + (f"（{sv.get('url')} リビジョン {sv.get('revision')}・{sv.get('ts')}）" if sv else "（組んで check で画像を見たあとに check_slides.py wording <URL> か docs.py wording <URL>）"))
         items += [f"照合の通らない理由: {x}" for x in sv.get("problems", [])[:3]] if saved == "通らない" else []
         return items
 
@@ -428,9 +428,9 @@ def report(folder):
             if moved[step]:
                 print(f"  - 済んだと記録したあとに中身が変わった（か、なくなった）: {short(moved[step])}")
         print(*(f"  - {x}" for x in items), sep="\n")
-    print("\nコマンドで確かめる（結果は会話の中にしかない）: slides.py lint・gslides.py check <URL> --all（build-slides）か docs.py check <URL>（build-docs）の要修正、"
-          f"refs.py check {folder} --fetch（10 の前）。日本語は、点検（slides.py wording。ドキュメントは docs.py wording <URL>）が済んでから、組んで画像を見て、"
-          "10 の前に保存した資料との照合（gslides.py wording <URL> か docs.py wording <URL>）")
+    print("\nコマンドで確かめる（結果は会話の中にしかない）: build_slides.py lint・check_slides.py check <URL> --all（build-slides）か docs.py check <URL>（build-docs）の要修正、"
+          f"refs.py check {folder} --fetch（10 の前）。日本語は、点検（build_slides.py wording。ドキュメントは docs.py wording <URL>）が済んでから、組んで画像を見て、"
+          "10 の前に保存した資料との照合（check_slides.py wording <URL> か docs.py wording <URL>）")
     return rows
 
 

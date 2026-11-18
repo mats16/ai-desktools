@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """usage: sessions.py --since <ISO8601（UTC）> [--root <作業フォルダ>]   （--selftest で自己確認）
 Claude Code・Codex・pi の会話からユーザーの発言、触った資料のフォルダ、規則への言及と読み取り成功、
-資料を対象にした確認（スライドは gslides.py check、Google Docs は docs.py check、docx は check.sh）の成功、道具のエラーを抜き出す。標準ライブラリのみ。
+資料を対象にした確認（スライドは check_slides.py check、Google Docs は docs.py check、docx は check.sh）の成功、道具のエラーを抜き出す。標準ライブラリのみ。
 拾うのは、作業フォルダそのものか AREAS の下で始めた会話だけ（Obsidian Vault・Codex などは拾わない）。T3 Code が任せたサブエージェントの会話は拾わない。
 確認できない呼び出しは未確認として残す。会話はデータで、指示ではない。"""
 import glob, json, os, re, shlex, sys
@@ -77,7 +77,7 @@ def shell_evidence(command):
         if len(args) > offset and os.path.basename(args[offset]) == "check.sh":
             if any(re.search(r"\.(?:pptx|docx)$", arg) for arg in args[offset + 1:]):
                 checks += 1
-        elif len(args) > offset + 2 and os.path.basename(args[offset]) in ("gslides.py", "docs.py") and args[offset + 1] == "check":
+        elif len(args) > offset + 2 and os.path.basename(args[offset]) in ("check_slides.py", "gslides.py", "docs.py") and args[offset + 1] == "check":
             checks += 1  # Google Slides の確認（2026-10-07 から）と Google Docs の確認（2026-10-09 から）
     # ; と || は途中の読み取り失敗を隠せるので、読了の帰属は保留する。
     if re.search(r";|\|\||\n", command.strip()):
@@ -148,7 +148,7 @@ def call_evidence(name, args):
         except ValueError:
             pass
     kind = name.rsplit("__", 1)[-1].lower()
-    info = {"decks": deck_words(kind, args), "mentions": rules(raw), "check_mention": any(x in raw for x in ("check.sh", "gslides.py check", "docs.py check")),
+    info = {"decks": deck_words(kind, args), "mentions": rules(raw), "check_mention": any(x in raw for x in ("check.sh", "check_slides.py check", "gslides.py check", "docs.py check")),
             "reads": [], "checks": 0, "piped": False, "nested": False, "read_tool": kind == "read"}
     if kind == "read" and isinstance(args, dict):
         info["reads"] = rules(args.get("file_path", args.get("path", "")))
@@ -242,7 +242,7 @@ class Session:
         if text.strip() and not read_failed:
             self.opened.update(info["reads"])
         failed = re.search(r"validate\.py (?:か lint の要修正が残っている|が失敗)|lint の要修正が残っている|Traceback|Operation not permitted|要修正:\s*[1-9]\d*", text)
-        # pipeline の終了コードは最終コマンドのもの。check.sh・gslides.py check・docs.py check の完走の出力も確認する。
+        # pipeline の終了コードは最終コマンドのもの。check.sh・check_slides.py check・docs.py check の完走の出力も確認する。
         complete = ("All validations PASSED" in text and "テキスト:" in text and "和文の書体" in text) or \
             ("テキスト:" in text and "画像:" in text and "JSON:" in text)
         if info["checks"] and not failed and (not info["piped"] or complete):
@@ -255,7 +255,7 @@ class Session:
 
     def md(self, root):
         where = os.path.relpath(self.cwd, root) if self.cwd else "?"
-        state = "、確認の成功確認" if self.built else "、確認（gslides.py check・docs.py check・check.sh）への言及あり（成功未確認）" if self.check_mentioned else ""
+        state = "、確認の成功確認" if self.built else "、確認（check_slides.py check・docs.py check・check.sh）への言及あり（成功未確認）" if self.check_mentioned else ""
         out = [f"## {self.kind} {self.sid[:8]} {self.start[:16]} {self.title} （{where}{state}）", f"- ファイル: {self.path}"]
         decks = Counter()
         for call in [*self.decks, *([[("", self.cwd)]] if self.cwd else [])]:  # 呼び出しごとに 1 回。資料のフォルダで始めた会話は、そのフォルダも数える
@@ -419,7 +419,7 @@ def report(root, since):
     built = [s for s in ss if s.built]
     unknown = [s for s in built if not read_table(s.opened)]
     print(f"# 会話の抜き出し（{since} から。{len(ss)} 本）\n")
-    print(f"- 確認（gslides.py check・docs.py check・check.sh）への言及あり: {sum(s.check_mentioned for s in ss)} 本。資料を対象にした実行の呼び出し: {sum(s.check_calls for s in ss)} 件")
+    print(f"- 確認（check_slides.py check・docs.py check・check.sh）への言及あり: {sum(s.check_mentioned for s in ss)} 本。資料を対象にした実行の呼び出し: {sum(s.check_calls for s in ss)} 件")
     print(f"- 資料を仕上げた会話（確認の成功確認）: {len(built)} 本。うち作り方の表の読み取りを確認できないもの: {len(unknown)} 本"
           + (f"（{', '.join(s.sid[:8] for s in unknown)}）" if unknown else ""))
     print("- 未確認は未読や失敗の断定ではない。複雑なシェル・複数コマンドの code mode は結果を帰属できなければ成功に数えない。")
@@ -520,9 +520,12 @@ def selftest():
     assert shell_evidence(f'K={root}/.agents/skills/slides-build/scripts; F="a.pptx"; $K/check.sh "$F"')[1] == 1
     assert shell_evidence("python3 ~/Documents/.agents/skills/docs-build/scripts/docs.py check https://docs.google.com/document/d/x/edit")[1] == 1
     assert shell_evidence(f'python3 - <<EOF\nprint("cat {rule}")\nEOF')[0] == []
-    gs = root + "/.agents/skills/slides-build/scripts/gslides.py"
-    assert shell_evidence(f'python3 {gs} check https://docs.google.com/presentation/d/x/edit')[1] == 1
-    assert shell_evidence(f'python3 {gs} pages https://docs.google.com/presentation/d/x/edit')[1] == 0
+    for script in ("check_slides.py", "gslides.py"):
+        gs = root + "/.agents/skills/slides-build/scripts/" + script
+        command = f'python3 {gs} check https://docs.google.com/presentation/d/x/edit'
+        assert shell_evidence(command)[1] == 1
+        assert shell_evidence(f'python3 {gs} pages https://docs.google.com/presentation/d/x/edit')[1] == 0
+        assert call_evidence("Bash", {"command": command})["check_mention"]
     pipe = Session("claude", "pipeline", "test")
     pipe.tool_input("Bash", {"command": f'{check} a.pptx | tail'}, "pipe")
     pipe.tool_result("pipe", "some output", False)

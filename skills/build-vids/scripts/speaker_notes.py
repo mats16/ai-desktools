@@ -75,7 +75,7 @@ def mine(pid):
 
 
 def pair(slides):
-    """スライドごとの、ページのファイル（分からなければ None）。スライドの ID に入れたファイル名の印（slides.py の PAGE_KEY）で結ぶ。
+    """スライドごとの、ページのファイル（分からなければ None）。スライドの ID に入れたファイル名の印（build_slides.py の PAGE_KEY）で結ぶ。
     並びの位置で結ぶと、手元で並べ替えたまま組んでいないときに、別のページのファイルに書く。"""
     by = {page_key(f.stem): f for f in page_files() or []}
     return [by.get(m.group(1)) if (m := PAGE_KEY.search(s["objectId"])) else None for s in slides]
@@ -187,7 +187,7 @@ def cmd_push(pid, path):
         if f:
             set_note(f, script[str(i)])
     if miss := [i for i, f in enumerate(files, 1) if f is None]:
-        print(f"p{', p'.join(map(str, miss))}: ページのファイルが分からない。そのページの speakerNotes（pages.py なら d.note）は手で台本にする（次の slides.py build が、ファイルのノートで書き戻す）", file=sys.stderr)
+        print(f"p{', p'.join(map(str, miss))}: ページのファイルが分からない。そのページの speakerNotes（pages.py なら d.note）は手で台本にする（次の build_slides.py build が、ファイルのノートで書き戻す）", file=sys.stderr)
     print(json.dumps({"presentationId": pid, "slides": len(slides), "changed": [int(k) for k, t in before.items() if t != script[k]],
                       "screen_edits": screen}, ensure_ascii=False))
 

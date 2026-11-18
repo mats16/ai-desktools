@@ -8,7 +8,7 @@
     {"type": "text", "text": "枠線だけの箱（点線）", "line": "RULE", "dash": true, "weight": 1, "align": "center", "valign": "middle"},
     {"type": "stack", "items": [
       {"type": "text", "text": "全体を太字にした補足", "bold": true, "size": 12, "color": "SUB", "align": "right"},
-      {"type": "text", "text": "python3 slides.py lint --all", "mono": true}]}]},
+      {"type": "text", "text": "python3 build_slides.py lint --all", "mono": true}]}]},
   {"type": "row", "items": [
     {"type": "label", "text": "GA", "w": "fit", "fill": "GA", "color": "STAGE_TEXT"},
     {"type": "label", "text": "Public Preview", "w": "fit", "fill": "PUBLIC_PREVIEW", "color": "STAGE_TEXT"},

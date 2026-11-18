@@ -3,7 +3,7 @@
 # dependencies = ["pillow"]
 # ///
 """usage: uv run -q sheet.py <出力.webp> <画像 ...> [--cols 2] [--width 800] [--per 16]   （--selftest で自己確認）
-       uv run -q sheet.py --webp <画像.png ...>   PNG を劣化なしの WebP（同じ名前の .webp）にし、PNG を消す（gslides.py check が取ったページの画像に使う）
+       uv run -q sheet.py --webp <画像.png ...>   PNG を劣化なしの WebP（同じ名前の .webp）にし、PNG を消す（check_slides.py check が取ったページの画像に使う）
 スライドの画像を何枚か 1 枚に並べる（まとめて見て確かめるとき）。素の python3 には Pillow がないので uv で動かす。
 出力は拡張子の形式で書く。.webp は品質 80（PNG の 5 分の 1 ほど。85 と比べて、モデルが読める文字は変わらなかった。2026-11-02）。長い辺が MAX_EDGE を超える一覧は、MAX_EDGE に縮める。
 各ページの上に、ファイル名の番号（p-03.png なら p3）を入れる（見る人が格子の位置を数え間違えないように。ページに重ねない）。

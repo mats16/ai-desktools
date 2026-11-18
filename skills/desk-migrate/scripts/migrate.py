@@ -128,7 +128,10 @@ RESTRUCTURE = [  # 2026-10-31: 進め方・知見・道具でスキルを分け�
     (rf"(<(?:スキル )?){G1104}( folder>| のフォルダ>)", lambda m: f"{m.group(1)}{RENAMED_1104[m.group(2)]}{m.group(3)}"),
     *((rf"(?<![.{B}]){re.escape(a)}(?![{B}])", b) for a, b in MOVED_1105.items()),  # 2026-11-05 に動かしたファイル
     # 2026-11-05: desk-doctor を desk-init に入れた（SKILL.md → desk-init/doctor.md。scripts/doctor.py は同じ名前のまま desk-init/scripts/ へ）
-    (rf"(?<![.{B}])desk-doctor/SKILL\.md(?![{B}])", "desk-init/doctor.md"), (rf"(?<![.{B}])(?<![{B}]`)desk-doctor(?![{B}])", "desk-init")]
+    (rf"(?<![.{B}])desk-doctor/SKILL\.md(?![{B}])", "desk-init/doctor.md"), (rf"(?<![.{B}])(?<![{B}]`)desk-doctor(?![{B}])", "desk-init"),
+    # 2026-11-18: 作成と保存済み資料の確認を、名前で区別する。旧名の CLI と import は互換の入口で保つ。
+    (rf"(?<![{B}])build-slides/scripts/slides\.py(?![{B}])", "build-slides/scripts/build_slides.py"),
+    (rf"(?<![{B}])build-slides/scripts/gslides\.py(?![{B}])", "build-slides/scripts/check_slides.py")]
 # deck-practices/scripts のほかの形（lib/ へ移したスクリプト、フォルダ、glob、cd）は、どこを指すか文から分からない（$K/・./・.agents/skills/ など）ので、
 # 雛形が書く形（上の <… のフォルダ>/scripts/）と台帳の値（skills/ から。rewrite の頭）だけを替え、ほかはどの形も old_scripts が要判断にする
 OLD_SKILLS = set(RENAMED_31) | set(RENAMED_1102) | {"vids-voice", "desk-doctor"}  # 2026-10-31・2026-11-02 の前のスキルの名前（前の版の rules/<スキル>/ の上書きを見分ける。google-* のころには rules/ はもうない）
@@ -1246,6 +1249,9 @@ def relink_id(ws, x, to):
 def selftest():
     global RECIPES
     RECIPES = False  # 前の段（2026-10-24〜27）は、rules/ の中の結果で確かめる。最後の段は selftest_recipes
+    renamed = "build-slides/scripts/build_slides.py build-slides/scripts/check_slides.py"
+    assert rewrite("build-slides/scripts/slides.py build-slides/scripts/gslides.py") == renamed
+    assert rewrite(renamed) == renamed and rewrite("scripts/slides.py my-build-slides/scripts/gslides.py") == "scripts/slides.py my-build-slides/scripts/gslides.py"
     ok = "/desk-tools:google-docs・$desk-tools:google-slides・<google-vids folder>/voice.md・<スキル google-docs のフォルダ>/scripts・slides-build/lint.md"
     assert rewrite(ok) == ok.replace("google-", "build-").replace("slides-build", "build-slides"), rewrite(ok)  # 2026-11-04。名前の形でこのプラグインのものと決まるもの
     keep = ("Docs は google-docs スキル（fe-google-tools）で読む・fe-google-tools の `google-docs`・/skill:google-vids・fe-google-tools:google-slides → pages・`google-slides` → pages・"

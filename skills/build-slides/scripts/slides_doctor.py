@@ -30,8 +30,8 @@ def check(ws, local=False, own=False):
         return out
     sl, dr = cfg.get("slides", {}), cfg.get("drive", {})
     brand = cfg.get("brand", {})
-    marks = [("brand.copyright", brand.get("copyright", ""))]  # テーマの copyright は、そのテーマのデッキで [brand] の代わりに書く（slides.py の use_theme）
-    mine = {}  # ワークスペースのテーマのファイル（themes/slides/<名前>.json）。組むときに止まる値（形・色・copyright・書体）を、組む前に出す（slides.py と同じ read_theme で見る）
+    marks = [("brand.copyright", brand.get("copyright", ""))]  # テーマの copyright は、そのテーマのデッキで [brand] の代わりに書く（build_slides.py の use_theme）
+    mine = {}  # ワークスペースのテーマのファイル（themes/slides/<名前>.json）。組むときに止まる値（形・色・copyright・書体）を、組む前に出す（build_slides.py と同じ read_theme で見る）
     for f in sorted(root.joinpath(*slides.WS_THEMES).glob("*.json")):
         try:
             mine[f.stem] = slides.read_theme(f)
@@ -47,15 +47,15 @@ def check(ws, local=False, own=False):
     theme, temps = sl.get("default_theme", "navy"), {k: v for k, v in sl.get("templates", {}).items() if v}
     if old := sl.get("themes"):  # 2026-10-16 までの書き方
         ng("slides.themes", f"{', '.join(old)} はプラグインが読まない。テーマはワークスペースの themes/slides/<名前>.json（kind theme。色は colors の下に同じ名前で書く）に、"
-                            "テンプレートの url は [slides.templates] の「<名前> = \"<url>\"」に移して消す（テンプレートのある名前は slides.py theme <url> でも写せる。build-slides の themes.md）")
+                            "テンプレートの url は [slides.templates] の「<名前> = \"<url>\"」に移して消す（テンプレートのある名前は build_slides.py theme <url> でも写せる。build-slides の themes.md）")
     if "base_template" in sl:  # 2026-10-14 までの書き方
         ng("slides の base", "slides.base_template を消す。元のテンプレートは desk.toml に持たず、template.py <テーマ> --from-base <元の URL> で渡す（渡さなければ白紙の pptx から作る）")
     if sl.get("template_folder"):  # 2026-10-12 までの書き方
         warn("slides.template_folder", "プラグインは読まない。新しく作るテンプレートは [drive] desk の下の Themes に作る（前のバージョンのスクリプトで動かさなくなったら消す）")
     (ok if temps.get(theme) else warn)("slides.templates", ", ".join(temps) if temps.get(theme) else
-                                       f"既定のテーマ {theme} のテンプレートがない。template.py {theme} --from-base で作るか、共有のテーマ（slides.py themes）を slides.py theme <url> で写す")
+                                       f"既定のテーマ {theme} のテンプレートがない。template.py {theme} --from-base で作るか、共有のテーマ（build_slides.py themes）を build_slides.py theme <url> で写す")
     if bare := [n for n in temps if n not in files]:
-        ng("テーマのファイル", f"{', '.join(bare)} のテンプレートはあるが、themes/slides/<名前>.json がない。組めない。slides.py theme <[slides.templates] の URL> で写す")
+        ng("テーマのファイル", f"{', '.join(bare)} のテンプレートはあるが、themes/slides/<名前>.json がない。組めない。build_slides.py theme <[slides.templates] の URL> で写す")
     if theme not in files:
         ng("slides.default_theme", f"{theme} のテーマのファイルがない（themes/slides/{theme}.json）。テーマを書かない資料が組めない")
     if no_desc := [n for n in temps if n in files and not files[n].get("description")]:
@@ -77,9 +77,9 @@ def check(ws, local=False, own=False):
         except Exception as e:  # 回線のエラーや proxy の断り・形の違う返事も。行ごとに知らせ、ほかの行を落とさない
             w = (str(e) or type(e).__name__).split()[0]
             ng(name, f"開けない（{w}）: {url}" if w[:3].isdigit() else f"開けない: {url}。{doctor.proxy_fail(e)}")  # HTTP のほか（proxy の断り・回線）は、確かめることを添える（doctor.py と同じ）
-    if dr.get("shared_themes"):  # 全社の共有テーマのフォルダ。探すときだけ読む（使うテーマは slides.py theme <url> で写す）
+    if dr.get("shared_themes"):  # 全社の共有テーマのフォルダ。探すときだけ読む（使うテーマは build_slides.py theme <url> で写す）
         try:
-            shared, have = slides.shared_files(), {gapi.file_id(u) for u in temps.values()}  # 自分の Themes は読まない（slides.py themes が出す）
+            shared, have = slides.shared_files(), {gapi.file_id(u) for u in temps.values()}  # 自分の Themes は読まない（build_slides.py themes が出す）
             names, new = [f["properties"][slides.THEME_PROP] for f in shared], [f["properties"][slides.THEME_PROP] for f in shared if f["id"] not in have]
             bare = 0 if names else len(slides.theme_files(gapi.folder_id(dr["shared_themes"]), named=False))  # 名前のあるものが 1 つでもあれば数えない（base の写しのように、名前がなくて正しいものもある）
         except slides.READ_ERRORS:  # 開けないことは desk-init の doctor.py の drive.shared_themes に出る
@@ -91,7 +91,7 @@ def check(ws, local=False, own=False):
         elif not names:
             warn("共有テーマ", "テーマがない。管理者が template.py で作ったテンプレートを置く（ほかのファイルは読まない）")
         else:
-            ok("共有テーマ", ", ".join(names) + (f"（[slides.templates] にない: {', '.join(new)}。使うなら slides.py theme <url> で写す）" if new else ""))
+            ok("共有テーマ", ", ".join(names) + (f"（[slides.templates] にない: {', '.join(new)}。使うなら build_slides.py theme <url> で写す）" if new else ""))
     return out
 
 

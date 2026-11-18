@@ -107,7 +107,7 @@ pi install git:github.com/mats16/ai-desktools      # 全体
    - **設定の置き場所。** プラグインの範囲（ここの 1 の 2）とは別に、このワークスペースの設定をどこに置くかで決める。ワークスペースだけなら、ワークスペースの直下の `desk.toml`（`init.py <ワークスペース>`）。全体で `~/.desk.toml` がまだないか、その `workspace` がこのフォルダなら、`~/.desk.toml`（`init.py <ワークスペース> --user`）。このときワークスペースにもう `desk.toml` があれば、`<プラグイン>/skills/desk-migrate/SKILL.md` の `to-user` で `~/.desk.toml` に移してから回す。全体でも、`~/.desk.toml` がほかのフォルダを指していれば（2 つめのワークスペース）、このフォルダの `desk.toml`（`init.py <ワークスペース>`。`to-user` は回さず、`~/.desk.toml` は変えない）。このあとの `desk.toml` は、ここで決めた設定のファイルのこと（6 でもそれを返す）。
    - **`init.py` が止まったら**（設定がもうほかの場所にある）、そのメッセージを伝え、ユーザーと決めてから、示された手で直してもう一度回す。ただし `~/.desk.toml` の `workspace` は書き替えない（書き替えると、前のワークスペースがどの会話からも使われなくなる）。メッセージがその手を挙げても、ユーザーには出さない。
    - **書く値。** 3 の `[drive] shared_themes` は、ここの 1 の 3 で聞いた値。`[feedback.google_comments] watch_hours` は、ここの 1 の 5 で選んだ時間（見張らないなら雛形の 0 のまま）。`[desk] default_language` は、ここの 1 の 6 で選んだ言語（日本語なら雛形の `ja` のまま）。設定にもう値があり、ここの 1 の答えと違えば、どちらにするかを聞く（聞かずに上書きしない）。
-   - **既定のテーマ。** 3 の `[slides] default_theme`（既定のテンプレート）は、テンプレートを作り、共有のテーマを `slides.py theme <url>` で写したあとで、`<プラグイン>/skills/build-slides/template.md` の「Choosing the default theme」に従って選択式で聞く（1 では聞かない。何を選べるかは、そろってから分かる）。
+   - **既定のテーマ。** 3 の `[slides] default_theme`（既定のテンプレート）は、テンプレートを作り、共有のテーマを `build_slides.py theme <url>` で写したあとで、`<プラグイン>/skills/build-slides/template.md` の「Choosing the default theme」に従って選択式で聞く（1 では聞かない。何を選べるかは、そろってから分かる）。
 2. desk-init の最後の手順（6 の「Check」）は、`<プラグイン>/skills/desk-init/doctor.md` を開いて従う。要修正が 0 になるまで直す。Google のログインのように、ユーザーが回すものが残ったら、回してもらってから doctor をもう一度回す。
 
 ## 5. 定期の整理を登録する
