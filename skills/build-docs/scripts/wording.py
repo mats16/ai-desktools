@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """日本語の点検: できあがった原稿（スライドはページの JSON と pages.py から組む前のデッキ）の文を見て、言い回しの指摘を場所つきで出し、直したあとに見直して、
 意味の変わる恐れと、まだ判断していない指摘を数える。最後に、Google に保存された資料の文が、点検した文と同じかを別に確かめる（保存した資料との照合）。
-文を集めるのは道具（スライドは slides.py wording と gslides.py wording、ドキュメントは docs.py wording）で、ここは集めた文を見て、資料のフォルダの wording.json に残す。
+文を集めるのは道具（スライドは build_slides.py wording と check_slides.py wording、ドキュメントは docs.py wording）で、ここは集めた文を見て、資料のフォルダの wording.json に残す。
 持ち主は build-slides。build-docs は写しを持つ（tests/skills/check.py --sync）。標準ライブラリと、同じフォルダの textlint.py・yomiyasu/ だけ。
 usage: wording.py <資料のフォルダ>                            今の点検の状態と、保存した資料との照合の状態（wording.json。Google を読まない）
        wording.py keep <資料のフォルダ> <ID> ... --why <理由>   言い回しの指摘（W…）を直さずに残す（その文のハッシュに結ぶ。文が変われば判断は消える）
@@ -93,7 +93,7 @@ def checked(text_, slides, one_line, notes):
 
 def flat(t):
     """Google の資料の文と、ページの JSON・doc.md の書き方を突き合わせるための文: Markdown の太字・リンク・コード・見出し・箇条・表の印と空白を外す
-    （slides.py・docs.py が組むときに外すもの）。gslides.py と docs.py が文の場所を探すのに使う。"""
+    （build_slides.py・docs.py が組むときに外すもの）。check_slides.py と docs.py が文の場所を探すのに使う。"""
     t = re.sub(r"\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)", r"\1", t)  # リンク（URL に 1 段のかっこがあっても）
     t = re.sub(r"\{\d+(?:\.\d+)?:|<br\s*/?>", "", re.sub(r"^\s*(#+|[-*]|\d+\.)\s+", "", t))  # 大きさの {32:…}・{10.5:…} と段落の中の改行 <br>
     return re.sub(r"[\s*_`|{}\\]", "", t)  # 両側から同じ記号を外すので、記号を全部外しても突き合わせは崩れない（***赤***、\* のエスケープ）
@@ -287,7 +287,7 @@ def show(st, tool="wording", folder=None):
     s, open_f, open_r = summarize(st)
     last, dec = st.get("last") or {}, st.get("decisions", {})
     if not last:
-        print("日本語の点検: 未実施（スライドは slides.py wording、ドキュメントは docs.py wording <URL> を build/ で回す）")
+        print("日本語の点検: 未実施（スライドは build_slides.py wording、ドキュメントは docs.py wording <URL> を build/ で回す）")
         return s
     print(f"日本語の点検: 文 {s['文']}・指摘 {s['指摘']}（未判断 {s['未判断']}・残す {s['残す']}）・前の点検から直した {s['直した']}"
           f"・意味の変わる恐れ {s['恐れ']}（未確認 {s['未確認']}）・聞く {s['聞く']}（指摘と恐れ）・書き直し {s['書き直し']} / {s['上限']} 回")
@@ -325,7 +325,7 @@ def show(st, tool="wording", folder=None):
     if folder is not None:
         sv, state = st.get("saved") or {}, saved_state(st, folder)
         print(f"保存した資料との照合: {state}" + (f"（{sv.get('url')} リビジョン {sv.get('revision')}・{sv.get('ts')}）" if sv else "")
-              + "。点検が済んでも、組んで画像を見たあとの照合（gslides.py wording <URL> か docs.py wording <URL>）が済むまでは渡さない")
+              + "。点検が済んでも、組んで画像を見たあとの照合（check_slides.py wording <URL> か docs.py wording <URL>）が済むまでは渡さない")
         for p in sv.get("problems", [])[:8] if state == "通らない" else []:
             print(f"[照合が通らない] {p}")
     return s
@@ -392,7 +392,7 @@ def verify(folder, url, revision, units, problems=(), tool="wording"):
     last = st.get("last") or {}
     out = list(problems)
     if not last:
-        out.append("日本語の点検を回していない（スライドは slides.py wording を先に回す）")
+        out.append("日本語の点検を回していない（スライドは build_slides.py wording を先に回す）")
     else:
         if summarize(st)[0]["状態"] != "済み":
             out.append("日本語の点検が済みでない（wording.py <資料のフォルダ> で残りを見る）")
@@ -417,7 +417,7 @@ def verify(folder, url, revision, units, problems=(), tool="wording"):
 def decide(folder, status, ids, why):
     """指摘（W…）か恐れ（R…）の判断を残す。ID は最後の点検にあるものだけ。keep は W だけ、ok は R だけ。"""
     st = load(folder)
-    last = st.get("last") or sys.exit(f"{os.path.join(folder, STATE)} がない（点検は未実施）。先に slides.py wording か docs.py wording を回す")
+    last = st.get("last") or sys.exit(f"{os.path.join(folder, STATE)} がない（点検は未実施）。先に build_slides.py wording か docs.py wording を回す")
     known = {x["id"]: x for x in last.get("findings", []) + last.get("risks", [])}
     bad = [i for i in ids if i not in known or (status == "keep" and not i.startswith("W")) or (status == "ok" and not i.startswith("R"))]
     bad and sys.exit(f"最後の点検にない ID か、使えない判断（keep は W…、ok は R…、ask はどちらも）: {', '.join(bad)}")
@@ -430,7 +430,7 @@ def decide(folder, status, ids, why):
         st["rounds"] = 0
     st["summary"], _, _ = summarize(st)
     save(folder, st)
-    show(st, "docs.py wording <URL>" if st.get("kind") == "docs" else "slides.py wording", folder)
+    show(st, "docs.py wording <URL>" if st.get("kind") == "docs" else "build_slides.py wording", folder)
 
 
 def selftest():
@@ -445,7 +445,7 @@ def selftest():
     # 守る語の崩れ（改悪は出し、言い回しだけを直したものは出さない）
     bad = [("検証は不要ではない", "検証は不要だ"), ("価格は月 100 円", "価格は月 120 円"), ("Databricks の Unity Catalog で管理する", "Databricks のカタログで管理する"),
            ("「書き方の取り決め」に書く", "「書き方の決まり」に書く"), ("A 社が B 社に渡す", "B 社が A 社に渡す"), ("詳しくは https://example.com/a", "詳しくは https://example.com/b"),
-           ("`slides.py build` で組む", "slides.py で組む"), ("移行しない", "移行する")]
+           ("`build_slides.py build` で組む", "build_slides.py で組む"), ("移行しない", "移行する")]
     good = [("4 つの構成の比べ", "4 つの構成を比べる"), ("前の版のファイル", "前のバージョンのファイル"), ("費用は、CU 時間で見積もる", "費用は CU 時間で見積もる"),
             ("AI がデータを語る", "AI がデータの傾向を示す"), ("2026年に始める", "2026 年に始める"), ("Spark 3.5 で動かさない", "Spark 3.5 では動かさない")]
     assert all(guard(a, b) for a, b in bad), [(a, b) for a, b in bad if not guard(a, b)]
@@ -565,7 +565,7 @@ def selftest():
         open(f"{d}/build/p01.json", "w").write("b")  # 照合のあとに手元を直した
         assert saved_state(load(d), d) == "古い" and stale(load(d), d) == ["build/p01.json"]
         with contextlib.redirect_stdout(io.StringIO()) as shown:
-            show(load(d), "slides.py wording", d)
+            show(load(d), "build_slides.py wording", d)
         assert "点検: 古い。点検のあとに変わったファイル build/p01.json" in shown.getvalue() and "点検: 済み" not in shown.getvalue()
         assert not verify(d, url, "r1", page(*texts)) and any("点検のあとに変わったファイル: build/p01.json" in x for x in load(d)["saved"]["problems"])
         open(f"{d}/build/p01.json", "w").write("a2")  # 文の変わらない直し（位置・大きさ）を点検し直しても、前の照合は古い（組んでいない）
@@ -640,7 +640,7 @@ def main(argv):
         a = ap.parse_args(argv[1:])
         ids = [i for x in a.ids for i in x.split()]  # zsh は引用符のない $IDS を空白で分けず 1 つの引数で渡す（14/16 本で断られた。2026-11-17）
         if not ids:  # 閉じるものがない（ID を集めた結果が空）。断らずに今の状態を出す
-            show(load(a.folder), "docs.py wording <URL>" if load(a.folder).get("kind") == "docs" else "slides.py wording", a.folder)
+            show(load(a.folder), "docs.py wording <URL>" if load(a.folder).get("kind") == "docs" else "build_slides.py wording", a.folder)
             return
         return decide(a.folder, argv[0], ids, a.why)
     if len(argv) == 1 and not argv[0].startswith("-"):

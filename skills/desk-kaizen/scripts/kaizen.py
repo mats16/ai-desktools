@@ -23,7 +23,7 @@ import gapi
 
 SECTIONS = ("## 変えること", "## 理由", "## 背景", "## 過去資料での検証", "## 影響", "## 迷ったところ")
 MAX_BODY = 60000  # GitHub の Issue の本文は 65536 字まで
-DESIGN = re.compile(r"skills/(deck-design/(slides|docs)\.md|build-slides/(scripts/(slides|template|box_pad|brand|notes)\.py|assets/)|build-docs/(scripts/(docs|doc_layout)\.py|assets/))")  # 見た目が変わりうるファイル
+DESIGN = re.compile(r"skills/(deck-design/(slides|docs)\.md|build-slides/(scripts/(build_slides|slides|template|box_pad|brand|notes)\.py|assets/)|build-docs/(scripts/(docs|doc_layout)\.py|assets/))")  # 見た目が変わりうるファイル
 URL_ID = re.compile(r"https://docs\.google\.com/(?:presentation|document)/d/([\w-]+)")
 COUNT = re.compile(r"^== (要修正|要確認)[^:]*: (\d+)(?:（[^）]*）)? ==$", re.M)  # 「== 要確認: 16（うち見積もり 11。画像で確定する） ==」も
 HIT = re.compile(r"^\[(.+?)\] (.*)$", re.M)
@@ -45,7 +45,7 @@ SELECT = Path(__file__).resolve().parents[1] / "prompt_select.md"
 UNATTENDED = "\n\n人のいない実行なので、確かめたいことがあっても聞かずに、依頼に書いてあることから決めて最後まで書く。決めたことは最後の返事に書く。"  # 確かめの決まり（deck-flow-003）をそのまま守って止まる子がいた（2026-10-30、GPT）
 REPLAY = ("desk-tools のスキル（deck-workflow と build-slides）に従い、{folder}/{outline} の構成で、スライドを JSON のページで書き直してください。"
           "構成はもう決まっています。聞き手への確認、構成案のレビュー、代表の 3 枚のレビュー、/deck-review はせず、Google で組むことも画像を取ることもしないでください。"
-          "{folder}/build/ に deck.json と各ページの JSON を書き、slides.py lint deck.json の要修正を 0 にしたところで止めてください。")
+          "{folder}/build/ に deck.json と各ページの JSON を書き、build_slides.py lint deck.json の要修正を 0 にしたところで止めてください。")
 
 
 def sh(*cmd, cwd=None, env=None, check=True):
@@ -148,7 +148,7 @@ def lint_cmd(w, urls):
 
 
 def is_slides(build):
-    """build/ の正本がスライド（deck.json か pages.py）なら True、ドキュメント（doc.md）なら False。両方のスライドがあるときは slides.py が止める。"""
+    """build/ の正本がスライド（deck.json か pages.py）なら True、ドキュメント（doc.md）なら False。両方のスライドがあるときは build_slides.py が止める。"""
     if any((build / f).is_file() for f in ("deck.json", "pages.py")):
         return True
     if (build / "doc.md").is_file():
@@ -157,7 +157,7 @@ def is_slides(build):
 
 
 def page_shots(folder, slides, repo):
-    """check が出したページの画像（ファイルの名前 → パス）。スライドの画像は WebP にそろえる。base の側の前のバージョンの gslides.py は PNG を出すので、
+    """check が出したページの画像（ファイルの名前 → パス）。スライドの画像は WebP にそろえる。base の側の前のバージョンの check_slides.py は PNG を出すので、
     同じ劣化なしの WebP にしてから比べる（同じ画素なら同じバイト列になる。形式の違いだけを、見た目の変更と数えない）。"""
     if slides and (old := sorted(folder.glob("p-*.png"))):
         sh("uv", "run", "-q", repo / "skills" / "build-slides" / "scripts" / "sheet.py", "--webp", *old)
@@ -177,6 +177,7 @@ def rebuild(w, folders, pages=None, keep=False):
         try:
             for side in ("base", "head"):
                 s = w.scripts(side, "build-slides" if slides else "build-docs")
+                # 前のバージョンにもある互換名を使う（head の側は新しい実装へ渡す）。
                 r = sh(sys.executable, s / ("slides.py" if slides else "docs.py"), "new", out_dir, f"{time.strftime('%Y%m%d')}_検証_{w.name}_{label.replace(' ', '')}_{side}", cwd=build, env={"DESK_VERIFY": "1"})
                 fid = URL_ID.findall(r.stdout)[-1]
                 made.append(fid)
@@ -184,7 +185,7 @@ def rebuild(w, folders, pages=None, keep=False):
                 outs.append(sh(*cmd, cwd=build, env={"DESK_VERIFY": "1"}, check=False).stdout)
                 cj = Path(f"/tmp/slides_{fid[:8]}/changed.json")
                 if slides and cj.is_file() and any(x["image"] is None for x in json.loads(cj.read_text())["pages"]):  # 画像のないページ（WebP にできなかった）を、変わらなかったページと取り違えない
-                    sys.exit(f"{side} のページの画像を WebP にできなかった（gslides.py check の出力）。uv と Pillow を確かめてから回し直す")
+                    sys.exit(f"{side} のページの画像を WebP にできなかった（check_slides.py check の出力）。uv と Pillow を確かめてから回し直す")
                 shots[side] = page_shots(Path(f"/tmp/{'slides' if slides else 'docs'}_{fid[:8]}"), slides, w.repo)
         finally:
             for fid in made if not keep else []:
@@ -379,7 +380,7 @@ def lint_build(plugin, build):
     """変えた版の lint を、組まずに手元で（どちらの出力も同じ物差しで数える）。回らなければ None。"""
     if not build:
         return None
-    out = sh(sys.executable, plugin / "skills" / "build-slides" / "scripts" / "slides.py", "lint", "deck.json", "--all", cwd=build, env={"DESK_VERIFY": "1", "DESK_CONFIG": ""}, check=False).stdout  # --all: 既定は前に回したときから変わったページだけで、書く役の最後の lint のあとでは、ほとんどのページを見ない
+    out = sh(sys.executable, plugin / "skills" / "build-slides" / "scripts" / "build_slides.py", "lint", "deck.json", "--all", cwd=build, env={"DESK_VERIFY": "1", "DESK_CONFIG": ""}, check=False).stdout  # --all: 既定は前に回したときから変わったページだけで、書く役の最後の lint のあとでは、ほとんどのページを見ない
     return out if COUNT.search(out) else None
 
 
@@ -684,7 +685,7 @@ def shots_selftest():
         for d, colors in ((base, ((200, 0, 0), (200, 0, 0))), (head, ((200, 0, 0), (0, 0, 200)))):
             for n, c in enumerate(colors, 1):
                 png(d / f"p-{n:02d}.png", c)
-        page_shots(head, True, repo)  # head の側は、gslides.py check が WebP にしたもの
+        page_shots(head, True, repo)  # head の側は、check_slides.py check が WebP にしたもの
         b, h = page_shots(base, True, repo), page_shots(head, True, repo)
         assert sorted(b) == sorted(h) == ["p-01.webp", "p-02.webp"] and not list(base.glob("*.png"))
         assert b["p-01.webp"].read_bytes() == h["p-01.webp"].read_bytes() and b["p-02.webp"].read_bytes() != h["p-02.webp"].read_bytes()
@@ -693,6 +694,27 @@ def shots_selftest():
 
 
 def selftest():
+    from types import SimpleNamespace
+    from unittest.mock import patch
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d).resolve()
+        (root / "material" / "build").mkdir(parents=True)
+        (root / "material" / "build" / "deck.json").write_text("{}")
+        for side, names in (("base", ("slides.py", "gslides.py")), ("head", ("slides.py", "gslides.py", "build_slides.py", "check_slides.py"))):
+            (root / side).mkdir()
+            for name in names:
+                (root / side / name).touch()
+        calls = []
+        def run_script(_python, script, command, *args, **kwargs):
+            assert script.is_file(), script  # base に新名はない。head でも互換の入口がある。
+            calls.append((script.parent.name, command))
+            return SimpleNamespace(stdout="https://docs.google.com/presentation/d/test_version_check/edit" if command == "new" else "== 要修正: 0 ==\n== 要確認: 0 ==\n")
+        w = SimpleNamespace(need=lambda: None, verify=root / "verify", name="test", ws=root, repo=root,
+                            scripts=lambda side, skill: root / side, label=lambda _: "資料 1", log=lambda *args: None)
+        with patch.object(gapi, "config", return_value={"drive": {"desk": "test-folder"}}), patch.object(gapi, "trash") as trash, patch(__name__ + ".sh", side_effect=run_script), patch(__name__ + ".page_shots", return_value={}):
+            rebuild(w, [root / "material"])
+            assert calls == [("base", "new"), ("base", "check"), ("head", "new"), ("head", "check")]
+            assert trash.call_count == 2
     before = "== 要修正: 1 ==\n[絵文字] p1: 「✅」\n\n== 要確認: 2 ==\n[あおり] p2: 「このままでは」\n[空疎な言い回し] p3: 「実現する」\n"
     after = "== 要修正: 0 ==\n\n== 要確認: 2 ==\n[あおり] p2: 「このままでは」\n[空疎な言い回し] p3: 「実現する」\n\n== 要確認（ワークスペースの点検）: 1 ==\n[気になる語] p4\n"
     with tempfile.TemporaryDirectory() as d:  # 拡張のないバージョン（2026-11-04 から）には -e を渡さない。前のバージョンには渡す
@@ -707,6 +729,8 @@ def selftest():
     assert "Acme" in detail and "Acme" not in public and "✅" not in public  # Issue には資料の名前も本文も出さない
     body = "\n".join(SECTIONS)
     assert check_body(body, ["skills/build-slides/scripts/lint.py"], "x", []) == []
+    for script in ("slides.py", "build_slides.py"):
+        assert any("前後の画像がない" in x for x in check_body(body, [f"skills/build-slides/scripts/{script}"], "x", []))
     assert len(check_body(body, ["skills/deck-design/slides.md"], "x", [])) == 2  # 見た目なのに画像がない。決まりの文なのに走らせていない
     probe_ok = f"{PROBE}（claude、モデル: x、変えた版 abc1234）\n\n- 比べた依頼: 2 本（両方が出し切って lint が回ったもの）\n- 見立て: 効いた\n"
     assert len(check_body(body, ["skills/deck-design/slides.md"], probe_ok, [], "abc1234")) == 1  # 画像がないだけ

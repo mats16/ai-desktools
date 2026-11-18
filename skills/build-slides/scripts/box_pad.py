@@ -3,17 +3,17 @@
 # dependencies = ["pillow"]
 # ///
 """usage: uv run -q box_pad.py <deck.json> <画像のフォルダ> [ページ ...]   （--selftest で自己確認）
-箱の中の文字と、箱の下端の間を、Google が描いたページの画像（gslides.py check の p-NN.webp）で測る。
+箱の中の文字と、箱の下端の間を、Google が描いたページの画像（check_slides.py check の p-NN.webp）で測る。
 1 字分（その枠でいちばん小さい文字の大きさ）より狭いものを出す（slides-visual-027、deck-design「枠と文字の間は 1 字分」）。
 [slides-lint-019] JSON の行の高さの見積もりは ±0.4 in ずれるので、画像で測る。
-見るのは、塗りの箱の中にある、上寄せの 2 行以上の文字の枠と、白いカードの下端の真上にある 1 行の文字の枠。gslides.py check が呼ぶ。
+見るのは、塗りの箱の中にある、上寄せの 2 行以上の文字の枠と、白いカードの下端の真上にある 1 行の文字の枠。check_slides.py check が呼ぶ。
 もう 1 つ、1 つだけで置く淡色のパネル（白いカード・濃紺の箱・横に同じ高さの箱が並ぶものを除く）の上寄せの文字で、
 下の空きが上の空きより SLACK_MIN 以上大きいものを出す（slides-visual-028、deck-design。中央に置くか縮める。2026-10-10）。"""
 import json, os, sys
 
 from PIL import Image
 
-sys.dont_write_bytecode = True  # scripts/ に __pycache__ を残さない（gslides.py と同じ）
+sys.dont_write_bytecode = True  # scripts/ に __pycache__ を残さない（check_slides.py と同じ）
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lint  # noqa: E402
 import slides  # noqa: E402
@@ -70,7 +70,7 @@ MID = "中央寄せの文字と箱の上下の端の間が 1 字分より狭い"
 SLACK = "上寄せの文字の下が、上より大きく空いている"  # [slides-lint-026] slides-visual-028（deck-design）。淡色のパネルの文字は上下の中央に置く
 SLACK_MIN = 0.25  # in。下の空きが上の空きをこれ以上超えたら出す（1 行ぶんほど）
 CARD = "白いカードの最終行と下端が近い"  # [slides-lint-027] slides-visual-027（deck-design）
-CARD_MIN = 0.28  # in。2 字分ほど。slides.py のカードは、見出しの上もこれと同じ見た目にする（中身を上下の中央に置く）
+CARD_MIN = 0.28  # in。2 字分ほど。build_slides.py のカードは、見出しの上もこれと同じ見た目にする（中身を上下の中央に置く）
 
 
 PARALLEL = 4  # これより多くのページは、ページごとにプロセスを分けて並べて測る（53 枚で 6.7 秒、1 枚 0.1 秒ほど）

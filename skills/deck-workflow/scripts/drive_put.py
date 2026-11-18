@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""仕上げたファイル（html・csv など）を Google Drive のフォルダに上げる（deck-workflow/drive.md）。スライドは slides.py が Drive に直接作る。
+"""仕上げたファイル（html・csv など）を Google Drive のフォルダに上げる（deck-workflow/drive.md）。スライドは build_slides.py が Drive に直接作る。
 同じ名前のファイルがフォルダにあれば中身だけ上書きする（ID・URL・共有の設定は変わらない）。なければ作る。Google Docs に変換するのは research だけ。
 usage: drive_put.py <ファイル> <フォルダの URL か ID> <Drive 上の名前（YYYYMMDD_ で始める。拡張子は省くと付ける）>
        drive_put.py research <Research/<内容>_<YYYYMMDD>.md>   調べものを Google Docs に変換して、[drive] desk の下の Research（なければ作る）に

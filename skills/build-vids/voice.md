@@ -9,7 +9,7 @@ Run in the material's `build/` folder. The URL is in the outline.
 ```sh
 N=<build-vids folder>/scripts/speaker_notes.py
 K=<build-slides folder>/scripts                  # the scripts/ folder of the skill build-slides
-python3 $K/gslides.py check <URL> --all        # deck.md (text and current notes of each page) and page images in /tmp/slides_<first 8 chars of ID>/
+python3 $K/check_slides.py check <URL> --all        # deck.md (text and current notes of each page) and page images in /tmp/slides_<first 8 chars of ID>/
 python3 $N pull <URL> > notes_vids.json        # current notes as {"1": "…", …}; pages whose notes differ from `speakerNotes` in the page JSON go to stderr
 python3 $N lint notes_vids.json --lang ja      # run after every edit (--lang en for English decks; without --lang, `[desk] default_language` in desk.toml)
 python3 $N push <URL> notes_vids.json          # replace the notes only
@@ -43,9 +43,9 @@ Before writing, open the file for the deck's language: [voice_ja.md](voice_ja.md
 - It stops before writing anything unless an `.md` file in the material's folder (the outline holds the URL) contains the deck's ID, because page file names such as `p05.json` repeat across materials, and pushing from another material's `build/` would overwrite that material's page files.
 - The first time, it saves the current notes to `notes_before_<date>.json` in `build/`. If any `notes_before_*.json` exists, it saves nothing, so the file keeps the notes from before the first push. To restore them, `push` that file.
 - It replaces only the speaker notes of pages whose notes changed (in the deck's font), reads them back, and stops if they differ from the script.
-- It rewrites `speakerNotes` in the page file of each slide, keeping the file's layout. It finds the file by the file-name mark in the slide's ID (not by position, so a locally reordered `deck.json` does not send notes to the wrong file). It lists the slides whose file it cannot find (pages.py decks, pages added on screen); rewrite those notes yourself (`d.note` for pages.py) before the next `slides.py build`, because the build writes the page files' notes over the deck's (it lists the pages in `notes_rewritten`).
-- If the deck had no on-screen edits, it records the new version, so the next `slides.py build` does not take the push for an on-screen edit. If it had some, it leaves the record as it was, and the next build still stops for them (slides-command-002 in `build-slides` → commands).
-- The page hash leaves out the notes, so the next `slides.py build` keeps the pages whose only change is the notes (their comments stay attached), and rewrites only their notes when the page JSON differs from the deck. Pages built before 2026-10-23 have the notes in the hash, so after a push the next build rebuilds them once.
+- It rewrites `speakerNotes` in the page file of each slide, keeping the file's layout. It finds the file by the file-name mark in the slide's ID (not by position, so a locally reordered `deck.json` does not send notes to the wrong file). It lists the slides whose file it cannot find (pages.py decks, pages added on screen); rewrite those notes yourself (`d.note` for pages.py) before the next `build_slides.py build`, because the build writes the page files' notes over the deck's (it lists the pages in `notes_rewritten`).
+- If the deck had no on-screen edits, it records the new version, so the next `build_slides.py build` does not take the push for an on-screen edit. If it had some, it leaves the record as it was, and the next build still stops for them (slides-command-002 in `build-slides` → commands).
+- The page hash leaves out the notes, so the next `build_slides.py build` keeps the pages whose only change is the notes (their comments stay attached), and rewrites only their notes when the page JSON differs from the deck. Pages built before 2026-10-23 have the notes in the hash, so after a push the next build rebuilds them once.
 
 ## In Vids
 

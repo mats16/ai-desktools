@@ -193,7 +193,7 @@ def layout(args):
         path = out / f"p-{i + 1:02d}.png"
         path.write_bytes(urllib.request.urlopen(gapi.thumbnail(slides_id, pages[i])["contentUrl"]).read())
         return path
-    with ThreadPoolExecutor(6) as ex:  # gslides.py の THREADS と同じ
+    with ThreadPoolExecutor(6) as ex:  # check_slides.py の THREADS と同じ
         paths = list(ex.map(fetch, range(len(pages))))
     rows = []
     for i, (pid, path) in enumerate(zip(pages, paths)):
@@ -234,7 +234,7 @@ def scenes_of(slides_id):
 
 def look(slides, image):
     """ページの見た目の印（ノートを除く）。ID（…ObjectId）と URL は外し、画像（contentUrl）は image(URL) が返す中身の印で比べる。
-    build-slides の build は、ノートだけを直してもページを新しい ID で作り直し、手元の画像を組むたびに違う URL で入れる（slides.py の carry）。
+    build-slides の build は、ノートだけを直してもページを新しい ID で作り直し、手元の画像を組むたびに違う URL で入れる（build_slides.py の carry）。
     contentUrl も 30 分で切れる一時 URL。どちらも、ID や URL のままでは、ノートの修正とページの修正を見分けられない。"""
     def strip(x):
         if isinstance(x, dict):

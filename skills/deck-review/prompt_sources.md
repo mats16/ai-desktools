@@ -3,7 +3,7 @@
 The request you give the source-check child agent (deck-flow-019 in step 5 of `deck-workflow` → steps 1–5). It opens the sources of the rows in the 「出典の表」 and checks the values against the source text, because the maker's 「済」 is self-attested, and errors whose source was a chat, a meeting, or the maker's own reading passed every review so far (only a proofread that reopened the URLs caught them). Start it in the background and do not wait for it (deck-agents-013); it never blocks writing or building. Fill in the `<>`. How to start it (a new child agent without the conversation, the main agent's model and reasoning effort passed explicitly) is in `deck-workflow` → child agents.
 
 - **Pass 1 (rows):** after the 「出典の表」 is written in step 5. Delete the "Pages" section of the request.
-- **Pass 2 (rows and pages):** after building the whole in step 8, together with round 1 of `/deck-review`. Keep the "Pages" section and pass the text that `gslides.py check` wrote (`$D/deck.md`; for documents `$D/text.md`). Rows marked 「照合済」 in pass 1 are not listed again.
+- **Pass 2 (rows and pages):** after building the whole in step 8, together with round 1 of `/deck-review`. Keep the "Pages" section and pass the text that `check_slides.py check` wrote (`$D/deck.md`; for documents `$D/text.md`). Rows marked 「照合済」 in pass 1 are not listed again.
 - For a content/structure fix after delivery that adds or changes rows, run pass 2 on the changed pages only.
 - When a child returns items under 「見ていない」, start another child on them with the same request and the sentence in "Limit".
 
@@ -19,7 +19,7 @@ You check the facts of a material against their sources. Open each source yourse
 ## How to open sources
 - Public pages: fetch the page itself (WebFetch, or `curl -sL`). A search result snippet is not the source. Read the tables and footnotes (legends such as ‡ in availability tables).
 - GitHub: `gh api repos/<owner>/<repo>`, `gh api repos/<owner>/<repo>/contents/<path>`, or raw.githubusercontent.com (README, package.json, Cargo.toml, and so on).
-- Google Slides and Docs: the file-storage tool in `[sources]` of the settings `desk.toml`, or `gslides.py export <URL> /tmp/<name>.pptx` (`build-slides`) and the slide XML text; for Docs `docs.py export <URL> /tmp/<name>.pdf` (`build-docs`) and `pdftotext`. Do not run `gslides.py check` (it takes page images and shares the parent's rate limit).
+- Google Slides and Docs: the file-storage tool in `[sources]` of the settings `desk.toml`, or `check_slides.py export <URL> /tmp/<name>.pptx` (`build-slides`) and the slide XML text; for Docs `docs.py export <URL> /tmp/<name>.pdf` (`build-docs`) and `pdftotext`. Do not run `check_slides.py check` (it takes page images and shares the parent's rate limit).
 - Meetings and chat: the `meetings` and `chat` tools in `[sources]`. Read the part the `出典` cell points to (time, message).
 - Local data (kind `データ`): open the file and recompute. For `計算` rows, recompute from the original values of the rows it cites, not from rounded values (deck-content-037).
 

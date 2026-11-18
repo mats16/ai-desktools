@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """AI Desk Tools のテンプレートを作る・合わせ直す（../themes.md。会社のテンプレートから作る流れは ../template_create.md）。
 テーマはテーマのファイル（kind theme。組み込みの ../themes/<名前>.json と、ワークスペースの themes/slides/<名前>.json）。色は役割の名前で書く。
-テーマのファイルだけを見る（形と役割の組のコントラスト）のは slides.py lint <ファイル>（Google を読まない）。
+テーマのファイルだけを見る（形と役割の組のコントラスト）のは build_slides.py lint <ファイル>（Google を読まない）。
 usage:
   template.py audit <Google Slides の URL>  元にするテンプレートを読み、ページの大きさ・マスターの配色とコントラスト・レイアウト・書体と大きさ・和文の有無を出す（変えない）
   template.py <テーマ>                      配色・書体・ページ番号・見本のページをテーマに合わせ直す（ID は変わらない）
   template.py <テーマ> --from-base [<元の URL>]  元のテンプレート（渡さなければ白紙の BLANK_PPTX）を [drive] desk の下の Themes に複製して作り直し、
                                             URL を desk.toml の [slides.templates] に書き込む。元の URL は desk.toml に持たない（会話で渡されたものを使う）
 表紙・扉のパターン（テーマの cover・section）の文字の幅と地の明るさを測り、ワークスペースのテーマのファイルに書き込む（lint が Google を読まずに使う）。
-作ったテンプレートのマスターには、テーマの値をすべて書く（slides.py の THEME_MARK。slides.py theme <URL> でテーマのファイルに戻せる）。Drive の説明に description を、
-プロパティにテーマの名前を書く。全社の共有テーマのフォルダ（[drive] shared_themes）に置くと、slides.py themes がほかの人に候補として出す。
+作ったテンプレートのマスターには、テーマの値をすべて書く（build_slides.py の THEME_MARK。build_slides.py theme <URL> でテーマのファイルに戻せる）。Drive の説明に description を、
+プロパティにテーマの名前を書く。全社の共有テーマのフォルダ（[drive] shared_themes）に置くと、build_slides.py themes がほかの人に候補として出す。
   template.py --selftest                    見本のページを、API を呼ばずに組めるかを確かめる
-すでに作ったデッキは、slides.py build で組み直すとテーマのファイルの値にそろう（slides.py の theme_diff）。"""
+すでに作ったデッキは、build_slides.py build で組み直すとテーマのファイルの値にそろう（build_slides.py の theme_diff）。"""
 import colorsys, json, os, re, sys, time, zipfile
 from collections import Counter
 
@@ -44,7 +44,7 @@ PAIRS = [(WHITE, NAVY, 4.5, "結論バンドの白"), (SUB_ON_NAVY, NAVY, 4.5, "
          (RED_TEXT, RED_SOFT, 4.5, "淡い赤の札"), (RED, BG, 3.0, "18pt 以上の赤の文字"), (ON_RED, RED, 3.0, "赤の塗りの太字（番号の丸）"),
          (WHITE, NAVY_BLOCK, 4.5, "扉の中のブロックの白"), (SUB_ON_NAVY, NAVY_BLOCK, 4.5, "扉の中のブロックの補足"), (STAGE_TEXT, GA, 4.5, "GA の札"),
          (STAGE_TEXT, PREVIEW, 4.5, "Beta・Preview の札"), (WHITE, OSS, 4.5, "OSS の札")]
-# 扉の章番号（88pt 太字）と扉の地の組（slides-visual-038）。地の明るさ（slides.py の TONES）ごとに、テーマの扉が使うものだけを測る。濃紺の地は Blank に組む扉でも使う
+# 扉の章番号（88pt 太字）と扉の地の組（slides-visual-038）。地の明るさ（build_slides.py の TONES）ごとに、テーマの扉が使うものだけを測る。濃紺の地は Blank に組む扉でも使う
 DIVIDER = {"dark": (TONES["dark"][2], NAVY, 3.0, "濃紺の地の扉の章番号"), "accent": (TONES["accent"][2], RED, 3.0, "赤の地の扉の章番号"),
            "light": (TONES["light"][2], BG, 3.0, "白の地の扉の章番号")}
 
@@ -54,7 +54,7 @@ def theme_pairs(t):
     tones = {"dark"} | {s.get("tone", "dark") for s in t.get("section", []) if isinstance(s, dict)}
     return PAIRS + [DIVIDER[k] for k in DIVIDER if k in tones]
 NO_RENDER = {"Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic"}  # API は受け付けるが、描くと明朝と欧文のセリフ体になる（Google Fonts にない）
-PAGE = (13.333, 7.5)  # slides.py の版面（in）。違う大きさのテンプレートには組めない
+PAGE = (13.333, 7.5)  # build_slides.py の版面（in）。違う大きさのテンプレートには組めない
 
 
 def page_ok(size):
@@ -63,7 +63,7 @@ def page_ok(size):
 
 
 def theme(name):
-    """テーマ name の表（slides.py の load_theme）。ファイルがなければ止める。"""
+    """テーマ name の表（build_slides.py の load_theme）。ファイルがなければ止める。"""
     if (t := load_theme(name)) is None:
         sys.exit(f"テーマ {name} のファイルがない（ある: {', '.join(theme_names())}）。ワークスペースの themes/slides/{name}.json に書く（../template.md）")
     return t
@@ -125,7 +125,7 @@ def fix(T, pairs=PAIRS + [DIVIDER["dark"]]):
 
 
 def check(theme, t):
-    """テーマ theme（表 t）の役割の組のコントラストと、届かない色の直す案を出す。すべて届けば True。slides.py lint <テーマのファイル> が呼ぶ。"""
+    """テーマ theme（表 t）の役割の組のコントラストと、届かない色の直す案を出す。すべて届けば True。build_slides.py lint <テーマのファイル> が呼ぶ。"""
     T, ps = palette(t), theme_pairs(t)
     F, out = fix(T, ps)
     name = {**{c: n for c, n, *_ in FIXED}, **{slot: n for n, slot in ROLE.items()}}
@@ -159,7 +159,7 @@ def audit(url):
     p = request("GET", f"{SLIDES}/{file_id(url)}")
     w, h = (p["pageSize"][k]["magnitude"] / EMU for k in ("width", "height"))
     out = [f"# {p.get('title', '')}", "", f"- ページの大きさ: {w:.2f} × {h:.2f} in" + ("" if page_ok(p["pageSize"]) else
-           f"。slides.py は {PAGE[0]:.2f} × {PAGE[1]} in でしか組めない。複製を画面の「ファイル → ページ設定 → カスタム」で {PAGE[0]:.2f} × {PAGE[1]} インチにし、その URL で audit し直す")]
+           f"。build_slides.py は {PAGE[0]:.2f} × {PAGE[1]} in でしか組めない。複製を画面の「ファイル → ページ設定 → カスタム」で {PAGE[0]:.2f} × {PAGE[1]} インチにし、その URL で audit し直す")]
     used = Counter(s.get("slideProperties", {}).get("masterObjectId") for s in p.get("slides", []))
     out.append(f"- ページ: {len(p.get('slides', []))} 枚。マスター {len(p['masters'])} 個、レイアウト {len(p['layouts'])} 個")
     for m in p["masters"]:
@@ -171,10 +171,10 @@ def audit(url):
             c = sch.get(k)
             if c:
                 out.append(f"| {k} | `{c}` | " + " | ".join(f"{contrast(c, g):.2f}" for g in ("FFFFFF", sch.get("LIGHT1", "FFFFFF"), sch.get("DARK1", "000000"))) + " |")
-        out += ["", "| レイアウト | プレースホルダー |", "|---|---|"]  # slides.py が使えるのは、ページ番号の枠だけのもの（is_blank）
+        out += ["", "| レイアウト | プレースホルダー |", "|---|---|"]  # build_slides.py が使えるのは、ページ番号の枠だけのもの（is_blank）
         for l in (l for l in p["layouts"] if l["layoutProperties"].get("masterObjectId") == m["objectId"]):
             ph = placeholders(l)
-            out.append(f"| {l['layoutProperties']['displayName']} | {', '.join(ph) or 'なし'}" + ("（slides.py が使える Blank）" if is_blank(l) else "") + " |")
+            out.append(f"| {l['layoutProperties']['displayName']} | {', '.join(ph) or 'なし'}" + ("（build_slides.py が使える Blank）" if is_blank(l) else "") + " |")
     fonts, sizes, ja, latin = Counter(), {}, 0, 0
     for pg in p["masters"] + p["layouts"]:
         for e, t, st in runs(pg, empty=True):
@@ -202,7 +202,7 @@ def specimen(theme, t, origin=()):
     """テンプレートの見本のページ。テーマの色と部品を一通り、決まり（deck-design → slides）どおりの使い方で置く（色の確認と、部品を直したときの確認に使う）。
     origin は、色の早見表の出典の行に足す元のテンプレートの部品（template() が作る。合わせ直しでは元が分からないので書かない）。"""
     T = palette(t)
-    use_theme(t)  # 固定の色と著作権表示はテーマの値（slides.py build がデッキのテーマから読むのと同じ）
+    use_theme(t)  # 固定の色と著作権表示はテーマの値（build_slides.py build がデッキのテーマから読むのと同じ）
     use_font(theme_font(t))  # 字幅は、styles がマスターに書く書体のもの
     docs = "https://developers.google.com/workspace/slides"  # 出典の行の見本のリンク。どの会社のテンプレートにも入るので、会社に結びつかない公開のページ
 
@@ -240,7 +240,7 @@ def specimen(theme, t, origin=()):
             d.text(s, x + PAD, y + PAD, cw - 2 * PAD, ch - 2 * PAD, [(f"{name}\n", {"bold": True}), f"{tone(T, c)}\n", use], color=on(c, fg), spacing=115)
         d.source(s, ["出典: deck-design → slides §1（色の決まり）、build-slides の template_dark.md（暗い本文のテーマ）。", *origin])
         d.note(s, f"テーマ「{theme}」の、テーマに入れない {len(FIXED)} の色です。HEAD・CARD・SUB_ON_NAVY・ON_RED は、書かなければ NAVY・白・RULE・白と同じ色です。"
-                  "DECOR は slides.py の章の扉が使い、ページには書きません。")
+                  "DECOR は build_slides.py の章の扉が使い、ページには書きません。")
 
         s = d.page("部品は役割の色で塗り、大きさと間隔は既定に従う", "カード、パネル、数字、札、正円の番号、表、矢印、結論バンド、出典の行の見本。")
         hw = (W - 0.3) / 2  # d.card の h は、中身を下げる CARD_DOWN の分を足す（下の空きを保つ）
@@ -253,7 +253,7 @@ def specimen(theme, t, origin=()):
         for i, (label, fill, fg) in enumerate([("GA", GA, STAGE_TEXT), ("Beta", PREVIEW, STAGE_TEXT), ("OSS", OSS, WHITE)]):
             d.text(s, X + i * 0.95, 5.13, 0.8, 0.4, label, color=fg, bold=True, align="CENTER", valign="MIDDLE", fill=fill)
         d.text(s, X + 3.2, 5.13, 0.8, 0.4, "推奨", color=RED_TEXT, bold=True, align="CENTER", valign="MIDDLE", fill=RED_SOFT)  # 提供ステージの札と離す（赤と緑を並べない）
-        for n, (size, cx) in enumerate((("small", 4.35), ("medium", 4.85), ("large", 5.45)), 1):  # 正円の番号の 3 つの大きさ（slides.py の NUM）。札と中心をそろえる
+        for n, (size, cx) in enumerate((("small", 4.35), ("medium", 4.85), ("large", 5.45)), 1):  # 正円の番号の 3 つの大きさ（build_slides.py の NUM）。札と中心をそろえる
             d.num(s, n, X + cx, 5.33, size)
         rx = X + hw + 0.3
         tb = d.table(s, rx, Y_BODY, [1.6, hw - 1.6], [["役割", "使うところ"], ["NAVY", "扉、結論バンド、表の見出しの行"], ["HEAD", "見出し、表の 1 列目"], ["SUB", "出典、フッター、補足"],
@@ -297,8 +297,8 @@ def specimen(theme, t, origin=()):
 
 
 def pick(p, names=None):
-    """残すマスター（いちばん多くのページが使うもの。同じなら先のもの）と、slides.py が使うレイアウトを選ぶ。レイアウトは、そのマスターの、
-    プレースホルダーがページ番号の枠だけのもの（slides.py の is_blank）。名前が BLANK のもの、型が BLANK のものの順に先にする。
+    """残すマスター（いちばん多くのページが使うもの。同じなら先のもの）と、build_slides.py が使うレイアウトを選ぶ。レイアウトは、そのマスターの、
+    プレースホルダーがページ番号の枠だけのもの（build_slides.py の is_blank）。名前が BLANK のもの、型が BLANK のものの順に先にする。
     names（{"cover"・"section": レイアウトの名前の並び}。テーマの cover・section）があれば、その表紙・扉のパターンも選ぶ（{種類: [レイアウト, …]}。
     並びの順がパターンの番号。同じ名前のレイアウトが 2 つあれば両方）。"""
     used = Counter(s.get("slideProperties", {}).get("masterObjectId") for s in p.get("slides", []))
@@ -315,9 +315,9 @@ def pick(p, names=None):
     extras = {k: [l for n in dict.fromkeys(v) for l in ls if l["layoutProperties"]["displayName"] == n] for k, v in names.items()}
     kept = [l for v in extras.values() for l in v]
     if stale := [l["layoutProperties"]["displayName"] for l in ls if l not in kept and any(LAYOUT_MARK.search(e.get("description", "")) for e in l.get("pageElements", []))]:
-        # 前に表紙・扉として残し、テーマの cover・section から外したパターン。目印が残ると slides.py が使い続け、Blank に選ぶこともある
+        # 前に表紙・扉として残し、テーマの cover・section から外したパターン。目印が残ると build_slides.py が使い続け、Blank に選ぶこともある
         sys.exit(f"テーマの cover・section にない表紙・扉のパターン「{'」「'.join(stale)}」が、テンプレートに残っている。パターンを減らすときは --from-base で作り直す")
-    if bad := [l["layoutProperties"]["displayName"] for l in kept if "SLIDE_NUMBER" not in placeholders(l)]:  # 目印はページ番号の枠に書き、slides.py の createSlide もこの枠を対応づける
+    if bad := [l["layoutProperties"]["displayName"] for l in kept if "SLIDE_NUMBER" not in placeholders(l)]:  # 目印はページ番号の枠に書き、build_slides.py の createSlide もこの枠を対応づける
         sys.exit(f"テーマの cover・section のレイアウト「{'」「'.join(dict.fromkeys(bad))}」に、ページ番号の枠がない。元のテンプレートを複製し、"
                  "画面のテーマビルダーでそのレイアウトにスライド番号のプレースホルダーを足して、その URL を --from-base に渡す")
     cands = sorted((l for l in ls if is_blank(l) and l not in kept),
@@ -329,14 +329,14 @@ def pick(p, names=None):
 
 
 def decor(layout):
-    """表紙・扉のレイアウトに残す置き物（図形・画像・ロゴ・線）。プレースホルダーと、文字の入った枠（著作権の行など。slides.py が書く）は残さない。"""
+    """表紙・扉のレイアウトに残す置き物（図形・画像・ロゴ・線）。プレースホルダーと、文字の入った枠（著作権の行など。build_slides.py が書く）は残さない。"""
     def text(e):
         return "".join(t.get("textRun", {}).get("content", "") for t in e.get("shape", {}).get("text", {}).get("textElements", [])).strip()
     return [e for e in layout.get("pageElements", []) if "placeholder" not in e.get("shape", {}) and not text(e)]
 
 
 def align_decor(layout):
-    """表紙・扉の置き物のうち、元のタイトルの枠と左端がそろっていたもの（ロゴ、短い線など）を、slides.py の文字の左端 X に寄せる要求。
+    """表紙・扉の置き物のうち、元のタイトルの枠と左端がそろっていたもの（ロゴ、短い線など）を、build_slides.py の文字の左端 X に寄せる要求。
     元の余白（例: 0.83 in）のままだと、0.6 in の余白で組む文字と左端がずれる（2026-10-13）。ページの右端まで届くもの（帯、全面の写真や四角）は
     寄せない（右端に地が見える）。"""
     lefts = [e.get("transform", {}).get("translateX", 0) / EMU for e in layout.get("pageElements", [])  # API の JSON は 0 の値を省く
@@ -361,7 +361,7 @@ def text_w(layout):
 
 
 def bg_tone(t, master, layout):
-    """表紙・扉のパターンの地の明るさ（slides.py の TONES）。地は、レイアウトの置き物のうちページ全面を覆う塗りの四角（上にあるもの）、
+    """表紙・扉のパターンの地の明るさ（build_slides.py の TONES）。地は、レイアウトの置き物のうちページ全面を覆う塗りの四角（上にあるもの）、
     なければレイアウトの塗り、なければマスターの塗り（テーマの色はこのテーマの値で引く）。白の文字が 4.5:1 に届けば dark、3:1 なら accent
     （大きな文字だけ白）、届かなければ light。ponytail: 全面の写真や絵の明るさは見ない（塗りだけ）。"""
     scheme = theme_slots(t)
@@ -395,9 +395,9 @@ def strip(pid, p, master, blank, extras=None):
     keep = {blank["objectId"], *(l["objectId"] for l in kept)}
     dels = ([l["objectId"] for l in now["layouts"] if l["objectId"] not in keep]
             + [m["objectId"] for m in now["masters"] if m["objectId"] != master["objectId"]])
-    # マスターの著作権の行とロゴ、Blank の全面の四角（ページの地を覆う）など、プレースホルダーでないもの。フッターは slides.py が書く
+    # マスターの著作権の行とロゴ、Blank の全面の四角（ページの地を覆う）など、プレースホルダーでないもの。フッターは build_slides.py が書く
     dels += [e["objectId"] for pg in (master, blank) for e in pg.get("pageElements", []) if "placeholder" not in e.get("shape", {})]
-    for l in kept:  # 置き物とページ番号の枠（2 つあれば先の 1 つ。slides.py の placeholderIdMappings が 1 つに決まるように）のほかを消す
+    for l in kept:  # 置き物とページ番号の枠（2 つあれば先の 1 つ。build_slides.py の placeholderIdMappings が 1 つに決まるように）のほかを消す
         nums = [e for e in l.get("pageElements", []) if placeholders({"pageElements": [e]}) == ["SLIDE_NUMBER"]]
         dels += [e["objectId"] for e in l.get("pageElements", []) if e not in decor(l) and e not in nums[:1]]
     batch(pid, [{"deleteObject": {"objectId": o}} for o in dels])
@@ -413,7 +413,7 @@ def measured(t, master, extras):
 
 
 def styles(theme, t, master, blank, extras=None):
-    """配色・プレースホルダーの書体・目印（slides.py の theme_reqs。t は measured のもの）と、表紙・扉の置き物の左端、ページ番号の枠（文字は slides.py の
+    """配色・プレースホルダーの書体・目印（build_slides.py の theme_reqs。t は measured のもの）と、表紙・扉の置き物の左端、ページ番号の枠（文字は build_slides.py の
     number_style。右端を本文の右端に、上端を著作権表示の文字にそろえる。この枠は内側の余白が 0）。"""
     kept = [l for v in (extras or {}).values() for l in v]
     reqs = theme_reqs(theme, t, master, blank, extras or {}) + [r for l in kept for r in align_decor(l)]
@@ -533,7 +533,7 @@ def main():
         sn = {"shape": {"placeholder": {"type": "SLIDE_NUMBER"}}}
         master = {"objectId": "m", "pageElements": [{"objectId": "n", "size": {"width": {"magnitude": EMU}, "height": {"magnitude": EMU}}, **sn}]}
         alt = [r["updatePageElementAltText"] for r in styles("visual", visual, master, {"pageElements": []}) if "updatePageElementAltText" in r]
-        m = THEME_MARK.search(alt[0]["description"])  # slides.py build が読む。マスターの配色・書体にない値（説明）も書く
+        m = THEME_MARK.search(alt[0]["description"])  # build_slides.py build が読む。マスターの配色・書体にない値（説明）も書く
         assert len(alt) == 1 and alt[0]["objectId"] == "n" and m.group(1) == "visual" and json.loads(m.group(2)) == {"description": visual["description"]}
         lay = lambda i, m, *els, name="": {"objectId": i, "layoutProperties": {"masterObjectId": m, "displayName": i, "name": name}, "pageElements": list(els)}
         p = {"masters": [{"objectId": "a"}, {"objectId": "b"}], "slides": [{"slideProperties": {"masterObjectId": "b"}}],
@@ -591,7 +591,7 @@ def main():
         assert page_ok({"width": {"magnitude": 12192000}, "height": {"magnitude": 6858000}}) and not page_ok({"width": {"magnitude": 9144000}, "height": {"magnitude": 5143500}})
         return print("selftest ok")
     if a[:1] == ["check"]:
-        sys.exit("template.py check は slides.py lint <テーマのファイル> になった（Google を読まずに、形と役割の組のコントラストを見る）")
+        sys.exit("template.py check は build_slides.py lint <テーマのファイル> になった（Google を読まずに、形と役割の組のコントラストを見る）")
     if a[:1] == ["audit"] and len(a) != 2:
         sys.exit(__doc__)
     if a[:1] == ["audit"]:

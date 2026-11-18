@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""usage: lint.py <deck.json> [--talk]   Google Slides（Slides API の presentations.get の JSON。gslides.py check が書き出して呼ぶ）
+"""usage: lint.py <deck.json> [--talk]   Google Slides（Slides API の presentations.get の JSON。check_slides.py check が書き出して呼ぶ）
        python3 lint.py --selftest で自己確認、--stats で要確認の残り方（規則ごと。textlint.py --stats と同じ）
 --talk は LT など話す資料（聞き手が初めて聞く中身を短く話すもの）。1 枚の本文の字数も見る。
 書いたルールのうち、機械で見られるものを数える。本文の表記の決まり・出典の照合・記録はドキュメントと同じ textlint.py。ドキュメントは build-docs の doc_lint.py。
@@ -14,8 +14,8 @@ import gapi, textlint  # noqa: E402
 from notes import flatten, mag, note_text, paras, ptext  # noqa: E402  要素の位置とノートの文字（build-vids と同じ部品）
 from brand import CLASSIFICATION, COPYRIGHT_FOOTER  # noqa: E402
 from textlint import (FEED, FEED_LINK, HARD, HEAD_PERIOD, HEAD_POLITE, FONT_NG, JA, MONO_NG, NO_LINK, NOT_IN_FACTS, NUM, POLITE_END, WARN, contrast, facts_hit,  # noqa: E402
-                      load_facts, lum, not_in_facts, workspace_checks)  # load_facts・lum・JA は slides.py・template.py が lint から引く
-from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMPH_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, NO_HEAD, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_KICK, Y_LEAD, deck_card, deck_copyright, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（slides.py）と同じものを使う
+                      load_facts, lum, not_in_facts, workspace_checks)  # load_facts・lum・JA は build_slides.py・template.py が lint から引く
+from slides import BAR_MARK, BAND_BOTTOM, COPYRIGHT_PT, EMPH_PT, EMU, FONT, INSET, LAYOUT_MARK, MONO_DEFAULT, NO_HEAD, STAGE_FILL, Y_BODY, Y_BODY_NOLEAD, Y_FOOT, Y_KICK, Y_LEAD, deck_card, deck_copyright, deck_font, deck_mono, em_width, use_font  # 版面・書体・字幅の見積もりは、組む側（build_slides.py）と同じものを使う
 
 MIN_PT = 11  # [slides-lint-001] スライドの文字の下限（slides-visual-002、deck-design）。下回ると要確認（詰まった図の説明など、ページによっては小さくてよい）。社内資料の差し替え用（名前に「差し替え用」）は元の大きさのままなので見ない
 FIG_MIN_PT = MIN_PT - 2  # [slides-lint-022] 塗りのある図形の中の文字（ガントのバー、図のラベル）は本文から 2pt 下まで（slides-visual-037）。表のセル、塗りのない文字、別の図形の塗りに重ねた文字（カードの本文、背景の四角の上の出典）は MIN_PT のまま
@@ -47,10 +47,10 @@ EMPTY_HOLE = "本文の中ほどが空いている"  # [slides-lint-005] 要素�
 PAD_NG = "塗りの箱の端と文字の間が 1 字分より狭い"  # slides-visual-027（deck-design）
 NUM_NO_UNIT = "大きな数字に単位がない"  # [slides-lint-006] slides-visual-015（deck-design）。数字だけの段落は何の数か分からない
 PHRASE_BREAK = "自動の折り返しが文節の途中に入る見込み"  # [slides-lint-024] slides-visual-013（deck-design）。Google Slides は和文を 1 字ずつ折り返す。レビューで直した改行でいちばん多かった
-# 2026-11-17 から slides.py が組むときに文節の切れ目で改行する（slides-component-027）ので、残るのは「・」「、」も空白もない 1 行より長い文節、等幅の文字、BudouX なしで組んだ資料と前に組んだ資料
+# 2026-11-17 から build_slides.py が組むときに文節の切れ目で改行する（slides-component-027）ので、残るのは「・」「、」も空白もない 1 行より長い文節、等幅の文字、BudouX なしで組んだ資料と前に組んだ資料
 NO_TAIL = "（「『【〔［｛〈《“‘(["  # 行末に来ない字。Google は次の行へ送る
 TIGHT = 0.1  # 字の幅の 1 割より小さくはみ出す字は、Google が前の行に入れることが多い（2026-11-17、<br> を外した 16 本の PDF: はみ出しが 1 pt 未満の 11pt の和文の字は 15 字中 13 字が前の行に入った）
-LAST_SHORT = "自動の折り返しの最終行が 1〜2 字の見込み"  # slides-component-013（slides.py）・slides-visual-013（deck-design）。組むときの警告（fit の枠だけ）と同じ決まりで、表のセルと fit でない枠も見て、直す位置まで出す
+LAST_SHORT = "自動の折り返しの最終行が 1〜2 字の見込み"  # slides-component-013（build_slides.py）・slides-visual-013（deck-design）。組むときの警告（fit の枠だけ）と同じ決まりで、表のセルと fit でない枠も見て、直す位置まで出す
 OPEN_HEAD = "手の改行のあとの行頭に全角の開き括弧"  # [slides-lint-007] slides-visual-013（deck-design）の「改行」。行頭の「（」「「」は半字下がって見え、左端がそろわない
 TEXT_OVER = "文字が枠の下からはみ出し、下の文字に重なる見込み"  # [slides-lint-025] 枠の高さを決め打ちにした見出しが折り返したとき（2026-10-19。カードの太字の見出しを Regular の字幅で見込み、2 行目が本文に重なった）
 COL_SHIFT = "隣り合う列の箱の上端か下端がずれている"  # [slides-lint-008] slides-visual-024（deck-design）。片方の列にだけ小見出しを置くと、箱の上下がそろわない
@@ -121,9 +121,9 @@ def page_bg(p, s, scheme):  # ページの地
 
 
 def is_dark(p, s, scheme):
-    """表紙・扉のページか。slides.py は表紙・扉の地を NAVY（DARK1）、本文の地を BG（LIGHT1）のテーマの色で塗るので、地の色の値でなく枠で見る
+    """表紙・扉のページか。build_slides.py は表紙・扉の地を NAVY（DARK1）、本文の地を BG（LIGHT1）のテーマの色で塗るので、地の色の値でなく枠で見る
     （本文の地が暗いテーマでも、本文のページを扉と取り違えない）。RGB で塗ったページ（手で作ったもの）は、DARK1 と同じ値なら扉とみなす。
-    会社のテンプレートの表紙・扉のパターン（白や赤の地もある）は、レイアウトの目印（slides.py の LAYOUT_MARK）で見る。"""
+    会社のテンプレートの表紙・扉のパターン（白や赤の地もある）は、レイアウトの目印（build_slides.py の LAYOUT_MARK）で見る。"""
     lay = next((x for x in p.get("layouts", []) if x["objectId"] == s.get("slideProperties", {}).get("layoutObjectId")), {})
     if any(LAYOUT_MARK.search(e.get("description", "")) for e in lay.get("pageElements", [])):
         return True
@@ -132,7 +132,7 @@ def is_dark(p, s, scheme):
 
 
 def group_lines(els, inside=False):
-    """グループの中の線の ID。slides.py の塗りのない角丸の囲みは、辺と弧を線でつないでグループにする。矢印・罫線・格子の線としては見ない。
+    """グループの中の線の ID。build_slides.py の塗りのない角丸の囲みは、辺と弧を線でつないでグループにする。矢印・罫線・格子の線としては見ない。
     ponytail: 画面で線をまとめてグループにした格子も見逃す。困ったら、弧の短い線を含むグループだけを外す"""
     for e in els:
         if "elementGroup" in e:
@@ -142,7 +142,7 @@ def group_lines(els, inside=False):
 
 
 def ancestry(els, up=()):
-    """要素の ID から、入っているグループの ID の並び（外から内）。slides.py の角丸・正円は、背景と文字の枠を 1 つのグループにする（Deck.box）。"""
+    """要素の ID から、入っているグループの ID の並び（外から内）。build_slides.py の角丸・正円は、背景と文字の枠を 1 つのグループにする（Deck.box）。"""
     for e in els:
         if "elementGroup" in e:
             yield from ancestry(e["elementGroup"].get("children", []), up + (e.get("objectId"),))
@@ -192,7 +192,7 @@ def est_lines(para, avail):
 
 
 def wrap_breaks(para, avail):
-    """段落を幅 avail（pt）で自動で折り返したときに、行頭になる字の位置（段落の文字列の位置）の見込み。数え方は slides.py の wrap_lines と同じ
+    """段落を幅 avail（pt）で自動で折り返したときに、行頭になる字の位置（段落の文字列の位置）の見込み。数え方は build_slides.py の wrap_lines と同じ
     （和文は 1 字ずつ、英数字の語はまとめて次の行へ、1 行より長い語は字で折る）。run ごとの大きさを見る。文字の大きさの分からない run があれば []。
     禁則も見る: 行頭に来ない字（NO_HEAD）と行末に来ない字（NO_TAIL）は、前の字ごと次の行へ送る（Google と同じ追い出し。<br> を外した 16 本の PDF で、
     見積もりより 1 字前で折れた 16 か所のうち 12 か所がこれだった）"""
@@ -347,7 +347,7 @@ def text_lines(sh, width):
 
 
 def text_bottom(sh, b):
-    """文字の下端の見込み（EMU）。行送りは slides.py の spec_text_h と同じ（大きさの 1.2 倍 × 行間）。上下の中央・下のそろえも見る。大きさの分からない段落があれば None。"""
+    """文字の下端の見込み（EMU）。行送りは build_slides.py の spec_text_h と同じ（大きさの 1.2 倍 × 行間）。上下の中央・下のそろえも見る。大きさの分からない段落があれば None。"""
     h = 0
     for para in paras(sh.get("text")):
         avail = b[2] / EMU * 72 - 2 * INS - para[0].get("indentStart", {}).get("magnitude", 0)
@@ -368,7 +368,7 @@ def ink_bottom(e, b, scheme):
     return text_bottom(sh, b) or b[1] + b[3]
 
 
-def is_band(e, b, scheme):  # 結論バンド（slides.py の band）: 濃紺の塗り、下端 6.60 in、本文の幅いっぱい
+def is_band(e, b, scheme):  # 結論バンド（build_slides.py の band）: 濃紺の塗り、下端 6.60 in、本文の幅いっぱい
     fill = solid(e.get("shape", {}).get("shapeProperties", {}).get("shapeBackgroundFill"), scheme)
     return fill == scheme.get("DARK1", "1B3139") and abs(b[1] + b[3] - BODY_BOTTOM) < 0.05 * EMU and b[2] > 11 * EMU
 
@@ -383,10 +383,10 @@ def empty_space(els, scheme):
     below = floor - max(k for *_, k in body) - max(0, top - Y_BODY * EMU) if body else 0
     boxes, content = [], [(e2, b2, k) for e2, b2, k in body if has_text(e2) or "table" in e2 or "image" in e2]  # 文字のない図形（角丸を組む部品・枠線）は中身に数えない。箱ごとに数え直さない
     for e, b, _ in body:
-        sh = e.get("shape")  # 箱は塗りで見分ける（slides.py は文字の枠も塗りのない RECTANGLE で作る）
+        sh = e.get("shape")  # 箱は塗りで見分ける（build_slides.py は文字の枠も塗りのない RECTANGLE で作る）
         if not sh or not solid(sh.get("shapeProperties", {}).get("shapeBackgroundFill"), scheme) or min(b[2], b[3]) < THIN:
             continue
-        if e.get("title") == BAR_MARK:  # 棒グラフの棒（slides.py の bars）。棒の中の数字の下が空くのは決まった形
+        if e.get("title") == BAR_MARK:  # 棒グラフの棒（build_slides.py の bars）。棒の中の数字の下が空くのは決まった形
             continue
         inner = [k for e2, b2, k in content if e2 is not e and b[0] <= b2[0] + b2[2] / 2 <= b[0] + b[2] and b[1] <= b2[1] + b2[3] / 2 <= b[1] + b[3]]
         own = text_bottom(sh, b) if sh.get("text") else None
@@ -446,7 +446,7 @@ def shape_text(e):
 
 def code_heads(els, scheme):
     """[slides-lint-032] 濃紺のコードの箱（等幅の文字を含む枠が中にある）の真上 0.3 in までに、横に重なって置いた文字の枠で、下に塗りがあるもの（札・帯）。
-    部品は塗りと文字を別の図形にする（slides.py の label は角丸の箱と透明の文字の枠）ので、文字の枠ごとに、中心の下に塗りの図形があるかで見る。
+    部品は塗りと文字を別の図形にする（build_slides.py の label は角丸の箱と透明の文字の枠）ので、文字の枠ごとに、中心の下に塗りの図形があるかで見る。
     箱と一緒に、もっと大きな塗りの箱の中にあるもの（ターミナルの窓の帯）は見ない。"""
     fill = lambda e: solid(e.get("shape", {}).get("shapeProperties", {}).get("shapeBackgroundFill"), scheme)
     filled = [(e, b) for e, b in els if "shape" in e and fill(e)]
@@ -552,7 +552,7 @@ def text_over(els):
 
 def column_shift(cards, filled):
     """白いカードと濃紺の箱（入れ子でないもの）を左端で列に分け、隣り合う列（横に重ならず、縦に重なる）の上端・下端のずれを返す。b は [x, y, w, h]（EMU）。"""
-    merged = []  # slides.py の角丸のカードは、横長と縦長の白い四角を重ねて作る。重なる四角は 1 枚のカードにまとめる
+    merged = []  # build_slides.py の角丸のカードは、横長と縦長の白い四角を重ねて作る。重なる四角は 1 枚のカードにまとめる
     for c in sorted(cards):
         for m in merged:
             if c[0] < m[0] + m[2] and m[0] < c[0] + c[2] and c[1] < m[1] + m[3] and m[1] < c[1] + c[3]:
@@ -602,13 +602,13 @@ class Report(textlint.Report):
 def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=None):
     """p は presentations.get の JSON。reuse は社内資料の差し替え用（元の大きさのままなので 11pt の下限と表紙を見ない）。
     facts は資料の出典の表の文字（load_facts）。None なら、ページの数字が表にあるかを見ない（deck-lint-026）。
-    only（ページの番号の集合）を渡すと、そのページの指摘・見出し・字数だけを出す（slides.py lint --pages）。デッキ全体の規則（DECK_WIDE）と、
+    only（ページの番号の集合）を渡すと、そのページの指摘・見出し・字数だけを出す（build_slides.py lint --pages）。デッキ全体の規則（DECK_WIDE）と、
     ワークスペースの点検（ページをまたいで見るものがありうる）は絞らない。"""
     titles, sizes, pairs, chars, dark, foot_secret, bands, claims, wraps = [], Counter(), defaultdict(list), [], [], [], [], [], []
     kicks, div_text, panels = [], [], []  # 本文のページのキッカー (ページ, 文字) と、扉の文字（章の名前のキッカーを見分ける）
     global MONO
     font, MONO, cright = deck_font(p), deck_mono(p), deck_copyright(p).strip()
-    crights = {c for c in (cright, CLASSIFICATION.sub("", cright)) if c}  # 空の著作権表示（組めない）は、秘密区分だけの段落を著作権表示にしない。 デッキの著作権表示（秘密区分を外した形も。slides.py の finish は資料名の区分を後ろに足す）
+    crights = {c for c in (cright, CLASSIFICATION.sub("", cright)) if c}  # 空の著作権表示（組めない）は、秘密区分だけの段落を著作権表示にしない。 デッキの著作権表示（秘密区分を外した形も。build_slides.py の finish は資料名の区分を後ろに足す）
     # 会社のテンプレートは会社の書体（template.md）。等幅はデッキのテーマの mono
     use_font(font)  # 字幅の見積もり（行数・折り返し）もデッキの書体のもの
     card = deck_card(p)  # カードの地。デッキのテーマの CARD（書かなければ白）
@@ -621,7 +621,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
         els = list(flatten(s.get("pageElements", [])))
         ups = dict(ancestry(s.get("pageElements", [])))
         parts = set(group_lines(s.get("pageElements", [])))
-        gbox = {}  # いちばん内側のグループごとの外形（slides.py の角丸・ピルは、四角と円を 1 つのグループに組む。文字と箱の端の間は、真ん中の四角ではなく外形で測る）
+        gbox = {}  # いちばん内側のグループごとの外形（build_slides.py の角丸・ピルは、四角と円を 1 つのグループに組む。文字と箱の端の間は、真ん中の四角ではなく外形で測る）
         for e, b in els:
             if g := ups.get(e.get("objectId")):
                 x0, y0, x1, y1 = gbox.get(g[-1], (b[0], b[1], b[0] + b[2], b[1] + b[3]))
@@ -660,7 +660,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
             if "shape" in e and (want := STAGE_FILL.get("".join(ptext(x) for x in paras(sh.get("text"))).strip())):
                 got, want = own or under, scheme.get(want, want)
                 if got != want:
-                    r.hits[STAGE_NG].append(f"p{i}: 「{''.join(ptext(x) for x in paras(sh.get('text'))).strip()}」の塗りが {got}（{want} にする。slides.py の STAGE_FILL）")
+                    r.hits[STAGE_NG].append(f"p{i}: 「{''.join(ptext(x) for x in paras(sh.get('text'))).strip()}」の塗りが {got}（{want} にする。build_slides.py の STAGE_FILL）")
             if sh.get("shapeType") == "ROUND_RECTANGLE" and sh.get("shapeProperties", {}).get("outline", {}).get("dashStyle", "SOLID") not in ("SOLID", "DASH_STYLE_UNSPECIFIED"):
                 r.hits[DASH_ROUND].append(f"p{i}: {b[2]:.2f} × {b[3]:.2f} in。JSON の box に \"shape\": \"round_rectangle\", \"dash\": true を書き、半径 0.1 in の点線にする（pages.py は d.box(…, kind=\"ROUND_RECTANGLE\", dash=True)）")
             ol = sh.get("shapeProperties", {}).get("outline", {})
@@ -675,7 +675,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                     r.hits[FEED_LINK].append(f"p{i}: {u[:80]}。フィードやデータでなく、人の読むページにつなぐ")
             lines_ = [x for text, _ in texts for x in paras(text) if ptext(x).strip()]
             code_box = ("shape" in e and not own and ub is not None and under == scheme.get("DARK1") and lines_
-                        and all(any(st.get("fontFamily") == MONO and c.strip() for c, st in x[1]) for x in lines_))  # slides.py の code の形（濃紺の箱に重ねた塗りのない文字の枠で、どの行にも等幅の字がある。和文の字は本文の書体で組む）。言い回しは見ない。地の文に等幅の語が混ざっただけの枠や、濃紺の地のページの文は見る
+                        and all(any(st.get("fontFamily") == MONO and c.strip() for c, st in x[1]) for x in lines_))  # build_slides.py の code の形（濃紺の箱に重ねた塗りのない文字の枠で、どの行にも等幅の字がある。和文の字は本文の書体で組む）。言い回しは見ない。地の文に等幅の語が混ざっただけの枠や、濃紺の地のページの文は見る
             for (text, f), place in zip(texts, cell_places(e)):
                 items = [ptext(x).strip() for x in paras(text) if x[0].get("bullet") and ptext(x).strip()]
                 if len({t.endswith("。") for t in items}) > 1:  # 1 つの枠の箇条書き（ひとまとまり）で、句点のある項目とない項目が混ざる
@@ -707,7 +707,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                         r.hits[CODE_NOT_MONO].append(f"p{i}: 「{t.strip()[:30]}」。JSON の code か、text の \"mono\": true にする（pages.py は d.code か d.text(…, mono=True)）")
                     if not dark[-1] and re.fullmatch(r"[\d.,]+", t.strip()) and max((size_of(st) or 0) for _, st in para[1]) >= BIG_NUM_PT:
                         r.hits[NUM_NO_UNIT].append(f"p{i}: 「{t.strip()}」。単位と何の数かを数字と同じ枠に書く（例: 16 モデル）")
-                    if "出典" in t or re.search(r"\bSources?\s*[：:]", t, re.I):  # 英語の出典の行（slides.py の source が default_language で足す）
+                    if "出典" in t or re.search(r"\bSources?\s*[：:]", t, re.I):  # 英語の出典の行（build_slides.py の source が default_language で足す）
                         has_src = True
                     elif not footer and not mono and NUM.search(t):
                         nums.append(t)
@@ -778,7 +778,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
         elif not dark[-1]:
             kicks += [(i, k) for e, b in els if "shape" in e and e is not best[1] and abs(b[1] / EMU - Y_KICK) < 0.08
                       and (k := "".join(ptext(x) for x in paras(e["shape"].get("text"))).strip())]
-            for e, b in els:  # 結論バンドの上に重ねた文字（slides.py の band は箱と文字の枠を分ける）
+            for e, b in els:  # 結論バンドの上に重ねた文字（build_slides.py の band は箱と文字の枠を分ける）
                 if "shape" in e and is_band(e, b, scheme):
                     inside = [x for x, xb in els if "shape" in x and x.get("shape", {}).get("text") and abs(xb[1] + xb[3] - b[1] - b[3]) < 0.05 * EMU and xb[0] >= b[0] - 0.05 * EMU]
                     first = next((ptext(x).strip() for x2 in inside for x in paras(x2["shape"].get("text")) if ptext(x).strip()), "")
@@ -863,7 +863,7 @@ def lint_slides(p, r, reuse=False, talk=False, only=None, scope="deck", facts=No
                 kept.append(t)
         titles = kept
         chars = [c for c in chars if on(c)]
-    if scope != "deck":  # ページか部品だけを見るときは、デッキ全体の規則を出さない（slides.py lint のページ・部品のファイル）
+    if scope != "deck":  # ページか部品だけを見るときは、デッキ全体の規則を出さない（build_slides.py lint のページ・部品のファイル）
         for k in DECK_WIDE:
             r.hits.pop(k, None)
     if scope == "component":  # 部品だけのときは、ページの規則（見出し・ノート・出典・ページの空き・字数）も出さない。部品の中の規則は出す
@@ -1054,7 +1054,7 @@ def selftest():
     # 手の改行のあとの行頭の全角の開き括弧（slides-visual-013、deck-design）。括弧の後で改行したものは出さない
     assert len(run(deck([(NAVY, [title()]), (oat, [title(), shape(1, text=["表と同じ権限\v（Unity Catalog）"])])]))[0].hits[OPEN_HEAD]) == 1
     assert not run(deck([(NAVY, [title()]), (oat, [title(), shape(1, text=["表と同じ権限（Unity\vCatalog）"])])]))[0].hits[OPEN_HEAD]
-    # 自動の折り返しが文節の途中に入る見込み（slides-visual-013）。数え方は slides.py の wrap_lines と同じ。文節は BudouX の結果を差し替えて試す
+    # 自動の折り返しが文節の途中に入る見込み（slides-visual-013）。数え方は build_slides.py の wrap_lines と同じ。文節は BudouX の結果を差し替えて試す
     pa = lambda *runs: ({}, [(c, {"fontSize": {"magnitude": sz}} if sz else {}) for c, sz in runs])
     t = "データを見る人と評価者がいる"
     assert wrap_breaks(pa((t, 12)), 120) == [10] and wrap_breaks(pa((t, 12)), 200) == []  # 12pt で 10 字の幅。11 字目の「者」が次の行頭
@@ -1141,9 +1141,9 @@ def selftest():
     assert blk(OAT, "303F47") == 1 and blk(OAT, "EEEDE9") == 0 and blk(NAVY, "303F47") == 0
     # 濃紺の地のコード: 等幅でなければ出す。等幅なら出さない。地の文（和文で始まる行）は見ない
     code = lambda t, font: len(run(deck([(OAT, [title(), shape(1, text=[t], font=font, fill=NAVY)])]))[0].hits[CODE_NOT_MONO])
-    def mixed(fill=None):  # 等幅の語と和文の字が混ざった 1 行の枠（slides.py の code は、和文の字を本文の書体で組む）
-        e = shape(1, text=["slides.py build "], font=MONO, fill=fill)
-        e["shape"]["text"]["textElements"][-1]["textRun"]["content"] = "slides.py build "
+    def mixed(fill=None):  # 等幅の語と和文の字が混ざった 1 行の枠（build_slides.py の code は、和文の字を本文の書体で組む）
+        e = shape(1, text=["build_slides.py build "], font=MONO, fill=fill)
+        e["shape"]["text"]["textElements"][-1]["textRun"]["content"] = "build_slides.py build "
         e["shape"]["text"]["textElements"].append({"textRun": {"content": "の比べ\n", "style": {"fontFamily": FONT, "fontSize": {"magnitude": 12, "unit": "PT"}}}})
         return e
     under_box = shape(1, text=[""], fill=NAVY) | {"objectId": "box"}

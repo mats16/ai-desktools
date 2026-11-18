@@ -54,7 +54,7 @@ Then open the files for this material (read only those that apply; the rules in 
 | 時間が短い（役員への説明、LT） | 問いは 1 枚で見せ、答えは 1 つに絞る。詳細は Appendix に回す |
 
 [deck-content-015] **Materials for talks such as LTs, when the content is new to the audience**
-- One message per page. State it firmly in the lead (the heading on assertion pages), and show the body as a figure, or as large numbers and short words. The body is at most 5 lines (125 characters) （中身 1-13）. `gslides.py check <URL> --talk` reports pages over the limit as `要確認`.
+- One message per page. State it firmly in the lead (the heading on assertion pages), and show the body as a figure, or as large numbers and short words. The body is at most 5 lines (125 characters) （中身 1-13）. `check_slides.py check <URL> --talk` reports pages over the limit as `要確認`.
 - Do not put file names, paths, commands, or step details on the page; move them to the Appendix. Before the name of the mechanism, show what happens from the audience's point of view (what you ask for and what comes out).
 - [deck-content-016] Only on pages where the user asked for a technical deep dive may file names and script names appear. Those pages also show their role with a kicker (「深掘り: …」), and still keep one message per page and the character limit.
 - Do not apply this to materials meant to be read (circulated or sent by email). Those follow "Explanation and evidence in materials meant to be read" in §1.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""スライド（slides.py）とドキュメント（docs.py）で同じ、見た目の共通の値: 書体と字幅の表、色の既定、会社の著作権表示とロゴ（desk.toml の [brand]）、
+"""スライド（build_slides.py）とドキュメント（docs.py）で同じ、見た目の共通の値: 書体と字幅の表、色の既定、会社の著作権表示とロゴ（desk.toml の [brand]）、
 使い回す画像（asset）。どちらのテーマのファイルの font・mono も、ここの theme_font・theme_mono で確かめる。標準ライブラリだけ。
 usage: python3 brand.py --selftest"""
 import os, re, sys, tomllib
@@ -45,7 +45,7 @@ DM_SANS_BOLD_EM = dict(zip(ASCII_EM, (
     .49, .47, .27, .47, .58)))
 FONT_EM = {FONT: (ASCII_EM, ASCII_BOLD_EM), "DM Sans": (DM_SANS_EM, DM_SANS_BOLD_EM)}  # 英数字の幅を測った書体（Regular, Bold）。テーマの font には、JP_FONTS とこれが書ける。ほかの JP_FONTS は Noto Sans JP の幅で見込む
 
-# ---- 色の既定。テーマのファイルの colors に同じ名前で書くと替わる（slides.py の FIXED、docs.py の load_theme） ----
+# ---- 色の既定。テーマのファイルの colors に同じ名前で書くと替わる（build_slides.py の FIXED、docs.py の load_theme） ----
 WHITE = "FFFFFF"
 TEXT, RULE = "303F47", "DCE0E2"  # 本文／罫線（スライドでは濃紺の上の補足も）
 
@@ -67,7 +67,7 @@ BRAND_COPYRIGHT = _BRAND.get("copyright", PLACEHOLDER_COPYRIGHT)  # 初公表年
 LOGO = _BRAND.get("logo")  # ドキュメントの表紙のロゴ（assets/ の中のパスか URL）。なければ置かない
 COPYRIGHT_PT = 9  # 著作権表示と、高さをそろえるページ番号だけは 11pt 以上の例外。本文を邪魔しない（2026-10-08、ページ番号は 2026-10-13）
 COPYRIGHT_FOOTER = re.compile(r"^©\s*\d{4}\s+.+?\s+All rights reserved\.(?:\s*｜\s*(?:Internal Only|Confidential))?\s*$", re.I)
-CLASSIFICATION = re.compile(r"\s*｜\s*(?:Internal Only|Confidential)\s*$", re.I)  # フッターの末尾の秘密区分（資料名から slides.py の finish が足す）
+CLASSIFICATION = re.compile(r"\s*｜\s*(?:Internal Only|Confidential)\s*$", re.I)  # フッターの末尾の秘密区分（資料名から build_slides.py の finish が足す）
 
 
 def need_brand(copyright=BRAND_COPYRIGHT):

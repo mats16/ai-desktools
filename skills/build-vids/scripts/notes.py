@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""スピーカーノートを読み書きする部品と、デッキのテーマの目印・書体・リビジョン。持ち主は build-slides（slides.py・lint.py が import する）。
+"""スピーカーノートを読み書きする部品と、デッキのテーマの目印・書体・リビジョン。持ち主は build-slides（build_slides.py・lint.py が import する）。
 build-vids は、この写しを持つ（同じ中身。直すのは build-slides のものだけで、tests/skills/check.py --sync で写す）。標準ライブラリと gapi・brand だけ。"""
 import hashlib, re, sys, urllib.parse
 
@@ -82,7 +82,7 @@ def paras(text):
 
 
 def ptext(para):
-    """段落の文字。段落の中の改行（\\v）は、英数字の語と語の間なら空白にし、ほかは詰める（slides.py が文節の切れ目に入れる改行で、和文に空白を入れない）。"""
+    """段落の文字。段落の中の改行（\\v）は、英数字の語と語の間なら空白にし、ほかは詰める（build_slides.py が文節の切れ目に入れる改行で、和文に空白を入れない）。"""
     return re.sub(r"(?<=[!-~])\v(?=[!-~])", " ", "".join(c for c, _ in para[1])).replace("\v", "")
 
 

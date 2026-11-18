@@ -61,7 +61,7 @@ SRC = "docs_py_src"  # 組んだ doc.md のフォルダ（ワークスペース�
 P_FIELDS = ("namedStyleType,alignment,indentStart,indentFirstLine,indentEnd,shading,borderTop,borderBottom,borderLeft,borderRight,"
             "spaceAbove,spaceBelow,lineSpacing,keepWithNext")
 T_FIELDS = "bold,italic,underline,strikethrough,link,weightedFontFamily,fontSize,foregroundColor,backgroundColor"  # 書かない項目は、名前付きスタイルに戻す
-INLINE = re.compile(r"\\([\\*`\[\]])|\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\((https?://[^)\s]+)\)")  # スライドの記法（slides.py の MD）のうち、ドキュメントで使うもの
+INLINE = re.compile(r"\\([\\*`\[\]])|\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\((https?://[^)\s]+)\)")  # スライドの記法（build_slides.py の MD）のうち、ドキュメントで使うもの
 ASCII = re.compile(r"[ -~]+")
 
 
@@ -78,7 +78,7 @@ def mm(v):
 
 
 def runs(s, st=None):
-    """本文の中の書き方（スライドの記法と同じ。slides.py の spec_md）: **太字**、***赤の太字***（RED_TEXT）、[文字](URL)、`コード`、記号そのものは \\* のように \\ を付ける。
+    """本文の中の書き方（スライドの記法と同じ。build_slides.py の spec_md）: **太字**、***赤の太字***（RED_TEXT）、[文字](URL)、`コード`、記号そのものは \\* のように \\ を付ける。
     太字・赤の中にはリンクとコードを、リンクの中にはコードを入れられる（***[文字](URL)***）。大きさの {32:…} はスライドだけ。戻り: (文字, 文字の書式) の並び。"""
     st, out, i = st or {}, [], 0
 
@@ -451,7 +451,7 @@ def fingerprint(did):
 
 
 def footer_text(name):
-    """スライドと同じ著作権表示と、NAME の末尾の秘密区分（slides.py の finish）。資料名は出さない。"""
+    """スライドと同じ著作権表示と、NAME の末尾の秘密区分（build_slides.py の finish）。資料名は出さない。"""
     c = re.search(r"(?:^|[｜|])\s*(Internal Only|Confidential)\s*$", name, re.I)
     return COPYRIGHT + (f"｜{c.group(1)}" if c else "")
 
@@ -521,7 +521,7 @@ def new(folder, name):
 
 STANDARD = "standard"  # 組み込みのテーマ（docs.py の既定の値）。theme を書かず、[docs] default_theme もないとき。doc.md に theme: standard とも書ける
 DEFAULT_NOTE = "既定。A4・本文 10.5pt・濃紺の見出し・濃紺の地の表の見出しの行（deck-design → docs）"  # themes/docs/standard.json の description で書き換えられる
-# [docs-write-012] テーマのファイル。スライドのテーマのファイル（slides.py の read_theme）と同じ形で、頭の apiVersion・kind と description・font・mono・colors は
+# [docs-write-012] テーマのファイル。スライドのテーマのファイル（build_slides.py の read_theme）と同じ形で、頭の apiVersion・kind と description・font・mono・colors は
 # 同じキー。page・margins・styles はドキュメントだけのキー。バージョンはキーの意味が変わるときだけ上げる（../../build-slides/pages.md の slides-pages-035 と同じ考え方）
 API_VERSION = "docs/v1"
 WS_THEMES = ("themes", "docs")  # ワークスペースの themes/docs/<名前>.json（ファイルの名前がテーマの名前）
@@ -618,7 +618,7 @@ def cmd_themes():
 
 
 def need_theme(doc):
-    """new で、standard のほかにテーマがあるのに doc.md の先頭に theme: がなければ、一覧を出して止める（slides.py の need_theme と同じく、選ぶものがあるときだけ。
+    """new で、standard のほかにテーマがあるのに doc.md の先頭に theme: がなければ、一覧を出して止める（build_slides.py の need_theme と同じく、選ぶものがあるときだけ。
     themes/docs/standard.json に説明だけを書いたときは止めない。desk-kaizen の検証では止めない）。"""
     if not doc.meta.get("theme") and set(theme_names()) - {STANDARD} and not os.environ.get("DESK_VERIFY"):
         cmd_themes()
@@ -1137,7 +1137,7 @@ def cmd_check(src):
     font, mono = built_fonts(did)  # 書体は組んだときのもの（doc.md のテーマではない）
     hard = doc_lint.lint_gdoc(doc, r := doc_lint.Report(), template=bool(md and (md.meta.get("template") or md.meta.get("source"))), font=font, mono=mono,
                          facts=textlint.load_facts() if src else None)  # テンプレートとその見本は、節の順をテンプレートが決める
-    if not any(w in doc["title"].lower() for w in ("tmp", "template", "作業用", "テンプレート")):  # 一時の文書は数えない（gslides.py と同じ）
+    if not any(w in doc["title"].lower() for w in ("tmp", "template", "作業用", "テンプレート")):  # 一時の文書は数えない（check_slides.py と同じ）
         textlint.log_run(r, did)
     for f in glob.glob(f"{d}/p-*.png"):
         os.remove(f)
@@ -1296,7 +1296,7 @@ def selftest():
     assert runs("**太字**と[リンク](https://a.b/c)と`x=1`") == [("太字", {"bold": True}), ("と", {}), ("リンク", {"link": {"url": "https://a.b/c"}}), ("と", {}),
                                                                 ("x=1", {"code": True})]
     assert runs("ふつう") == [("ふつう", {})] and runs("") == []
-    # スライドと同じ記法: 赤の太字、中のリンクとコード、記号そのもの（slides.py の spec_md）
+    # スライドと同じ記法: 赤の太字、中のリンクとコード、記号そのもの（build_slides.py の spec_md）
     assert runs("a***b[c](https://x)***\\*d") == [("a", {}), ("b", {"bold": True, "red": True}), ("c", {"bold": True, "red": True, "link": {"url": "https://x"}}), ("*d", {})]
     assert runs("**`x`**") == [("x", {"bold": True, "code": True})] and render(runs("***赤*** と **太**")) == "***赤*** と **太**"
     w = Writer(1)

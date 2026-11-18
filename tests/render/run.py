@@ -14,7 +14,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 K = ROOT / "skills" / "build-slides" / "scripts"
 SAMPLES = ROOT / "skills" / "build-slides" / "samples" / "json"
-sys.path.insert(0, str(K))  # slides.py・gapi.py
+sys.path.insert(0, str(K))  # build_slides.py・gapi.py
 sys.dont_write_bytecode = True
 import gapi  # noqa: E402
 
@@ -90,15 +90,15 @@ def main():
     (build / "deck.json").write_text(json.dumps(deck, ensure_ascii=False))
 
     print("== 手元の lint ==")
-    _, local = sh(K / "slides.py", "lint", "--all", cwd=build)  # 要修正があっても組んで画像を見る
+    _, local = sh(K / "build_slides.py", "lint", "--all", cwd=build)  # 要修正があっても組んで画像を見る
     print("\n== 組む ==")
-    made, failed = sh(K / "slides.py", "new", folder, time.strftime("%Y%m%d_tmp_render"), cwd=build)  # 組めなければ、new が複製をゴミ箱に移す
+    made, failed = sh(K / "build_slides.py", "new", folder, time.strftime("%Y%m%d_tmp_render"), cwd=build)  # 組めなければ、new が複製をゴミ箱に移す
     if failed:
-        sys.exit("slides.py new で止まった（上の出力）")
+        sys.exit("build_slides.py new で止まった（上の出力）")
     pid = re.search(r'"presentationId": "([^"]+)"', made).group(1)
     try:
         print("\n== 画像を取る ==")
-        _, check = sh(K / "gslides.py", "check", pid, "--all", cwd=build)  # 要修正があっても、画像は取ってある
+        _, check = sh(K / "check_slides.py", "check", pid, "--all", cwd=build)  # 要修正があっても、画像は取ってある
         shots = sorted(Path(f"/tmp/slides_{pid[:8]}").glob("p-*.webp"))
         if len(shots) != len(pages()):
             sys.exit(f"画像が {len(shots)} 枚（ページは {len(pages())} 枚）")
@@ -114,7 +114,7 @@ def main():
     n = bool(local) + bool(check)
     said = lambda rc: "要修正あり（出力の「== 要修正」）" if rc else "要修正なし"
     lines = [f"# 見本を組んだ画像の確認（{time.strftime('%Y-%m-%d %H:%M')}）", "",
-             f"- 手元の lint: {said(local)}、組んだあとの lint（gslides.py check）: {said(check)}。要確認は画像で見る", ""]
+             f"- 手元の lint: {said(local)}、組んだあとの lint（check_slides.py check）: {said(check)}。要確認は画像で見る", ""]
     for i, p in enumerate(pages(), 1):
         lines += [f"## p{i} {p}", f"画像: {img / f'p-{i:02d}.webp'}", "", *[f"- {x}" for x in e[p]], ""]
     lines += ["## どのページにも", "", f"- {COMMON}", ""]

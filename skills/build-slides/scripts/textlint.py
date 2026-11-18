@@ -110,12 +110,12 @@ HEAD_PERIOD, BULLET_PERIOD = "見出しの句点", "箇条書きの句点の混�
 HEAD_POLITE = "見出しが「ください・します」で終わる"
 POLITE_END = re.compile(r"(ください|します|しましょう)$")
 FONT_NG = f"書体が {FONT} でない"  # スライドはテンプレートの書体（deck_font）と比べる。Google Fonts にない書体は、API が受け付けても黙って別の書体で描かれる（api.md）。英数字だけの MONO（コード）は通す
-MONO_NG = f"等幅の {MONO_DEFAULT} に和文"  # 名前は既定の書体のまま（台帳と lint_runs.jsonl が名前で数える）。テーマの mono なら指摘にその名前を出す。MONO に和文の字形はなく、Google が別の書体で描く。和文は FONT にする（slides.py の mono_reqs。slides-visual-014、deck-design）
+MONO_NG = f"等幅の {MONO_DEFAULT} に和文"  # 名前は既定の書体のまま（台帳と lint_runs.jsonl が名前で数える）。テーマの mono なら指摘にその名前を出す。MONO に和文の字形はなく、Google が別の書体で描く。和文は FONT にする（build_slides.py の mono_reqs。slides-visual-014、deck-design）
 HARD_NAMES = set(HARD) | {HEAD_PERIOD, HEAD_POLITE, FONT_NG, MONO_NG}  # スライドとドキュメントで同じ要修正（それぞれの lint が足す）
 
 
 def load_facts(folder=".."):
-    """資料のフォルダ（build/ の親）の出典の表の文字（同じフォルダの refs.py の facts_text）。slides.py lint・docs.py check が build/ で呼び、
+    """資料のフォルダ（build/ の親）の出典の表の文字（同じフォルダの refs.py の facts_text）。build_slides.py lint・docs.py check が build/ で呼び、
     lint_slides・lint_gdoc の facts に渡す。refs.py はパスで読む（build/ に同じ名前のファイルがあっても取り違えない）。"""
     import importlib.util
     spec = importlib.util.spec_from_file_location("refs", os.path.join(os.path.dirname(os.path.abspath(__file__)), "refs.py"))
@@ -159,7 +159,7 @@ class Report:
     def __init__(self):
         self.hits = defaultdict(list)
         self.extra_hard = set()  # ワークスペースの点検（checks.py の HARD）の要修正の名前（workspace_checks が足す）
-        self.where = lambda hit: ""  # 指摘の後ろに付ける、作ったものの中の場所（slides.py lint が JSON のページの部品の場所を引く）
+        self.where = lambda hit: ""  # 指摘の後ろに付ける、作ったものの中の場所（build_slides.py lint が JSON のページの部品の場所を引く）
 
     def scan(self, where, text, rules):
         text = URL.sub("", text).strip()
