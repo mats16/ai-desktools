@@ -102,6 +102,8 @@ def check(ws, local=False):
     (warn if odd else ok)("ワークスペースの決まり", "、".join(odd) if odd else f"レシピ {len(rules)} 個")
     if cfg.get("desk", {}).get("source"):  # 2026-10-14 まで、desk-kaizen が worktree を作る checkout（前の [factory] source。desk-migrate が [desk] にする）
         warn("desk.source", "使わなくなった（desk-kaizen は .desk/kaizen/ に自分で clone する）。desk.toml から消す")
+    if "sources" in cfg:  # 2026-11-19 まで、材料を集める道具を役割ごとに書いた表。今はエージェントが自分の道具の一覧から選ぶ
+        warn("sources", f"使わなくなった（材料を集める道具は、エージェントが自分の MCP とスキルの一覧から選ぶ。deck-workflow の gathering materials）。道具ごとの使い方を書いていれば step: gather のレシピに移し、{conf} から消す")
     names = sorted({p.parent.name for p in SKILLS.glob("*/SKILL.md")} | set(OLD_NAMES))  # 前の名前で置いた写しも（名前がぶつからないので、プラグインのものと両方が効く）
     found = {}  # 実体ごとに 1 回（.claude/skills は .agents/skills へのリンクのことが多い）
     for d in (".agents/skills", ".claude/skills"):
@@ -227,6 +229,9 @@ def selftest():
         (ws / "desk.toml").rename(Path(tmp, "desk.toml"))  # 既定のワークスペースの上にある desk.toml も、中で開くと勝つ
         assert str(Path(tmp, "desk.toml")) in rows(conf.parent)["設定が 2 つ"][1]
         Path(tmp, "desk.toml").rename(ws / "desk.toml")
+        conf.write_text(conf.read_text() + '[sources]\nchat = "slack"\n')
+        kind, detail = rows(Path(tmp))["sources"]
+        assert kind == "要確認" and str(conf) in detail and "sources" not in rows(ws)
         conf.write_text("[drive]\n")
         assert rows(Path(tmp))["個人の設定"][0] == "要修正" and rows(ws)["個人の設定"][0] == "要確認"  # 読めない ~/.desk.toml。中ではワークスペースの desk.toml で動く
     os.environ["DESK_CONFIG"] = ""  # 手元の ~/.desk.toml に左右されない
@@ -276,7 +281,10 @@ def selftest():
         assert kinds()["google.quota_project"] == "要確認"  # Docs は直接呼ぶ
         conf.write_text(base + "[uc_connections]\nenabled = false\n" + hosts)
         assert "無効" in next(d for _, n, d in check(Path(tmp), local=True) if n == "uc_connections") and kinds()["google.quota_project"] == "要確認"
+        conf.write_text(base + '[sources]\nchat = "slack"\n')
+        assert kinds()["sources"] == "要確認"  # 前の表が残っている
         conf.write_text(base)
+        assert "sources" not in kinds()
         agents = Path(tmp) / "AGENTS.md"
         assert "前の雛形の AGENTS.md" not in kinds() and "前のバージョンのワークスペース" not in kinds()  # 今の雛形は AGENTS.md を置かない
         assert kinds()["ワークスペースの決まり"] == "OK"

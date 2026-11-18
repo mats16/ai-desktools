@@ -13,14 +13,14 @@ You check the facts of a material against their sources. Open each source yourse
 ## What to read
 - Rows to check: run `refs.py check <material folder>` (`deck-workflow`) and take the section 「照合していない行」. It lists the rows in order of risk (`提供` → `計算` → `数字` → `顧客` → `名前`) with the source's ID, kind, date checked, and URL. Check them in that order.
 - The outline's 「出典の表」 (<outline path>) and <material folder>/references.md, for the full rows and for `使い道`.
-- Workspace rules: <the paths that `desk.py recipes <material folder>` (`deck-workflow`) lists: the recipes without `step` and those in the outline's 「使う決まり」, and the customer's memory.md> (open each whole; a rule about which sources may be used or cited takes priority over the plugin)
+- Workspace rules: <the paths that `desk.py recipes <material folder>` (`deck-workflow`) lists: the recipes without `step`, the applicable `step: gather` recipes, those in the outline's 「使う決まり」, and the customer's memory.md> (open each whole; a rule about which sources may be used or cited takes priority over the plugin)
 - Rules: "Sources" and deck-content-024, 025, 027, and 064 in content from the table in <deck-writing folder>/SKILL.md (what counts as a source, conflicting values, model generations, availability tables).
 
 ## How to open sources
 - Public pages: fetch the page itself (WebFetch, or `curl -sL`). A search result snippet is not the source. Read the tables and footnotes (legends such as ‡ in availability tables).
 - GitHub: `gh api repos/<owner>/<repo>`, `gh api repos/<owner>/<repo>/contents/<path>`, or raw.githubusercontent.com (README, package.json, Cargo.toml, and so on).
-- Google Slides and Docs: the file-storage tool in `[sources]` of the settings `desk.toml`, or `check_slides.py export <URL> /tmp/<name>.pptx` (`build-slides`) and the slide XML text; for Docs `docs.py export <URL> /tmp/<name>.pdf` (`build-docs`) and `pdftotext`. Do not run `check_slides.py check` (it takes page images and shares the parent's rate limit).
-- Meetings and chat: the `meetings` and `chat` tools in `[sources]`. Read the part the `出典` cell points to (time, message).
+- Google Slides and Docs: a file-storage tool in your tool list (such as a Google Drive MCP server), or `check_slides.py export <URL> /tmp/<name>.pptx` (`build-slides`) and the slide XML text; for Docs `docs.py export <URL> /tmp/<name>.pdf` (`build-docs`) and `pdftotext`. Do not run `check_slides.py check` (it takes page images and shares the parent's rate limit).
+- Meetings and chat: the tools in your tool list that hold meeting records and chat (such as Dahlia MCP, the 「Google Meet」 folder in Google Drive, Slack, Microsoft Teams). Read the part the `出典` cell points to (time, message).
 - Local data (kind `データ`): open the file and recompute. For `計算` rows, recompute from the original values of the rows it cites, not from rounded values (deck-content-037).
 
 ## How to judge each row

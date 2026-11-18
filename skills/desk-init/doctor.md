@@ -41,7 +41,7 @@ Prints one item per line as 「OK」, 「要修正」, or 「要確認」. Exits
 
 ## What to check outside the script
 
-The script cannot see whether the tools for gathering material (`deck-workflow` → gathering materials) are available. Check whether each tool written in `[sources]` of `desk.toml` (an MCP server or skill name) is in your own tool list, and return the missing ones together as `要確認`. If `[sources]` is empty, ask the user which tools to use and write them. Materials can be built without them, but gathering material becomes manual.
+The script cannot see which tools for gathering material (`deck-workflow` → gathering materials) are available. Match the MCP servers and skills in your own tool list to the roles there (`search`, `chat`, `meetings`, `wiki`, `crm`, `usage`), and return the roles no tool serves together as `要確認`. Materials can be built without them, but gathering material for those roles becomes manual (the user pastes it). If a gathering recipe (`step: gather`) names a tool that is not in your tool list, return that too.
 
 ## How to reply
 

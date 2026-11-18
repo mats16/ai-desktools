@@ -8,7 +8,18 @@ Read this when gathering internal materials and customer information (steps 3 an
 
 ## Internal materials (reuse and messaging)
 
-The tools are listed by role in the settings `desk.toml` under `[sources]` (`search`, `chat`, `meetings`, `wiki`, `crm`, `usage`). For a role that is not listed, ask the user to paste the material or URL. How to use each tool and where to look in that company are in the workspace's gathering recipes (`step: gather`): before you gather, list them with `python3 <deck-workflow folder>/scripts/desk.py recipes` and open the ones that fit.
+Pick the tools from your own tool list (MCP servers and skills), by the role each one plays. No setting lists them, because the host already tells you what is connected, and a list in a file goes stale when a tool is added or removed. The roles and typical tools (examples, not a list to look for):
+
+| Role | What it holds | Typical tools |
+| --- | --- | --- |
+| `search` | Cross search over internal documents, chat, and wikis | Genie One, Glean |
+| `chat` | Internal and shared channels | Slack, Microsoft Teams |
+| `meetings` | Meeting records (summaries, transcripts) | Dahlia MCP, the 「Google Meet」 folder in Google Drive |
+| `wiki` | Enablement materials, field guides | Notion, Confluence |
+| `crm` | Deals, owners, basic customer information | Salesforce |
+| `usage` | The customer's usage and spend | Genie One, Databricks SQL (dbsql) |
+
+One tool can serve several roles (Genie One serves both `search` and `usage`). When two tools serve one role, use the one closer to the original (the CRM itself over a search hit that quotes it). When no tool serves a role, say which role is missing and ask the user to paste the material or URL. How to use each tool and where to look in that company are in the workspace's gathering recipes (`step: gather`): before you gather, list them with `python3 <deck-workflow folder>/scripts/desk.py recipes` and open the ones that fit.
 
 - **Internal cross search** (`search`): search here first for materials on the same theme (「<製品名> pitch deck」「<テーマ> 日本語」「<顧客の業種> 事例」 and so on).
 - **File storage**: read the contents of the Google Slides and Docs you found (for Google Slides, `check_slides.py` of `build-slides` also works).

@@ -59,15 +59,6 @@ deck_review_max_rounds = 3  # /deck-review を回すラウンドの上限（1〜
 # ほかの経路の指摘を受けるときは、[feedback.<経路>] を足す
 watch_hours = 0  # 最後のコメント（なければ見張り始め）から何時間見張るか。新しいコメントがないまま過ぎたら終える。0 か、書かなければ見張らない（頼まれたときだけ）
 
-[sources]  # 材料を集める道具（deck-workflow の gathering materials）。値は MCP のサーバーかスキルの名前。使わない役割は書かない（資料や URL を貼ってもらう）
-# 道具ごとの使い方とその会社の探し場所は recipes/ のレシピ（step: gather）に書く。desk-doctor が、書いた道具が使えるかを見る
-# search   = "glean"       # 社内の横断検索
-# chat     = "slack"       # 社内のチャット（Microsoft Teams なら、その MCP の名前）
-# meetings = ""            # 会議の記録（議事録・文字起こし）
-# wiki     = "confluence"  # 社内の wiki（Notion などでもよい）
-# crm      = "salesforce"  # 顧客の台帳
-# usage    = ""            # 顧客の利用額・利用状況
-
 [drive]
 desk = ""       # 個人の資料の根元（例: My Drive の AI Desk Tools）。template.py --from-base は、この下の Themes にテンプレートを作る（なければ作る）。gslides.py keep の差し替え用の複製は直下に、調べものの写し（drive_put.py research）はこの下の Research に作る
 shared_themes = ""  # 全社の共有テーマのフォルダ（管理者が template.py で作ったテンプレートの置き場所。見る権限でよい）。slides.py themes が、desk.toml にないテンプレートを候補に出す。
