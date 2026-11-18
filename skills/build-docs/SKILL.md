@@ -1,13 +1,13 @@
 ---
 name: build-docs
-description: Write Japanese documents (proposals, research reports, explanatory materials, PoC plans) in markdown (build/doc.md), build them in Google Docs with docs.py, and check and fix them with docs.py check (lint, page images, matching against the template). When delivering as Word, export from Google Docs. Always use before you start writing a document and before you deliver it.
+description: Write, build, revise, and check documents in Google Docs (proposals, research reports, explanations, PoC plans). Use before writing a document and before delivering it, and when asked to fix a document, write from a workspace template, make or change a document theme, or hand it over as Word. The overall workflow is deck-workflow; how pages look is deck-design; slides are build-slides.
 ---
 
 # Build and finish Japanese documents in Google Docs
 
 [docs-write-001] Documents are built directly in Google Docs with the Docs API (history in `Research/gdocs_pipeline_20261009.md`). The source of truth for the content is the material's `build/doc.md` (markdown); docs.py builds it with named styles and a theme, and rebuilds it to the same URL (moved from doc.py on 2026-10-10. §1 below). The visual rules are in `deck-design` → documents, and how to write the content is in `deck-writing` → content (same as slides). Slides are in `build-slides`. Where to place the document on Drive is `deck-workflow` → Drive.
 
-**Workspace recipes.** The workspace may add to or override this skill in its recipes, which take precedence. Before building, run `python3 <build-docs folder>/scripts/desk.py recipes <material folder>` and open, each whole, the recipes without `step` and with `step: build` whose `description` fits, those the outline's 「使う決まり」 names, and the customer's `memory.md` it names ("Workspace rules" in `desk-feedback` → routing). Skip the ones you already opened in this context.
+**Workspace recipes.** The workspace may add to or override this skill in its recipes, which take precedence. Before building, run `python3 scripts/desk.py recipes <material folder>` and open, each whole, the recipes without `step` and with `step: build` whose `description` fits, those the outline's 「使う決まり」 names, and the customer's `memory.md` it names ("Workspace rules" in `desk-feedback` → routing). Skip the ones you already opened in this context.
 
 | What you make | Read before you start writing |
 |---|---|
@@ -17,17 +17,20 @@ description: Write Japanese documents (proposals, research reports, explanatory 
 | **Lint:** reading `docs.py check` and lint output; the Japanese check after building (`docs.py wording`) | [lint.md](lint.md) |
 | **Docs API pitfalls:** changing `docs.py`, or a build that fails or looks wrong in an unexpected way | [api.md](api.md); after editing `docs.py`, `doc_lint.py`, or `doc_layout.py`, also the bullet 「When you edit docs.py, doc_lint.py, or doc_layout.py」 in [templates.md](templates.md) (selftests and rebuilding the template samples) |
 
-```sh
-K=<build-docs folder>/scripts   # the scripts/ folder beside this file. docs.py imports copies of the parts shared with slides (gapi.py, textlint.py, brand.py) from this folder; their owner is build-slides
-cd <folder>/build
-python3 $K/docs_doctor.py <workspace> [--local]             # the prerequisites for building documents: doctor.py's checks (desk-init), then [brand], themes, templates (--own: only these, when doctor.py already ran)
-python3 $K/docs.py init <template name>                      # when the workspace has a template and you start from it (copies doc.md. templates.md)
-python3 $K/docs.py new <Drive folder URL> <YYYYMMDD_name>   # first build. Write the printed URL in the outline and tell the user right away (deck-drive-003 in `deck-workflow` → Drive)
-python3 $K/docs.py build <URL>                                    # rebuild after edits (the URL does not change. Stops if someone edited in the UI)
-python3 $K/docs.py check <URL>                                    # check (§2 below. exit 1 if there is 要修正)
-python3 $K/docs.py wording <URL>                                  # after check: the Japanese check on the saved document, which is also the match with it ([lint.md](lint.md) → Japanese check)
-python3 $K/docs.py export <URL> /tmp/<material name>.docx                 # only when the counterpart asks for Word ([lint.md](lint.md))
-```
+## Scripts
+
+Run commands from the material's `build/` folder (`doc.md` there is the one built). Script paths are relative to this skill's folder; resolve them from there when working in another folder. `docs.py` imports the copies of the parts shared with slides in `scripts/` (`gapi.py`, `textlint.py`, `brand.py`; their owner is `build-slides`). `<URL>` is the Google Docs URL.
+
+| Task | Command and result |
+|---|---|
+| Check the prerequisites | `python3 scripts/docs_doctor.py <workspace> [--local]` runs doctor.py's checks (`desk-init`), then `[brand]`, themes, and templates. `--own` checks only these, when doctor.py already ran; `--local` skips the Google APIs |
+| List themes | `python3 scripts/docs.py themes` prints the default and the workspace's document themes with their descriptions (§1.2) |
+| Start from a template | `python3 scripts/docs.py init <template name>` copies the template's doc.md, when the workspace has one ([templates.md](templates.md)) |
+| Create the Google Doc | `python3 scripts/docs.py new <Drive folder URL> <YYYYMMDD_name>` makes the first build. Write the printed URL in the outline and tell the user right away (deck-drive-003 in `deck-workflow` → Drive) |
+| Rebuild after edits | `python3 scripts/docs.py build <URL>` keeps the URL. It stops if someone edited in the UI or comments are unresolved; put those into doc.md, then add `--force` (§4) |
+| Check the build | `python3 scripts/docs.py check <URL>` runs lint, page images, and the matches (§2). Exit 1 if there is `要修正` |
+| Check Japanese | `python3 scripts/docs.py wording <URL>` after `check`: the Japanese check on the saved document, which is also the match with it ([lint.md](lint.md) → Japanese check) |
+| Export to Word | `python3 scripts/docs.py export <URL> /tmp/<material name>.docx`, only when the counterpart asks for Word (§4) |
 
 ## 1. Writing doc.md and the check loop
 

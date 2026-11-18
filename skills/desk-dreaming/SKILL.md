@@ -1,6 +1,6 @@
 ---
 name: desk-dreaming
-description: Periodically tidies this folder's rules (recipes, customer memory) and the skills from conversation logs and the rule ledger (modeled on Devin's Dreaming). Rule changes drawn from conversations become proposals that wait for the user's reply. Safe cleanups (rebuilding the index, overlaps, stale text, broken paths) are applied directly and reported. Once a month it also reruns the desk-research survey. A scheduler calls it with the one line in prompt.txt. Also read it when the user says 「整理して」「desk-dreaming して」「提案を適用して」「推奨どおり」.
+description: Tidy this workspace's rules (recipes, customer memory) and the skills on a schedule, from conversation logs and the rule ledger. Rule changes drawn from conversations become proposals that wait for the user; safe cleanups are applied and reported. Runs once a day from a scheduler, and reruns the desk-research survey once a month. Use when the user says 「整理して」「desk-dreaming して」, replies to its proposals (「提案を適用して」「推奨どおり」), or asks to schedule it.
 ---
 
 # Scheduled cleanup (desk-dreaming)
@@ -22,6 +22,20 @@ Corrections are written back into rules on the spot, in the conversation that ma
 | **Applying proposals:** the user replies to a report (「適用」「推奨どおり」「推奨どおり、P0002 は却下」, answers to pending questions, or choices) | [apply.md](apply.md) |
 | **Scheduling:** registering the run with a scheduler | [schedule.md](schedule.md) |
 
+## Scripts
+
+Run in the workspace (`$R` below). Script paths are relative to this skill's folder; resolve them from there. [run.md](run.md) gives each step's commands.
+
+| Task | Command and result |
+|---|---|
+| Run from launchd or cron | `sh scripts/run.sh claude\|codex\|pi` runs the line in `prompt.txt` with that CLI ([schedule.md](schedule.md)) |
+| Read conversations since the last run | `python3 scripts/sessions.py --since <ISO8601 UTC> [--root <workspace>]` prints user messages, opened rule files, and tool errors |
+| Freeze, compare, restore | `sh scripts/snapshot.sh save` prints the copy's path; `diff <copy>` shows changes since then; `restore <copy>` puts it back (files added after are kept) |
+| The rule ledger | `python3 scripts/ledger.py …` (a copy; the owner is `desk-feedback`). `$R/.desk/ledger.jsonl`: findings, sources per plugin rule ID and workspace rule file, versions of each workspace rule file, proposals, applies, rejections, undos |
+| The sources index | `python3 scripts/refs.py index` rebuilds `references_index.md` (a copy of `deck-workflow`'s sources ledger) |
+
+Each `.py` has `--selftest`.
+
 ## Files
 
 | File | Contents |
@@ -30,10 +44,6 @@ Corrections are written back into rules on the spot, in the conversation that ma
 | [prompt_propose.md](prompt_propose.md) | The request for the child agents of step 4 (territories, the order of evidence desk-dreaming-003, the candidate format) |
 | [prompt_decided.md](prompt_decided.md) | The request for the child agent of step 4j (whether a rewrite kept each decision of the user) |
 | [schedule.md](schedule.md) | How to register with each scheduler |
-| `scripts/sessions.py` | Extracts user messages, opened rule files, and tool errors from conversations since the last run (has `--selftest`) |
-| `scripts/snapshot.sh` | Freezes a copy before changes (`save`), shows the diff since then (`diff`), restores it (`restore`) |
-| `scripts/run.sh` | Runs with `claude` or `codex` from launchd or cron |
-| `scripts/ledger.py` | The rule ledger (a copy; the owner is `desk-feedback`, and `scripts/refs.py` is a copy of `deck-workflow`'s sources ledger) (`$R/.desk/ledger.jsonl`). Findings, sources per plugin rule ID and workspace rule file, the versions of each workspace rule file, and records of proposals, applies, rejections, and undos (has `--selftest`) |
 | `$R/.desk/dreaming/last_run` | When the last cleanup finished (UTC). Everything from here down lives in the workspace (anything inside the plugin is lost on reinstall) |
 | `$R/.desk/dreaming/log/<YYYYMMDD>.md` | The report (only for runs that found something). Proposal contents and status are in the rule ledger |
 | `$R/.desk/dreaming/backup/` | Copies taken before changes (`snapshot.sh` keeps only the newest 8) |

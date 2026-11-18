@@ -1,6 +1,6 @@
 ---
 name: desk-feedback
-description: Learn from the user's corrections. Judge who a correction is true for (this material only, this customer, this person's or organization's environment, or knowledge any expert would share), record it in the rule ledger with that judgment, write it where that kind of knowledge lives (the outline, the customer's memory, a workspace recipe, or a proposal to the plugin through desk-kaizen), in the form that suits it, and decide how it will be verified. Holds how to judge, how to record and route (the ledger, rule IDs, when workspace rules are opened, customer memory, verifying rules), and how to write, test, and regroup recipes. Use when the user corrects a material or its content (「ここは〜にして」「次から〜」), when asked to add, edit, or regroup rules or recipes (「決まりに足して」「レシピを整理して」「決まりの書き方を教えて」), when the user wants to write a recipe with you (「〜のレシピを作りたい」「レシピを試して」), and before every edit of a recipe or a customer's memory.
+description: Learn from the user's corrections. Judge who a correction holds for (this material, this customer, this environment, or anyone), record it, and write it where it belongs (outline, customer memory, a workspace recipe, or a plugin proposal). Use when the user corrects a material (「ここは〜にして」「次から〜」), when asked to add, edit, or regroup rules or recipes (「決まりに足して」「レシピを整理して」「決まりの書き方を教えて」「〜のレシピを作りたい」「レシピを試して」), and before editing a recipe or a customer's memory.
 ---
 
 # Learning from feedback
@@ -37,9 +37,22 @@ Write what lets the model think, and instruct only where thinking cannot reach.
 
 Take a correction the user gives while making a material this way, on the spot, so the next material does not need the same words. Do not stop at fixing this material, and do not leave it for the cleanup (`desk-dreaming` picks up only what was missed).
 
-1. **Record it as soon as you receive it,** in the rule ledger as the user said it, with your judgment, because a summarized conversation can drop it: `python3 <desk-feedback folder>/scripts/ledger.py add --deck <material folder> --quote "<the user's words>" --fix "<what was fixed>" --to <destination> --scope <資料・顧客・環境・知見> --check <lint・レビュー・なし>` (`<desk-feedback folder>` is this skill's folder. The ledger's script is this skill's `scripts/ledger.py`; other skills run the same commands from their own copy or by naming this skill). Add `--decided` when the user decided it outright (chose from options, or stated it flatly). Change the judgment later with `ledger.py scope <c-ID> <value>`. The ledger is the workspace's `.desk/ledger.jsonl`; it holds customer information, so do not copy it outside.
+1. **Record it as soon as you receive it,** in the rule ledger as the user said it, with your judgment, because a summarized conversation can drop it (`ledger.py add`, "Scripts" below). Add `--decided` when the user decided it outright (chose from options, or stated it flatly).
 2. **Write it** where it lives, in its form: rules for making materials in a recipe, a customer's preferences in their `memory.md`, facts about a customer in their `profile.md`. Do not keep it only in the agent's own memory, because other agents and other tools do not see it. Before editing a recipe or a memory, open [recipes.md](recipes.md) (whoever edits: the making conversation, a direct request, desk-dreaming), so a rule reads the same however it got in.
 3. **Route it** after the edit (`ledger.py route <c-ID> <file>`), and decide how it will be verified (lint, review, or a principle; "Verifying rules" in [routing.md](routing.md)). At the end of the report, say which correction went where (`ledger.py list --deck <material folder>`).
+
+## Scripts
+
+Paths are relative to this skill's folder; resolve them from there when working in another folder. Run them in the workspace. Other skills run the same commands from their own copy of `ledger.py` or by naming this skill. The ledger is the workspace's `.desk/ledger.jsonl`; it holds customer information, so do not copy it outside. All subcommands: `python3 scripts/ledger.py --help`; the destination values and versions: [routing.md](routing.md).
+
+| Task | Command and result |
+|---|---|
+| Record a correction | `python3 scripts/ledger.py add --deck <material folder> --quote "<the user's words>" --fix "<what was fixed>" --to <destination> --scope <資料・顧客・環境・知見> --check <lint・レビュー・なし> [--decided]` prints its c-ID |
+| Route it, or change the judgment | `python3 scripts/ledger.py route <c-ID> <file>`; `python3 scripts/ledger.py scope <c-ID> <value>` |
+| List a material's corrections | `python3 scripts/ledger.py list --deck <material folder> [--open]` (`--open`: destination still 「未」) |
+| Where a rule came from and is written | `python3 scripts/ledger.py why <rule ID or file>` (sources, counts, whether the user decided); `trace <rule ID>` (where it is written, the checks that name it); `where <rule ID>` |
+| A new plugin rule ID | `python3 scripts/ledger.py next <prefix>` (prefixes: `ledger.py topics`) |
+| The step-5 recipe list, for testing a recipe | `python3 scripts/recipe_menu.py [--draft <draft RECIPE.md> --as recipes/<name>/RECIPE.md]` prints the list of per-material recipes the making conversation sees ([recipes.md](recipes.md) §7) |
 
 ## Files
 

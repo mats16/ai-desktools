@@ -82,6 +82,8 @@
 
 Claude Code はスキルの一覧をコンテキストの 1% に収め、超えると説明を落とす（`docs/claude-code-plugin.md` の「一覧に説明が載っているかを確かめる」）。desk-tools の 15 個の description は合わせて約 11,000 文字（1 個 374〜995 文字）で、ほかのプラグインと同居する端末ではこの予算の大きな部分を占める。設定で予算を広げる案内は書いたが、プラグイン側の手として、各 description を場面の言葉（「〜して」の引用）を残して半分ほどに縮める余地がある。短くすると Codex・pi でも場面から選ぶ精度が変わりうるので、`docs/fixtures/` のプロンプトで確かめてから。
 
+2026-11-18 に、15 個の description を、ユーザーが頼むことと場面の言葉を中心に 1 個 369〜470 文字に縮めた（合わせて約 6,300 文字）。この端末（ほかのプラグインと同居）で名前だけになるスキルは、7 個（build-docs・build-vids・customer-profile・desk-crawl・desk-init・desk-kaizen・desk-migrate）から 4 個（desk-crawl・desk-init・desk-kaizen・desk-migrate）に減った（`claude -p --model haiku` に 2 回ずつ聞いた）。残りの 4 個も載せるには、さらに縮めるか、設定で予算を広げる。ふだん使われる流れ（資料を作る 1 本ずつを Claude Code と pi で組んだ）では、開くスキルは前と同じだった。`docs/fixtures/` のプロンプトと、ほかの場面（調べもの、ワークスペースを作る、移行）から選ばれるかは確かめていない。
+
 ## 1 本の md を 1 回の読み込みに収める（2026-11-05）
 
 Codex はツールの結果 1 回を約 10,000 トークンで切る。`deck-design/slides.md`（48 KB、約 12,000 トークン）は 1 回で読み切れなかったので、2026-11-05 に §5〜8 を `slides_patterns.md` に分けた（33 KB と 16 KB）。`check.py` の上限（50 KB・2,000 行）はまだこれより大きい。`desk-dreaming/run.md`（40 KB）と `deck-writing/content.md`（38 KB、約 9,500 トークン）も上限に近いので、節で分けてから `check.py` の上限を 35 KB ほどに下げる。

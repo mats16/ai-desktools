@@ -1,13 +1,13 @@
 ---
 name: desk-crawl
-description: Decide which places a recurring collection job reads and how often, and learn it from every run. Per topic (an area to read, such as `vendor-updates`), keeps the list of places (Slack channels and searches, mail searches, RSS and Atom feeds, web pages and searches, wiki pages) and a record of each run. Plans each run (reads the places that pay, spaces out the ones that rarely do, catches up on what was skipped or failed, tries new and pointed-to candidates), briefs child agents to read them shallowly (title, link, summary, where each item was seen), merges the finds, and learns from what the consumers used and missed. Reads only the places in its list, within the window. Does not research a question, verify claims, keep citations, pick items, or write the output; the consumers do that with their own interests. Use for scheduled collection 「毎朝の〜のアップデートを集めて」, when asked 「どこを読めばいいか学ばせて」「読む先を見直して」, and when setting up a new recurring collection.
+description: Run and improve a recurring collection job (a daily digest of vendor updates, a watch on a topic). Per topic, keeps the list of places to read (Slack, mail, feeds, web, wiki), plans which to read this run, has child agents skim them, merges the finds, and learns from what was used and missed. Use for scheduled collection 「毎朝の〜のアップデートを集めて」, 「どこを読めばいいか学ばせて」「読む先を見直して」, and to set up a new one. Researching a question is desk-research.
 ---
 
 # Crawl the places a recurring job reads
 
 This skill decides where and when to read, and learns from each run. A topic is an area to read, not a project or a reader. Make one topic per area (`vendor-updates`) and collect it once, at the shortest interval any consumer needs, so the same channel is not read once per project. The consumers (a daily digest, a project's watch, a customer's news) pick from the merged candidates by their own interests and write their outputs. They return two things only: the outputs (to mark what was used) and what they missed. Keep interests, categories, wording, and who may see what in the consumers, not here. A place only one consumer needs (a customer's newsroom) goes in its own topic.
 
-**Workspace recipes.** Before gathering, open, each whole, the workspace's gathering recipes (`step: gather`: the company's search tools and sources) whose `description` fits. `python3 <desk-crawl folder>/scripts/desk.py recipes` lists them ("Workspace rules" in `desk-feedback` → routing).
+**Workspace recipes.** Before gathering, open, each whole, the workspace's gathering recipes (`step: gather`: the company's search tools and sources) whose `description` fits. `python3 scripts/desk.py recipes` lists them ("Workspace rules" in `desk-feedback` → routing).
 
 | File | Use |
 |---|---|
@@ -17,9 +17,20 @@ This skill decides where and when to read, and learns from each run. A topic is 
 | `<workspace>/.desk/crawl/<topic>/sources.json` | The list of places: tier, group, pinned, url, notes. Edited only through `crawl.py set` and `record` |
 | `<workspace>/.desk/crawl/<topic>/runs.jsonl` | One line per run: reads, candidates with the places they were seen in, what was used, misses, discoveries, lessons |
 
-```sh
-S=<desk-crawl folder>/scripts/crawl.py   # run in the workspace
-```
+## Scripts
+
+Run in the workspace. `scripts/crawl.py` is relative to this skill's folder; resolve it from there. Running it without arguments prints every option.
+
+| Task | Command and result |
+|---|---|
+| Plan a run | `python3 scripts/crawl.py plan <topic> [--hours 24 \| --since <ISO>] [--until <ISO>] [--explore 3]` prints the groups to read, each place's start, and the changes to ask about |
+| Brief a child | `python3 scripts/crawl.py prompt <topic> <group> --goal "<goal>"` prints the whole prompt for that group's child |
+| Read the feeds | `python3 scripts/crawl.py feeds <topic> --out $D/feeds.json` reads the `feed` places itself |
+| Read more today | `python3 scripts/crawl.py more <topic> <id>...` adds up to 3 places as a new group and prints its number |
+| Merge the replies | `python3 scripts/crawl.py merge <topic> $D/*.json --out $D.run.json` prints the numbered list of candidates |
+| Record the run | `python3 scripts/crawl.py record <topic> $D.run.json --published <output>... [--missed <file>...]` marks what was used and applies the lessons |
+| Report | `python3 scripts/crawl.py report <topic> [<run id>]` prints the 「## 情報源」 section and the trend |
+| Edit or list the places | `python3 scripts/crawl.py set <topic> <id> key=value...` or `set <topic> --from <file.json>`; `python3 scripts/crawl.py sources <topic> [--json]` |
 
 ## Inputs from the prompt
 
@@ -33,15 +44,15 @@ Take these from the prompt and do not guess them. If one is missing in a schedul
 
 ## Each run
 
-1. **Plan.** `python3 $S plan <topic> --hours 24` prints the groups to read, each place's start (where it was last read, up to 7 days back), its notes, the candidates to explore, the `follow` places skipped by their interval, and the changes to ask the user about. Keep the "ask" lines for the report.
-2. **Collect in parallel.** For each group except `feed`, run `python3 $S prompt <topic> <n> --goal "<goal>"` and pass the output as the whole prompt to a new child agent, all in one message so they run at the same time (in T3 Code, `delegate_task` with `mode` `async`; in Claude Code, Agent with the same model as yours). Do not fill `prompt_collect.md` by hand. Make a new folder for this run (`D=$(mktemp -d /tmp/<topic>.XXXX)`), so that replies from an earlier run never get merged again. Meanwhile run `python3 $S feeds <topic> --out $D/feeds.json`. Save each child's JSON to `$D/<n>.json`. Rerun a failed or timed-out group once; if it fails again, go on without it (`merge` records its places as failed, and the next run reads them from this window's start).
-3. **Merge.** `python3 $S merge <topic> $D/*.json --out $D.run.json` joins the same news across places, marks items used before (`［使われた済み］`) and similar titles (`［似ている］`), and prints a numbered list. Read only this list, not the children's raw output. To open an item's fields (`url`, `summary`), read `items` in `$D.run.json`: item `n` of the list is `items[n - 1]`. The children's files and `feeds.json` keep theirs under `candidates`, so do not read that key in `$D.run.json`.
-4. **Read more (when the list calls for it).** If an item points to a place worth reading today (the channel of a product announced today, a vendor's release page, a place a child discovered), run `python3 $S more <topic> <id>...` (up to 3 per run), brief one more child with the group number it prints, save the reply in `$D`, and merge again with every reply. Each extra read counts as exploration, so places that give nothing rest.
+1. **Plan.** `python3 scripts/crawl.py plan <topic> --hours 24` prints the groups to read, each place's start (where it was last read, up to 7 days back), its notes, the candidates to explore, the `follow` places skipped by their interval, and the changes to ask the user about. Keep the "ask" lines for the report.
+2. **Collect in parallel.** For each group except `feed`, run `python3 scripts/crawl.py prompt <topic> <n> --goal "<goal>"` and pass the output as the whole prompt to a new child agent, all in one message so they run at the same time (in T3 Code, `delegate_task` with `mode` `async`; in Claude Code, Agent with the same model as yours). Do not fill `prompt_collect.md` by hand. Make a new folder for this run (`D=$(mktemp -d /tmp/<topic>.XXXX)`), so that replies from an earlier run never get merged again. Meanwhile run `python3 scripts/crawl.py feeds <topic> --out $D/feeds.json`. Save each child's JSON to `$D/<n>.json`. Rerun a failed or timed-out group once; if it fails again, go on without it (`merge` records its places as failed, and the next run reads them from this window's start).
+3. **Merge.** `python3 scripts/crawl.py merge <topic> $D/*.json --out $D.run.json` joins the same news across places, marks items used before (`［使われた済み］`) and similar titles (`［似ている］`), and prints a numbered list. Read only this list, not the children's raw output. To open an item's fields (`url`, `summary`), read `items` in `$D.run.json`: item `n` of the list is `items[n - 1]`. The children's files and `feeds.json` keep theirs under `candidates`, so do not read that key in `$D.run.json`.
+4. **Read more (when the list calls for it).** If an item points to a place worth reading today (the channel of a product announced today, a vendor's release page, a place a child discovered), run `python3 scripts/crawl.py more <topic> <id>...` (up to 3 per run), brief one more child with the group number it prints, save the reply in `$D`, and merge again with every reply. Each extra read counts as exploration, so places that give nothing rest.
 5. **Hand the list to the consumers.** Each picks by its own interest, opens the pages it needs, and writes its output with each item's source URL. Skip `［使われた済み］` items unless they changed; check `［似ている］` ones against the earlier output.
-6. **Record.** `python3 $S record <topic> $D.run.json --published <output>... [--missed <file>...]`. Pass every output made from this run so far. When a consumer finishes later, record again with all the outputs; it replaces the run, keeps the misses added before, and does not apply lessons twice. Recording again with only `--missed` keeps the items marked used before. Record before building slides or posting, because a later failure should not lose what was learned. A run is identified by the end of its window, so a new `plan` starts a new run.
+6. **Record.** `python3 scripts/crawl.py record <topic> $D.run.json --published <output>... [--missed <file>...]`. Pass every output made from this run so far. When a consumer finishes later, record again with all the outputs; it replaces the run, keeps the misses added before, and does not apply lessons twice. Recording again with only `--missed` keeps the items marked used before. Record before building slides or posting, because a later failure should not lose what was learned. A run is identified by the end of its window, so a new `plan` starts a new run.
    - The misses file lists items a consumer learned elsewhere that this crawl should have found: `[{"url": "<item URL>", "source": "<kind>:<ref>, if known", "why": "<one line>"}]`. A miss reported after its run goes into the next run's record.
    - Relay `record`'s lines in the report. For each 「読む先にないサイト」, open the site: if it is a stream of updates (a blog, release notes), find its feed ("Finding a site's feed" in `kinds.md`) and add it with `set <topic> feed:<URL> tier=candidate`; if it is reference material (docs), run `set <topic> web:https://<host> tier=dropped` so it is not suggested again.
-7. **Report.** Paste `python3 $S report <topic>` into an output as 「## 情報源」 if the prompt wants it. In the final report, list places that failed, what `record` changed, the "ask" lines from `plan` and `record`, and the trend line from `report`.
+7. **Report.** Paste `python3 scripts/crawl.py report <topic>` into an output as 「## 情報源」 if the prompt wants it. In the final report, list places that failed, what `record` changed, the "ask" lines from `plan` and `record`, and the trend line from `report`.
 
 ## How it learns
 
@@ -58,6 +69,6 @@ Take these from the prompt and do not guess them. If one is missing in a schedul
 ## Set up a topic
 
 1. Write the seed places from the prompt to a JSON list: `[{"id": "slack:C0123456789", "name": "team-announce", "tier": "follow"}, {"id": "feed:https://example.com/feed.xml", "name": "release notes", "tier": "follow"}]`. Name ids as in the kinds table in `kinds.md`. Use `group` for places one child should read together (a digest bot and its source channels). Put how to read a place in `notes` (the markers for a busy channel, 「要約の bot。元の投稿を開く」).
-2. `python3 $S set <topic> --from <file>`, then `python3 $S sources <topic>` to check.
-3. To start from a similar topic, run `python3 $S sources <old topic> --json > <file>`, then `set <new topic> --from <file>`. It copies the `follow` places and the notes passed to children, not the record, so the new topic measures them again; spacing keeps the cost of copying too many small. The same file moves a list to another workspace or person. It holds channel IDs and names, so share it only where those may go.
+2. `python3 scripts/crawl.py set <topic> --from <file>`, then `python3 scripts/crawl.py sources <topic>` to check.
+3. To start from a similar topic, run `python3 scripts/crawl.py sources <old topic> --json > <file>`, then `set <new topic> --from <file>`. It copies the `follow` places and the notes passed to children, not the record, so the new topic measures them again; spacing keeps the cost of copying too many small. The same file moves a list to another workspace or person. It holds channel IDs and names, so share it only where those may go.
 4. For a schedule, register a prompt that names this skill, the topic, the goal, the window, and the consumers and their outputs (in T3 Code, `schedule_task`). Keep interests and output rules (categories, wording, who may see what) in that prompt or in the consumer, not here.

@@ -1,6 +1,6 @@
 ---
 name: customer-profile
-description: Create, refresh, or add to a customer's profile (`Customers/<customer>/profile.md` — business, organization, technology stack, engineers' preferences and culture, current initiatives). Gathers from the tools in `[sources]` of desk.toml, the `[user] profile` file, and public information, and keeps what the user said. Use when asked 「<顧客> の profile を作って・更新して」, when starting a customer-facing material and the profile is missing or older than 30 days, and when the user says something newly learned about a customer (business, stack, preferences).
+description: Create, refresh, or add to a customer's profile (`Customers/<customer>/profile.md` — business, organization, technology stack, engineers' preferences and culture, current initiatives) from the configured sources, public information, and what the user said. Use when asked 「<顧客> の profile を作って・更新して」, when starting a customer-facing material whose profile is missing or older than 30 days, and when the user tells something new about a customer.
 ---
 
 # Customer profile

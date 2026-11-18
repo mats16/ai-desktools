@@ -1,6 +1,6 @@
 ---
 name: desk-init
-description: "Create an AI Desk Tools workspace (the folder that holds materials and rules). Places templates of references_index.md, drive_folders.md, recipes/, and .gitignore, plus Customers/, Internal/, and Research/, and the settings desk.toml in the workspace or in ~/.desk.toml (never overwrites existing files), fills in the settings with the user, and holds the workspace layout (which folder holds what). Also checks the prerequisites (doctor.py: Python and uv, which settings file and workspace are used, overlapping skills, Google authentication, templates and Drive folders, the MCP servers for gathering) and prints how to fix each problem. Use when asked 「ワークスペースを作って」, 「setup して」, 「AI Desk Tools を使い始めたい」, 「環境を確かめて」, or 「doctor して」, in a new environment, on 401 or 403, or when 「desk.toml が見つからない」 appears."
+description: Set up AI Desk Tools - create a workspace (the folder that holds materials, rules, and settings), fill in its settings with the user, and check the environment (Python, settings, Google authentication, Drive, gathering tools), printing how to fix each problem. Also holds which folder of the workspace holds what. Use when asked 「ワークスペースを作って」「setup して」「AI Desk Tools を使い始めたい」「環境を確かめて」「doctor して」, in a new environment, on 401 or 403, or when 「desk.toml が見つからない」 appears.
 ---
 
 # Create a workspace
@@ -11,6 +11,16 @@ description: "Create an AI Desk Tools workspace (the folder that holds materials
 
 A workspace is the folder that holds the material folders, the rules, and the records `.desk/` (for example `~/Documents`). Its settings `desk.toml` go in one of two places. Scripts walk up from the current folder and use the first `desk.toml` they find, and its folder is the workspace. If there is none, they read `~/.desk.toml` (or the path in the environment variable `DESK_CONFIG`) and use its `workspace`. They read only the one they find and never merge the two (`scripts/desk.py`). What goes where is in "Workspace layout" below; how workspace rules take priority over the plugin is in `desk-feedback` → routing ("Workspace rules").
 
+## Scripts
+
+Script paths are relative to this skill's folder; resolve them from there.
+
+| Task | Command and result |
+|---|---|
+| Create a workspace | `python3 scripts/init.py <workspace>` places the templates and `<workspace>/desk.toml`; `--user` puts the settings in `~/.desk.toml` instead. Never overwrites; prints 「置いた」 and 「残した」 |
+| Check the environment | `python3 scripts/doctor.py [<workspace>] [--local]` prints each problem and its fix; `--local` skips the Google APIs ([doctor.md](doctor.md)) |
+| Find the workspace and recipes | `python3 scripts/desk.py` prints the workspace; `python3 scripts/desk.py recipes [<material folder>]` lists the recipes for each step |
+
 ## Steps
 
 When installing through a conversation (the repository's `INSTALL.md`), step 1 is already done. A conversation that just installed the plugin has not loaded this skill or any other skill, so for other skills (build-slides), open `skills/<skill>/SKILL.md` in the install location and follow it.
@@ -19,8 +29,8 @@ When installing through a conversation (the repository's `INSTALL.md`), step 1 i
    - **Where the settings go.** Match how the plugin is installed. Installed only in the workspace (`--scope project`, `pi install -l`, or 「ワークスペースだけ」 in the repository's `INSTALL.md`): in the workspace (`<workspace>/desk.toml`), because only conversations opened there load the plugin. Installed for the whole user (「全体」 in `INSTALL.md`; a Codex `codex plugin add` whose user config is not disabled is one too): in `~/.desk.toml`, so that a conversation opened in any folder uses this workspace. A second workspace or a test one (`sandbox/`) always gets its own `desk.toml`. If `~/.desk.toml` already exists and points to another workspace, tell the user; there is only one.
 2. **Place the files.**
    ```sh
-   python3 <this skill's folder>/scripts/init.py <workspace>          # settings in <workspace>/desk.toml
-   python3 <this skill's folder>/scripts/init.py <workspace> --user   # settings in ~/.desk.toml, with workspace = "<workspace>"; none in the workspace
+   python3 scripts/init.py <workspace>          # settings in <workspace>/desk.toml
+   python3 scripts/init.py <workspace> --user   # settings in ~/.desk.toml, with workspace = "<workspace>"; none in the workspace
    ```
    Relay the 「置いた」 and 「残した」 lines of the output as they are. With `--user`, `init.py` stops if the workspace (or a folder above it) already has `desk.toml` (to move the workspace's own, use desk-migrate's `to-user`), or if `~/.desk.toml` points to another workspace. Without it, `init.py` stops if `~/.desk.toml` points to this folder or one inside it, because a `desk.toml` there would win inside that workspace.
 3. **Fill in the settings (`desk.toml`, or `~/.desk.toml`).** Ask one item at a time and write it. Leave unknown items empty; they stay as `要確認` in doctor.

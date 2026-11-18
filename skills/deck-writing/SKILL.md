@@ -1,6 +1,6 @@
 ---
 name: deck-writing
-description: The brief and the writing axes for materials (decks, documents) - what a good material does, the user's iron rule, and four axes for what the rules leave open in content and wording (what the reader must grasp, which relationships must be seen, how far to claim, which words, what this audience needs). Read before writing an outline or pages, before reviewing, and when a choice of content or wording is not decided by a rule. Also holds what changes by material type (customer-facing, internal, explaining), headings, the content of one page, wording and 「文体」, how to cite sources, and what stays out of customer-facing materials (「社外秘と顧客の情報」). How things look is in deck-design. deck-workflow opens both first; child agents that write pages or review get both.
+description: What makes the content and wording of a deck or document good - the brief, the user's iron rule, and four axes for choices the rules leave open, with notes per material type (customer-facing, internal, explaining), headings, wording and 「文体」, citing sources, and what stays out of customer-facing materials. Read before writing an outline or pages, and before reviewing. How pages look is deck-design; deck-workflow opens both first.
 ---
 
 # The brief and the writing axes
