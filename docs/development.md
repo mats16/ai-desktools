@@ -89,7 +89,7 @@ A conversation that makes a material should open the common marker at the start,
 
 ## Build materials
 
-Use pi or Claude Code with Opus 5.5 at medium thinking/effort for behavior and timing checks. In T3 Code, run these as child tasks so the execution record is visible. Give an ordinary material request without telling the child how to author it; inspect the actual commands to see whether it writes JSON directly or writes custom code to generate or edit it. Keep the prompt, model settings, code, and workspace conditions the same when comparing instruction changes, and save complete command arguments rather than truncated excerpts.
+Use pi or Claude Code with Opus 5.5 at medium thinking/effort for behavior and timing checks. In T3 Code, run these as child tasks so the execution record is visible. Give an ordinary material request without telling the child how to author it; inspect the actual commands and results to see whether it chooses direct JSON, existing tools, or custom code without unnecessary work. Code use alone is not a failure. Keep the prompt, model settings, code, and workspace conditions the same when comparing instruction changes, and save complete command arguments rather than truncated excerpts.
 
 In a `sandbox/` conversation, go through a scene that uses the changed skill (`/desk-tools:build-slides` in Claude Code, `$desk-tools:build-slides` in Codex, `/skill:build-slides` in pi, and so on), and check with lint and with images of the pages Google drew.
 
