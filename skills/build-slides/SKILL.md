@@ -34,12 +34,14 @@ cd <folder>/build
 # Slides
 python3 $K/slides.py new <Drive folder URL> <YYYYMMDD_name>   # first build. Tell the user the printed URL right away (deck-drive-003 in `deck-workflow`). --theme <theme> (a name from slides.py themes) for a theme other than the default
 python3 $K/slides.py lint <URL>                                     # after every edit, lint locally without building (pages changed since the last run. "Three layers of checks" below)
-python3 $K/slides.py patch p05.json.lead=<text> …                  # writes the page JSON and runs lint (all or nothing): a few values, or whole pages with p05.json:={…}, many at once from a heredoc with - (commands.md, slides-command-039)
+python3 $K/slides.py patch p05.json.lead=<text> …                  # targeted fixes to existing JSON only; write new files and whole-page rewrites directly as JSON, then lint (commands.md, slides-command-039)
 python3 $K/slides.py wording                                        # once the pages are written: the Japanese check on the page JSON, without building (lint.md → Japanese check)
 python3 $K/slides.py build <URL>                                    # build at checkpoints (rebuilds only changed pages. The URL does not change. Stops if someone edited in the UI. commands.md)
 python3 $K/gslides.py check <URL>                                   # after building. Images and lint of changed pages. Add --talk at the end for talks such as LTs. --all for images of every page
 python3 $K/gslides.py wording <URL>                                 # last, after check: the saved deck holds the checked text (lint.md → Japanese check)
 ```
+
+**Writing JSON.** Write new page and deck files, and whole-page rewrites, directly as JSON with a file editor or a heredoc of literal JSON. Do not generate them with Python or another script, or create them through `patch`. Use `slides.py patch` only for targeted fixes to existing JSON (values, replacements, insertions, and deletions). Run `lint` or `dry` on the written files to check their format.
 
 ## Three layers of checks
 

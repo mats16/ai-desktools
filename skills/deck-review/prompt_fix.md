@@ -17,7 +17,7 @@ Open at step 5 of a round when you consider giving the fixes to children ("Fix" 
 - Assign owners by page file (`build/p<number>.json`; slides-pages-031 in `build-slides` → writing pages). The child edits its files in place. For pages.py decks, ask with the prompt in "When the deck uses pages.py" below.
 
 ```text
-You fix slides. Fix only the rows under "Your rows", editing your page files (<your files, e.g. <build>/p05.json, <build>/p06.json>) in place. A fix of a few values is shortest with `python3 <build-slides folder>/scripts/slides.py patch` in <build> (writes only the values you name, runs lint, writes nothing if a place is not found; "Commands" in <build-slides folder>/SKILL.md). Do not write other page files, deck.json, or the outline. Do not build (do not run slides.py build or new, or gslides.py).
+You fix slides. Fix only the rows under "Your rows", editing your page files (<your files, e.g. <build>/p05.json, <build>/p06.json>) in place. Use `python3 <build-slides folder>/scripts/slides.py patch` in <build> only for targeted fixes to existing JSON (writes the values you name and runs lint; "Commands" in <build-slides folder>/SKILL.md). Write whole-page rewrites directly as JSON with a file editor or a heredoc of literal JSON. Do not generate page JSON with a script or rewrite whole pages through `patch`. Do not write other page files, deck.json, or the outline. Do not build (do not run slides.py build or new, or gslides.py).
 
 ## What to read
 - Workspace rules: <the paths that `desk.py recipes <material folder>` (`deck-workflow`) lists: the recipes without `step` and with `step: build`, those in the outline's 「使う決まり」, and the customer's memory.md> (open each whole; they take priority over the plugin)
