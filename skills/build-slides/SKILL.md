@@ -14,7 +14,7 @@ Slides are built directly in Google Slides with the Slides API (switched from pp
 | **Writing pages:** writing or fixing pages | [pages.md](pages.md) (the page JSON), with `deck-design` → slides (how slide pages should look) |
 | **Diagrams:** pages with a free-form diagram, arrows, a Gantt chart, a bar chart, or a gridded diagram | [diagrams.md](diagrams.md) (`frame`, `arrow`, `gantt`, `bars`, and the build warnings for positions), in addition to the two above |
 | **Samples:** pages that cover the usual ways of writing each component | `samples/json/` (open the page that uses the components you chose; copy the syntax, not the form) |
-| **Commands:** building, build warnings, command options | [commands.md](commands.md) |
+| **Commands:** editing JSON, building, build warnings, command options | [commands.md](commands.md) |
 | **Themes:** choosing, copying, or changing a theme | [themes.md](themes.md) |
 | **Images:** images, logos, icons | [images.md](images.md) |
 | **Assets:** the reused images, logos, and the blank template (`blank.pptx`), with where each came from | `assets/` (its `README.md`) |
@@ -34,14 +34,16 @@ cd <folder>/build
 # Slides
 python3 $K/slides.py new <Drive folder URL> <YYYYMMDD_name>   # first build. Tell the user the printed URL right away (deck-drive-003 in `deck-workflow`). --theme <theme> (a name from slides.py themes) for a theme other than the default
 python3 $K/slides.py lint <URL>                                     # after every edit, lint locally without building (pages changed since the last run. "Three layers of checks" below)
-python3 $K/slides.py patch p05.json.lead=<text> …                  # edit JSON values, replace text, insert or delete items; runs lint (commands.md, slides-command-039)
+# Existing JSON editor: several changes across files in one call, then lint (commands.md, slides-command-039)
+python3 $K/slides.py patch 'p05.json.body.0.items.0.size:=14' \
+  'p06.json.lead=修正後の文' --del p05.json.band
 python3 $K/slides.py wording                                        # once the pages are written: the Japanese check on the page JSON, without building (lint.md → Japanese check)
 python3 $K/slides.py build <URL>                                    # build at checkpoints (rebuilds only changed pages. The URL does not change. Stops if someone edited in the UI. commands.md)
 python3 $K/gslides.py check <URL>                                   # after building. Images and lint of changed pages. Add --talk at the end for talks such as LTs. --all for images of every page
 python3 $K/gslides.py wording <URL>                                 # last, after check: the saved deck holds the checked text (lint.md → Japanese check)
 ```
 
-**Writing JSON.** Prefer direct JSON and existing tools for edits and checks; custom code usually adds overhead. Choose code when it is more efficient. Use `slides.py patch` for targeted fixes, or `sed` or a file editor for simple replacements. Run `lint` or `dry` afterward.
+**Writing JSON.** Prefer direct JSON and existing tools for edits and checks; custom code usually adds overhead. Choose code when it is more efficient. `slides.py patch` is the existing JSON editor: batch changes, insertions, and deletions across files in one call; it runs lint. A file editor or `sed` also works for simple replacements. Run `lint` or `dry` afterward.
 
 ## Three layers of checks
 
