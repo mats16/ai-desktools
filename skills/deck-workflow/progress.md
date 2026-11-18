@@ -51,3 +51,9 @@ Names that help in `--out`:
 - **When child agents write pages** (slides-flow-016): record step 7 「始めた」 for the whole material and, when you hand out the pages, 「始めた」 with `--files` for each child's planned pages (they need not exist yet), because the join sees only scopes that have a record. Ask each child to record its own pages when it finishes (`flow.py record <material folder> 7 済んだ --files build/p06.json build/p07.json`). Step 7 is 「済んだ」 only after the parent records it 「済んだ」 for the whole material and every child's pages are 「済んだ」 or 「飛ばした」. A page dropped from the plan is recorded 「飛ばした」 with `--files`, even after the file is deleted; the children's hashes keep watching the pages after step 7 closes.
 
 A short material finished in one sitting may need no record; the files and the outline already say enough.
+
+## Evidence for summarizing
+
+The evidence for deck-flow-005 and deck-flow-015 in `SKILL.md`:
+
+- Summarizing: one call takes 9.6 seconds at 100k–200k, 11.7 seconds at 200k–300k, and 17.0 seconds at 300k–400k. Calls at boundaries were mostly after the plan review and before building the whole; they were rarely made in `/deck-review` rounds, and the automatic summary at 400k ran instead. Context that was 80k–90k right after a summary went back to a median of 210k after 30 calls because of bulk re-reading (2026-10-14; 23 pi logs; `Internal/deck_speed_202610/社内メモ_計測の結果.md`, p.7 and p.12 of the slides in the same folder; the earlier study is `Research/pi_compaction_deck_workflow_20261010/README.md`). Summarizing before delivery: of 67 revision requests after delivery, 41 started more than 5 minutes after the previous reply (the prompt cache expires), and the first call rewrote a median of 248k tokens. This rewriting was 24% of the cost of the 67. Summarizing before delivering is expected to save $1.0–1.2 per request (estimate; 2026-10-19; the workspace's `Internal/deck_revision_speed_20261019/`).

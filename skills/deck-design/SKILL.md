@@ -1,6 +1,6 @@
 ---
 name: deck-design
-description: Design knowledge for materials (decks, documents) - how a page looks. Principles from design experts (search for the design that best expresses what the page most wants to say, emphasis is relative, same or clearly different, the smallest effective difference, grouping by space, the glance test) and the best practices that follow from them (the focal point, categories and the accent, form per page and frame across pages, means of emphasis, hierarchy, color, surfaces, arrows), with the few instructions that remain (what the components and lint decide, and the order of precedence). Read before writing pages, before reviewing, and when a visual choice is not decided by a rule. Content and wording are in deck-writing. deck-workflow opens both first; child agents that write pages or review get both paths.
+description: How the pages of decks and documents should look - design principles from experts, the best practices that follow from them (focal point, accent, emphasis, hierarchy, color, surfaces, arrows), and the few fixed instructions. Read before writing or reviewing pages, and when a visual choice is not decided by a rule. Content and wording are deck-writing; deck-workflow opens both first.
 ---
 
 # Design knowledge

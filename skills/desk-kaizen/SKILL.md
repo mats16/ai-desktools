@@ -1,6 +1,6 @@
 ---
 name: desk-kaizen
-description: Improve the plugin (upstream). Takes the rules, checks, and script fixes that grew in a workspace and help other people too, verifies them on past materials with the changed and previous versions, and files an Issue on the plugin repository with the reason, verification results, images, and the diff of the proposed change. The owner creates the PR. Use when applying desk-dreaming's 「プラグインに上げる」 proposals, or when asked 「工場を改善して」, 「プラグインに Issue を出して」, or 「大元を直して」.
+description: Propose an improvement to the plugin itself - take a rule, check, or script fix that grew in a workspace and would help other users too, verify it on past materials with the changed and previous versions, and file it as an Issue on the plugin repository (the owner makes the PR). Use when applying desk-dreaming's 「プラグインに上げる」 proposals, or when asked 「工場を改善して」「プラグインに Issue を出して」「大元を直して」.
 ---
 
 # Improve the plugin (file an Issue upstream)
@@ -13,15 +13,18 @@ The plugin owner reads the Issue, decides whether to take it, and rewrites it to
 
 Prerequisites: `gh` is logged in. Run in the workspace. `start` clones the upstream repository (`repository` in `.claude-plugin/plugin.json`) into `.desk/kaizen/<name>/repo`, so no local checkout or fork is needed.
 
-```sh
-P="python3 <this skill's folder>/scripts/kaizen.py"
-$P start <name>                                   # clone into .desk/kaizen/<name>/repo (branch kaizen/<name>)
-$P lint <name> <material URL ...>                 # run lint with the previous and changed versions on current materials and compare
-$P rebuild <name> <material folder ...> [--pages 2,5]   # build temporarily from the source of truth with both versions and lay changed pages' images side by side (the temporary materials go to the trash)
-$P probe <name> [--fixtures 02,05] [<material folder ...>] [--agent claude|codex|pi] [--model <model>]   # have child agents write the same requests with both versions, lint both locally, and have a blind child pick one (no Google)
-$P open <name> --title <title> --body <body.md>   # Issue on the upstream repository. From the second time, rewrites the same Issue
-$P clean <name>                                   # after the Issue is closed (deletes the clone too)
-```
+## Scripts
+
+Run in the workspace. `scripts/kaizen.py` is relative to this skill's folder; resolve it from there.
+
+| Task | Command and result |
+|---|---|
+| Start | `python3 scripts/kaizen.py start <name>` clones upstream into `.desk/kaizen/<name>/repo` (branch `kaizen/<name>`) and the previous version (main) beside it |
+| Compare lint | `python3 scripts/kaizen.py lint <name> <material URL ...>` runs the previous and changed lint on current materials |
+| Compare pages | `python3 scripts/kaizen.py rebuild <name> <material folder ...> [--pages 2,5] [--keep]` builds temporarily with both versions and lays changed pages' images side by side (the temporary materials go to the trash unless `--keep`) |
+| Compare how agents write | `python3 scripts/kaizen.py probe <name> [--fixtures 02,05] [<material folder ...>] [--agent claude\|codex\|pi] [--model <model>] [--jobs 2] [--timeout 1800]` has child agents write the same requests with both versions, lints both, and has a blind child pick one (no Google) |
+| File the Issue | `python3 scripts/kaizen.py open <name> --title <title> --body <body.md>` creates the Issue; from the second time, rewrites the same one |
+| Clean up | `python3 scripts/kaizen.py clean <name>` after the Issue is closed (deletes the clone too) |
 
 ## Steps
 

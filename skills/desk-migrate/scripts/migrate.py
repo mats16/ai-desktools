@@ -63,7 +63,9 @@ SPLIT = {  # 中身を場面ごとに分けたプラグインのファイル。�
     "vids-build/SKILL.md": "vids-build/SKILL.md・avatars.md、vids-build/failures.md（失敗したときの節。2026-11-02）",
     "deck-practices/content.md": "deck-practices/content.md・content_customer.md・content_internal.md・content_explain.md（§1 の資料の種類ごとの決まり）、deck-writing/SKILL.md（§0 のどの資料でも同じこと。2026-10-30）",
     "slides-build/visual.md": "slides-build/visual.md、deck-design/SKILL.md（§3・§4 の色と形のベストプラクティスと、§6 の slides-visual-048・049。2026-10-30）",
-    "deck-design/slides.md": "deck-design/slides.md・slides_patterns.md（§5〜8 の表とグラフ・図の型・AI の癖・使わない提案。2026-11-05）"}
+    "deck-design/slides.md": "deck-design/slides.md・slides_patterns.md（§5〜8 の表とグラフ・図の型・AI の癖・使わない提案。2026-11-05）",
+    "build-vids/SKILL.md": "build-vids/SKILL.md・create_update.md（手順 5〜7 で create と update が中ですること。2026-11-18）",
+    "desk-migrate/SKILL.md": "desk-migrate/SKILL.md・apply_lines.md（apply が出す行ごとの意味。2026-11-18）"}
 B = "A-Za-z0-9_-"  # ID とスキルの名前の前後の区切り（和文は続けて書いてもよいので、英数字だけを見る）
 DREAMING = re.compile(rf"(?<![{B}])(?<!\.desk/)dreaming(?![{B}])(?!/(?:last_run|log|backup)\b)")  # 2026-10-25 より前のスキルの名前。記録のフォルダ .desk/dreaming/（中の last_run・log・backup）は替えない
 MOVED_31 = {"deck-practices/rules.md": "desk-feedback/routing.md", **{f"deck-practices/{x}.md": f"deck-writing/{x}.md" for x in ("content", "content_customer", "content_internal", "content_explain")},
@@ -775,7 +777,7 @@ PLUGIN_VALUE = re.compile(r"(\.\./)?(?:skills/)?([a-z][a-z-]*)/([\w./-]+\.(?:md|
 def unresolved(ws):
     """台帳の変更先（指摘の今の戻し先 to と、当てていないプラグインへの提案の file）のうち、書き換えたあとも今のプラグインにないファイルを指すもの [「台帳の <ID> の <欄>: <値>」]。
     台帳は足していくだけなので、行でなく今の状態（ledger.state。あとの route で替えた戻し先、閉じた提案は見ない）で確かめる。
-    形の決まった値だけを今のファイルで確かめる（文の中のパスは、決まった形だけを替え、確かめない。desk-migrate の SKILL.md の 2026-11-02）。"""
+    形の決まった値だけを今のファイルで確かめる（文の中のパスは、決まった形だけを替え、確かめない。desk-migrate の apply_lines.md の 2026-11-02）。"""
     if not (ws / ".desk" / "ledger.jsonl").is_file():
         return []
     cs, ps, _, _ = ledger.state(ws)
