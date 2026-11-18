@@ -4306,8 +4306,8 @@ def lint_local(path="pages.py", url=None, talk=False, pages=None):
 
 LINT_HARD = "lint の要修正が残っている（上の出力を直す）"
 PATCH_STOP = "要修正: patch を止めた（何も書いていない）。"  # モデルは出力を「要修正」で grep するので、止まる文はこの語で始める
-PATCH_USAGE = ("slides.py patch [<ファイル>.json] <場所>=<文> | <場所>:=<JSON> | --del <場所> | --sub <今の文> <新しい文> …"
-               "（場所は lint の出す p05.json.body[0].items[1].text か、前に渡したファイルの中の body.0.items.1.text）")
+PATCH_USAGE = ("slides.py patch [<ファイル>.json] <場所>=<文> | <場所>:=<JSON> | <ファイル>.json:={ページの JSON} | --ins <場所> <JSON> | --del <場所> | --sub <今の文> <新しい文> | - …"
+               "（場所は lint の出す p05.json.body[0].items[1].text か、前に渡したファイルの中の body.0.items.1.text。- は標準入力の {場所: JSON の値}）")
 
 
 def patch_target(s, cur):
@@ -4331,7 +4331,8 @@ def patch_step(o, k, where):
 
 def cmd_patch(args):
     """JSON のページの値を、場所を指して書き換える（slides-command-039）。すべての直しを手元で当ててから書き、場所・文が見つからなければ何も書かずに止める。
-    書いたあとに lint（deck.json があればデッキの既定の範囲）を回す。直しで書く形が崩れた（知らないキー・値の型）なら、書いたファイルを戻して止める。"""
+    書いたあとに lint（deck.json があればデッキの既定の範囲）を回す。直しで書く形が崩れた（知らないキー・値の型）なら、書いたファイルを戻して止める。
+    <ファイル>.json:={…} はファイルを丸ごと書く（なければ作る。先頭の apiVersion・kind を省けば足す）。--ins は並びの番号の位置に差し込む。- は標準入力の {場所: 値} を場所:=値 として読む。"""
     if Path("pages.py").is_file():
         sys.exit(f"{PATCH_STOP}pages.py のデッキは patch で直さない（ページの関数を直す。../legacy.md）")
     docs, before, cur, i, short = {}, {}, None, 0, lambda v: (s := json.dumps(v, ensure_ascii=False))[:60] + ("…" if len(s) > 60 else "")
@@ -4349,6 +4350,15 @@ def cmd_patch(args):
     out = []
     while i < len(args):
         x, i = args[i], i + 1
+        if x == "-":  # 標準入力の {場所: 値} を、ここに 場所:=値 として並べる（ページをまとめて書くとき、シェルの引用符を気にしない）
+            try:
+                m = json.load(sys.stdin)
+            except json.JSONDecodeError as e:
+                sys.exit(f"{PATCH_STOP}標準入力が JSON でない（{e}）")
+            if not isinstance(m, dict):
+                sys.exit(f"{PATCH_STOP}標準入力は {{\"p05.json\": {{…}}, \"p06.json.lead\": \"…\"}} の形（場所: 値）で書く")
+            args = args[:i] + [f"{k}:={json.dumps(v, ensure_ascii=False)}" for k, v in m.items()] + args[i:]
+            continue
         if x == "--sub":
             if cur is None or len(args) < i + 2:
                 sys.exit(PATCH_USAGE if cur else f"{PATCH_STOP}--sub の前にファイルを渡す（p05.json --sub 今の文 新しい文）")
@@ -4366,6 +4376,16 @@ def cmd_patch(args):
             cur, keys = patch_target(args[i], cur)
             i += 1
             op, val = "del", None
+        elif x == "--ins":
+            if i + 1 >= len(args):
+                sys.exit(PATCH_USAGE)
+            cur, keys = patch_target(args[i], cur)
+            try:
+                val = json.loads(args[i + 1])
+            except json.JSONDecodeError as e:
+                sys.exit(f"{PATCH_STOP}--ins {args[i]} の値が JSON でない（{e}）")
+            i += 2
+            op = "ins"
         elif "=" in x:
             t, v = x.split("=", 1)
             op = "json" if t.endswith(":") else "set"
@@ -4381,12 +4401,30 @@ def cmd_patch(args):
         else:
             sys.exit(PATCH_USAGE)
         if not keys:
-            sys.exit(f"{PATCH_STOP}{x!r} に場所がない（ファイルを丸ごと書き換えない）")
+            if op != "json" or not isinstance(val, dict):
+                sys.exit(f"{PATCH_STOP}{x!r} に場所がない（ファイルを丸ごと書くのは {cur}:={{ページの JSON}} の形）")
+            f = os.path.relpath(Path(cur).resolve())
+            if f not in docs:
+                try:
+                    before[f] = Path(f).read_text(encoding="utf-8")
+                except FileNotFoundError:
+                    before[f] = None
+                except OSError as e:
+                    sys.exit(f"{PATCH_STOP}{f} が読めない（{e}）")
+            docs[f] = {"apiVersion": API_VERSION, "kind": "deck" if "pages" in val else "page", **val}  # 先頭を省いたら足す（書いてあればそちら）
+            out.append(f"{f}: {'新しく書いた' if before[f] is None else '丸ごと書き換えた'}（{len(json.dumps(val, ensure_ascii=False))} 字）")
+            continue
         o, where = doc(cur), cur
         for k in keys[:-1]:
             where += f"[{k}]" if isinstance(k, int) else f".{k}"
             o = patch_step(o, k, where)
         k, loc = keys[-1], re.sub(r"^\.", "", "".join(f"[{k}]" if isinstance(k, int) else f".{k}" for k in keys))
+        if op == "ins" and not (isinstance(o, list) and isinstance(k, int) and k <= len(o)):
+            sys.exit(f"{PATCH_STOP}--ins {cur}.{loc} は並びの番号を指す（" + (f"0〜{len(o)}。{len(o)} は末尾" if isinstance(o, list) else "その上が並びでない") + "）")
+        if op == "ins":
+            out.append(f"{cur} {loc}: （前に差し込んだ） → {short(val)}")
+            o.insert(k, val)
+            continue
         append = isinstance(o, list) and op != "del" and k == len(o)  # 並びの長さと同じ番号は、末尾に足す
         if op == "del" or isinstance(o, list) and not append:
             patch_step(o, k, f"{cur}.{loc}")  # 消すものと、並びの中の書き換えは、もうあるものだけ
@@ -4402,11 +4440,18 @@ def cmd_patch(args):
             o[k] = val
     if not out:
         sys.exit(PATCH_USAGE)
-    wrote = [f for f in docs if json.dumps(docs[f]) != json.dumps(json.loads(before[f]))]  # JSON の型も比べる（Python では 1 == True）。書式だけ違うファイルは書き直さない
-    for f in wrote:
-        Path(f).write_text(json.dumps(docs[f], ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print("\n".join(out), flush=True)
+    def changed(f):  # JSON の型も比べる（Python では 1 == True）。書式だけ違うファイルは書き直さない
+        try:
+            return before[f] is None or json.dumps(docs[f]) != json.dumps(json.loads(before[f]))
+        except json.JSONDecodeError:  # 読めなかったファイルを丸ごと書き換えた
+            return True
+    wrote = [f for f in docs if changed(f)]
+    attempted = []
     try:
+        for f in wrote:
+            attempted.append(f)  # 書く途中で止まっても、そのファイルから戻す
+            Path(f).write_text(json.dumps(docs[f], ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        print("\n".join(out), flush=True)
         with contextlib.redirect_stderr(io.StringIO()):
             for f in wrote:  # デッキにまだ並んでいないページも、lint の要修正で止まる前に形を確かめる
                 deck_context("deck.json" if Path("deck.json").is_file() else f)
@@ -4416,11 +4461,22 @@ def cmd_patch(args):
     except BaseException as e:
         if isinstance(e, SystemExit) and e.code in (None, 0, LINT_HARD):  # 通常の lint の要修正は、直しを残す
             raise
-        for f in wrote:  # ページを読めない例外の種類によらず、全ファイルを戻す
-            Path(f).write_text(before[f], encoding="utf-8")
+        restore_errors = []
+        for f in reversed(attempted):  # 書けない・ページを読めないときは戻す（新しく書いたファイルは消す）
+            try:
+                if before[f] is None:
+                    Path(f).unlink(missing_ok=True)
+                elif Path(f).read_bytes() != before[f].encode("utf-8"):  # 途中の UTF-8 でも比べる。書く前に断られたファイルはそのまま
+                    Path(f).write_text(before[f], encoding="utf-8")
+            except OSError as restore_error:  # 1 ファイルを戻せなくても、ほかを戻す
+                restore_errors.append(f"{f}: {restore_error}")
+        stop = (f"{e}\n要修正: patch を止めた（戻せなかったファイル: {'・'.join(restore_errors)}）。ほかのファイルは戻した。"
+                if restore_errors else f"{e}\n要修正: patch を止めた（書いたファイルを戻した: {'・'.join(attempted)}）。ファイルを書けないか、上のとおりページの JSON として読めない")
         if not isinstance(e, (Exception, SystemExit)):  # 中断は、戻してから伝える
+            if restore_errors:
+                e.add_note(stop)
             raise
-        sys.exit(f"{e}\n要修正: patch を止めた（書いたファイルを戻した: {'・'.join(wrote)}）。直しを当てると、上のとおりページの JSON として読めない")
+        sys.exit(stop)
 
 
 def patch_parent(o, loc):
@@ -5185,6 +5241,70 @@ def selftest_patch():
                     assert {f: Path(f).read_text() for f in keep} == keep
             finally:
                 globals()["load_theme"] = real_load
+            # ファイルを丸ごと書く（標準入力でまとめて・先頭を省いて）、差し込む、新しく書いたファイルは止まれば消す
+            def go_in(text, *args):
+                real_in = sys.stdin
+                sys.stdin = io.StringIO(text)
+                try:
+                    return go(*args)
+                finally:
+                    sys.stdin = real_in
+            for f in ("p01.json", "p02.json", "alias.json"):
+                Path(f).unlink()
+            code, out = go_in(json.dumps({"deck.json": {"name": "t", "theme": "navy", "pages": ["p01.json", "p02.json"]},
+                                          "p01.json": {"title": "書いた見出し", "body": [{"type": "text", "text": "1 段目"}]},
+                                          "p02.json": {"apiVersion": API_VERSION, "kind": "page", "title": "次の見出し", "body": [{"type": "text", "text": "a - b"}]}}, ensure_ascii=False), "-")
+            assert code in (0, None, LINT_HARD) and "p01.json: 新しく書いた" in out and "deck.json: 丸ごと書き換えた" in out and "手元の lint" in out, (code, out)
+            a, d = json.loads(Path("p01.json").read_text()), json.loads(Path("deck.json").read_text())
+            assert list(a)[:2] == ["apiVersion", "kind"] and a["kind"] == "page" and d["kind"] == "deck" and d["pages"] == ["p01.json", "p02.json"], (a, d)
+            code, out = go("p01.json", "--ins", "body.0", "{\"type\": \"text\", \"text\": \"前に足した段\"}", "--ins", "body.2", "{\"type\": \"text\", \"text\": \"末尾\"}", "p02.json", "--sub", "-", "—")
+            assert code in (0, None, LINT_HARD) and [b["text"] for b in json.loads(Path("p01.json").read_text())["body"]] == ["前に足した段", "1 段目", "末尾"], (code, out)
+            assert json.loads(Path("p02.json").read_text())["body"][0]["text"] == "a — b"  # --sub の文の - は標準入力にしない
+            keep = {f: Path(f).read_text() for f in ("deck.json", "p01.json", "p02.json")}
+            for args, want in [(["p01.json", "--ins", "body.4", "{}"], "0〜3"), (["p01.json", "--ins", "title", "{}"], "並びでない"),
+                               (["p01.json=丸ごと"], "ファイルを丸ごと書くのは"), (["p01.json:=[1]"], "ファイルを丸ごと書くのは")]:
+                code, _ = go(*args)
+                assert want in str(code) and str(code).startswith(PATCH_STOP), (args, code)
+            assert str(go_in("[1]", "-")[0]).startswith(PATCH_STOP) and str(go_in("{", "-")[0]).startswith(PATCH_STOP)
+            code, _ = go("p03.json:={\"title\": \"新しいページ\", \"foo\": 1}", "p01.json.title=戻す見出し")  # 書く形の外: 新しいファイルは消し、ほかは戻す
+            assert "戻した" in str(code) and not Path("p03.json").exists() and {f: Path(f).read_text() for f in keep} == keep, code
+            for first_file in ("p01.json", "p03.json"):  # 途中で書けなくなったら、前に置き換えたものも新しく書いたものも戻す
+                code, _ = go(f'{first_file}:={{"title":"途中の見出し"}}', 'missing/p04.json:={"title":"書けないページ"}')
+                assert "戻した" in str(code) and not Path("p03.json").exists() and {f: Path(f).read_text() for f in keep} == keep, code
+            Path("directory.json").mkdir()  # フォルダを新しいファイルと見なして、戻すときに消そうとしない
+            code, _ = go('p01.json.title=途中', 'p03.json:={"title":"新しいページ"}', 'directory.json:={"title":"書けない"}')
+            assert str(code).startswith(PATCH_STOP) and Path("directory.json").is_dir() and not Path("p03.json").exists() and {f: Path(f).read_text() for f in keep} == keep, code
+            from unittest.mock import patch
+            real_write = Path.write_text
+            for partial in (False, True):  # 書く前に断られる場合と、途中まで書いて止まる場合
+                failed = False
+                def fail_write(path, content, *args, **kwargs):
+                    nonlocal failed
+                    if path.name == "p02.json" and not failed:
+                        failed = True
+                        if partial:
+                            raw = content.encode("utf-8")
+                            path.write_bytes(raw[:raw.index("書".encode("utf-8")) + 1])  # 和文の 1 バイト目で途切れる
+                        raise PermissionError("selftest write failure")
+                    return real_write(path, content, *args, **kwargs)
+                with patch.object(Path, "write_text", fail_write):
+                    code, _ = go('p03.json:={"title":"新しいページ"}', 'p01.json.title=途中', 'p02.json.title=書けない', 'p04.json:={"title":"未着手"}')
+                assert failed and "戻した" in str(code) and not Path("p03.json").exists() and not Path("p04.json").exists() and {f: Path(f).read_text() for f in keep} == keep, code
+            real_unlink = Path.unlink
+            def cannot_restore(path, content, *args, **kwargs):
+                if path.name == "p02.json":
+                    path.write_bytes(b"{\xe6")
+                    raise OSError(28, "selftest disk full")
+                return real_write(path, content, *args, **kwargs)
+            def cannot_remove(path, *args, **kwargs):
+                if path.name == "p03.json":
+                    raise PermissionError("selftest unlink failure")
+                return real_unlink(path, *args, **kwargs)
+            with patch.object(Path, "write_text", cannot_restore), patch.object(Path, "unlink", cannot_remove):
+                code, _ = go('p01.json.title=途中', 'p03.json:={"title":"新しいページ"}', 'p02.json.title=書けない', 'p04.json:={"title":"未着手"}')
+            assert "戻せなかったファイル: p02.json:" in str(code) and "p03.json:" in str(code) and Path("p01.json").read_text() == keep["p01.json"] and not Path("p04.json").exists(), code
+            real_write(Path("p02.json"), keep["p02.json"])
+            real_unlink(Path("p03.json"))
             Path("pages.py").write_text("")
             assert str(go("p01.json.title=x")[0]).startswith("要修正: patch を止めた（何も書いていない）。pages.py")
     finally:
