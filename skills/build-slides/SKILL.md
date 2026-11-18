@@ -41,7 +41,7 @@ python3 $K/gslides.py check <URL>                                   # after buil
 python3 $K/gslides.py wording <URL>                                 # last, after check: the saved deck holds the checked text (lint.md → Japanese check)
 ```
 
-**Writing JSON.** Write new page and deck files, and whole-page rewrites, directly as JSON with a file editor or a heredoc of literal JSON. Do not generate them with Python or another script, or create them through `patch`. Use `slides.py patch` only for targeted fixes to existing JSON (values, replacements, insertions, and deletions). Run `lint` or `dry` on the written files to check their format.
+**Writing JSON.** Write new page and deck files, and whole-page rewrites, directly as JSON with a file editor or a heredoc of literal JSON. Do not generate them with Python or another script, or create them through `patch`. For targeted fixes to existing JSON (values, replacements, insertions, and deletions), use `slides.py patch`. Simple literal text replacements with `sed` or a file editor are also fine. Write the JSON itself, not custom code that generates or edits it. This applies to every programming language and to inline scripts. Run `lint` or `dry` on the written files to check their format.
 
 ## Three layers of checks
 
