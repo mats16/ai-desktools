@@ -32,7 +32,7 @@ usage（資料の build/ で。deck.json か pages.py は今いるフォルダ�
   build_slides.py --selftest
 テンプレートの管理は template.py。色は下の「色の役割」の名前で渡す。役割の名前はテーマの色（マスターの配色）を指すので、テンプレートを替えると色が変わる。
 見た目の決まりは deck-design → slides §1。"""
-import ast, atexit, contextlib, decimal, functools, hashlib, importlib, inspect, io, itertools, json, math, os, re, shutil, subprocess, sys, tempfile, time, tomllib, types, urllib.error, urllib.parse, urllib.request
+import ast, atexit, contextlib, decimal, functools, hashlib, http.client, importlib, inspect, io, itertools, json, math, os, re, shutil, subprocess, sys, tempfile, time, tomllib, types, urllib.error, urllib.parse, urllib.request
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -3786,6 +3786,20 @@ def build_plan(pid, deck, force=False, theme=None, only=None, p=None):
 GUARD_SRC = "ページのファイル（deck.json・pages.py）"
 
 
+def warm(body, get=None):
+    """slides-image-026。送る要求の中の wsrv.nl の URL（Iconify のアイコン、png() の SVG）を、Google に渡す前に 1 回ずつ読んでおく。
+    初めて描く SVG は wsrv.nl が数秒かかり、Slides API が待ちきれずに createImage を「画像を取れない」で断る（2026-11-19、2 つの会話で組むのが 1〜3 回止まった。
+    12 個のうち 1 個が 3.4 秒。1 回読んだあとは 0.05 秒で、組むのが通った）。読めなくても組む（Google が読めれば通る）。get は selftest が差し替える。"""
+    def fetch(u):
+        with contextlib.suppress(OSError, ValueError, http.client.HTTPException):
+            with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "build_slides.py"}), timeout=30) as response:
+                response.read()
+    urls = sorted({json.loads(f'"{u}"') for u in re.findall(r'"(https://wsrv\.nl/\?(?:[^"\\]|\\.)*)"', body)})
+    with ThreadPoolExecutor(8) as ex:
+        list(ex.map(get or fetch, urls))
+    return urls
+
+
 def build(pid, deck, force=False, theme=None, only=None, p=None, guarded=None):
     """pid のプレゼンのページを、deck のページに置き換える（build_plan のとおりに送る）。force=False なら、先に guard で画面での修正とコメントを確かめる。
     theme を渡すと、確かめたあとでマスターをその値にそろえる（先に書くと、自分の書いたリビジョンを画面での修正と取り違える）。
@@ -3813,6 +3827,7 @@ def build(pid, deck, force=False, theme=None, only=None, p=None, guarded=None):
                 if fresh := [i for i in used if i not in urls]:
                     carried = ex.submit(carry, [deck.images[i] for i in fresh])
             tmpl = body
+            warmed = ex.submit(warm, body)  # 運ぶのと並べる（guard はもう済んでいる）
             if x.themed:
                 batch(pid, theme_reqs(*theme, *deck_parts(x.p)))
                 if not force:  # 自分の書き込みのリビジョンを残す（このあとページを組めずに止まっても、次の build が画面での修正と取り違えない）
@@ -3827,6 +3842,7 @@ def build(pid, deck, force=False, theme=None, only=None, p=None, guarded=None):
                 gapi.CLOCK.lap("手元の画像を運ぶ")
             fill = lambda: re.sub(r'"@IMG(\d+)"', lambda m: json.dumps(urls[int(m.group(1))]), tmpl)
             send = json.loads(fill()) + old + moves
+            warmed.result()
             try:
                 batch(pid, send)
             except gapi.ApiError as e:  # 前に組んだ画像の URL を Google が読めなかった。運び直して 1 回だけ送り直す（まとめて送った要求は、失敗すれば 1 つも入らない）
@@ -4820,6 +4836,22 @@ def selftest():
     # SVG の URL の中の ? と # が wsrv.nl に渡る前に解けないよう、二重にエンコードする（# は %2523）
     assert png("https://api.iconify.design/tabler/database.svg?color=%23303F47", 512) == ("https://wsrv.nl/?url=https%3A%2F%2Fapi.iconify.design"
                                                                                        "%2Ftabler%2Fdatabase.svg%3Fcolor%3D%2523303F47&output=png&w=512")
+    # build は送る要求の中の wsrv.nl の URL を、重ねずに 1 回ずつ先に読む。ほかの URL は読まない
+    u = png("https://api.iconify.design/tabler/database.svg?color=%23303F47", 512)
+    got = []
+    body = json.dumps([{"createImage": {"url": u}}, {"createImage": {"url": u}}, {"createImage": {"url": "https://x/a.png"}}])
+    assert warm(body, got.append) == [u] and got == [u]
+    # 事前の取得が途中で切れても、Google が画像を取る本来の処理へ進む。読み終えた応答も閉じる
+    from unittest.mock import patch
+    for length in (3, 10):
+        response = http.client.HTTPResponse(types.SimpleNamespace(makefile=lambda *a: io.BytesIO(f"HTTP/1.1 200 OK\r\nContent-Length: {length}\r\n\r\nabc".encode())))
+        response.begin()
+        with patch.object(urllib.request, "urlopen", return_value=response):
+            assert warm(body) == [u]
+        assert response.closed
+    for error in (OSError("接続できない"), http.client.BadStatusLine("応答が壊れている")):
+        with patch.object(urllib.request, "urlopen", side_effect=error):
+            assert warm(body) == [u]
     try:
         make_deck(lambda d: d.image(d.page("t"), "https://example.com/a.svg?v=1", 0, 0, 1, 1), "foot")
         raise AssertionError("SVG の URL を通した")

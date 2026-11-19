@@ -12,7 +12,7 @@ Open at steps 2–3 of every round (`SKILL.md`). How to start a child is in `dec
 
 ## How to ask
 
-- Start each child as `deck-workflow` → child agents says (a new child without the conversation, the same model and effort as the main agent, passed explicitly).
+- Start each child as `deck-workflow` → child agents says (a new child without the conversation).
 - Pass the paths of the image folder (`$D`), the contact sheet, the text (`deck.md`, `text.md`), the outline, the workspace rules that `desk.py recipes <material folder>` (`deck-workflow`; without it, the `grep` in "Workspace rules" of `desk-feedback` → routing) names (the customer's `memory.md`, the outline's 「使う決まり」, the recipes without `step`; the review prompts have a line for them), and, for customer-facing materials, that customer's `profile.md` (the customer's business and setup). Do not pass the page JSON, pages.py, or `build/doc.md` (so it looks with eyes that do not know how the material was made).
 - You may run two children side by side split by aspect (story and wording; visuals).
 - Do not have them give scores. Have them return only a list of defects.
