@@ -15,18 +15,20 @@ Add what worked, what missed, and access tips after each research run. The detai
 
 ## 1. Common access tips
 
+What a summarizing page-fetch tool (such as `WebFetch`) and a search tool (such as `WebSearch` or `web_search`) did. Other fetch tools may return the body as is.
+
 | Target | Whether it can be fetched, and how |
 |---|---|
-| note, Zenn, Qiita, Hatena Blog | WebFetch reads the body. Paid note articles: only the free part |
-| Speaker Deck | WebFetch gets a summary of the slide text. Details are lost |
+| note, Zenn, Qiita, Hatena Blog | The page-fetch tool reads the body. Paid note articles: only the free part |
+| Speaker Deck | The page-fetch tool gets a summary of the slide text. Details are lost |
 | X (Twitter) | Cannot be fetched. For posts that got attention, searching for quotes in note or blogs is faster |
 | GitHub | Raw files on `raw.githubusercontent.com` lose less than github.com display pages |
 | arxiv | `/abs/` for the abstract, `/html/` for the body (table numbers can be taken). Always cross-check numbers against `/html/` |
-| Long pages (W3C jlreq, some Claude Code docs pages) | WebFetch summaries are shallow. Save with `curl`, strip tags, and `grep` |
-| PDF | WebFetch sometimes cannot fetch it. `curl` + `pdftotext -layout` |
+| Long pages (W3C jlreq, some Claude Code docs pages) | Page-fetch summaries are shallow. Read the HTML source directly (for example, `curl`, strip tags, and `grep`) |
+| PDF | The page-fetch tool sometimes cannot fetch it. `curl` + `pdftotext -layout` |
 | Shift_JIS pages (the CUD color sets) | `iconv -f SHIFT_JIS` |
 | Redirects | Follow by hand (e.g. developers.openai.com → learn.chatgpt.com) |
-| web_search | Sometimes fails with "Connection closed". Retrying works |
+| Web search tool | Sometimes fails with "Connection closed". Retrying works |
 
 ## 2. Japanese-language: material content
 
@@ -37,7 +39,7 @@ Add what worked, what missed, and access tips after each research run. The detai
 
 ## 3. Japanese-language: look and Japanese typesetting
 
-- **Good:** 伝わるデザイン (tsutawarudesign.com; the top page is concepts only, and the lower pages yomiyasuku1–6, miyasuku1–5, universal1–3 are the substance; WebFetch returns "no numbers", so read with `curl`). W3C jlreq (772KB; line spacing is in the section "It is common that the line gap", Japanese–Latin spacing in "quarter em spacing"). デジタル庁デザインシステム (design.digital.go.jp/dads/; typography, color, and spacing with numbers). サイボウズ 小林大輔's Speaker Deck (accessibility; the most direct as rules for materials). 森重湧太's Speaker Deck (howtodesignslides). 広島大 天野由貴『スライド作成入門』 (PDF). 吉村伸一's note, デザインとAI's note, Zenn's kazzzz. JTF スタイルガイド, SmartHR Design System (notation rules)
+- **Good:** 伝わるデザイン (tsutawarudesign.com; the top page is concepts only, and the lower pages yomiyasuku1–6, miyasuku1–5, universal1–3 are the substance; the page-fetch summary returns "no numbers", so read the HTML source). W3C jlreq (772KB; line spacing is in the section "It is common that the line gap", Japanese–Latin spacing in "quarter em spacing"). デジタル庁デザインシステム (design.digital.go.jp/dads/; typography, color, and spacing with numbers). サイボウズ 小林大輔's Speaker Deck (accessibility; the most direct as rules for materials). 森重湧太's Speaker Deck (howtodesignslides). 広島大 天野由貴『スライド作成入門』 (PDF). 吉村伸一's note, デザインとAI's note, Zenn's kazzzz. JTF スタイルガイド, SmartHR Design System (notation rules)
 - **Search terms that worked:** 「スライド 1行の文字数 日本語 目安 根拠 調査」「PowerPoint 日本語 行間 倍数 固定値 フォント」「AIっぽいスライド 元凶 note」「和文と英数字の間 半角スペース スタイルガイド 比較」「BudouX 日本語 改行」
 - **Misses:** 「けっきょく、よはく。 ルール」「ノンデザイナーズ・デザインブック 日本」「プレゼン資料のデザイン図鑑 要点」 (no primary source for the books), 「freee／サイボウズ デザインシステム スライド」 (for web and UI; no numbers for slides)
 - **How to measure (for the pptx method; from 2026-10-07, look at Google Slides thumbnails):** on this Mac, pptxgenjs → LibreOffice (`SAL_USE_VCLPLUGIN=osx`) → PDF → `pdftotext -bbox-layout` measures line pitch and wrapping. Character widths can be measured with Pillow's `ImageFont.getlength` (Noto Sans CJK JP: full-width 1.0 em, alphanumerics 0.55–0.60 em, space 0.223 em)
@@ -61,7 +63,7 @@ Add what worked, what missed, and access tips after each research run. The detai
 
 ## 6. English-language: research and practice of AI slide generation
 
-- **arxiv search terms:** "slide generation", "presentation generation agent", "PPTEval", "SlidesBench", "paper-to-slide", "slide editing agent", "VLM judge slide aesthetics". In web_search, 「論文名 + arxiv」 and 「システム名 + human agreement correlation」 worked
+- **arxiv search terms:** "slide generation", "presentation generation agent", "PPTEval", "SlidesBench", "paper-to-slide", "slide editing agent", "VLM judge slide aesthetics". In web search, 「論文名 + arxiv」 and 「システム名 + human agreement correlation」 worked
 - **Research groups:** Hao Zheng et al. (PPTAgent, DeepPresenter, icip-cas/PPTAgent), Jiaxin Ge (AutoPresent), Kyudan Jung and Jaegul Choo (Talk to Your Slides), Yunqiao Yang et al. (SlidesGen-Bench), Nojun Kwak (ACE), Rehg (ArcDeck)
 - **Papers to follow:** SlidesGen-Bench's GitHub (its implementations of computed metrics may be reusable), DeepPresenter's body (the procedure of fixing by looking at images), SeaSlides' three-stage feedback
 - **Official and practice:** anthropics/skills' pptx (issue #531, PR #330) and frontend-design, Vercel's Gamma case, Beautiful.ai's help, Ethan Mollick's demos (Valence's record)

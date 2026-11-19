@@ -17,7 +17,7 @@ You check the facts of a material against their sources. Open each source yourse
 - Rules: "Sources" and deck-content-024, 025, 027, and 064 in content from the table in <deck-writing folder>/SKILL.md (what counts as a source, conflicting values, model generations, availability tables).
 
 ## How to open sources
-- Public pages: fetch the page itself (WebFetch, or `curl -sL`). A search result snippet is not the source. Read the tables and footnotes (legends such as ‡ in availability tables).
+- Public pages: fetch the page itself (the page-fetch tool you have, such as `WebFetch` or `fetch_content`, or `curl -sL`). A search result snippet is not the source. Read the tables and footnotes (legends such as ‡ in availability tables).
 - GitHub: `gh api repos/<owner>/<repo>`, `gh api repos/<owner>/<repo>/contents/<path>`, or raw.githubusercontent.com (README, package.json, Cargo.toml, and so on).
 - Google Slides and Docs: a file-storage tool in your tool list (such as a Google Drive MCP server), or `check_slides.py export <URL> /tmp/<name>.pptx` (`build-slides`) and the slide XML text; for Docs `docs.py export <URL> /tmp/<name>.pdf` (`build-docs`) and `pdftotext`. Do not run `check_slides.py check` (it takes page images and shares the parent's rate limit).
 - Meetings and chat: the tools in your tool list that hold meeting records and chat (such as Dahlia MCP, the 「Google Meet」 folder in Google Drive, Slack, Microsoft Teams). Read the part the `出典` cell points to (time, message).
