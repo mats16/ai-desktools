@@ -48,7 +48,7 @@ You are the researcher. Today is <YYYY-MM-DD>.
 <examples of the scope. Start from the sources and search terms in the matching section of sources.md, and widen on your own>
 
 ## How to proceed
-- Load `select:mcp__web_search__web_search,WebFetch` with ToolSearch and use them. web_search is a summary and mixes in errors, so verify each claim you adopt by opening the primary source with WebFetch. Verify numbers verbatim. Write 「未確認」 for anything you could not verify.
+- Use the web search and page-fetch tools you have (such as `WebSearch` and `WebFetch`, or `web_search` and `fetch_content`). Search answers are summaries and mix in errors, so verify each claim you adopt by opening the primary source with the page-fetch tool. Verify numbers verbatim. Write 「未確認」 for anything you could not verify.
 - Consult at least <count> sources. Note posting dates.
 
 ## Output
