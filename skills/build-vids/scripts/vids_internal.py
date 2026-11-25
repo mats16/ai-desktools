@@ -297,7 +297,8 @@ if ("a" in gone.avatar || gone.timing.a.join() !== "x") throw new Error("state a
 // 保存は、編集画面の HTML が渡した sid（読むたびに新しいセッション）で送り、開いたセッションはすべて /leave で閉じる（止まったときも）
 async function resumes() {
   const n = t.SAVE_EVERY + 2, model = [], saves = [], drops = [], opened = new Set(), left = new Set();
-  let tts = 0, failAt = n, calls = 0, refused = 0, refuse = () => false, hang = false, noSid = false, broken = false;
+  let tts = 0, failAt = n, calls = 0, refused = 0, refuse = () => false, hang = false, noSid = false, broken = false, retryShape = false;
+  const revisions = [];
   for (let i = 0; i < n; i++) model.push([12, `s${i}`, null, 0], [15, `s${i}:notes_text`, null, 0, `台本${i}`]);
   model.push([43, [], [0, 10, 1, 500], "s1", []], [58, "s0_bgm", [177, 2, 184, "s0", 176, 60000, 122, 1, 123, 30000]]); // 2 つ目のシーンの入りにトランジション、最初のシーンに BGM
   globalThis.document = { cookie: "SAPISID=x" };
@@ -305,19 +306,21 @@ async function resumes() {
   globalThis.fetch = async (url, opt = {}) => {
     if (url.endsWith("/edit")) {
       const sid = (opened.size + 1).toString(16).padStart(16, "0"); opened.add(sid);
-      const h = model.length >> 1, chunk = (c, r) => `var modelChunk = ${JSON.stringify(broken ? { revision: r } : { parts: [{ commands: c.slice(0, 1) }, { commands: c.slice(1) }], revision: r })}; var modelChunkParseEnd`; // 今の形。大きな文書は塊が分かれる
-      return ok(`"info_params":{"token":"t","ouid":"o"} "espresso_api_key":"k" ${noSid ? "" : `sid: '${sid}', `}session: 'x' ${chunk(model.slice(0, h), 1)} ${chunk(model.slice(h), 1)}`);
+      const h = model.length >> 1, chunk = (c, r) => `var modelChunk = ${JSON.stringify(broken || (retryShape && calls > 0) ? { revision: r } : { parts: [{ commands: c.slice(0, 1) }, { commands: c.slice(1) }], revision: r })}; var modelChunkParseEnd`; // 今の形。大きな文書は塊が分かれる
+      const rev = retryShape && calls > 0 ? 7 : 1;
+      return ok(`"info_params":{"token":"t","ouid":"o"} "espresso_api_key":"k" ${noSid ? "" : `sid: '${sid}', `}session: 'x' ${chunk(model.slice(0, h), rev)} ${chunk(model.slice(h), rev)}`);
     }
     if (url.includes("/leave")) { left.add(new URL(url, "https://x").searchParams.get("sid")); return hang ? new Promise(() => {}) : ok("{}"); }
     if (url.includes("/genai/generate")) return ++tts === failAt ? { ok: false, status: 500, text: async () => "x" } : ok([[`K${tts}`, "bard_storage", null, "lookup_temp_data"]]);
     if (url.includes("/insertmedia")) return ok({ [Object.keys(JSON.parse(new URLSearchParams(opt.body).get("insert_media_requests")))[0]]: { ms: "OK", ni: "N", sb: "4844" } });
     if (url.includes("/save")) {
+      revisions.push(Number(new URLSearchParams(opt.body).get("rev")));
       const sid = new URL(url, "https://x").searchParams.get("sid");
       if (noSid ? !/^[0-9a-f]{16}$/.test(sid) || opened.has(sid) : !opened.has(sid) || left.has(sid) || JSON.parse(new URLSearchParams(opt.body).get("bundles"))[0].sid !== sid) throw new Error(`開いていないセッションの保存: ${sid}`);
       if (refuse(++calls)) { refused++; return { ok: false, status: 550, text: async () => ')]}\'\n[["er",null,null,null,null,550,null,null,null,13],["di",1]]' }; }
       const cmds = JSON.parse(new URLSearchParams(opt.body).get("bundles"))[0].commands.flatMap((c) => (c[0] === 4 ? c[1] : [c]));
       saves.push(cmds.filter((c) => c[0] === 58).length); drops.push(cmds.filter((c) => c[0] === 59).length); model.push(...cmds);
-      return ok({ revisionRanges: [[1, 2]] });
+      return ok({ revisionRanges: [retryShape ? [7, 8] : [1, 2]] });
     }
     throw new Error("fetch " + url);
   };
@@ -358,6 +361,11 @@ async function resumes() {
   noSid = false; broken = true; left.clear(); const before = opened.size;
   const odd = await window.VidsClient.inspect({ vidsId: "V", scripts: [] }).then(() => null, (e) => e);
   if (!String(odd).includes("Vids の文書の形が変わった（編集画面を開いたとき") || opened.size !== before + 1 || !left.size) throw new Error(`形の変わった文書: ${odd} 閉じた ${left.size}`);
+  // 550 後の読み直しは、コマンドの形が変わっても、読めた新しいリビジョンで送り直す。読むために開いたセッションも閉じる
+  broken = false; retryShape = true; calls = 0; refuse = (k) => k === 1 || revisions.at(-1) < 7;
+  revisions.length = 0; opened.clear(); left.clear();
+  await window.VidsClient.updateScenes({ vidsId: "V", scripts: Array.from({ length: n }, (_, i) => `六つめの台本${i}`) });
+  if (revisions.slice(0, 2).join() !== "1,7" || [...opened].some((sid) => !left.has(sid))) throw new Error(`送り直したリビジョン: ${revisions} 開いた ${opened.size}、閉じた ${left.size}`);
 }
 // pool: 1 つ失敗したら、ほかの手は新しく始めない（avatar の回数を捨てる結果に使わない）
 // できたものは残して、失敗を out.stopped で返す（呼んだ側が置いてから投げる）

@@ -110,10 +110,10 @@
     clearTimeout(timer);
   }
 
-  async function reread(doc) { // 文書をもう一度読み、{model, rev} を返す。読むと別のセッションが開くので、すぐ閉じる（保存は doc のセッションのまま）
+  async function reread(doc) { // 文書をもう一度読む。読むと別のセッションが開くので、すぐ閉じる（保存は doc のセッションのまま）。必要なデータの読み取りは呼んだ側で行う
     const page = await editPage(doc.id);
     await leave({ id: doc.id, token: page.info.token, ouid: page.info.ouid, sid: page.sid });
-    return modelOf(page.chunks, "読み直したとき");
+    return page;
   }
 
   const OWN_SID = "要確認: 編集画面の sid を読めなかったので、自分で作った sid で保存した。画面の作りが変わったかもしれない（build-vids/internal_api.md）";
@@ -154,7 +154,7 @@
     const s = restSeconds(e, n);
     doc.waited.push(s);
     await new Promise((r) => setTimeout(r, s * 1000 * REST.scale));
-    doc.rev = Math.max(doc.rev, (await reread(doc).catch(() => ({ rev: doc.rev }))).rev); // 読み直せなくても送り直す（版は前のまま）
+    doc.rev = Math.max(doc.rev, ...(await reread(doc).catch(() => ({ chunks: [] }))).chunks.map((c) => c.revision)); // コマンドの形にかかわらずリビジョンを読む。読み直せなくても送り直す（リビジョンは前のまま）
   }
 
   async function saveOnce(doc, commands, blobIdMap = {}, reqId = doc.reqId++) { // 送り直すときは同じ reqId
@@ -313,7 +313,7 @@
     const oldMedia = Object.keys(st.media).filter((m) => old.includes(st.media[m]));
     const drop = [...oldMedia.map((m) => [59, m]), ...old.flatMap((id) => unplace(st, id))];
     if (drop.length) await save(doc, [[4, drop]]);
-    const now = state((await reread(doc)).model).scenes; // 新しいシーンの入った並び
+    const now = state(modelOf((await reread(doc)).chunks, "読み直したとき").model).scenes; // 新しいシーンの入った並び
     const gone = old.filter((x) => now.includes(x)).sort((a, b) => now.indexOf(b) - now.indexOf(a)); // 後ろから消すと、前の位置は変わらない
     if (gone.length) await save(doc, [[4, gone.map((id) => [13, now.indexOf(id), 0, null, id])]]); // シーンごとに分けず 1 回で（保存を重ねると 550）
     return { vidsId, scenes: sceneIds.length, musicMs, revision: doc.rev, waited: doc.waited };
