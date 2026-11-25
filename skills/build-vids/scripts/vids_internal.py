@@ -277,6 +277,19 @@ if (tr.music?.end !== 9000 || JSON.stringify(t.trimMusic(tr.music, 70000)) !== '
 const dg = [[[12, "a", null, 0], [35, "x", 0, [3, 500, 4, 3012], "a"]], [[12, "b", null, 0], [43, [], [1, 500, 0, 10], "b", []], [35, "y", 0, [3, 500, 4, 13291, 0, 20], "b"]]];
 t.startWithVoice(dg);
 if (dg[0][1][3].join() !== "3,500,4,0" || dg[1][2][3].join() !== "3,500,4,500,0,20") throw new Error("startWithVoice");
+// modelOf: modelChunk の塊（今の {parts: [{commands}]} と前の {chunk}）と parts は順につなぎ、リビジョンは大きいほう。
+// 形が違えば（どちらの配列もない、コマンドが配列でない）、読んだ所と位置と型だけ添えて止める（Issue #95）
+const mo = t.modelOf([{ chunk: [[12, "a", null, 0]], revision: 3 }, { parts: [{ commands: [[12, "b", null, 0], [13, 0, 0, null, "a"]] }, { commands: [[12, "c", null, 0]] }], revision: 5 }], "x");
+if (mo.rev !== 5 || t.state(mo.model).scenes.join() !== "b,c") throw new Error("modelOf");
+// 空の Vids の今の形（2026-11-25 に読んだもの。色などは略）: 5 秒の空シーン "p" が 1 つ
+const empty = t.modelOf([{ parts: [{ commands: [[1, [365760, 205740], [302400, 427680]], [45, [], [0, "en"], []], [13, 0, 0, null, "p"], [13, 0, 1, "m", "l"], [13, 0, 2, null, "m"],
+  [12, "flix-master", 0, 2, [0, []]], [12, "p", 0, 0, [16, 5000, 17, 1, 1, "flix-master"]], [9, [], [14, 1, 15, [null, 2]], "p", []], [43, [], [0, 0, 3, 1, 4, 0], "p", []]] }], revision: 2 }], "x");
+if (empty.rev !== 2 || t.state(empty.model).scenes.join() !== "p") throw new Error("modelOf empty: " + t.state(empty.model).scenes);
+const shape = (chunks) => { try { t.modelOf(chunks, "読み直したとき"); } catch (e) { return e.message; } return "止まらない"; };
+const noChunk = shape([{ chunk: [[12, "a", null, 0]], revision: 1 }, { revision: 2, other: [] }]), noCommands = shape([{ parts: [{ commands: [] }, { cmds: [] }], revision: 1 }]);
+const oddItem = shape([{ parts: [{ commands: [[12, "a", null, 0]] }, { commands: ["台本の文字"] }], revision: 1 }]);
+if (!noChunk.includes("読み直したとき: modelChunk の 1 番目の塊に chunk の配列も、commands の配列を持つ parts もない。塊は鍵が revision,other のオブジェクト")) throw new Error("modelOf no chunk: " + noChunk);
+if (!noCommands.includes("0 番目の塊に chunk の配列も") || !oddItem.includes("0 番目の塊の 1 番目のコマンドが配列でなく、string") || oddItem.includes("台本の文字")) throw new Error("modelOf odd: " + noCommands + oddItem);
 const gone = t.state([...am, [36, 0, "a"], [0, ["a_av_actor50_s"]]]);
 if ("a" in gone.avatar || gone.timing.a.join() !== "x") throw new Error("state avatar removed");
 // updateScenes: 新しい音声は SAVE_EVERY シーンずつ保存し、途中で止まっても、できたシーンは保存してから止まる。回し直すと残りだけ作る
@@ -284,7 +297,7 @@ if ("a" in gone.avatar || gone.timing.a.join() !== "x") throw new Error("state a
 // 保存は、編集画面の HTML が渡した sid（読むたびに新しいセッション）で送り、開いたセッションはすべて /leave で閉じる（止まったときも）
 async function resumes() {
   const n = t.SAVE_EVERY + 2, model = [], saves = [], drops = [], opened = new Set(), left = new Set();
-  let tts = 0, failAt = n, calls = 0, refused = 0, refuse = () => false, hang = false, noSid = false;
+  let tts = 0, failAt = n, calls = 0, refused = 0, refuse = () => false, hang = false, noSid = false, broken = false;
   for (let i = 0; i < n; i++) model.push([12, `s${i}`, null, 0], [15, `s${i}:notes_text`, null, 0, `台本${i}`]);
   model.push([43, [], [0, 10, 1, 500], "s1", []], [58, "s0_bgm", [177, 2, 184, "s0", 176, 60000, 122, 1, 123, 30000]]); // 2 つ目のシーンの入りにトランジション、最初のシーンに BGM
   globalThis.document = { cookie: "SAPISID=x" };
@@ -292,7 +305,8 @@ async function resumes() {
   globalThis.fetch = async (url, opt = {}) => {
     if (url.endsWith("/edit")) {
       const sid = (opened.size + 1).toString(16).padStart(16, "0"); opened.add(sid);
-      return ok(`"info_params":{"token":"t","ouid":"o"} "espresso_api_key":"k" ${noSid ? "" : `sid: '${sid}', `}session: 'x' var modelChunk = ${JSON.stringify({ chunk: model, revision: 1 })}; var modelChunkParseEnd`);
+      const h = model.length >> 1, chunk = (c, r) => `var modelChunk = ${JSON.stringify(broken ? { revision: r } : { parts: [{ commands: c.slice(0, 1) }, { commands: c.slice(1) }], revision: r })}; var modelChunkParseEnd`; // 今の形。大きな文書は塊が分かれる
+      return ok(`"info_params":{"token":"t","ouid":"o"} "espresso_api_key":"k" ${noSid ? "" : `sid: '${sid}', `}session: 'x' ${chunk(model.slice(0, h), 1)} ${chunk(model.slice(h), 1)}`);
     }
     if (url.includes("/leave")) { left.add(new URL(url, "https://x").searchParams.get("sid")); return hang ? new Promise(() => {}) : ok("{}"); }
     if (url.includes("/genai/generate")) return ++tts === failAt ? { ok: false, status: 500, text: async () => "x" } : ok([[`K${tts}`, "bard_storage", null, "lookup_temp_data"]]);
@@ -340,6 +354,10 @@ async function resumes() {
   refuse = () => true;
   const ownStuck = await window.VidsClient.updateScenes({ vidsId: "V", scripts: Array.from({ length: n }, (_, i) => `五つめの台本${i}`) }).then(() => null, (e) => e);
   if (!String(ownStuck).includes("HTTP 550") || !String(ownStuck).includes(t.OWN_SID)) throw new Error(`自分の sid で止まったとき: ${ownStuck}`);
+  // 文書の形が変わっていたら、開いたところで分かる文で止め、開いたセッションは閉じる（TypeError で落ちない）
+  noSid = false; broken = true; left.clear(); const before = opened.size;
+  const odd = await window.VidsClient.inspect({ vidsId: "V", scripts: [] }).then(() => null, (e) => e);
+  if (!String(odd).includes("Vids の文書の形が変わった（編集画面を開いたとき") || opened.size !== before + 1 || !left.size) throw new Error(`形の変わった文書: ${odd} 閉じた ${left.size}`);
 }
 // pool: 1 つ失敗したら、ほかの手は新しく始めない（avatar の回数を捨てる結果に使わない）
 // できたものは残して、失敗を out.stopped で返す（呼んだ側が置いてから投げる）
