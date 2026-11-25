@@ -64,17 +64,38 @@
     return { info: JSON.parse(info[1]), key: t.match(/"espresso_api_key":"([\w-]+)"/)?.[1], sid: t.match(/\bsid: '([\w-]+)'/)?.[1], chunks };
   }
 
+  // modelChunk の塊から、文書のモデル（コマンドの並び）とリビジョン。開くときも読み直すときもここで読む。塊の形は 2 つ:
+  // {parts: [{commands: [コマンド, …]}, …], revision}（2026-11 後半から。Issue #95）と、それまでの {chunk: [コマンド, …], revision}（切り替えの途中の人のために残す）。
+  // 塊も parts も順につなぐ。形が違えば止める（飛ばすとシーンを復元できない）。文書の文字は出さず、どこの何が違うか（位置・型・塊の鍵）だけを添える
+  const kind = (x) => (Array.isArray(x) ? "配列" : x === null ? "null" : typeof x === "object" ? `鍵が ${Object.keys(x).join(",") || "なし"} のオブジェクト` : typeof x);
+  function modelOf(chunks, stage) {
+    const changed = (what) => new Error(`Vids の文書の形が変わった（${stage}: modelChunk の${what}）。` +
+      "今のエディタの modelChunk を build-vids/internal_api.md と見比べ、vids_client.js の modelOf() と state() を直す");
+    const model = chunks.flatMap((c, i) => {
+      const cmds = Array.isArray(c?.chunk) ? c.chunk : Array.isArray(c?.parts) && c.parts.every((p) => Array.isArray(p?.commands)) ? c.parts.flatMap((p) => p.commands) : null;
+      if (!cmds) throw changed(` ${i} 番目の塊に chunk の配列も、commands の配列を持つ parts もない。塊は${kind(c)}`);
+      const j = cmds.findIndex((x) => !Array.isArray(x));
+      if (j >= 0) throw changed(` ${i} 番目の塊の ${j} 番目のコマンドが配列でなく、${kind(cmds[j])}`);
+      return cmds;
+    });
+    return { model, rev: Math.max(...chunks.map((c) => c.revision)) };
+  }
+
   // 編集画面の HTML から、token・ouid・sid・リビジョン。1 回の呼び出しは、この 1 つのセッションで保存する。
   // 内部の作りは公開されておらず変わりうるので、sid が読めなければ、2026-10-26 までのように自分で作った sid で続ける（それでも保存は通っていた）。
   // そのときは閉じるセッションがわからないので leave しない（ownSid。vids.py が知らせる）
   async function openDoc(vidsId) {
     const { info, key, sid, chunks } = await editPage(vidsId);
     const doc = { id: vidsId, token: info.token, ouid: info.ouid, sid };
-    if (!key) {
+    let read;
+    try {
+      if (!key) throw new Error("編集画面に genai のキー（espresso_api_key）がない");
+      read = modelOf(chunks, "編集画面を開いたとき");
+    } catch (e) {
       await leave(doc);
-      throw new Error("編集画面に genai のキー（espresso_api_key）がない");
+      throw e;
     }
-    const opened = { ...doc, key, rev: Math.max(...chunks.map((c) => c.revision)), reqId: 0, ph: 0, waited: [], model: chunks.flatMap((c) => c.chunk) };
+    const opened = { ...doc, key, ...read, reqId: 0, ph: 0, waited: [] };
     if (sid) return opened;
     return { ...opened, sid: [...crypto.getRandomValues(new Uint8Array(8))].map((x) => x.toString(16).padStart(2, "0")).join(""), ownSid: true };
   }
@@ -89,7 +110,7 @@
     clearTimeout(timer);
   }
 
-  async function reread(doc) { // 文書をもう一度読む。読むと別のセッションが開くので、すぐ閉じる（保存は doc のセッションのまま）
+  async function reread(doc) { // 文書をもう一度読む。読むと別のセッションが開くので、すぐ閉じる（保存は doc のセッションのまま）。必要なデータの読み取りは呼んだ側で行う
     const page = await editPage(doc.id);
     await leave({ id: doc.id, token: page.info.token, ouid: page.info.ouid, sid: page.sid });
     return page;
@@ -133,7 +154,7 @@
     const s = restSeconds(e, n);
     doc.waited.push(s);
     await new Promise((r) => setTimeout(r, s * 1000 * REST.scale));
-    doc.rev = Math.max(doc.rev, ...(await reread(doc).catch(() => ({ chunks: [] }))).chunks.map((c) => c.revision)); // 読み直せなくても送り直す（版は前のまま）
+    doc.rev = Math.max(doc.rev, ...(await reread(doc).catch(() => ({ chunks: [] }))).chunks.map((c) => c.revision)); // コマンドの形にかかわらずリビジョンを読む。読み直せなくても送り直す（リビジョンは前のまま）
   }
 
   async function saveOnce(doc, commands, blobIdMap = {}, reqId = doc.reqId++) { // 送り直すときは同じ reqId
@@ -292,7 +313,7 @@
     const oldMedia = Object.keys(st.media).filter((m) => old.includes(st.media[m]));
     const drop = [...oldMedia.map((m) => [59, m]), ...old.flatMap((id) => unplace(st, id))];
     if (drop.length) await save(doc, [[4, drop]]);
-    const now = state((await reread(doc)).chunks.flatMap((c) => c.chunk)).scenes; // 新しいシーンの入った並び
+    const now = state(modelOf((await reread(doc)).chunks, "読み直したとき").model).scenes; // 新しいシーンの入った並び
     const gone = old.filter((x) => now.includes(x)).sort((a, b) => now.indexOf(b) - now.indexOf(a)); // 後ろから消すと、前の位置は変わらない
     if (gone.length) await save(doc, [[4, gone.map((id) => [13, now.indexOf(id), 0, null, id])]]); // シーンごとに分けず 1 回で（保存を重ねると 550）
     return { vidsId, scenes: sceneIds.length, musicMs, revision: doc.rev, waited: doc.waited };
@@ -485,6 +506,6 @@
       ms: scenes.map((id) => (avatar[id] ? props(avatar[id].props).get(176) : voice[id]?.ms) ?? null), musicMs: music?.end ?? 0 };
   }
 
-  window.VidsClient = { createFromSlides: session(createFromSlides), updateScenes: session(updateScenes), inspect: session(inspect), _test: { SAVE_EVERY, REST, LEAVE, RESENDS, OWN_SID, restSeconds, md5b64, draftBody, ttsBody, avatarBody, avatarElement, state, unplace, pool, pad, trimMusic, startWithVoice } };
+  window.VidsClient = { createFromSlides: session(createFromSlides), updateScenes: session(updateScenes), inspect: session(inspect), _test: { modelOf, SAVE_EVERY, REST, LEAVE, RESENDS, OWN_SID, restSeconds, md5b64, draftBody, ttsBody, avatarBody, avatarElement, state, unplace, pool, pad, trimMusic, startWithVoice } };
   return "VidsClient loaded";
 })();
