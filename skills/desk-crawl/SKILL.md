@@ -14,7 +14,7 @@ This skill decides where and when to read, and learns from each run. A topic is 
 | `scripts/crawl.py` | Plan, extra reads, child prompts, feeds, merge, record, report, and the list of places (has `--selftest`) |
 | [prompt_collect.md](prompt_collect.md) | The child agent's brief, filled by `crawl.py prompt` |
 | [kinds.md](kinds.md) | How to read each kind of place (Slack, mail, feeds, web, wiki), the tool pitfalls, finding a site's feed, and naming a new kind. Children read it |
-| `<workspace>/.desk/crawl/<topic>/sources.json` | The list of places: tier, group, pinned, url, notes. `sources` is an object keyed by the place id (`slack:C…`), not a list. Edited only through `crawl.py set` and `record`. To look up a place's name, run `crawl.py sources <topic>` (every place) instead of opening the file; `--json` lists only the `follow` places, with name, group, and url when set |
+| `<workspace>/.desk/crawl/<topic>/sources.json` | The list of places: tier, group, pinned, url, notes. `sources` is an object keyed by the place id (`slack:C…`), not a list. Edited only through `crawl.py set` and `record`. To look up a place's name, run `crawl.py sources <topic>` (every place) instead of opening the file; `--json` exports `follow` places (name, group, and url when set) and prepends topic-wide notes as `id: "*"` when present |
 | `<workspace>/.desk/crawl/<topic>/runs.jsonl` | One line per run: reads, candidates with the places they were seen in, what was used, misses, discoveries, lessons |
 
 ## Scripts
